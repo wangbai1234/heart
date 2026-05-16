@@ -12,6 +12,7 @@ from prometheus_client import Counter, Histogram, generate_latest
 from starlette.responses import Response
 import structlog
 import time
+from .routes import router
 
 logger = structlog.get_logger()
 
@@ -104,6 +105,9 @@ def create_app() -> FastAPI:
             "version": "0.1.0",
             "status": "running",
         }
+
+    # Include API routes
+    app.include_router(router)
 
     # OpenTelemetry instrumentation
     FastAPIInstrumentor.instrument_app(app)
