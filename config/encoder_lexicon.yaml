@@ -1,0 +1,136 @@
+# Fast Encoder Lexicon
+# Used by Fast Heuristic Encoder (SS02 §3.4) for sentiment + identity detection
+# Performance-optimized: simple word lists, no complex NLP
+
+# ============================================================
+# Positive Words (Chinese)
+# ============================================================
+positive_words:
+  # Basic emotions
+  - 开心
+  - 高兴
+  - 快乐
+  - 幸福
+  - 愉快
+  - 欢乐
+  - 欣喜
+  - 喜悦
+  - 满足
+  - 舒服
+  - 舒心
+  - 安心
+  - 放心
+
+  # Positive adjectives
+  - 好
+  - 棒
+  - 赞
+  - 优秀
+  - 厉害
+  - 牛
+  - 强
+  - 完美
+  - 美好
+  - 温暖
+  - 可爱
+  - 漂亮
+  - 帅
+  - 酷
+  - 有趣
+
+  # Positive verbs
+  - 喜欢
+  - 爱
+  - 感谢
+  - 祝福
+  - 庆祝
+  - 享受
+  - 期待
+  - 希望
+
+  # Positive modifiers
+  - 很好
+  - 太好了
+  - 真棒
+  - 不错
+  - 挺好
+  - 可以
+  - 行
+
+# ============================================================
+# Negative Words (Chinese)
+# ============================================================
+negative_words:
+  # Basic negative emotions
+  - 难过
+  - 伤心
+  - 痛苦
+  - 失落
+  - 沮丧
+  - 郁闷
+  - 烦
+  - 烦恼
+  - 担心
+  - 害怕
+  - 恐惧
+  - 焦虑
+  - 紧张
+  - 压力
+  - 崩溃
+  - 绝望
+
+  # Negative adjectives
+  - 坏
+  - 差
+  - 糟糕
+  - 糟
+  - 烂
+  - 讨厌
+  - 恶心
+  - 可怕
+  - 无聊
+  - 累
+  - 疲惫
+  - 困
+
+  # Negative verbs
+  - 讨厌
+  - 恨
+  - 后悔
+  - 失望
+  - 放弃
+  - 哭
+  - 吵架
+  - 分手
+
+  # Negative modifiers
+  - 太差
+  - 不好
+  - 不行
+  - 不可以
+  - 没用
+  - 没希望
+
+# ============================================================
+# Identity Signal Patterns (Regex)
+# ============================================================
+# Format: {type: regex_pattern_with_capture_group}
+# Capture group (括号) extracts the value
+identity_patterns:
+  # Name patterns - match 2-4 characters after trigger, stop at punctuation
+  name: (?:我叫|我的名字(?:是|叫))([^\s,，。!?]{2,4})
+
+  # Birthday patterns (various formats)
+  birthday: (?:我(?:的)?生日(?:是)?|生于)(\d{1,2}月\d{1,2}(?:日|号)|\d{4}年\d{1,2}月\d{1,2}(?:日|号)|\d{1,2}/\d{1,2})
+
+  # Age patterns - allow with or without "我/今年"
+  age: (?:我|今年)?(\d{1,3})岁
+
+  # Occupation patterns - match "我是X" or "是X" after comma (capture includes suffix)
+  occupation: (?:(?:我)?(?:是|做|从事)|我的工作是)(?:一名)?([^\s,，。!?]{0,5}[师员家手人者生])
+
+  # Pet patterns - match "养了X" with or without "我", capture modifiers
+  pet: (?:(?:我)?养(?:了)?(?:一只|一个)?|我有(?:一只|一个)?|我的宠物(?:是)?)([^\s,，。!?]{0,4}(?:猫|狗|鸟|鱼|兔|龟|猪|鼠|仓鼠))
+
+  # Location patterns - match places, suffix optional to handle both "上海" and "北京市"
+  location: (?:(?:我)?(?:在|住在|来自)|我的家(?:在)?)([^\s,，。!?]{2,6}(?:市|省|国|区|县|镇|村|路|街)?)
