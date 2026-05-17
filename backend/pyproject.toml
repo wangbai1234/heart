@@ -69,6 +69,10 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
+markers = [
+    "requires_postgres: tests that need a real Postgres backend (skipped on SQLite)",
+]
+addopts = "-m 'not requires_postgres'"
 
 [tool.ruff]
 line-length = 100

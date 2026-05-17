@@ -22,6 +22,10 @@ from uuid import uuid4
 import pytest
 from sqlalchemy import select
 
+# Consolidator tests require Postgres (ARRAY/JSONB/vector columns).
+# Skip in unit runs; the suite is exercised by tests/integration/.
+pytestmark = pytest.mark.requires_postgres
+
 from heart.ss02_memory.models import (
     ConsolidationJob,
     EpisodicMemory,

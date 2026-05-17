@@ -13,6 +13,7 @@ Test coverage:
 Author: 心屿团队
 """
 
+import random
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -59,6 +60,7 @@ class TestBaseFrequency:
 
     def test_base_frequency_over_1000_turns(self, rin_soul_spec):
         """Base frequency should be ~3% over 1000 turns."""
+        random.seed(20260517)  # Deterministic to avoid flaky statistical assertion
         engine = ForgettingAffectEngine("rin", rin_soul_spec)
 
         # Simulate 1000 turns with days_since_last = 0 (no multipliers)
