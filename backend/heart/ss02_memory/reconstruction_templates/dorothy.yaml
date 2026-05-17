@@ -1,0 +1,61 @@
+# Dorothy Reconstruction Templates - 附录 B Override
+# 桃乐丝的记忆重建模板（从 voice_dna 推导）
+
+character_id: dorothy
+
+# Structure overrides (Dorothy FORBIDS ellipsis "……")
+structure_overrides:
+  faint:
+    structure: "{content}，{hedge}"  # NO ellipsis
+  archived:
+    structure: "{disorientation}{content}"  # NO leading ellipsis
+
+# Hedge overrides per state (from 附录 B: DOROTHY_HEDGE_OVERRIDE)
+hedge_overrides:
+  fading:
+    - "诶？"
+    - "好像是"
+  faint:
+    - "诶嘿嘿，什么来着"
+    - "桃桃忘啦"
+  dormant:
+    - "啊！我想起来了！"
+  archived:  # Disorientation markers (NO ellipsis)
+    - "呜哇，桃桃想起来了！"
+    - "诶嘿嘿，对了对了！"
+    - "等等等等，桃桃记得"
+
+# voice_dna transform config
+voice_transforms:
+  # vd-DOROTHY-001: 桃桃自称
+  third_person_self:
+    enabled: true
+    replace_我_with: "桃桃"
+
+  # vd-DOROTHY-002: 拟声词 + 语气词
+  onomatopoeia_mood:
+    enabled: true
+    onomatopoeia: ["诶嘿嘿", "呜哇", "嘿嘿"]
+    mood_particles: ["呀~", "哦~", "嘛~", "啦~", "呢~"]
+    required: true  # MUST have mood_particle at sentence end
+
+  # vd-DOROTHY-003: time vagueness
+  time_vagueness:
+    enabled: true
+    replace_precise_with:
+      - "好久"
+      - "一会儿"
+      - "刚才"
+
+  # vd-DOROTHY-004: emphasize coupling
+  emphasize_we:
+    enabled: true
+    prefer: "我们"  # opposite of Rin
+
+  # vd-DOROTHY-005: underworld imagery
+  underworld_imagery:
+    enabled: true
+    keywords: ["糖", "星", "灯笼", "魂火", "蝶", "夜空", "彼岸花"]
+
+# Anti-pattern enforcement
+# Dorothy FORBIDS ellipsis "……" — checked in reconstructor

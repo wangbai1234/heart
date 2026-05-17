@@ -1,0 +1,48 @@
+# Rin Reconstruction Templates - 附录 B Override
+# 凛的记忆重建模板（从 voice_dna 推导）
+
+character_id: rin
+
+# Hedge overrides per state (from 附录 B: RIN_HEDGE_OVERRIDE)
+# Rin MUST have ellipsis in fading/faint states (vd-001)
+hedge_overrides:
+  fading:
+    - "……对吧"
+    - "……好像"
+    - "……什么来着"
+  faint:
+    - "……"
+    - "……记不清了"
+  dormant:
+    - "……等等。"
+    - "……"
+
+# voice_dna transform config
+voice_transforms:
+  # vd-001: ellipsis for pauses
+  ellipsis_insertion:
+    enabled: true
+    states: [fading, faint, dormant, archived]
+
+  # vd-002: rhetorical reshape
+  rhetorical_reshape:
+    enabled: true
+    frequency: high
+
+  # vd-NEW-A: time precision
+  time_precision:
+    enabled: true
+    fallback: vague  # if no precise time available
+
+  # vd-NEW-C: avoid 我们
+  avoid_we:
+    enabled: true
+    replace_with: "你和我"
+
+  # vd-006: short sentences for past
+  short_past_sentences:
+    enabled: true
+    max_length: 8
+
+# Anti-pattern enforcement (from soul_specs/rin/v1.0.0.yaml)
+# This is checked in reconstructor, not applied as transform
