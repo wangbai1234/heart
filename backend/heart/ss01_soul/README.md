@@ -8,36 +8,57 @@
 
 1. **`schema_validator.py`** - Pydantic 模型，严格校验 Soul Spec YAML
 2. **`registry.py`** - Soul Registry，启动时加载、校验、缓存所有 Soul Specs
-3. **`anchor_block.py`** - Anchor Block Generator，从 Soul Spec 生成 Prompt
-4. **`tests/unit/test_soul_validator.py`** - 25 个单元测试 + 集成测试
-5. **`tests/unit/test_anchor_block.py`** - 20 个 Anchor Block 测试
+3. **`anchor_injector.py`** - Anchor Injector，按 §6.2 生成 FULL / LIGHT / REINFORCE
+4. **`anchor_mode_decider.py`** - 按 §3.4 cadence 决定每轮的 Anchor Mode
+5. **`tests/unit/test_soul_validator.py`** - 25 个 Schema Validator 测试
+6. **`tests/unit/test_anchor_injector.py`** - 31 个 Anchor Injector 测试
+7. **`tests/unit/test_anchor_mode_decider.py`** - 53 个 Mode Decider 测试
 
 ## 快速开始
 
 ### 1. 生成 Anchor Block (用于 Prompt 组装)
 
 ```python
-from heart.ss01_soul.anchor_block import get_anchor_generator, AnchorMode
+from heart.ss01_soul.registry import get_soul_registry
+from heart.ss01_soul.anchor_injector import (
+    get_anchor_injector,
+    AnchorActivationView,
+    DriftEvidence,
+)
+from heart.ss01_soul.anchor_mode_decider import decide_mode, AnchorMode
 
-# 获取 Anchor Generator
-generator = get_anchor_generator()
+# 获取 Soul Spec
+soul = get_soul_registry().get_soul("rin", "1.0.0")
 
-# 生成 FULL Anchor Block (完整版)
-anchor = generator.generate_anchor_block("rin", AnchorMode.FULL)
-print(anchor.content)  # Prompt 文本
-print(anchor.token_count_estimate)  # ~2000 tokens
+# Anchor Injector（启动时预编译所有 skeleton）
+injector = get_anchor_injector()
 
-# 生成 LIGHT Anchor Block (精简版)
-light = generator.generate_anchor_block("rin", AnchorMode.LIGHT)
-print(light.token_count_estimate)  # ~275 tokens
+# 构造每请求活态视图
+state = AnchorActivationView(
+    resonance_score=0.42,
+    unlocked_facet_ids=(),
+    last_full_anchor_turn=1,
+)
 
-# 生成 REINFORCE Anchor Block (强化版，用于 drift 修正)
-reinforce = generator.generate_anchor_block("rin", AnchorMode.REINFORCE)
+# 由 cadence 决定 mode
+mode = decide_mode(state, turn_index=8, drift_score=0.1)  # → FULL
 
-# 转换为 PromptLayer (用于 SS05 Composition)
-layer = anchor.to_prompt_layer()
-print(layer["priority"])  # 1 (highest)
-print(layer["position_constraint"])  # "first"
+# 生成 anchor prompt 字符串
+if mode == AnchorMode.FULL:
+    prompt = injector.generate_full_anchor(soul, state)
+else:
+    prompt = injector.generate_light_anchor(soul, state)
+
+# 触发漂移恢复时
+evidence = DriftEvidence(
+    sample_messages=("亲爱的你今天怎么样呀",),
+    detected_patterns=("使用'亲爱的'",),
+    required_patterns=("使用省略号", "凛式反问"),
+)
+reinforce_prompt = injector.generate_reinforce_anchor(soul, evidence)
+
+# Token 估算（可换 estimator）
+tokens = injector.estimate_tokens(prompt)
 ```
 
 ### 2. 使用 Registry 加载 Soul Specs
@@ -149,10 +170,14 @@ backend/heart/ss01_soul/
 ├── __init__.py
 ├── schema_validator.py      # Pydantic 模型
 ├── registry.py              # Soul Registry
-└── README.md               # 本文件
+├── anchor_injector.py       # §6.2 模板生成
+├── anchor_mode_decider.py   # §3.4 cadence
+└── README.md                # 本文件
 
 backend/tests/unit/
-└── test_soul_validator.py   # 25 个测试
+├── test_soul_validator.py        # 25 tests
+├── test_anchor_injector.py       # 31 tests
+└── test_anchor_mode_decider.py   # 53 tests
 ```
 
 ## 测试覆盖
@@ -203,41 +228,38 @@ async def get_soul_info(character_id: str):
 ### 在 Persona Composer 中使用
 
 ```python
-from heart.ss01_soul.anchor_block import get_anchor_generator, AnchorMode
+from heart.ss01_soul.registry import get_soul_registry
+from heart.ss01_soul.anchor_injector import (
+    get_anchor_injector,
+    AnchorActivationView,
+    AnchorMode,
+)
+from heart.ss01_soul.anchor_mode_decider import decide_mode
 
 class PersonaComposer:
     def __init__(self):
-        self.anchor_generator = get_anchor_generator()
-    
-    def get_anchor_block(self, context):
-        """
-        Per SS05 §3.2 - Layer Aggregator 调用此方法获取 Anchor Block
-        """
-        # 根据 drift_score 和 turn_index 决定 anchor mode
-        anchor_mode = self._decide_anchor_mode(
-            context.activation_state,
-            context.turn_index,
+        self.registry = get_soul_registry()
+        self.injector = get_anchor_injector()
+
+    def get_anchor_block(self, ctx) -> str:
+        """SS05 §3.2 Layer Aggregator 入口"""
+        soul = self.registry.get_soul(ctx.character_id, ctx.soul_spec_version)
+        state = AnchorActivationView(
+            resonance_score=ctx.activation_state.resonance_score,
+            unlocked_facet_ids=tuple(
+                f.facet_id for f in ctx.activation_state.unlocked_facets
+            ),
+            last_full_anchor_turn=ctx.activation_state.last_full_anchor_turn,
         )
-        
-        # 生成 Anchor Block
-        anchor = self.anchor_generator.generate_anchor_block(
-            context.character_id,
-            anchor_mode,
-        )
-        
-        # 转换为 PromptLayer
-        return anchor.to_prompt_layer()
-    
-    def _decide_anchor_mode(self, activation_state, turn_index):
-        """Per SS05 §3.6"""
-        drift_score = activation_state.current_drift_score
-        
-        if drift_score > 0.3:
-            return AnchorMode.REINFORCE
-        elif turn_index == 1 or turn_index - activation_state.last_full_anchor_turn >= 8:
-            return AnchorMode.FULL
-        else:
-            return AnchorMode.LIGHT
+
+        # REINFORCE 仅当 Drift Detector 已经产出 evidence 时使用
+        if ctx.drift_evidence is not None:
+            return self.injector.generate_reinforce_anchor(soul, ctx.drift_evidence)
+
+        mode = decide_mode(state, ctx.turn_index, ctx.activation_state.current_drift_score)
+        if mode == AnchorMode.FULL:
+            return self.injector.generate_full_anchor(soul, state)
+        return self.injector.generate_light_anchor(soul, state)
 ```
 
 ### 在 Drift Detector 中使用
@@ -328,13 +350,15 @@ structlog
 
 ## 已完成 ✅
 
-- [x] Soul Spec Schema Validator (schema_validator.py)
-- [x] Soul Registry (registry.py)
-- [x] Anchor Block Generator (anchor_block.py) - 生成 FULL/LIGHT/REINFORCE Anchor
-- [x] 25 个 Schema Validator 测试（全部通过）
-- [x] 20 个 Anchor Block 测试（全部通过）
-- [x] 验证脚本 (validate_soul_specs.py)
-- [x] Demo 脚本 (demo_anchor_block.py)
+- [x] Soul Spec Schema Validator (`schema_validator.py`)
+- [x] Soul Registry (`registry.py`)
+- [x] Anchor Injector (`anchor_injector.py`) — §6.2 FULL/LIGHT/REINFORCE
+- [x] Anchor Mode Decider (`anchor_mode_decider.py`) — §3.4 cadence
+- [x] 25 个 Schema Validator 测试
+- [x] 31 个 Anchor Injector 测试（含 thread-safety）
+- [x] 53 个 Mode Decider 测试
+- [x] 验证脚本 (`validate_soul_specs.py`)
+- [x] Demo 脚本 (`demo_anchor_injector.py`)
 
 ## 下一步
 
