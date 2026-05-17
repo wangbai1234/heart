@@ -7,11 +7,19 @@ Covers:
 - Memory Encoder Worker (阶段 2 LLM extraction)
 - Multi-Strategy Retriever (vector + graph + recency + emotional + identity)
 - Memory Reconstructor (state-aware recall with voice_dna)
+- Forgetting Affect Engine (inject "she's forgetting" hints)
 
 Author: 心屿团队
 """
 
 from .decay_engine import DecayEngine, reinforce_memory, ReinforcementTrigger
+from .forgetting_affect import (
+    ForgettingAffectEngine,
+    ForgettingAffectConfig,
+    ForgettingAffectDecision,
+    InjectionMode,
+    MemoryStateDistribution,
+)
 from .models import EpisodicMemory, FactNode, IdentityMemory, MemoryEncodingEvent
 from .reconstructor import Reconstructor, ReconstructResult
 from .retriever import (
@@ -49,4 +57,10 @@ __all__ = [
     # Reconstructor
     "Reconstructor",
     "ReconstructResult",
+    # Forgetting Affect Engine
+    "ForgettingAffectEngine",
+    "ForgettingAffectConfig",
+    "ForgettingAffectDecision",
+    "InjectionMode",
+    "MemoryStateDistribution",
 ]
