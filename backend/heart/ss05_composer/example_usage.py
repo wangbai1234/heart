@@ -128,6 +128,7 @@ async def encode_memory_entry(
     )
 
     import json
+
     return json.loads(response)
 
 
@@ -171,6 +172,7 @@ async def safety_check(message: str) -> dict:
     )
 
     import json
+
     return json.loads(response)
 
 

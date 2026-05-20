@@ -12,7 +12,7 @@ Author: 心屿团队
 from __future__ import annotations
 
 import math
-from typing import List, Set
+from typing import List
 from uuid import UUID
 
 import structlog
@@ -177,13 +177,17 @@ class GraphRetriever(RetrievalStrategy):
                 keyword_filters.append(FactNode.object.contains(kw))
                 keyword_filters.append(FactNode.literal_text.contains(kw))
 
-            stmt = select(FactNode.id).where(
-                FactNode.user_id == query_context.user_id,
-                FactNode.character_id == query_context.character_id,
-                FactNode.do_not_recall == False,
-                FactNode.promoted_to_l4_at.is_(None),
-                or_(*keyword_filters),
-            ).limit(10)
+            stmt = (
+                select(FactNode.id)
+                .where(
+                    FactNode.user_id == query_context.user_id,
+                    FactNode.character_id == query_context.character_id,
+                    FactNode.do_not_recall == False,
+                    FactNode.promoted_to_l4_at.is_(None),
+                    or_(*keyword_filters),
+                )
+                .limit(10)
+            )
 
             result = await self.session.execute(stmt)
             return [row[0] for row in result.all()]

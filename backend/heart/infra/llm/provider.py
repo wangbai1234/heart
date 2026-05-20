@@ -54,12 +54,12 @@ class DeepSeekProvider(LLMProvider):
     # DeepSeek 官方定价 (per 1M tokens)
     PRICING = {
         "deepseek-reasoner": {
-            "input": 0.55,      # $0.55 per 1M input tokens
-            "output": 2.19,     # $2.19 per 1M output tokens
+            "input": 0.55,  # $0.55 per 1M input tokens
+            "output": 2.19,  # $2.19 per 1M output tokens
         },
         "deepseek-chat": {
-            "input": 0.14,      # $0.14 per 1M input tokens
-            "output": 0.28,     # $0.28 per 1M output tokens
+            "input": 0.14,  # $0.14 per 1M input tokens
+            "output": 0.28,  # $0.28 per 1M output tokens
         },
     }
 

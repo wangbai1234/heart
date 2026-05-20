@@ -146,10 +146,7 @@ class RetrievalOrchestrator:
         logger.debug(
             "retrieval_candidates_merged",
             total=total_candidates,
-            by_strategy={
-                name: len(candidates)
-                for name, candidates in strategy_results.items()
-            },
+            by_strategy={name: len(candidates) for name, candidates in strategy_results.items()},
         )
 
         # Combine scores
@@ -202,10 +199,7 @@ class RetrievalOrchestrator:
             Dict of {strategy_name: [ScoredMemory]}
         """
         # Create tasks for all strategies
-        tasks = [
-            self._run_strategy_timed(strategy, query_context)
-            for strategy in self.strategies
-        ]
+        tasks = [self._run_strategy_timed(strategy, query_context) for strategy in self.strategies]
 
         # Execute in parallel
         results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -298,9 +292,7 @@ class RetrievalOrchestrator:
                             existing.score_breakdown[k] = v
                         else:
                             # Take max if same key from different strategies
-                            existing.score_breakdown[k] = max(
-                                existing.score_breakdown[k], v
-                            )
+                            existing.score_breakdown[k] = max(existing.score_breakdown[k], v)
 
                     # Merge retrieved_by
                     existing.retrieved_by.extend(cand.retrieved_by)

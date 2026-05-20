@@ -141,9 +141,17 @@ def l4_memory(user_id, character_id):
 
 @pytest.fixture
 def mock_db_session():
-    """Mock database session."""
+    """Mock database session with proper async and sync mock support."""
     session = MagicMock()
-    session.execute = AsyncMock()
+
+    # Create a default result mock that supports both .all() (sync) and .scalars() methods
+    # Tests can override this by setting mock_db_session.execute.return_value
+    result_mock = MagicMock()
+    result_mock.all = MagicMock(return_value=[])
+    result_mock.scalars = MagicMock(return_value=MagicMock(all=MagicMock(return_value=[])))
+
+    # AsyncMock with default return value
+    session.execute = AsyncMock(return_value=result_mock)
     session.commit = AsyncMock()
     return session
 

@@ -84,14 +84,17 @@ class RecencyRetriever(RetrievalStrategy):
         cutoff = now - timedelta(hours=self.window_hours)
 
         # Query L2 memories within time window
-        stmt = select(EpisodicMemory).where(
-            EpisodicMemory.user_id == query_context.user_id,
-            EpisodicMemory.character_id == query_context.character_id,
-            EpisodicMemory.do_not_recall == False,
-            EpisodicMemory.created_at >= cutoff,
-        ).order_by(
-            EpisodicMemory.created_at.desc()
-        ).limit(top_n)
+        stmt = (
+            select(EpisodicMemory)
+            .where(
+                EpisodicMemory.user_id == query_context.user_id,
+                EpisodicMemory.character_id == query_context.character_id,
+                EpisodicMemory.do_not_recall == False,
+                EpisodicMemory.created_at >= cutoff,
+            )
+            .order_by(EpisodicMemory.created_at.desc())
+            .limit(top_n)
+        )
 
         result = await self.session.execute(stmt)
         memories = result.scalars().all()

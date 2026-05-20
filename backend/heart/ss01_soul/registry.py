@@ -82,9 +82,7 @@ class SoulRegistry:
             RuntimeError: If any YAML parsing fails
         """
         if not self.soul_specs_dir.exists():
-            raise FileNotFoundError(
-                f"Soul specs directory not found: {self.soul_specs_dir}"
-            )
+            raise FileNotFoundError(f"Soul specs directory not found: {self.soul_specs_dir}")
 
         logger.info("soul_registry_load_start", dir=str(self.soul_specs_dir))
 
@@ -99,7 +97,7 @@ class SoulRegistry:
             character_id = character_dir.name
 
             # Skip hidden directories
-            if character_id.startswith('.') or character_id.startswith('_'):
+            if character_id.startswith(".") or character_id.startswith("_"):
                 continue
 
             logger.info("soul_registry_scan_character", character_id=character_id)
@@ -137,11 +135,13 @@ class SoulRegistry:
                         file=yaml_file.name,
                         error=str(e),
                     )
-                    failed_specs.append({
-                        "character_id": character_id,
-                        "file": str(yaml_file),
-                        "error": str(e),
-                    })
+                    failed_specs.append(
+                        {
+                            "character_id": character_id,
+                            "file": str(yaml_file),
+                            "error": str(e),
+                        }
+                    )
 
         if failed_specs:
             error_msg = f"Failed to load {len(failed_specs)} Soul Spec(s):\n"
@@ -172,7 +172,7 @@ class SoulRegistry:
         logger.debug("soul_spec_parse", file=str(yaml_file))
 
         # Load YAML with safe_load (NEVER yaml.load)
-        with open(yaml_file, 'r', encoding='utf-8') as f:
+        with open(yaml_file, "r", encoding="utf-8") as f:
             yaml_data = yaml.safe_load(f)
 
         # Validate through Pydantic
@@ -206,10 +206,7 @@ class SoulRegistry:
         """
         if character_id not in self._registry:
             available = list(self._registry.keys())
-            raise KeyError(
-                f"Character '{character_id}' not found. "
-                f"Available: {available}"
-            )
+            raise KeyError(f"Character '{character_id}' not found. Available: {available}")
 
         character_versions = self._registry[character_id]
 

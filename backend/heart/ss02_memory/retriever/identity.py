@@ -10,7 +10,7 @@ Author: 心屿团队
 
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import List
 
 import structlog
 from sqlalchemy import select, or_
@@ -88,8 +88,7 @@ class IdentityLookup(RetrievalStrategy):
             # Note: This is a simple implementation
             # In production, use full-text search or vector similarity
             keyword_filters = [
-                IdentityMemory.content.cast(str).contains(kw)
-                for kw in query_context.keywords
+                IdentityMemory.content.cast(str).contains(kw) for kw in query_context.keywords
             ]
             stmt = stmt.where(or_(*keyword_filters))
 

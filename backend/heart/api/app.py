@@ -62,6 +62,7 @@ def create_app() -> FastAPI:
     async def swagger_ui():
         """API 文档重定向"""
         from fastapi.openapi.docs import get_swagger_ui_html
+
         return get_swagger_ui_html(openapi_url="/openapi.json", title="Heart API")
 
     return app

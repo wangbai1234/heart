@@ -6,8 +6,8 @@
 from typing import AsyncGenerator, Optional
 import logging
 
-from .config import LLMModels, ModelTier, ModelConfig, LLMProviderConfig
-from .provider import DeepSeekProvider, LLMProvider
+from .config import ModelTier, LLMProviderConfig
+from .provider import DeepSeekProvider
 
 logger = logging.getLogger(__name__)
 
@@ -41,9 +41,7 @@ class ModelRouter:
         """
         model = self.config.get_main_model()
         logger.info(f"[{agent_name}] Calling main model: {model.name}")
-        return await self.deepseek_provider.call(
-            model, messages, temperature, max_tokens
-        )
+        return await self.deepseek_provider.call(model, messages, temperature, max_tokens)
 
     async def stream_main(
         self,
@@ -61,9 +59,7 @@ class ModelRouter:
         """
         model = self.config.get_main_model()
         logger.info(f"[{agent_name}] Streaming main model: {model.name}")
-        async for chunk in self.deepseek_provider.stream(
-            model, messages, temperature, max_tokens
-        ):
+        async for chunk in self.deepseek_provider.stream(model, messages, temperature, max_tokens):
             yield chunk
 
     async def call_cheap(
@@ -110,9 +106,7 @@ class ModelRouter:
         else:
             model = self.config.get_cheap_model()
 
-        return await self.deepseek_provider.estimate_cost(
-            model, input_tokens, output_tokens
-        )
+        return await self.deepseek_provider.estimate_cost(model, input_tokens, output_tokens)
 
     async def close(self):
         """关闭所有连接"""
@@ -135,8 +129,10 @@ async def initialize_router(config: LLMProviderConfig):
     """初始化全局 Model Router"""
     global _global_router
     _global_router = ModelRouter(config)
-    logger.info(f"ModelRouter initialized with main={config.get_main_model().name}, "
-                f"cheap={config.get_cheap_model().name}")
+    logger.info(
+        f"ModelRouter initialized with main={config.get_main_model().name}, "
+        f"cheap={config.get_cheap_model().name}"
+    )
 
 
 async def shutdown_router():

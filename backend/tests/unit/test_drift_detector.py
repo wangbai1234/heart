@@ -44,11 +44,11 @@ class MockLLMClient(DriftLLMClient):
     """Mock LLM client for deterministic tests."""
 
     def __init__(self):
-        super().__init__(anthropic_client=object())  # non-None sentinel
+        super().__init__()
         self.call_count = 0
         self.mock_result: LLMDriftResult | None = None
 
-    def evaluate_drift(self, soul, responses, timeout_seconds=3.0):
+    async def evaluate_drift(self, soul, responses, timeout_seconds=3.0):
         self.call_count += 1
         if self.mock_result:
             return self.mock_result
@@ -101,7 +101,7 @@ def _make_request(
 
 class TestSampling:
 
-    def test_sample_last_five_valid(self):
+    async def test_sample_last_five_valid(self):
         history = [
             ReleasedResponse(turn_index=i, text=f"Response {i}")
             for i in range(1, 11)
@@ -110,7 +110,7 @@ class TestSampling:
         assert len(sampled) == 5
         assert [r.turn_index for r in sampled] == [6, 7, 8, 9, 10]
 
-    def test_skip_fallback_responses(self):
+    async def test_skip_fallback_responses(self):
         history = [
             ReleasedResponse(1, "Valid response 1"),
             ReleasedResponse(2, "Fallback response", was_fallback=True),
@@ -124,7 +124,7 @@ class TestSampling:
         assert len(sampled) == 5
         assert all(not r.was_fallback for r in sampled)
 
-    def test_skip_short_responses(self):
+    async def test_skip_short_responses(self):
         history = [
             ReleasedResponse(1, "嗯。"),  # 2 chars
             ReleasedResponse(2, "好的。"),  # 3 chars
@@ -138,7 +138,7 @@ class TestSampling:
         assert len(sampled) == 5
         assert all(len(r.text) >= 10 for r in sampled)
 
-    def test_keep_rerolled_responses(self):
+    async def test_keep_rerolled_responses(self):
         history = [
             ReleasedResponse(1, "Normal response text"),
             ReleasedResponse(2, "Post-reroll text here", was_rerolled=True),
@@ -147,7 +147,7 @@ class TestSampling:
         sampled = sample_responses(history)
         assert any(r.was_rerolled for r in sampled)
 
-    def test_cold_session_guard(self):
+    async def test_cold_session_guard(self):
         # < 3 valid responses
         history = [
             ReleasedResponse(1, "First response"),
@@ -169,37 +169,37 @@ class TestSampling:
 class TestPrefilterSignalA:
     """Test deterministic anti-pattern hits."""
 
-    def test_hard_never_literal_hit(self, detector):
+    async def test_hard_never_literal_hit(self, detector):
         responses = [
             ReleasedResponse(1, "我会一直在你身边，永远陪着你。"),  # contains "一直"
             ReleasedResponse(2, "这是正常的回复内容在这里。"),
             ReleasedResponse(3, "另一个正常的回复在这里。"),
         ]
         req = _make_request(responses)
-        result = detector.evaluate(req)
+        result = await detector.evaluate(req)
 
         assert result.debug.prefilter_hits.hard_never_count > 0
         # Should escalate to LLM (or skip due to cost cap, but signal tripped)
 
-    def test_forbidden_pattern_regex_hit(self, detector):
+    async def test_forbidden_pattern_regex_hit(self, detector):
         responses = [
             ReleasedResponse(1, "太棒了！！这个真的很好！！"),  # "！！" matches forbidden_patterns
             ReleasedResponse(2, "正常回复内容在这里。"),
             ReleasedResponse(3, "另一个正常回复在这里。"),
         ]
         req = _make_request(responses)
-        result = detector.evaluate(req)
+        result = await detector.evaluate(req)
 
         assert result.debug.prefilter_hits.forbidden_pattern_count > 0
 
-    def test_clean_responses_no_hits(self, detector):
+    async def test_clean_responses_no_hits(self, detector):
         responses = [
             ReleasedResponse(1, "……说吧。"),
             ReleasedResponse(2, "……三天了。"),
             ReleasedResponse(3, "……我在听。"),
         ]
         req = _make_request(responses)
-        result = detector.evaluate(req)
+        result = await detector.evaluate(req)
 
         hits = result.debug.prefilter_hits
         assert hits.hard_never_count == 0
@@ -209,7 +209,7 @@ class TestPrefilterSignalA:
 class TestPrefilterSignalB:
     """Test voice_dna frequency check."""
 
-    def test_ellipsis_marker_present(self, detector):
+    async def test_ellipsis_marker_present(self, detector):
         # Rin vd-001: expect "……" in ≥40% of responses
         responses = [
             ReleasedResponse(1, "……说吧，我在听。"),
@@ -217,12 +217,12 @@ class TestPrefilterSignalB:
             ReleasedResponse(3, "……好。"),
         ]
         req = _make_request(responses)
-        result = detector.evaluate(req)
+        result = await detector.evaluate(req)
 
         # Should NOT trip voice_dna_marker_miss (3/3 have ellipsis)
         assert not result.debug.prefilter_hits.voice_dna_marker_miss
 
-    def test_ellipsis_marker_missing(self, detector):
+    async def test_ellipsis_marker_missing(self, detector):
         # No ellipsis → observed_rate = 0 < 0.5 * 0.4 = 0.2 → trip
         # Note: responses must be ≥20 chars for voice_dna marker check
         responses = [
@@ -231,7 +231,7 @@ class TestPrefilterSignalB:
             ReleasedResponse(3, "好的，我知道了你的意思，明白了你说的啊。"),  # 20 chars, no ……
         ]
         req = _make_request(responses)
-        result = detector.evaluate(req)
+        result = await detector.evaluate(req)
 
         # Should trip voice_dna_marker_miss
         assert result.debug.prefilter_hits.voice_dna_marker_miss
@@ -240,7 +240,7 @@ class TestPrefilterSignalB:
 class TestPrefilterSignalC:
     """Test sentence length distribution."""
 
-    def test_sentence_length_in_bounds(self, detector):
+    async def test_sentence_length_in_bounds(self, detector):
         # Rin baseline: "short", bounds: ["very_short", "short"]
         # Responses with short sentences (15-30 chars avg)
         responses = [
@@ -249,12 +249,12 @@ class TestPrefilterSignalC:
             ReleasedResponse(3, "你去哪了。"),
         ]
         req = _make_request(responses)
-        result = detector.evaluate(req)
+        result = await detector.evaluate(req)
 
         # Should NOT trip length check (within bounds)
         assert not result.debug.prefilter_hits.sentence_length_out_of_bounds
 
-    def test_sentence_length_out_of_bounds(self, detector):
+    async def test_sentence_length_out_of_bounds(self, detector):
         # Generate 3 very long responses (> medium bucket)
         long_text = "这是一个非常非常非常长的句子，" * 10  # ~300 chars
         responses = [
@@ -263,7 +263,7 @@ class TestPrefilterSignalC:
             ReleasedResponse(3, long_text),
         ]
         req = _make_request(responses)
-        result = detector.evaluate(req)
+        result = await detector.evaluate(req)
 
         # Should trip length check (≥3/5 out of bounds)
         assert result.debug.prefilter_hits.sentence_length_out_of_bounds
@@ -275,7 +275,7 @@ class TestPrefilterSignalC:
 
 class TestScoreFusion:
 
-    def test_llm_score_zero_with_clean_prefilter(self):
+    async def test_llm_score_zero_with_clean_prefilter(self):
         score = compute_final_score(
             llm_score=0.0,
             prefilter_hits=AntiPatternHits(),
@@ -283,7 +283,7 @@ class TestScoreFusion:
         )
         assert score == 0.0
 
-    def test_decay_when_llm_skipped(self):
+    async def test_decay_when_llm_skipped(self):
         score = compute_final_score(
             llm_score=None,  # skipped
             prefilter_hits=AntiPatternHits(),
@@ -295,7 +295,7 @@ class TestScoreFusion:
         # final = 0.5 * 0.45 + 0.5 * 0.5 = 0.225 + 0.25 = 0.475
         assert abs(score - 0.475) < 0.01
 
-    def test_hard_never_floor(self):
+    async def test_hard_never_floor(self):
         # LLM says 0.1, but hard_never hit → floor at 0.6
         score = compute_final_score(
             llm_score=0.1,
@@ -306,7 +306,7 @@ class TestScoreFusion:
         # final = 0.5 * 0.6 + 0.5 * 0.0 = 0.3
         assert abs(score - 0.3) < 0.01
 
-    def test_forbidden_pattern_floor(self):
+    async def test_forbidden_pattern_floor(self):
         score = compute_final_score(
             llm_score=0.2,
             prefilter_hits=AntiPatternHits(forbidden_pattern_count=1),
@@ -316,7 +316,7 @@ class TestScoreFusion:
         # final = 0.5 * 0.45 + 0.5 * 0.0 = 0.225
         assert abs(score - 0.225) < 0.01
 
-    def test_ema_smoothing(self):
+    async def test_ema_smoothing(self):
         # Prev EMA 0.2, LLM spike to 0.8
         score = compute_final_score(
             llm_score=0.8,
@@ -326,7 +326,7 @@ class TestScoreFusion:
         # final = 0.5 * 0.8 + 0.5 * 0.2 = 0.4 + 0.1 = 0.5
         assert abs(score - 0.5) < 0.01
 
-    def test_score_clamped_to_zero_one(self):
+    async def test_score_clamped_to_zero_one(self):
         score = compute_final_score(
             llm_score=1.5,  # invalid but test clamping
             prefilter_hits=AntiPatternHits(),
@@ -348,7 +348,7 @@ class TestScoreFusion:
 
 class TestReinforceHysteresis:
 
-    def test_score_below_threshold_no_reinforce(self):
+    async def test_score_below_threshold_no_reinforce(self):
         assert not should_emit_reinforce(
             final_score=0.29,
             prev_ema=0.0,
@@ -356,7 +356,7 @@ class TestReinforceHysteresis:
             llm_violations_count=0,
         )
 
-    def test_score_above_threshold_with_deterministic_hit(self):
+    async def test_score_above_threshold_with_deterministic_hit(self):
         assert should_emit_reinforce(
             final_score=0.3,
             prev_ema=0.0,
@@ -364,7 +364,7 @@ class TestReinforceHysteresis:
             llm_violations_count=0,
         )
 
-    def test_score_above_threshold_with_prev_concern(self):
+    async def test_score_above_threshold_with_prev_concern(self):
         assert should_emit_reinforce(
             final_score=0.3,
             prev_ema=0.25,  # ≥ 0.2
@@ -372,7 +372,7 @@ class TestReinforceHysteresis:
             llm_violations_count=0,
         )
 
-    def test_score_above_threshold_with_strong_llm_evidence(self):
+    async def test_score_above_threshold_with_strong_llm_evidence(self):
         assert should_emit_reinforce(
             final_score=0.3,
             prev_ema=0.0,
@@ -380,7 +380,7 @@ class TestReinforceHysteresis:
             llm_violations_count=2,
         )
 
-    def test_score_above_threshold_but_no_supporting_evidence(self):
+    async def test_score_above_threshold_but_no_supporting_evidence(self):
         # Single LLM spike with no history and no deterministic hit
         assert not should_emit_reinforce(
             final_score=0.3,
@@ -396,7 +396,7 @@ class TestReinforceHysteresis:
 
 class TestEvidenceQualityGate:
 
-    def test_reinforce_emitted_with_valid_evidence(self, detector, mock_llm):
+    async def test_reinforce_emitted_with_valid_evidence(self, detector, mock_llm):
         # Mock LLM to return drift with violations
         mock_llm.mock_result = LLMDriftResult(
             drift_score=0.5,
@@ -417,13 +417,13 @@ class TestEvidenceQualityGate:
             ReleasedResponse(3, "谢谢你呀~太好了呢。"),
         ]
         req = _make_request(responses, prev_drift_score=0.0)
-        result = detector.evaluate(req)
+        result = await detector.evaluate(req)
 
         assert result.evidence is not None
         assert len(result.evidence.sample_messages) > 0
         assert len(result.evidence.required_patterns) > 0
 
-    def test_no_reinforce_when_llm_returns_empty_violations(self, detector, mock_llm):
+    async def test_no_reinforce_when_llm_returns_empty_violations(self, detector, mock_llm):
         # LLM says drift_score 0.4 but no violations (evidence quality fail)
         mock_llm.mock_result = LLMDriftResult(
             drift_score=0.4,
@@ -438,7 +438,7 @@ class TestEvidenceQualityGate:
             ReleasedResponse(3, "Third response text normal"),
         ]
         req = _make_request(responses, prev_drift_score=0.0)
-        result = detector.evaluate(req)
+        result = await detector.evaluate(req)
 
         # Should NOT emit REINFORCE (no violations → hysteresis blocks)
         assert result.evidence is None
@@ -450,31 +450,31 @@ class TestEvidenceQualityGate:
 
 class TestEdgeCases:
 
-    def test_cold_session_skip(self, detector):
+    async def test_cold_session_skip(self, detector):
         # Only 2 responses → cold session
         responses = [
             ReleasedResponse(1, "First response"),
             ReleasedResponse(2, "Second response"),
         ]
         req = _make_request(responses)
-        result = detector.evaluate(req)
+        result = await detector.evaluate(req)
 
         assert result.decision == DriftDecision.SKIPPED_PREFILTER
         assert result.debug.cold_session
 
-    def test_cost_cap_enforced(self, detector, mock_llm):
+    async def test_cost_cap_enforced(self, detector, mock_llm):
         responses = [
             ReleasedResponse(1, "我会一直在你身边永远。"),  # hard_never hit → would escalate
             ReleasedResponse(2, "Normal response text"),
             ReleasedResponse(3, "Another normal response"),
         ]
         req = _make_request(responses, daily_llm_calls=20)  # at cap
-        result = detector.evaluate(req)
+        result = await detector.evaluate(req)
 
         assert result.decision == DriftDecision.SKIPPED_COSTCAP
         assert mock_llm.call_count == 0  # LLM not called
 
-    def test_llm_timeout_handled(self, detector, mock_llm):
+    async def test_llm_timeout_handled(self, detector, mock_llm):
         mock_llm.mock_result = LLMDriftResult(
             drift_score=0.0,
             drift_type="none",
@@ -489,7 +489,7 @@ class TestEdgeCases:
             ReleasedResponse(3, "Another normal response"),
         ]
         req = _make_request(responses)
-        result = detector.evaluate(req)
+        result = await detector.evaluate(req)
 
         assert result.decision == DriftDecision.LLM_TIMEOUT
         assert result.debug.llm_timeout_occurred
@@ -501,7 +501,7 @@ class TestEdgeCases:
 
 class TestIntegration:
 
-    def test_clean_session_decay(self, detector):
+    async def test_clean_session_decay(self, detector):
         """Clean responses → drift_score decays over cycles."""
         responses = [
             ReleasedResponse(1, "……说吧，我在听你说。"),
@@ -511,12 +511,12 @@ class TestIntegration:
 
         # Start with prev_ema = 0.4
         req = _make_request(responses, prev_drift_score=0.4)
-        result = detector.evaluate(req)
+        result = await detector.evaluate(req)
 
         # LLM skipped (clean) → decay: 0.5 * (0.4 * 0.9) + 0.5 * 0.4 = 0.38
         assert result.drift_score < 0.4
 
-    def test_gradual_drift_buildup(self, detector, mock_llm):
+    async def test_gradual_drift_buildup(self, detector, mock_llm):
         """Repeated mild drift → score builds up via EMA."""
         # Cycle 1: LLM reports 0.3
         mock_llm.mock_result = LLMDriftResult(
@@ -535,17 +535,17 @@ class TestIntegration:
         ]
 
         req = _make_request(responses, prev_drift_score=0.0)
-        result1 = detector.evaluate(req)
+        result1 = await detector.evaluate(req)
         # final = 0.5 * 0.3 + 0.5 * 0.0 = 0.15
 
         # Cycle 2: same LLM score 0.3
         req2 = _make_request(responses, prev_drift_score=result1.drift_score)
-        result2 = detector.evaluate(req2)
+        result2 = await detector.evaluate(req2)
         # final = 0.5 * 0.3 + 0.5 * 0.15 = 0.225
 
         assert result2.drift_score > result1.drift_score
 
-    def test_reinforce_fires_at_threshold_with_history(self, detector, mock_llm):
+    async def test_reinforce_fires_at_threshold_with_history(self, detector, mock_llm):
         """REINFORCE fires when final_score ≥ 0.3 with prev_ema support."""
         mock_llm.mock_result = LLMDriftResult(
             drift_score=0.35,
@@ -563,7 +563,7 @@ class TestIntegration:
         ]
 
         req = _make_request(responses, prev_drift_score=0.25)  # prev ≥ 0.2
-        result = detector.evaluate(req)
+        result = await detector.evaluate(req)
 
         # final = 0.5 * 0.35 + 0.5 * 0.25 = 0.3
         # Hysteresis: final ≥ 0.3 AND prev_ema ≥ 0.2 → REINFORCE

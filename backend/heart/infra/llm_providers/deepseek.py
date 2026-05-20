@@ -96,10 +96,7 @@ class DeepSeekV4FlashProvider(LLMProvider):
 
     def _prepare_request_body(self, request: LLMRequest) -> Dict:
         """Prepare request body for DeepSeek API."""
-        messages = [
-            {"role": msg.role.value, "content": msg.content}
-            for msg in request.messages
-        ]
+        messages = [{"role": msg.role.value, "content": msg.content} for msg in request.messages]
 
         body = {
             "model": request.model or self.DEFAULT_MODEL,
@@ -236,9 +233,13 @@ class DeepSeekV4FlashProvider(LLMProvider):
                                 finish_reason=choice["finish_reason"],
                                 usage={
                                     "prompt_tokens": usage.get("prompt_tokens", 0) if usage else 0,
-                                    "completion_tokens": usage.get("completion_tokens", 0) if usage else 0,
+                                    "completion_tokens": usage.get("completion_tokens", 0)
+                                    if usage
+                                    else 0,
                                     "total_tokens": usage.get("total_tokens", 0) if usage else 0,
-                                } if usage else None,
+                                }
+                                if usage
+                                else None,
                             )
                     except json.JSONDecodeError:
                         continue

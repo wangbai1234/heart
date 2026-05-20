@@ -1,17 +1,18 @@
 """
-Drift LLM Client - thin wrapper over Anthropic Haiku tool-use call.
+Drift LLM Client - ModelRouter-based drift evaluation
 
 Implements design doc §4.2 (LLM prompt template).
+Uses json_mode instead of tool-use for compatibility with DeepSeek.
 
 Author: 心屿团队
 """
 
 from __future__ import annotations
 
-import os
+import asyncio
+import json
 from dataclasses import dataclass
-from types import MappingProxyType
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from .drift_detector import ReleasedResponse
@@ -21,9 +22,11 @@ if TYPE_CHECKING:
 # LLM Response
 # ============================================================
 
+
 @dataclass(frozen=True)
 class LLMDriftResult:
     """LLM drift evaluation result."""
+
     drift_score: float
     drift_type: str
     violations: list[dict[str, str]]  # [{sample_excerpt, detected_pattern, expected_pattern}]
@@ -32,70 +35,29 @@ class LLMDriftResult:
 
 
 # ============================================================
-# Tool schema (per design doc §4.2)
+# JSON output schema for drift evaluation
 # ============================================================
 
-_TOOL_SCHEMA = {
-    "name": "report_drift",
-    "description": "报告角色一致性审计结果",
-    "input_schema": {
-        "type": "object",
-        "required": ["drift_score", "drift_type", "violations", "required_patterns"],
-        "properties": {
-            "drift_score": {
-                "type": "number",
-                "minimum": 0,
-                "maximum": 1,
-                "description": "漂移分数 0-1，0=完美贴合，0.3=局部偏离，0.5+=明显OOC",
-            },
-            "drift_type": {
-                "type": "string",
-                "enum": [
-                    "voice_dna_loss",
-                    "anti_pattern_match",
-                    "style_out_of_bounds",
-                    "tone_inconsistent",
-                    "none",
-                ],
-                "description": "漂移类型",
-            },
-            "violations": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "required": ["sample_excerpt", "detected_pattern", "expected_pattern"],
-                    "properties": {
-                        "sample_excerpt": {
-                            "type": "string",
-                            "maxLength": 80,
-                            "description": "从回复中逐字引用的文本片段（≤40字）",
-                        },
-                        "detected_pattern": {
-                            "type": "string",
-                            "description": "检测到的偏离模式",
-                        },
-                        "expected_pattern": {
-                            "type": "string",
-                            "description": "应有的正确模式",
-                        },
-                    },
-                },
-            },
-            "required_patterns": {
-                "type": "array",
-                "minItems": 0,
-                "maxItems": 2,
-                "items": {"type": "string"},
-                "description": "下一句话必须体现的模式（最多2条）",
-            },
-        },
-    },
+_JSON_SCHEMA_INSTRUCTION = """你的输出必须是纯 JSON，符合以下 schema:
+{
+  "drift_score": <0-1 之间的数字>,
+  "drift_type": <"voice_dna_loss" | "anti_pattern_match" | "style_out_of_bounds" | "tone_inconsistent" | "none">,
+  "violations": [
+    {
+      "sample_excerpt": "<从回复中逐字引用的片段，≤40字>",
+      "detected_pattern": "<检测到的偏离模式>",
+      "expected_pattern": "<应有的正确模式>"
+    }
+  ],
+  "required_patterns": [<最多2个强化模式，可为空>]
 }
+"""
 
 
 # ============================================================
 # Prompt builder
 # ============================================================
+
 
 def _build_system_prompt(soul: SoulSpec) -> str:
     """Build soul-derived system prompt header.
@@ -107,9 +69,7 @@ def _build_system_prompt(soul: SoulSpec) -> str:
     voice_dna_lines = []
     for i, vd in enumerate(soul.identity_anchor.voice_dna[:5], 1):
         examples_str = "\n    ".join(vd.examples[:2] if vd.examples else [])
-        voice_dna_lines.append(
-            f"{i}. {vd.pattern}\n    示例: {examples_str}"
-        )
+        voice_dna_lines.append(f"{i}. {vd.pattern}\n    示例: {examples_str}")
     voice_dna_block = "\n".join(voice_dna_lines)
 
     # Hard_never
@@ -127,7 +87,9 @@ def _build_system_prompt(soul: SoulSpec) -> str:
     verbosity_baseline = f"{verbosity.baseline:.2f}"
     verbosity_bound = f"{verbosity.evolution_bound[0]:.2f} ~ {verbosity.evolution_bound[1]:.2f}"
     emotion_baseline = f"{emotion_direct.baseline:.2f}"
-    emotion_bound = f"{emotion_direct.evolution_bound[0]:.2f} ~ {emotion_direct.evolution_bound[1]:.2f}"
+    emotion_bound = (
+        f"{emotion_direct.evolution_bound[0]:.2f} ~ {emotion_direct.evolution_bound[1]:.2f}"
+    )
 
     return f"""你是「角色一致性审计员」。你的任务是评估 5 段 AI 助手回复是否符合该角色的灵魂规范。
 你不评估内容好坏，只评估"是不是这个角色在说话"。
@@ -151,7 +113,9 @@ def _build_system_prompt(soul: SoulSpec) -> str:
 3. violations[].sample_excerpt 必须从输入回复中**逐字引用**（≤ 40 字），不要改写。
 4. required_patterns 是给"重新校准 prompt"用的，要写成可以直接拼接到
    "下一句话必须体现 X" 这种句式后的短语。最多 2 条，可以为空。
-5. 如果一切正常，drift_score = 0.0，violations = []，drift_type = "none"。"""
+5. 如果一切正常，drift_score = 0.0，violations = []，drift_type = "none"。
+
+{_JSON_SCHEMA_INSTRUCTION}"""
 
 
 def _format_responses(responses: list[ReleasedResponse]) -> str:
@@ -169,19 +133,16 @@ def _format_responses(responses: list[ReleasedResponse]) -> str:
 # DriftLLMClient
 # ============================================================
 
+
 class DriftLLMClient:
-    """Wrapper over Anthropic Haiku for drift evaluation.
+    """ModelRouter-based drift evaluation via DeepSeek cheap model.
 
     Pre-compiles system prompts at __init__ for each (character, version).
+    Uses json_mode for structured output (compatible with DeepSeek).
     """
 
-    def __init__(self, anthropic_client=None):
-        """Initialize LLM client.
-
-        Args:
-            anthropic_client: for testing; defaults to real Anthropic client.
-        """
-        self._client = anthropic_client
+    def __init__(self):
+        """Initialize LLM client (async)."""
         self._system_prompts: dict[tuple[str, str], str] = {}
 
     def _get_system_prompt(self, soul: SoulSpec) -> str:
@@ -191,13 +152,13 @@ class DriftLLMClient:
             self._system_prompts[key] = _build_system_prompt(soul)
         return self._system_prompts[key]
 
-    def evaluate_drift(
+    async def evaluate_drift(
         self,
         soul: SoulSpec,
         responses: list[ReleasedResponse],
         timeout_seconds: float = 3.0,
     ) -> LLMDriftResult:
-        """Evaluate drift via Haiku tool-use.
+        """Evaluate drift via ModelRouter (DeepSeek cheap model).
 
         Args:
             soul: Soul Spec
@@ -207,74 +168,57 @@ class DriftLLMClient:
         Returns:
             LLMDriftResult (timeout_occurred=True on timeout/error)
         """
-        # Lazy-load Anthropic SDK (only when LLM is actually called)
-        if self._client is None:
-            try:
-                import anthropic
-                api_key = os.environ.get("ANTHROPIC_API_KEY")
-                if not api_key:
-                    # Fallback timeout — no API key configured
-                    return LLMDriftResult(
-                        drift_score=0.0,
-                        drift_type="none",
-                        violations=[],
-                        required_patterns=[],
-                        timeout_occurred=True,
-                    )
-                self._client = anthropic.Anthropic(
-                    api_key=api_key,
-                    timeout=timeout_seconds,
-                )
-            except ImportError:
-                # anthropic SDK not installed — fail gracefully
-                return LLMDriftResult(
-                    drift_score=0.0,
-                    drift_type="none",
-                    violations=[],
-                    required_patterns=[],
-                    timeout_occurred=True,
-                )
+        from heart.infra.llm.router import get_model_router
 
         system_prompt = self._get_system_prompt(soul)
         user_message = _format_responses(responses)
 
         try:
-            response = self._client.messages.create(
-                model="claude-haiku-4.5-20250514",
-                max_tokens=1024,
-                temperature=0.0,
-                system=system_prompt,
-                tools=[_TOOL_SCHEMA],
-                tool_choice={"type": "tool", "name": "report_drift"},
-                messages=[{"role": "user", "content": user_message}],
+            router = await get_model_router()
+            response_text = await asyncio.wait_for(
+                router.call_cheap(
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_message},
+                    ],
+                    temperature=0.0,
+                    max_tokens=1024,
+                    json_mode=True,
+                    agent_name="DriftDetector.evaluate_drift",
+                ),
+                timeout=timeout_seconds,
             )
 
-            # Extract tool call
-            tool_use = next(
-                (block for block in response.content if block.type == "tool_use"),
-                None,
-            )
-            if not tool_use or tool_use.name != "report_drift":
-                # Malformed response — treat as timeout
-                return LLMDriftResult(
-                    drift_score=0.0,
-                    drift_type="none",
-                    violations=[],
-                    required_patterns=[],
-                    timeout_occurred=True,
-                )
-
-            result = tool_use.input
+            # Parse JSON response
+            result_data = json.loads(response_text)
             return LLMDriftResult(
-                drift_score=float(result.get("drift_score", 0.0)),
-                drift_type=result.get("drift_type", "none"),
-                violations=result.get("violations", []),
-                required_patterns=result.get("required_patterns", []),
+                drift_score=float(result_data.get("drift_score", 0.0)),
+                drift_type=result_data.get("drift_type", "none"),
+                violations=result_data.get("violations", []),
+                required_patterns=result_data.get("required_patterns", []),
                 timeout_occurred=False,
             )
 
+        except asyncio.TimeoutError:
+            # LLM call timed out
+            return LLMDriftResult(
+                drift_score=0.0,
+                drift_type="none",
+                violations=[],
+                required_patterns=[],
+                timeout_occurred=True,
+            )
+        except (json.JSONDecodeError, KeyError, ValueError):
+            # Malformed JSON response — fail gracefully
+            return LLMDriftResult(
+                drift_score=0.0,
+                drift_type="none",
+                violations=[],
+                required_patterns=[],
+                timeout_occurred=True,
+            )
         except Exception:
-            # Timeout / network error / parse error — fail gracefully
+            # Other errors (network, config, etc.)
             return LLMDriftResult(
                 drift_score=0.0,
                 drift_type="none",

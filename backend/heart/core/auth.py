@@ -3,13 +3,14 @@
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 import jwt
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
 from fastapi import HTTPException, status
 from .config import settings
 
 
 class TokenData(BaseModel):
     """Token payload data."""
+
     user_id: str
     email: Optional[str] = None
     exp: Optional[datetime] = None
@@ -17,6 +18,7 @@ class TokenData(BaseModel):
 
 class User(BaseModel):
     """User model."""
+
     user_id: str
     email: str
     username: str
@@ -25,6 +27,7 @@ class User(BaseModel):
 
 class Token(BaseModel):
     """Token response model."""
+
     access_token: str
     token_type: str = "bearer"
     expires_in: int

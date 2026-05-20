@@ -35,6 +35,7 @@ logger = structlog.get_logger()
 # Event Bus Protocol
 # ============================================================
 
+
 class EventBus(Protocol):
     """Protocol for event emission (to be implemented in orchestration layer)."""
 
@@ -47,9 +48,11 @@ class EventBus(Protocol):
 # Data Structures
 # ============================================================
 
+
 @dataclass(frozen=True)
 class TriggerProgress:
     """Progress toward a specific trigger's cumulative_count."""
+
     trigger_id: str
     current_count: int
     required_count: int
@@ -64,6 +67,7 @@ class FacetTriggerState:
 
     Maps trigger_id → progress for all triggers in facet.required_triggers.
     """
+
     facet_id: str
     triggers: dict[str, TriggerProgress]
 
@@ -79,6 +83,7 @@ class FacetTriggerState:
 @dataclass(frozen=True)
 class UnlockedFacet:
     """Record of an unlocked facet."""
+
     facet_id: str
     unlocked_at: datetime
     unlock_trigger_states: dict[str, TriggerProgress]
@@ -88,6 +93,7 @@ class UnlockedFacet:
 @dataclass(frozen=True)
 class FacetUnlockEvent:
     """Event emitted when a facet unlocks."""
+
     event_id: UUID
     user_id: UUID
     character_id: str
@@ -100,6 +106,7 @@ class FacetUnlockEvent:
 @dataclass(frozen=True)
 class FacetUnlockResult:
     """Result of check_unlock_conditions."""
+
     newly_unlocked: tuple[str, ...]  # facet_ids
     events: tuple[FacetUnlockEvent, ...]
     total_unlocked_count: int  # including previously unlocked
@@ -111,6 +118,7 @@ class ActivationStateForUnlock:
 
     Provided by SoulActivationStateService.
     """
+
     resonance_score: float
     unlocked_facets: tuple[UnlockedFacet, ...]
     facet_trigger_states: dict[str, FacetTriggerState]
@@ -119,6 +127,7 @@ class ActivationStateForUnlock:
 # ============================================================
 # Facet Unlocker
 # ============================================================
+
 
 class FacetUnlocker:
     """Checks and unlocks hidden facets based on resonance + triggers.
@@ -287,6 +296,7 @@ class FacetUnlocker:
 # ============================================================
 # Helper: Build FacetTriggerState from Events
 # ============================================================
+
 
 def build_facet_trigger_state(
     soul: SoulSpec,

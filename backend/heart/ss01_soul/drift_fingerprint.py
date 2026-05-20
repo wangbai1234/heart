@@ -22,9 +22,10 @@ if TYPE_CHECKING:
 @dataclass(frozen=True)
 class VoiceDNAMarker:
     """Expected marker for a high-frequency voice_dna pattern."""
+
     vd_id: str
-    pattern: str | re.Pattern         # literal or regex to search for
-    expected_hit_rate: float          # e.g. 0.4 = expect in ≥40% of responses
+    pattern: str | re.Pattern  # literal or regex to search for
+    expected_hit_rate: float  # e.g. 0.4 = expect in ≥40% of responses
     is_regex: bool = False
 
 
@@ -34,6 +35,7 @@ class DriftFingerprint:
 
     Built once at startup from Soul Spec, then frozen for lock-free reads.
     """
+
     character_id: str
     soul_spec_version: str
 
@@ -70,17 +72,13 @@ def _build_fingerprint(soul: SoulSpec) -> DriftFingerprint:
     """Build fingerprint from a single Soul Spec."""
     # Signal A — anti-patterns
     hard_never = frozenset(soul.identity_anchor.anti_patterns.hard_never)
-    soft_never = frozenset(
-        soul.identity_anchor.anti_patterns.soft_never or []
-    )
+    soft_never = frozenset(soul.identity_anchor.anti_patterns.soft_never or [])
     rare_unlock = frozenset(
-        w.word
-        for w in (soul.identity_anchor.anti_patterns.rare_unlock_words or [])
+        w.word for w in (soul.identity_anchor.anti_patterns.rare_unlock_words or [])
     )
 
     forbidden_patterns = tuple(
-        re.compile(fp.regex)
-        for fp in (soul.identity_anchor.anti_patterns.forbidden_patterns or [])
+        re.compile(fp.regex) for fp in (soul.identity_anchor.anti_patterns.forbidden_patterns or [])
     )
 
     # Signal B — voice_dna high-frequency markers

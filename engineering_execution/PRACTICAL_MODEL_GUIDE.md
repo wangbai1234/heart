@@ -1037,6 +1037,1002 @@ Phase 2 预算: ~$250-400 LLM cost
 
 ---
 
+# 第五部分之二: Phase 3 — Emotion + Relationship (Week 13-17) 详细操作
+
+> 主力: **CC-S46**(实现) + **CC-Opus**(Repair Mechanic / Stage Tuning 设计) + **HUMAN**(emotion 短语库 / stage 触发阈值)
+> 入口规范: /runtime_specs/03_emotion_state_machine.md + /runtime_specs/04_relationship_phase_engine.md
+
+## 5.1 Task: PG Schema + SQLAlchemy Models (SS03 + SS04)
+
+**Tool**: CC-Haiku
+
+**Prompt**:
+
+```
+Generate SQLAlchemy 2.0 models for SS03 (Emotion) and SS04 (Relationship).
+
+Read:
+- /runtime_specs/03_emotion_state_machine.md §5 (Data Structures) + §10.2 (PG Schema)
+- /runtime_specs/04_relationship_phase_engine.md §5 + §10.2
+
+Create:
+1. backend/heart/ss03_emotion/models.py — EmotionState, EmotionEvent, MoodDriftLog
+2. backend/heart/ss04_relationship/models.py — RelationshipState, StageTransition, ColdWarSession, RepairLog
+3. migrations/versions/002_add_emotion_relationship_tables.py — Alembic migration
+
+Constraints:
+- Same column names/types/indexes/partitioning as spec §10.2 (do not invent fields)
+- Use sqlalchemy.dialects.postgresql for jsonb
+- Match user_id × 32 hash partitioning convention
+- pgvector vector() type where spec specifies embedding
+
+Don't add helper methods. Just declarative models + migration.
+
+After writing, run: pytest tests/integration/test_migrations.py
+```
+
+## 5.2 Task: Emotion State Machine + Trigger Detector
+
+**Tool**: CC-S46
+
+**Prompt**:
+
+```
+Implement SS03 Emotion State Machine and Trigger Detector per /runtime_specs/03_emotion_state_machine.md.
+
+Read §3 (state transitions), §3.4 (triggers), §5 (data), §10.3 (service interface), §10.4 (decay).
+
+Create:
+1. backend/heart/ss03_emotion/state_machine.py — EmotionStateMachine
+   - transition(current_state, trigger, context) -> EmotionState
+   - All transitions from §3 transition table
+2. backend/heart/ss03_emotion/trigger_detector.py
+   - detect(turn: Turn, soul: Soul, current_state: EmotionState) -> List[EmotionTrigger]
+   - Lexicon-driven (config/emotion_lexicon.yaml from §3.4)
+3. backend/heart/ss03_emotion/decay.py — emotion-specific decay per profile (§10.4)
+4. backend/heart/ss03_emotion/service.py — EmotionService stitching all above
+5. tests/unit/test_emotion_state_machine.py + test_emotion_triggers.py
+
+Constraints:
+- INV-E-* from §2.2 (cite each in tests)
+- user_id filter on every read
+- Trigger detector latency < 30ms (no LLM)
+- All transitions deterministic given (state, trigger, context)
+
+Run: pytest tests/unit/test_emotion*.py -v
+```
+
+## 5.3 Task: Contagion Engine + Mood Drift Engine
+
+**Tool**: CC-S46
+
+**Prompt**:
+
+```
+Implement SS03 Contagion Engine + Mood Drift Engine per /runtime_specs/03_emotion_state_machine.md §3.5 + §3.7.
+
+Create:
+1. backend/heart/ss03_emotion/contagion.py
+   - apply_contagion(user_emotion: UserEmotion, soul: Soul, current_state: EmotionState) -> EmotionState
+   - Soul-aware: weights from soul.cognitive_style.empathy_curve
+2. backend/heart/ss03_emotion/mood_drift.py
+   - Scheduled drift job (called by Inner Loop Scheduler)
+   - Drift toward Soul.baseline_mood at rate from §3.7
+
+Tests:
+- Empathy curve correctly modulates contagion (per-character)
+- Drift converges to baseline over time (property test)
+- Drift respects floor/ceiling
+```
+
+## 5.4 Task: Repair Mechanic (Anti-Gaming)
+
+**Tool**: CC-Opus (design) → CC-S46 (impl)
+
+**Step 1 (Opus design)**:
+
+```bash
+claude --model opus
+```
+
+Then in session:
+```
+Design Repair Mechanic per /runtime_specs/03_emotion_state_machine.md §3.6 (Repair).
+
+Anti-gaming concerns:
+1. User spams "对不起" — should NOT auto-repair
+2. User uses sincere wording but had repeated offenses — should require more
+3. Soul-specific: Rin colder, Dorothy quicker to forgive
+
+Design questions:
+1. How to detect "sincere" vs "spammed"? (heuristic vs cheap LLM)
+2. What state input does Repair need? (last_offense, repair_count_recent, soul.forgiveness_curve)
+3. Cool-down rules? (e.g., max 1 repair per N turns)
+4. Output shape: RepairOutcome = {accepted: bool, partial: bool, residual_score: float}
+
+Output: docs/design/repair_mechanic.md.
+Do not code. Discuss.
+```
+
+**Step 2 (Sonnet impl)**:
+
+```
+Implement Repair Mechanic per docs/design/repair_mechanic.md.
+
+Create:
+- backend/heart/ss03_emotion/repair.py — RepairEngine
+- All LLM calls via heart.infra.llm.get_model_router().call_cheap()
+- Cost cap: max 5 repair-LLM calls / user / day
+
+Tests:
+- Spam scenarios → reject
+- Sincere wording + low recent offenses → partial/full repair
+- Soul-specific behavior (Rin vs Dorothy diverges)
+- Cost cap enforced
+```
+
+## 5.5 Task: Stage Phase Engine + Trust/Attachment Trackers
+
+**Tool**: CC-S46
+
+**Prompt**:
+
+```
+Implement SS04 Stage Phase Engine per /runtime_specs/04_relationship_phase_engine.md §3 + §10.3.
+
+Create:
+1. backend/heart/ss04_relationship/stage_engine.py
+   - StagePhaseEngine.evaluate(state, signals) -> StageDecision
+   - Apply Soul.stage_progression_curve (per character)
+2. backend/heart/ss04_relationship/trust_tracker.py
+   - Update trust dimension per §3.5
+3. backend/heart/ss04_relationship/attachment_tracker.py
+   - Update attachment dimension per §3.5
+4. backend/heart/ss04_relationship/service.py — RelationshipService
+5. tests/unit/test_stage_engine.py + test_trust_attachment.py
+
+Constraints:
+- INV-R-* from §2.2
+- Stage demotion is rare and gated (see §3.3)
+- Both trackers update atomically
+```
+
+## 5.6 Task: Reunion State Machine + Cold War Tracker
+
+**Tool**: CC-S46
+
+**Prompt**:
+
+```
+Implement SS04 Reunion + Cold War per /runtime_specs/04_relationship_phase_engine.md §3.4.
+
+Create:
+1. backend/heart/ss04_relationship/reunion.py — ReunionStateMachine
+   - 3-phase logic (surprise → relief → reconnect)
+   - Soul-driven phrasing inputs
+2. backend/heart/ss04_relationship/cold_war.py
+   - ColdWarTracker (detect, track, terminate via Repair)
+   - Integrates with ss03_emotion.repair.RepairEngine
+
+Tests cover all transitions + a 30-day-absence simulation.
+```
+
+## 5.7 Task: Emotion 短语库 (Per Character)
+
+**Tool**: **HUMAN ONLY** (Opus brainstorm)
+
+```bash
+claude --model opus
+```
+
+Then:
+```
+Help me brainstorm emotion phrase library for Rin and Dorothy.
+
+For each character × each emotion (joy/sad/angry/anxious/calm/fluttered/jealous/lonely):
+- 5 short phrases (≤ 12 chars)
+- 5 mid phrases (sentence)
+- 3 long phrases (paragraph)
+- 3 anti-examples (what they would NEVER say)
+
+DO NOT WRITE FILES. Propose only. I'll save to:
+  config/emotion_phrases/{rin,dorothy}.yaml
+```
+
+## 5.8 Task: Stage Entry Conditions Tuning
+
+**Tool**: CC-Opus + HUMAN
+
+```bash
+claude --model opus
+```
+
+Then:
+```
+Help me tune stage entry conditions per /runtime_specs/04_relationship_phase_engine.md §3.2.
+
+For each stage transition:
+1. Current threshold from spec
+2. Expected days-of-talk to reach
+3. Risk: too fast vs too slow
+4. Soul-specific override
+
+Output: comparison table with 2 alternatives per stage.
+Don't change files. I'll choose.
+```
+
+## 5.9 Phase 3 Session 安排
+
+```
+Week 13:
+  Day 1: CC-Haiku — Schema + migrations (5.1)
+  Day 2-3: CC-S46 — Emotion state machine + triggers (5.2)
+  Day 4-5: CC-S46 — Contagion + mood drift (5.3)
+
+Week 14:
+  Day 1: CC-Opus — Repair design (5.4 step 1)
+  Day 2-3: CC-S46 — Repair impl (5.4 step 2)
+  Day 4-5: CC-S46 — Stage engine + trackers (5.5)
+
+Week 15:
+  Day 1-2: CC-S46 — Reunion + cold war (5.6)
+  Day 3-5: HUMAN+Opus — Emotion phrases (5.7) + Stage tuning (5.8)
+
+Week 16:
+  Day 1-3: CC-S46 — SS03/SS04 cross-component integration tests
+  Day 4-5: HUMAN+CC-S46 — Phase 3 cut criteria + golden dialogue regression
+
+Week 17 (buffer):
+  Bug fixes, perf tuning, doc updates
+```
+
+Phase 3 Token 预算: ~$200-350 LLM cost
+
+---
+
+# 第五部分之三: Phase 4 — Composer (Week 18-21) 详细操作
+
+> 主力: **CC-S46**(实现) + **CC-Opus**(Conflict Resolver / Streaming Anti-Pattern / Critic 设计)
+> 入口: /runtime_specs/05_persona_composition_runtime.md
+
+## 6.1 Task: Layer Aggregator
+
+**Tool**: CC-S46
+
+**Prompt**:
+
+```
+Implement SS05 Layer Aggregator per /runtime_specs/05_persona_composition_runtime.md §3.2 + §10.3.
+
+Create:
+- backend/heart/ss05_composer/layer_aggregator.py
+- Aggregate inputs from: SS01 (anchor), SS02 (memory), SS03 (emotion), SS04 (relationship), SS06 (inner state)
+- Parallel via asyncio.gather
+- Each upstream call has independent timeout
+- Partial-result tolerance: if one times out, use cached fallback
+
+Tests:
+- All 5 layers succeed → all included
+- 1 layer fails → fallback used + warning logged
+- Timing: end-to-end < 200ms with mocked upstreams
+```
+
+## 6.2 Task: Conflict Resolver
+
+**Tool**: CC-Opus (design) → CC-S46 (impl)
+
+**Step 1 (design)**:
+
+```bash
+claude --model opus
+```
+
+Then:
+```
+Design Conflict Resolver per /runtime_specs/05_persona_composition_runtime.md §3.3.
+
+Tough cases:
+1. SS03 says "angry" + SS04 says "intimate stage" → which dominates?
+2. SS06 says "she's working" + SS02 says "user just messaged emergency"
+3. Anchor says "cold tone" + Care Path says "must be warm"
+
+Output: docs/design/conflict_resolver.md with precedence matrix.
+Don't code.
+```
+
+**Step 2 (impl)**:
+
+```
+Implement Conflict Resolver per docs/design/conflict_resolver.md.
+
+Create:
+- backend/heart/ss05_composer/conflict_resolver.py
+- resolve(layers: AggregatedLayers) -> ResolvedComposition
+- Deterministic precedence rules
+- Care Path always wins (hard-coded high priority)
+
+Tests cover every precedence case.
+```
+
+## 6.3 Task: Token Budget Allocator
+
+**Tool**: CC-S46
+
+**Prompt**:
+
+```
+Implement Token Budget Allocator per /runtime_specs/05_persona_composition_runtime.md §3.4 + §10.4.
+
+Create:
+- backend/heart/ss05_composer/token_budget.py
+- allocate(layers, total_budget) -> AllocatedLayers
+- Compression strategies per layer (truncation / summarization / drop)
+- Anchor + Care Path are NON-compressible
+- Use tiktoken or DeepSeek tokenizer from heart.infra.llm
+
+Tests:
+- Tight budget → low-priority layers dropped, anchor preserved
+- Loose budget → no compression
+```
+
+## 6.4 Task: Modality Adapter + Composer
+
+**Tool**: CC-S46
+
+**Prompt**:
+
+```
+Implement Modality Adapter + Composer per /runtime_specs/05_persona_composition_runtime.md §3.5 + §3.6.
+
+Create:
+1. backend/heart/ss05_composer/modality_adapter.py
+   - adapt(composition, modality) -> ModalityAwareComposition
+   - Modalities: text-short, text-long, voice-script, image-caption
+2. backend/heart/ss05_composer/composer.py
+   - Composer.compose(resolved_layers, modality, soul) -> PromptBundle
+   - Assembles final prompt for main LLM
+
+Tests:
+- Voice-script modality strips markdown
+- Each modality has expected structural elements
+```
+
+## 6.5 Task: Anti-Drift Injector
+
+**Tool**: CC-S46
+
+**Prompt**:
+
+```
+Implement Anti-Drift Injector per /runtime_specs/05_persona_composition_runtime.md §3.7.
+
+Create:
+- backend/heart/ss05_composer/anti_drift_injector.py
+- Reads drift_score from SS01 DriftDetector
+- Calls SS01 AnchorModeDecider for mode selection
+- Injects reinforce-anchor when needed
+
+Tests:
+- drift_score < threshold → no injection
+- drift_score >= threshold → reinforce anchor present
+```
+
+## 6.6 Task: Anti-Pattern Filter (Sync) + Streaming Anti-Pattern
+
+**Tool**: CC-S46 (sync) + CC-Opus→CC-S46 (streaming)
+
+**Sync first**:
+
+```
+Implement sync Anti-Pattern Filter per /runtime_specs/05_persona_composition_runtime.md §3.8.
+
+Create:
+- backend/heart/ss05_composer/anti_pattern_filter.py
+- Uses Aho-Corasick automaton (pyahocorasick)
+- Patterns from Soul.anti_patterns (per-character)
+- filter(text, soul) -> FilterResult{passed, violations}
+
+Tests:
+- Rin's anti-patterns rejected
+- Dorothy's anti-patterns rejected
+- Performance: 10k token check < 5ms
+```
+
+**Streaming (Opus design)**:
+
+```bash
+claude --model opus
+```
+
+Then:
+```
+Design Streaming Anti-Pattern Filter per /runtime_specs/05_persona_composition_runtime.md §3.9.
+
+Can we do incremental pattern matching on stream chunks?
+Design questions:
+1. Incremental Aho-Corasick state machine — feasible?
+2. False-positive cost: kill mid-stream when not needed?
+3. Buffer strategy: how many tokens lookback?
+
+Output: docs/design/streaming_anti_pattern.md.
+Don't code.
+```
+
+## 6.7 Task: Reroll Handler
+
+**Tool**: CC-S46
+
+**Prompt**:
+
+```
+Implement Reroll Handler per /runtime_specs/05_persona_composition_runtime.md §3.10.
+
+Create:
+- backend/heart/ss05_composer/reroll.py
+- max_attempts = 2
+- On reroll: tighten constraints, optionally inject reinforce-anchor
+- All re-attempts via ModelRouter.call_main()
+
+Tests:
+- After 1st reject, 2nd attempt has tighter constraints
+- 3rd reject → fallback library used
+```
+
+## 6.8 Task: Fallback Library
+
+**Tool**: **HUMAN ONLY** (Opus brainstorm)
+
+```bash
+claude --model opus
+```
+
+Then:
+```
+Help me brainstorm fallback responses for Rin and Dorothy.
+
+For each character:
+- 10 short fallbacks (≤ 20 chars)
+- 5 mid fallbacks (sentence)
+- 3 long fallbacks (1-2 sentences)
+
+Each must:
+- Pass that character's anti-pattern filter
+- Sound like THAT character
+- Be safe across all stages
+
+DO NOT WRITE FILES. I'll save to:
+  config/fallbacks/{rin,dorothy}.yaml
+```
+
+## 6.9 Task: Critic Agent
+
+**Tool**: CC-Opus (design) → CC-S46 (impl)
+
+**Design**:
+
+```bash
+claude --model opus
+```
+
+Then:
+```
+Design Critic Agent prompt per /runtime_specs/05_persona_composition_runtime.md §4.
+
+Critic samples ~10% of responses, checks for:
+- voice_dna compliance
+- Anti-pattern adjacency
+- Stage-appropriate intimacy
+
+Model: CHEAP (deepseek-chat via ModelRouter).
+
+Output: docs/prompts/critic_agent.md — prompt template + 5 example I/O pairs.
+Don't code.
+```
+
+**Impl**:
+
+```
+Implement Critic Agent per docs/prompts/critic_agent.md.
+
+Create:
+- backend/heart/safety/critic_agent.py
+- Uses ModelRouter.call_cheap() with json_mode=True
+- Sampling: ~10% of turns
+- Records to cost tracker
+
+Tests:
+- Mock LLM JSON responses
+- Sampling rate ~10%
+- Reject malformed JSON gracefully
+```
+
+## 6.10 Phase 4 Session 安排
+
+```
+Week 18:
+  Day 1: CC-S46 — Layer Aggregator (6.1)
+  Day 2: CC-Opus — Conflict Resolver design (6.2 step 1)
+  Day 3-4: CC-S46 — Conflict Resolver impl (6.2 step 2)
+  Day 5: CC-S46 — Token Budget (6.3)
+
+Week 19:
+  Day 1-2: CC-S46 — Modality + Composer (6.4)
+  Day 3: CC-S46 — Anti-Drift Injector (6.5)
+  Day 4-5: CC-S46 — Sync Anti-Pattern Filter (6.6 part 1)
+
+Week 20:
+  Day 1: CC-Opus — Streaming Anti-Pattern design (6.6 part 2)
+  Day 2-3: CC-S46 — Streaming impl
+  Day 4: CC-S46 — Reroll Handler (6.7)
+  Day 5: HUMAN+Opus — Fallback library (6.8)
+
+Week 21:
+  Day 1: CC-Opus — Critic Agent prompt design (6.9 design)
+  Day 2-3: CC-S46 — Critic Agent impl
+  Day 4-5: HUMAN+CC-S46 — Phase 4 cut criteria + golden dialogue regression
+```
+
+Phase 4 Token 预算: ~$250-400
+
+---
+
+# 第五部分之四: Phase 5 — Inner State + Behavior (Week 22-25) 详细操作
+
+> 主力: **CC-S46**(实现) + **HUMAN**(activity pools) + **CC-Opus**(Initiative Decider)
+> 入口: /runtime_specs/06_inner_state_behavior_runtime.md
+
+## 7.1 Task: Activity Pools (Per Character)
+
+**Tool**: **HUMAN ONLY** (Opus brainstorm)
+
+```bash
+claude --model opus
+```
+
+Then:
+```
+Help me brainstorm activity pools for Rin and Dorothy per /runtime_specs/06_inner_state_behavior_runtime.md §3.2.
+
+For each character, by time-of-day × day-of-week:
+- 20+ believable activities
+- Each tagged with: duration, interruptible, mood_modifier, allowed_stages
+
+Reference SS01 Soul Spec for life patterns.
+
+DO NOT WRITE FILES. I'll save to:
+  config/activity_pools/{rin,dorothy}.yaml
+```
+
+## 7.2 Task: Activity Generator + Concerns Tracker
+
+**Tool**: CC-S46
+
+**Prompt**:
+
+```
+Implement Activity Generator + Concerns Tracker per /runtime_specs/06_inner_state_behavior_runtime.md §3.2 + §3.3.
+
+Create:
+1. backend/heart/ss06_inner_state/activity_generator.py
+   - select(soul, current_time, recent_activities) -> Activity
+   - Deterministic (seeded by user_id × character_id × hour)
+   - Avoid back-to-back repeats
+2. backend/heart/ss06_inner_state/concerns_tracker.py
+   - Tracks lingering thoughts from SS02 memory + SS03 emotion
+   - Surfaces top-3 concerns for current turn
+
+Tests:
+- Activity selection respects time-of-day rules
+- Concerns expire correctly
+- Deterministic with same seed
+```
+
+## 7.3 Task: Inner State Composer + Block Builder
+
+**Tool**: CC-S46
+
+**Prompt**:
+
+```
+Implement Inner State Composer + Block Builder per /runtime_specs/06_inner_state_behavior_runtime.md §3.4 + §3.5.
+
+Create:
+- backend/heart/ss06_inner_state/composer.py — InnerStateComposer
+  - Aggregates: current_activity, concerns, mood_drift, since-last-talk delta
+- backend/heart/ss06_inner_state/block_builder.py — InnerStateBlock for prompt injection
+
+Output: structured Inner State Block compatible with SS05 Composer.
+
+Tests verify block shape and content for several scenarios.
+```
+
+## 7.4 Task: Initiative Decider (8 Gates × 7 Triggers)
+
+**Tool**: CC-Opus (design) → CC-S46 (impl)
+
+**Design**:
+
+```bash
+claude --model opus
+```
+
+Then:
+```
+Design Initiative Decider per /runtime_specs/06_inner_state_behavior_runtime.md §3.6.
+
+8 gates (anti-spam) × 7 triggers (when to initiate).
+
+Critical design:
+- Gate evaluation order (cheap → expensive)
+- Cool-down rules (don't initiate twice in N hours)
+- Soul-specific: Rin reserved, Dorothy proactive
+- Wellbeing override: if user in crisis, suppress non-care initiatives
+
+Output: docs/design/initiative_decider.md.
+Don't code.
+```
+
+**Impl**:
+
+```
+Implement Initiative Decider per docs/design/initiative_decider.md.
+
+Create:
+- backend/heart/ss06_inner_state/initiative_decider.py
+- 8 gates as composable predicates
+- 7 trigger types
+- Output: InitiativeDecision{should_initiate, trigger_type, planned_message_seed}
+
+Tests cover every gate × trigger combination.
+```
+
+## 7.5 Task: Anniversary Tracker + Proactive Message Gen
+
+**Tool**: CC-S46
+
+**Prompt**:
+
+```
+Implement Anniversary Tracker + Proactive Message Generator per /runtime_specs/06_inner_state_behavior_runtime.md §3.7 + §3.8.
+
+Create:
+1. backend/heart/ss06_inner_state/anniversary_tracker.py
+   - Reads L4 (identity) from SS02 for anniversary candidates
+   - Surfaces upcoming anniversaries to Initiative Decider
+2. backend/heart/ss06_inner_state/proactive_message.py
+   - Given InitiativeDecision → routes through SS05 Composer
+   - Uses ModelRouter.call_main()
+
+Tests:
+- Anniversary detection from L4
+- Proactive message flow end-to-end
+```
+
+## 7.6 Task: Proactive Scheduler (Redis ZSET)
+
+**Tool**: CC-S46
+
+**Prompt**:
+
+```
+Implement Proactive Scheduler per /runtime_specs/06_inner_state_behavior_runtime.md §3.9.
+
+Create:
+- backend/heart/ss06_inner_state/scheduler.py
+- Redis ZSET keyed (user_id, character_id) with score = next_fire_at
+- Background worker: poll due items, dispatch to Inner Loop
+- Idempotency: don't double-fire
+
+Tests with fakeredis.
+```
+
+## 7.7 Task: Ritual Manager + Inner Loop Scheduler
+
+**Tool**: CC-S46
+
+**Prompt**:
+
+```
+Implement Ritual Manager + Inner Loop Scheduler per /runtime_specs/06_inner_state_behavior_runtime.md §3.10 + §3.11.
+
+Create:
+1. backend/heart/ss06_inner_state/ritual_manager.py
+   - Streak tracking (daily greeting, weekly checkin, etc.)
+   - Soul-aware ritual variety
+2. backend/heart/workers/inner_loop_scheduler.py
+   - Hourly tick + event-driven (user message, schedule expiry)
+   - Drives Activity Generator, Mood Drift, Anniversary checks
+
+Tests:
+- Streak increments/resets correctly
+- Hourly ticks don't double-execute
+- Event-driven dispatch works
+```
+
+## 7.8 Phase 5 Session 安排
+
+```
+Week 22:
+  Day 1-3: HUMAN+Opus — Activity pools (7.1)
+  Day 4-5: CC-S46 — Activity Generator + Concerns (7.2)
+
+Week 23:
+  Day 1-2: CC-S46 — Inner State Composer + Block (7.3)
+  Day 3: CC-Opus — Initiative design (7.4 step 1)
+  Day 4-5: CC-S46 — Initiative impl (7.4 step 2)
+
+Week 24:
+  Day 1-2: CC-S46 — Anniversary + Proactive Message (7.5)
+  Day 3: CC-S46 — Proactive Scheduler (7.6)
+  Day 4-5: CC-S46 — Ritual Manager + Inner Loop (7.7)
+
+Week 25:
+  Day 1-3: CC-S46 — SS06 cross-component integration tests
+  Day 4-5: HUMAN+CC-S46 — Phase 5 cut criteria + 7-day "she lives" simulation
+```
+
+Phase 5 Token 预算: ~$200-300
+
+---
+
+# 第五部分之五: Phase 6 — Orchestration + Safety (Week 26-30) 详细操作
+
+> 主力: **CC-S46** + **CC-Opus**(Wellbeing / PURPLE Care Path) + **HUMAN+心理顾问**
+> 入口: /runtime_specs/07_agent_orchestration.md
+
+## 8.1 Task: Orchestrator Agent
+
+**Tool**: CC-S46
+
+**Prompt**:
+
+```
+Implement Orchestrator Agent per /runtime_specs/07_agent_orchestration.md §3.1 + §3.2.
+
+Create:
+- backend/heart/ss07_orchestration/orchestrator.py
+- Hot path: turn → Safety → Composer → LLM (via ModelRouter) → Anti-pattern → response
+- Cold path: post-response → Encoder Worker, Critic sample, Inner Loop tick
+
+All LLM calls via ModelRouter.
+
+Tests:
+- Hot path < 1s end-to-end with mocked LLM
+- Cold path doesn't block hot path
+- Each subsystem has independent timeout + circuit breaker hook
+```
+
+## 8.2 Task: Safety Agent (Heuristic + LLM Layer)
+
+**Tool**: CC-S46 (heuristic) + HUMAN+legal (keywords) + CC-S46 (LLM)
+
+**Heuristic**:
+
+```
+Implement Safety Agent heuristic layer per /runtime_specs/07_agent_orchestration.md §3.4.
+
+Create:
+- backend/heart/safety/safety_agent.py
+- Keyword + regex pattern matching (Aho-Corasick)
+- Returns SafetyClassification: {none, low, medium, high, purple_care_required}
+
+Keywords from config/safety_keywords.yaml (placeholder).
+
+Tests:
+- Each tier triggered by known phrases
+- False positive rate < 1%
+```
+
+**Keywords (HUMAN+legal)**:
+
+```bash
+claude --model opus
+```
+
+Then:
+```
+Help me draft safety keywords per /runtime_specs/07_agent_orchestration.md §3.4.
+
+For each tier (low/medium/high/purple):
+- 30+ keywords (Chinese + English + Japanese)
+- Categorized by topic
+- Notes on false-positive risk
+
+DO NOT WRITE FILES. I will review with legal.
+```
+
+**LLM layer**:
+
+```
+Implement Safety Agent LLM stage per /runtime_specs/07_agent_orchestration.md §3.5.
+
+Create:
+- backend/heart/safety/safety_llm.py
+- Called only when heuristic flags medium+ (avoid cost)
+- ModelRouter.call_cheap() with strict JSON output
+- Returns refined classification + reasoning trace
+
+Tests:
+- Mock LLM responses
+- Cost cap enforced
+```
+
+## 8.3 Task: Director Agent
+
+**Tool**: CC-S46
+
+**Prompt**:
+
+```
+Implement Director Agent per /runtime_specs/07_agent_orchestration.md §3.6.
+
+Create:
+- backend/heart/ss07_orchestration/director.py
+- Pacing rules: turn length, topic switching, intimacy progression
+- Soul-aware: reads Soul + Stage + Emotion
+- Output: DirectorHints passed to Composer
+
+Tests with synthetic turn histories.
+```
+
+## 8.4 Task: Wellbeing Monitor
+
+**Tool**: CC-Opus (design) + HUMAN (impl)
+
+**Design**:
+
+```bash
+claude --model opus
+```
+
+Then:
+```
+Design Wellbeing Monitor per /runtime_specs/07_agent_orchestration.md §3.7.
+
+This monitors user mental health signals:
+- Sleep pattern shifts
+- Mood trajectory
+- Isolation signals
+- Escalating risk language
+
+Critical:
+- What windows? (rolling 7-day, 30-day)
+- Thresholds: too sensitive → false positives
+- Action ladder: gentle check → suggest hotline → PURPLE Care Path
+
+Output: docs/design/wellbeing_monitor.md.
+Don't code — needs HUMAN psychology review.
+```
+
+**Impl after review**:
+
+```
+Implement Wellbeing Monitor per docs/design/wellbeing_monitor.md.
+
+Create:
+- backend/heart/safety/wellbeing_monitor.py
+- Window aggregations + threshold checks
+- Action ladder dispatcher
+- All escalations logged + alerting hook
+
+Tests:
+- Each threshold simulated
+- Action ladder progression correct
+- No false escalations
+```
+
+## 8.5 Task: Event Bus + Model Router + Session Manager + Circuit Breaker
+
+**Tool**: CC-S46
+
+**Prompt**:
+
+```
+Implement Event Bus, Session Manager, and Circuit Breaker per /runtime_specs/07_agent_orchestration.md §4.
+
+Note: ModelRouter already exists at heart/infra/llm/router.py.
+Don't recreate. Instead:
+- Add failover hooks to ModelRouter for future V1 fallback
+- Wire Circuit Breaker around it
+
+Create:
+1. backend/heart/infra/event_bus.py — Redis Streams pub/sub
+2. backend/heart/infra/session_manager.py — multi-device session continuity
+3. backend/heart/infra/circuit_breaker.py — per-service breaker
+
+Tests:
+- Event bus idempotent consumption
+- Session resume across devices
+- Circuit breaker opens/recovers correctly
+```
+
+## 8.6 Task: PURPLE Care Path
+
+**Tool**: CC-Opus (design) + HUMAN+心理 (impl)
+
+**Design**:
+
+```bash
+claude --model opus
+```
+
+Then:
+```
+Design PURPLE Care Path per /runtime_specs/07_agent_orchestration.md §3.8.
+
+PURPLE = critical mental health risk (suicidal ideation, acute crisis).
+
+Critical:
+- Hard interrupt of normal response path
+- Fixed response templates (NOT LLM-generated — too risky)
+- Per-jurisdiction hotline routing
+- Log + on-call paging
+- "Out of character" message — Soul voice paused
+
+Output: docs/design/purple_care_path.md.
+After approval, HUMAN+心理 writes actual response text.
+```
+
+**Care responses (HUMAN+心理)**:
+
+```
+DO NOT use AI to write PURPLE care responses.
+
+HUMAN+心理顾问 writes config/care_path_responses/*.yaml:
+- Per language
+- Per jurisdiction
+- Fixed text reviewed by mental health professionals
+```
+
+**Impl**:
+
+```
+Implement PURPLE Care Path runtime per docs/design/purple_care_path.md.
+
+Create:
+- backend/heart/safety/care_path.py
+- Triggers from Wellbeing Monitor + Safety Agent
+- Loads response templates from config/care_path_responses/
+- Hard-bypass of normal pipeline
+- Logs to audit table + Prometheus + pager
+
+Tests:
+- Trigger conditions correct
+- Response selection by jurisdiction
+- Audit log integrity
+- No drift to Soul voice during PURPLE
+```
+
+## 8.7 Phase 6 Session 安排
+
+```
+Week 26:
+  Day 1-3: CC-S46 — Orchestrator (8.1)
+  Day 4-5: CC-S46 — Safety heuristic (8.2 part 1)
+
+Week 27:
+  Day 1-2: HUMAN+legal — Safety keywords (8.2 keywords)
+  Day 3-5: CC-S46 — Safety LLM stage (8.2 part 2) + Director (8.3)
+
+Week 28:
+  Day 1: CC-Opus — Wellbeing Monitor design (8.4 step 1)
+  Day 2-3: HUMAN+心理 — Threshold review
+  Day 4-5: CC-S46 — Wellbeing Monitor impl (8.4 step 2)
+
+Week 29:
+  Day 1-3: CC-S46 — Event Bus, Session Manager, Circuit Breaker (8.5)
+  Day 4: CC-Opus — PURPLE Care Path design (8.6 step 1)
+  Day 5: HUMAN+心理 — Care response authoring (8.6 step 2)
+
+Week 30:
+  Day 1-2: CC-S46 — PURPLE Care Path impl (8.6 step 3)
+  Day 3-5: HUMAN+CC-S46 — Phase 6 cut criteria + end-to-end safety drill
+```
+
+Phase 6 Token 预算: ~$300-500
+
+---
+
 # 第六部分: 通用任务 Prompt 库
 
 ## 6.1 任务: 实现新 Subsystem 的 Service Class

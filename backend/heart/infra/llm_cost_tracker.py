@@ -7,8 +7,6 @@ Per SS08 §6.2 - Tracks per-user daily costs, emits metrics, and provides alerts
 from dataclasses import dataclass, field
 from typing import Dict, Optional, Any, Protocol
 from datetime import date, datetime
-from decimal import Decimal
-import json
 
 
 @dataclass
@@ -18,6 +16,7 @@ class LLMCall:
 
     This can be constructed from LLMResponse or created manually.
     """
+
     model: str
     prompt_tokens: int
     completion_tokens: int

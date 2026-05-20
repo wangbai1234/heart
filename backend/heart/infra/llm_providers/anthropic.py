@@ -5,7 +5,6 @@ Note: Named 'anthropic.py' but implements DeepSeek V4-pro (deepseek-reasoner)
 for MVP simplification. This is the high-quality model for main responses.
 """
 
-import asyncio
 import json
 from typing import AsyncIterator, Dict, Optional
 import httpx
@@ -17,7 +16,6 @@ from heart.infra.llm_providers.base import (
     StreamChunk,
     CostEstimate,
     ProviderError,
-    ValidationError,
     CircuitBreakerInterface,
 )
 
@@ -95,10 +93,7 @@ class DeepSeekV4ProProvider(LLMProvider):
 
     def _prepare_request_body(self, request: LLMRequest) -> Dict:
         """Prepare request body for DeepSeek API."""
-        messages = [
-            {"role": msg.role.value, "content": msg.content}
-            for msg in request.messages
-        ]
+        messages = [{"role": msg.role.value, "content": msg.content} for msg in request.messages]
 
         body = {
             "model": request.model or self.DEFAULT_MODEL,
@@ -235,9 +230,13 @@ class DeepSeekV4ProProvider(LLMProvider):
                                 finish_reason=choice["finish_reason"],
                                 usage={
                                     "prompt_tokens": usage.get("prompt_tokens", 0) if usage else 0,
-                                    "completion_tokens": usage.get("completion_tokens", 0) if usage else 0,
+                                    "completion_tokens": usage.get("completion_tokens", 0)
+                                    if usage
+                                    else 0,
                                     "total_tokens": usage.get("total_tokens", 0) if usage else 0,
-                                } if usage else None,
+                                }
+                                if usage
+                                else None,
                             )
                     except json.JSONDecodeError:
                         continue

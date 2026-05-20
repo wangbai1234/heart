@@ -2,18 +2,19 @@
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
 
 
 class ModelTier(Enum):
     """模型层级"""
-    MAIN = "main"        # 主响应 - deepseek-reasoner (高质量)
-    CHEAP = "cheap"      # 便宜操作 - deepseek-chat (快速)
+
+    MAIN = "main"  # 主响应 - deepseek-reasoner (高质量)
+    CHEAP = "cheap"  # 便宜操作 - deepseek-chat (快速)
 
 
 @dataclass
 class ModelConfig:
     """单个模型配置"""
+
     name: str
     provider: str
     max_tokens: int
@@ -49,6 +50,7 @@ class LLMModels:
 @dataclass
 class DeepSeekConfig:
     """DeepSeek API 配置"""
+
     api_key: str
     base_url: str = "https://api.deepseek.com"
     api_version: str = "v1"
@@ -62,6 +64,7 @@ class DeepSeekConfig:
 @dataclass
 class LLMProviderConfig:
     """全局 LLM 提供商配置"""
+
     deepseek: DeepSeekConfig
     main_model: ModelTier = ModelTier.MAIN
     cheap_model: ModelTier = ModelTier.CHEAP

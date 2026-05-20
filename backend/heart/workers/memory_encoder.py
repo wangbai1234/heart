@@ -23,10 +23,9 @@ from typing import Optional
 from uuid import UUID, uuid4
 
 import structlog
-from sqlalchemy import select, update
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from heart.core.config import settings
 from heart.infra.llm.router import get_model_router
 from heart.prompts.memory_extraction import MEMORY_EXTRACTION_PROMPT
 from heart.ss02_memory.models import FactNode, MemoryEncodingEvent
@@ -220,9 +219,7 @@ async def write_facts_to_l3(
         if existing_fact:
             # Fact exists - reinforce it (阶段 3 logic, simplified here)
             existing_fact.confirmation_count += 1
-            existing_fact.confidence = max(
-                existing_fact.confidence, fact["confidence"]
-            )
+            existing_fact.confidence = max(existing_fact.confidence, fact["confidence"])
             existing_fact.last_confirmed_at = datetime.now(timezone.utc)
 
             # Add this turn to source_turn_ids
@@ -254,8 +251,7 @@ async def write_facts_to_l3(
                 emotional_charge=fact["emotional_charge"],
                 emotional_label=fact.get("emotional_label"),
                 importance=extraction["importance_estimate"],
-                is_identity_level=fact.get("sacred_signal", False)
-                or extraction["contains_sacred"],
+                is_identity_level=fact.get("sacred_signal", False) or extraction["contains_sacred"],
                 state="active",
                 created_at=datetime.now(timezone.utc),
                 updated_at=datetime.now(timezone.utc),
@@ -350,9 +346,7 @@ class MemoryEncoderWorker:
         logger.info("memory_encoder_worker_stopping")
         self._should_stop = True
 
-    async def _fetch_pending_events(
-        self, session: AsyncSession
-    ) -> list[MemoryEncodingEvent]:
+    async def _fetch_pending_events(self, session: AsyncSession) -> list[MemoryEncodingEvent]:
         """Fetch pending encoding events.
 
         Args:
@@ -392,9 +386,7 @@ class MemoryEncoderWorker:
         async with self.db_session_factory() as session:
             # Check if already processed (idempotency)
             # Reload event to get latest state
-            stmt = select(MemoryEncodingEvent).where(
-                MemoryEncodingEvent.event_id == event.event_id
-            )
+            stmt = select(MemoryEncodingEvent).where(MemoryEncodingEvent.event_id == event.event_id)
             result = await session.execute(stmt)
             current_event = result.scalar_one_or_none()
 
@@ -500,9 +492,7 @@ class MemoryEncoderWorker:
                 timeout=LLM_TIMEOUT_SECONDS,
             )
         except asyncio.TimeoutError:
-            raise TimeoutError(
-                f"LLM call timed out after {LLM_TIMEOUT_SECONDS}s"
-            )
+            raise TimeoutError(f"LLM call timed out after {LLM_TIMEOUT_SECONDS}s")
 
         # Parse JSON
         try:

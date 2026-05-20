@@ -22,7 +22,6 @@ from uuid import UUID
 
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
-    JSON,
     UUID as SQLUUID,
     VARCHAR,
     BigInteger,
@@ -30,19 +29,14 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     Float,
-    ForeignKey,
     Index,
     Integer,
-    String,
-    Table,
     Text,
     UniqueConstraint,
-    and_,
-    event,
     text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, ARRAY
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
 class Base(DeclarativeBase):
@@ -73,7 +67,9 @@ class EpisodicMemory(Base):
 
     # Content
     episode_summary: Mapped[str] = mapped_column(Text, nullable=False)
-    episode_raw_turn_ids: Mapped[list[UUID]] = mapped_column(ARRAY(SQLUUID(as_uuid=True)), nullable=False)
+    episode_raw_turn_ids: Mapped[list[UUID]] = mapped_column(
+        ARRAY(SQLUUID(as_uuid=True)), nullable=False
+    )
 
     # Temporal
     episode_start_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
@@ -104,7 +100,9 @@ class EpisodicMemory(Base):
     )
 
     # Recall Tracking
-    last_recalled_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_recalled_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     recall_count: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
     reinforcement_history: Mapped[list[dict]] = mapped_column(JSONB, nullable=False, default=list)
 
@@ -174,8 +172,12 @@ class FactNode(Base):
 
     # Provenance
     raw_evidence: Mapped[str] = mapped_column(Text, nullable=False)
-    source_episode_ids: Mapped[list[UUID]] = mapped_column(ARRAY(SQLUUID(as_uuid=True)), nullable=False, default=list)
-    source_turn_ids: Mapped[list[UUID]] = mapped_column(ARRAY(SQLUUID(as_uuid=True)), nullable=False, default=list)
+    source_episode_ids: Mapped[list[UUID]] = mapped_column(
+        ARRAY(SQLUUID(as_uuid=True)), nullable=False, default=list
+    )
+    source_turn_ids: Mapped[list[UUID]] = mapped_column(
+        ARRAY(SQLUUID(as_uuid=True)), nullable=False, default=list
+    )
     confidence: Mapped[float] = mapped_column(
         Float,
         nullable=False,
@@ -189,13 +191,17 @@ class FactNode(Base):
     # Importance
     importance: Mapped[float] = mapped_column(Float, nullable=False)
     is_identity_level: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    promoted_to_l4_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    promoted_to_l4_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     promotion_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     # Confirmation & Contradiction
     confirmation_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     contradiction_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    contradicting_fact_ids: Mapped[list[UUID]] = mapped_column(ARRAY(SQLUUID(as_uuid=True)), nullable=False, default=list)
+    contradicting_fact_ids: Mapped[list[UUID]] = mapped_column(
+        ARRAY(SQLUUID(as_uuid=True)), nullable=False, default=list
+    )
     is_corrected: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     do_not_recall: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     last_confirmed_at: Mapped[datetime] = mapped_column(
@@ -203,7 +209,9 @@ class FactNode(Base):
         nullable=False,
         default=lambda: datetime.now(datetime.timezone.utc),
     )
-    last_contradicted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_contradicted_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # State
     state: Mapped[str] = mapped_column(VARCHAR(20), nullable=False)
@@ -216,7 +224,9 @@ class FactNode(Base):
 
     # Recall Tracking
     recall_count: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
-    last_recalled_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_recalled_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # Reconstruction Hints
     reconstruction_hints: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
@@ -278,7 +288,9 @@ class IdentityMemory(Base):
     disclosed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     disclosure_context: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     source_episode_id: Mapped[Optional[UUID]] = mapped_column(SQLUUID(as_uuid=True), nullable=True)
-    source_turn_ids: Mapped[list[UUID]] = mapped_column(ARRAY(SQLUUID(as_uuid=True)), nullable=False, default=list)
+    source_turn_ids: Mapped[list[UUID]] = mapped_column(
+        ARRAY(SQLUUID(as_uuid=True)), nullable=False, default=list
+    )
 
     # Sacred Metadata
     sacred_reason: Mapped[str] = mapped_column(Text, nullable=False)
@@ -291,13 +303,17 @@ class IdentityMemory(Base):
 
     # Anniversary Tracking
     anniversary_pattern: Mapped[Optional[str]] = mapped_column(VARCHAR(20), nullable=True)
-    next_anniversary_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    next_anniversary_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     # Reconstruction Hints
     reconstruction_hints: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
 
     # Audit
-    promoted_from_fact_id: Mapped[Optional[UUID]] = mapped_column(SQLUUID(as_uuid=True), nullable=True)
+    promoted_from_fact_id: Mapped[Optional[UUID]] = mapped_column(
+        SQLUUID(as_uuid=True), nullable=True
+    )
     audit_log: Mapped[list[dict]] = mapped_column(JSONB, nullable=False, default=list)
 
     # Lifecycle
@@ -309,7 +325,9 @@ class IdentityMemory(Base):
 
     # User Control
     user_initiated_forget: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    forget_requested_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    forget_requested_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     __table_args__ = (
         CheckConstraint("significance_score >= 0.85"),
@@ -366,8 +384,12 @@ class MemoryEncodingEvent(Base):
         nullable=False,
         default=lambda: datetime.now(datetime.timezone.utc),
     )
-    llm_started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    llm_completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    llm_started_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    llm_completed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     failed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     failure_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
@@ -404,15 +426,29 @@ class ConsolidationJob(Base):
     scheduled_for: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
     # Inputs
-    pending_event_ids: Mapped[Optional[list[UUID]]] = mapped_column(ARRAY(SQLUUID(as_uuid=True)), nullable=True)
-    turns_to_consolidate: Mapped[Optional[list[UUID]]] = mapped_column(ARRAY(SQLUUID(as_uuid=True)), nullable=True)
+    pending_event_ids: Mapped[Optional[list[UUID]]] = mapped_column(
+        ARRAY(SQLUUID(as_uuid=True)), nullable=True
+    )
+    turns_to_consolidate: Mapped[Optional[list[UUID]]] = mapped_column(
+        ARRAY(SQLUUID(as_uuid=True)), nullable=True
+    )
 
     # Outputs
-    episodes_created: Mapped[Optional[list[UUID]]] = mapped_column(ARRAY(SQLUUID(as_uuid=True)), nullable=True)
-    facts_created: Mapped[Optional[list[UUID]]] = mapped_column(ARRAY(SQLUUID(as_uuid=True)), nullable=True)
-    facts_reinforced: Mapped[Optional[list[UUID]]] = mapped_column(ARRAY(SQLUUID(as_uuid=True)), nullable=True)
-    facts_contradicted: Mapped[Optional[list[UUID]]] = mapped_column(ARRAY(SQLUUID(as_uuid=True)), nullable=True)
-    promotions_to_l4: Mapped[Optional[list[UUID]]] = mapped_column(ARRAY(SQLUUID(as_uuid=True)), nullable=True)
+    episodes_created: Mapped[Optional[list[UUID]]] = mapped_column(
+        ARRAY(SQLUUID(as_uuid=True)), nullable=True
+    )
+    facts_created: Mapped[Optional[list[UUID]]] = mapped_column(
+        ARRAY(SQLUUID(as_uuid=True)), nullable=True
+    )
+    facts_reinforced: Mapped[Optional[list[UUID]]] = mapped_column(
+        ARRAY(SQLUUID(as_uuid=True)), nullable=True
+    )
+    facts_contradicted: Mapped[Optional[list[UUID]]] = mapped_column(
+        ARRAY(SQLUUID(as_uuid=True)), nullable=True
+    )
+    promotions_to_l4: Mapped[Optional[list[UUID]]] = mapped_column(
+        ARRAY(SQLUUID(as_uuid=True)), nullable=True
+    )
     associations_created: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     # Status

@@ -13,6 +13,7 @@ from enum import Enum
 
 class MessageRole(str, Enum):
     """Message role in conversation."""
+
     SYSTEM = "system"
     USER = "user"
     ASSISTANT = "assistant"
@@ -21,6 +22,7 @@ class MessageRole(str, Enum):
 @dataclass
 class Message:
     """A message in the conversation."""
+
     role: MessageRole
     content: str
 
@@ -28,6 +30,7 @@ class Message:
 @dataclass
 class LLMRequest:
     """Request to LLM provider."""
+
     messages: List[Message]
     model: str
     temperature: float = 0.7
@@ -41,6 +44,7 @@ class LLMRequest:
 @dataclass
 class LLMResponse:
     """Non-streaming response from LLM provider."""
+
     content: str
     model: str
     finish_reason: str
@@ -53,6 +57,7 @@ class LLMResponse:
 @dataclass
 class StreamChunk:
     """A chunk from streaming response."""
+
     content: str
     finish_reason: Optional[str] = None
     usage: Optional[Dict[str, int]] = None
@@ -61,6 +66,7 @@ class StreamChunk:
 @dataclass
 class CostEstimate:
     """Cost estimation for LLM call."""
+
     prompt_tokens: int
     estimated_completion_tokens: int
     input_cost_usd: float
@@ -216,4 +222,5 @@ class ProviderError(Exception):
 
 class ValidationError(Exception):
     """Exception for invalid requests."""
+
     pass

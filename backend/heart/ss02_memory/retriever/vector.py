@@ -11,7 +11,6 @@ Author: 心屿团队
 from __future__ import annotations
 
 from typing import List
-from uuid import UUID
 
 import structlog
 from sqlalchemy import select, func
@@ -111,25 +110,29 @@ class VectorRetriever(RetrievalStrategy):
         # Note: We need to use text() for raw SQL with pgvector operators
         from sqlalchemy import text
 
-        stmt = select(
-            EpisodicMemory,
-            # Cosine distance (0 = identical, 2 = opposite)
-            # Convert to similarity: 1 - distance/2 → [0, 1]
-            func.cast(
-                1.0 - (func.cast(
-                    text(f"semantic_vector <=> '{embedding_str}'::vector"),
-                    float
-                ) / 2.0),
-                float
-            ).label("similarity"),
-        ).where(
-            EpisodicMemory.user_id == query_context.user_id,
-            EpisodicMemory.character_id == query_context.character_id,
-            EpisodicMemory.do_not_recall == False,
-            EpisodicMemory.semantic_vector.isnot(None),
-        ).order_by(
-            text(f"semantic_vector <=> '{embedding_str}'::vector")
-        ).limit(top_n)
+        stmt = (
+            select(
+                EpisodicMemory,
+                # Cosine distance (0 = identical, 2 = opposite)
+                # Convert to similarity: 1 - distance/2 → [0, 1]
+                func.cast(
+                    1.0
+                    - (
+                        func.cast(text(f"semantic_vector <=> '{embedding_str}'::vector"), float)
+                        / 2.0
+                    ),
+                    float,
+                ).label("similarity"),
+            )
+            .where(
+                EpisodicMemory.user_id == query_context.user_id,
+                EpisodicMemory.character_id == query_context.character_id,
+                EpisodicMemory.do_not_recall == False,
+                EpisodicMemory.semantic_vector.isnot(None),
+            )
+            .order_by(text(f"semantic_vector <=> '{embedding_str}'::vector"))
+            .limit(top_n)
+        )
 
         result = await self.session.execute(stmt)
         rows = result.all()
@@ -166,24 +169,28 @@ class VectorRetriever(RetrievalStrategy):
 
         from sqlalchemy import text
 
-        stmt = select(
-            FactNode,
-            func.cast(
-                1.0 - (func.cast(
-                    text(f"semantic_vector <=> '{embedding_str}'::vector"),
-                    float
-                ) / 2.0),
-                float
-            ).label("similarity"),
-        ).where(
-            FactNode.user_id == query_context.user_id,
-            FactNode.character_id == query_context.character_id,
-            FactNode.do_not_recall == False,
-            FactNode.promoted_to_l4_at.is_(None),  # Exclude L4-promoted facts
-            FactNode.semantic_vector.isnot(None),
-        ).order_by(
-            text(f"semantic_vector <=> '{embedding_str}'::vector")
-        ).limit(top_n)
+        stmt = (
+            select(
+                FactNode,
+                func.cast(
+                    1.0
+                    - (
+                        func.cast(text(f"semantic_vector <=> '{embedding_str}'::vector"), float)
+                        / 2.0
+                    ),
+                    float,
+                ).label("similarity"),
+            )
+            .where(
+                FactNode.user_id == query_context.user_id,
+                FactNode.character_id == query_context.character_id,
+                FactNode.do_not_recall == False,
+                FactNode.promoted_to_l4_at.is_(None),  # Exclude L4-promoted facts
+                FactNode.semantic_vector.isnot(None),
+            )
+            .order_by(text(f"semantic_vector <=> '{embedding_str}'::vector"))
+            .limit(top_n)
+        )
 
         result = await self.session.execute(stmt)
         rows = result.all()

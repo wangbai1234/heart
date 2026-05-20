@@ -19,14 +19,13 @@ Author: 心屿团队
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Optional, Protocol
 from uuid import UUID, uuid4
 
 import structlog
 
 from .registry import SoulRegistry, get_soul_registry
-from .schema_validator import SoulSpec
 
 logger = structlog.get_logger()
 
@@ -34,6 +33,7 @@ logger = structlog.get_logger()
 # ============================================================
 # State Service Protocol
 # ============================================================
+
 
 class SoulActivationStateService(Protocol):
     """Protocol for state persistence (to be implemented in future subsystem).
@@ -63,20 +63,23 @@ class SoulActivationStateService(Protocol):
 # Data Structures
 # ============================================================
 
+
 @dataclass(frozen=True)
 class ResonanceStateSnapshot:
     """Minimal projection of SoulActivationState for resonance tracking.
 
     Populated by SoulActivationStateService.
     """
-    resonance_score: float                      # [0, 1]
-    last_interaction_at: Optional[datetime]     # None for new users
+
+    resonance_score: float  # [0, 1]
+    last_interaction_at: Optional[datetime]  # None for new users
     resonance_history: tuple[ResonanceEvent, ...]  # recent events (for daily cap check)
 
 
 @dataclass(frozen=True)
 class ResonanceEvent:
     """Resonance event record (§5.2)."""
+
     event_id: UUID
     trigger_cue: str
     weight_applied: float
@@ -88,14 +91,16 @@ class ResonanceEvent:
 @dataclass(frozen=True)
 class ResonanceTrackResult:
     """Result of track_event call."""
-    event: Optional[ResonanceEvent]    # None if cap reached / invalid trigger
-    new_score: float                   # Updated resonance_score
-    reason: str                        # "triggered" / "capped" / "invalid_trigger"
+
+    event: Optional[ResonanceEvent]  # None if cap reached / invalid trigger
+    new_score: float  # Updated resonance_score
+    reason: str  # "triggered" / "capped" / "invalid_trigger"
 
 
 # ============================================================
 # Resonance Tracker
 # ============================================================
+
 
 class ResonanceTracker:
     """Tracks user × character resonance based on soul.resonance_triggers.
@@ -250,7 +255,7 @@ class ResonanceTracker:
         score = state.resonance_score
         if days_since_last > self._DECAY_START_DAYS:
             weeks_inactive = (days_since_last - self._DECAY_START_DAYS) / 7
-            decay_rate = self._DECAY_BASE ** weeks_inactive
+            decay_rate = self._DECAY_BASE**weeks_inactive
             score *= decay_rate
             logger.debug(
                 "resonance_decay_applied",
@@ -282,9 +287,7 @@ class ResonanceTracker:
         trigger_cue: str,
     ) -> int:
         """Count how many times trigger_cue fired today."""
-        today_start = datetime.now(timezone.utc).replace(
-            hour=0, minute=0, second=0, microsecond=0
-        )
+        today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
 
         count = sum(
             1

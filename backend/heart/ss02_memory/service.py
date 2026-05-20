@@ -29,7 +29,6 @@ import structlog
 from .models import (
     ConsolidationJob,
     EpisodicMemory,
-    FactNode,
     IdentityMemory,
     MemoryEncodingEvent,
 )
@@ -48,6 +47,7 @@ class FastSignals:
 
     Generated in < 50ms, no LLM call.
     """
+
     detected_keywords: list[str]
     sentiment: float  # [-1, 1] from lexicon
     candidate_identity_signals: list[IdentitySignal]
@@ -56,6 +56,7 @@ class FastSignals:
 @dataclass(frozen=True)
 class IdentitySignal:
     """Candidate identity signal from fast encoder."""
+
     type: str  # "name" | "birthday" | "occupation" | "pet" | "location"
     value: str
     raw_text: str
@@ -64,6 +65,7 @@ class IdentitySignal:
 @dataclass(frozen=True)
 class Turn:
     """Single conversation turn."""
+
     turn_index: int
     role: str  # "user" | "assistant"
     content: str
@@ -78,6 +80,7 @@ class QueryContext:
 
     Contains current conversation state for retrieval.
     """
+
     current_message: str
     recent_turns: list[Turn]
     session_id: UUID
@@ -88,6 +91,7 @@ class QueryContext:
 @dataclass(frozen=True)
 class RetrievedMemory:
     """Single retrieved memory with reconstruction (§5.5)."""
+
     memory_id: UUID
     memory_type: str  # "L2" | "L3" | "L4"
     state: str  # MemoryState
@@ -98,7 +102,9 @@ class RetrievedMemory:
 
     # Score breakdown
     score: float
-    score_breakdown: dict[str, float]  # semantic, importance, emotional_resonance, recency, associative, confidence
+    score_breakdown: dict[
+        str, float
+    ]  # semantic, importance, emotional_resonance, recency, associative, confidence
 
     # Reconstruction metadata
     uncertainty_level: float  # [0, 1] 由 state 决定
@@ -111,6 +117,7 @@ class RetrievedMemory:
 @dataclass(frozen=True)
 class ForgettingHint:
     """Hint about forgotten memory for affect injection."""
+
     hint_text: str  # "她隐约记得有什么，但说不清"
     related_to: str  # 关联主题（不暴露具体内容）
 
@@ -118,6 +125,7 @@ class ForgettingHint:
 @dataclass(frozen=True)
 class MemoryRetrievalResult:
     """Main retrieval result (§5.5)."""
+
     query_id: UUID
     retrieved_at: datetime
 
@@ -137,6 +145,7 @@ class MemoryRetrievalResult:
 @dataclass(frozen=True)
 class ReinforcementTrigger:
     """Trigger for memory reinforcement (§5.2)."""
+
     trigger_type: str  # "user_re_mentioned" | "character_recalled_user_confirmed" | "recall_no_objection" | "peak_end_amplification" | "user_explicit_inquiry"
     context: str
     boost: float  # [0, 1]

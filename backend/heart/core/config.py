@@ -1,6 +1,5 @@
 """应用全局配置"""
 
-import os
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 

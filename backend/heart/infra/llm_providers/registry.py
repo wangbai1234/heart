@@ -140,8 +140,7 @@ def initialize_registry(
 
     if not deepseek_api_key:
         raise ValueError(
-            "DEEPSEEK_API_KEY environment variable not set. "
-            "Please check your .env file."
+            "DEEPSEEK_API_KEY environment variable not set. Please check your .env file."
         )
 
     # Register DeepSeek V4-pro (main model)
@@ -177,10 +176,7 @@ def get_registry() -> ProviderRegistry:
         RuntimeError: If registry not initialized
     """
     if _global_registry is None:
-        raise RuntimeError(
-            "Provider registry not initialized. "
-            "Call initialize_registry() first."
-        )
+        raise RuntimeError("Provider registry not initialized. Call initialize_registry() first.")
     return _global_registry
 
 

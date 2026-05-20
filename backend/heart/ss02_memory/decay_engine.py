@@ -39,7 +39,7 @@ from typing import Literal, Optional, Protocol, Union
 from uuid import UUID
 
 import structlog
-from sqlalchemy import select, update
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from heart.ss02_memory.models import EpisodicMemory, FactNode, IdentityMemory
@@ -112,6 +112,7 @@ class DecayableMemory(Protocol):
 @dataclass
 class EmotionalValues:
     """Extracted emotional values from memory."""
+
     valence: float  # [-1, 1]
     arousal: float  # [0, 1]
 
@@ -207,9 +208,7 @@ class DecayEngine:
         )
 
         # Compute raw importance
-        raw_importance = (
-            memory.initial_importance * time_factor * emotional_factor * recall_factor
-        )
+        raw_importance = memory.initial_importance * time_factor * emotional_factor * recall_factor
 
         # Compute floor (recall-aware)
         emotional_floor = valence_abs * EMOTIONAL_FLOOR_WEIGHT
@@ -358,9 +357,7 @@ class DecayEngine:
         else:
             raise ValueError(f"Unknown memory type: {type(memory)}")
 
-    def _extract_emotional_values(
-        self, memory: Union[EpisodicMemory, FactNode]
-    ) -> EmotionalValues:
+    def _extract_emotional_values(self, memory: Union[EpisodicMemory, FactNode]) -> EmotionalValues:
         """
         Extract emotional values from memory.
 
@@ -496,11 +493,13 @@ async def reinforce_memory(
 
     # Add to reinforcement history (if field exists)
     if hasattr(memory, "reinforcement_history"):
-        memory.reinforcement_history.append({
-            "triggered_by": trigger,
-            "boost": boost,
-            "at": now.isoformat(),
-        })
+        memory.reinforcement_history.append(
+            {
+                "triggered_by": trigger,
+                "boost": boost,
+                "at": now.isoformat(),
+            }
+        )
 
     await session.commit()
 

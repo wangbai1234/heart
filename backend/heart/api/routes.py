@@ -3,8 +3,8 @@
 from fastapi import APIRouter, HTTPException, Depends, status, Header
 from typing import Optional
 import structlog
-from pydantic import BaseModel, EmailStr
-from ..core.auth import auth_manager, Token, TokenData, User
+from pydantic import BaseModel
+from ..core.auth import auth_manager, Token, TokenData
 
 logger = structlog.get_logger()
 
@@ -13,24 +13,28 @@ router = APIRouter(prefix="/api", tags=["api"])
 
 class LoginRequest(BaseModel):
     """Login request model."""
+
     user_id: str
     email: Optional[str] = None
 
 
 class ChatMessage(BaseModel):
     """Chat message model."""
+
     role: str
     content: str
 
 
 class ChatRequest(BaseModel):
     """Chat request model."""
+
     messages: list[ChatMessage]
     character_id: str = "default"
 
 
 class ChatResponse(BaseModel):
     """Chat response model."""
+
     response: str
     character_id: str
     message_id: str
@@ -160,6 +164,7 @@ async def echo_chat(
 
     # Generate message ID
     import uuid
+
     message_id = str(uuid.uuid4())
 
     # Echo response with slight variation

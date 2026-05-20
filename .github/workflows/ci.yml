@@ -110,7 +110,10 @@ jobs:
     env:
       DATABASE_URL: postgresql://heart_test:test_password@localhost:5432/heart_test
       REDIS_URL: redis://localhost:6379/0
-      ANTHROPIC_API_KEY: test_key_dummy
+      DEEPSEEK_API_KEY: test_key_dummy
+      DEEPSEEK_BASE_URL: https://api.deepseek.com
+      MAIN_LLM_MODEL: deepseek-reasoner
+      CHEAP_LLM_MODEL: deepseek-chat
 
     steps:
       - uses: actions/checkout@v4

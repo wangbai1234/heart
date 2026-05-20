@@ -26,10 +26,11 @@ if TYPE_CHECKING:
 @dataclass(frozen=True)
 class AntiPatternHits:
     """Pre-filter scan results."""
+
     hard_never_count: int = 0
     forbidden_pattern_count: int = 0
     soft_never_count: int = 0
-    voice_dna_marker_miss: bool = False       # Signal B tripped
+    voice_dna_marker_miss: bool = False  # Signal B tripped
     sentence_length_out_of_bounds: bool = False  # Signal C tripped
 
     def any_signal_tripped(self) -> bool:
@@ -46,6 +47,7 @@ class AntiPatternHits:
 # ============================================================
 # Signal A — Deterministic anti-pattern hits
 # ============================================================
+
 
 def _scan_literals(
     text: str,
@@ -115,6 +117,7 @@ def _scan_signal_a(
 # ============================================================
 # Signal B — Voice_DNA frequency check
 # ============================================================
+
 
 def _scan_signal_b(
     responses: list[ReleasedResponse],
@@ -221,6 +224,7 @@ def _scan_signal_c(
 # ============================================================
 # Public API
 # ============================================================
+
 
 def scan_anti_patterns(
     responses: list[ReleasedResponse],

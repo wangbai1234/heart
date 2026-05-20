@@ -24,14 +24,12 @@ from __future__ import annotations
 import asyncio
 import json
 from datetime import datetime, timedelta, timezone
-from typing import Optional
 from uuid import UUID, uuid4
 
 import structlog
-from sqlalchemy import select, update, and_, func
+from sqlalchemy import select, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from heart.core.config import settings
 from heart.infra.llm.router import get_model_router
 from heart.prompts.episode_summary import EPISODE_SUMMARY_PROMPT
 from heart.ss02_memory.models import (
@@ -192,9 +190,7 @@ class EpisodeSummarizer:
                 timeout=LLM_TIMEOUT_SECONDS,
             )
         except asyncio.TimeoutError:
-            raise TimeoutError(
-                f"LLM call timed out after {LLM_TIMEOUT_SECONDS}s"
-            )
+            raise TimeoutError(f"LLM call timed out after {LLM_TIMEOUT_SECONDS}s")
 
         # Parse JSON
         try:
@@ -223,9 +219,7 @@ class EpisodeSummarizer:
         peak_intensity = (peak_valence + peak_arousal) / 2
         end_intensity = (end_valence + end_arousal) / 2
 
-        emotional_significance = (
-            PEAK_WEIGHT * peak_intensity + END_WEIGHT * end_intensity
-        )
+        emotional_significance = PEAK_WEIGHT * peak_intensity + END_WEIGHT * end_intensity
 
         data["emotional_significance"] = emotional_significance
 
@@ -265,9 +259,7 @@ class FactReconciler:
             return reinforced, contradicted
 
         # Fetch new facts
-        stmt = select(FactNode).where(
-            FactNode.id.in_(new_fact_ids)
-        )
+        stmt = select(FactNode).where(FactNode.id.in_(new_fact_ids))
         result = await session.execute(stmt)
         new_facts = result.scalars().all()
 
@@ -307,7 +299,9 @@ class FactReconciler:
                 else:
                     # Contradicting
                     existing.contradiction_count = (existing.contradiction_count or 0) + 1
-                    existing.contradicted_by_ids = (existing.contradicted_by_ids or []) + [new_fact.id]
+                    existing.contradicted_by_ids = (existing.contradicted_by_ids or []) + [
+                        new_fact.id
+                    ]
                     contradicted.append(existing.id)
 
                     logger.info(
@@ -351,14 +345,19 @@ class L4Promoter:
         promoted = []
 
         # Fetch high-importance L3 facts
-        stmt = select(FactNode).where(
-            and_(
-                FactNode.user_id == user_id,
-                FactNode.character_id == character_id,
-                FactNode.importance_score >= L4_MIN_IMPORTANCE,
-                FactNode.do_not_recall == False,
+        stmt = (
+            select(FactNode)
+            .where(
+                and_(
+                    FactNode.user_id == user_id,
+                    FactNode.character_id == character_id,
+                    FactNode.importance_score >= L4_MIN_IMPORTANCE,
+                    FactNode.do_not_recall == False,
+                )
             )
-        ).order_by(FactNode.importance_score.desc()).limit(50)
+            .order_by(FactNode.importance_score.desc())
+            .limit(50)
+        )
 
         result = await session.execute(stmt)
         candidates = result.scalars().all()
@@ -549,9 +548,7 @@ class ConsolidationWorker:
         logger.info("consolidation_worker_stopping")
         self._should_stop = True
 
-    async def _fetch_pending_jobs(
-        self, session: AsyncSession
-    ) -> list[ConsolidationJob]:
+    async def _fetch_pending_jobs(self, session: AsyncSession) -> list[ConsolidationJob]:
         """Fetch pending consolidation jobs.
 
         Args:
@@ -600,9 +597,7 @@ class ConsolidationWorker:
 
         async with self.db_session_factory() as session:
             # Reload job to ensure we have latest state
-            stmt = select(ConsolidationJob).where(
-                ConsolidationJob.job_id == job.job_id
-            )
+            stmt = select(ConsolidationJob).where(ConsolidationJob.job_id == job.job_id)
             result = await session.execute(stmt)
             current_job = result.scalar_one_or_none()
 
@@ -721,14 +716,10 @@ class ConsolidationWorker:
                 current_job.associations_created = associations_count
 
                 # Step 7: Batch decay application
-                await self._apply_batch_decay(
-                    session, job.user_id, job.character_id
-                )
+                await self._apply_batch_decay(session, job.user_id, job.character_id)
 
                 # Step 8: Anniversary scheduling
-                await self._schedule_anniversaries(
-                    session, job.user_id, job.character_id
-                )
+                await self._schedule_anniversaries(session, job.user_id, job.character_id)
 
                 # Mark as succeeded
                 end_time = datetime.now(timezone.utc)
@@ -784,14 +775,18 @@ class ConsolidationWorker:
         # Fetch events from yesterday (simplified)
         yesterday = datetime.now(timezone.utc) - timedelta(days=1)
 
-        stmt = select(MemoryEncodingEvent).where(
-            and_(
-                MemoryEncodingEvent.user_id == user_id,
-                MemoryEncodingEvent.character_id == character_id,
-                MemoryEncodingEvent.status == "llm_done",
-                MemoryEncodingEvent.created_at >= yesterday,
+        stmt = (
+            select(MemoryEncodingEvent)
+            .where(
+                and_(
+                    MemoryEncodingEvent.user_id == user_id,
+                    MemoryEncodingEvent.character_id == character_id,
+                    MemoryEncodingEvent.status == "llm_done",
+                    MemoryEncodingEvent.created_at >= yesterday,
+                )
             )
-        ).order_by(MemoryEncodingEvent.created_at)
+            .order_by(MemoryEncodingEvent.created_at)
+        )
 
         result = await session.execute(stmt)
         events = result.scalars().all()

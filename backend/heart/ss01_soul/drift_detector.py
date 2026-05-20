@@ -31,26 +31,30 @@ from .registry import get_soul_registry
 # Types (per design doc §2)
 # ============================================================
 
+
 @dataclass(frozen=True)
 class ReleasedResponse:
     """Single assistant response that was released to the user."""
+
     turn_index: int
     text: str
-    was_rerolled: bool = False       # True if Mechanism C rerolled this
-    was_fallback: bool = False       # True if DP-3 system fallback
+    was_rerolled: bool = False  # True if Mechanism C rerolled this
+    was_fallback: bool = False  # True if DP-3 system fallback
 
 
 @dataclass(frozen=True)
 class SASSnapshotForDrift:
     """Snapshot of Soul Activation State fields needed for drift check."""
-    current_drift_score: float       # [0, 1], the previous EMA
+
+    current_drift_score: float  # [0, 1], the previous EMA
     last_drift_check_at: Optional[str] = None  # ISO8601
-    unlocked_facet_ids: tuple[str, ...] = ()   # for rare-unlock-word filter
+    unlocked_facet_ids: tuple[str, ...] = ()  # for rare-unlock-word filter
 
 
 @dataclass(frozen=True)
 class DriftCheckRequest:
     """Request to evaluate drift for a (user, character) pair."""
+
     user_id: UUID
     character_id: str
     soul_spec_version: str
@@ -62,6 +66,7 @@ class DriftCheckRequest:
 
 class DriftDecision(str, Enum):
     """Outcome of drift check."""
+
     SKIPPED_PREFILTER = "skipped_prefilter"
     SKIPPED_COSTCAP = "skipped_costcap"
     LLM_EVALUATED = "llm_evaluated"
@@ -71,7 +76,8 @@ class DriftDecision(str, Enum):
 @dataclass(frozen=True)
 class DriftEvent:
     """Drift event to be written to SAS (matches §5.2 schema)."""
-    drift_type: str                  # "voice_dna_loss" | "anti_pattern_match" etc
+
+    drift_type: str  # "voice_dna_loss" | "anti_pattern_match" etc
     drift_score: float
     turns_analyzed: list[int]
     sample_messages: list[str]
@@ -82,6 +88,7 @@ class DriftEvent:
 @dataclass(frozen=True)
 class DriftDebugInfo:
     """Observability — what signals fired, raw LLM response."""
+
     prefilter_hits: AntiPatternHits
     sampled_turn_indices: list[int]
     llm_raw_score: Optional[float] = None
@@ -92,7 +99,8 @@ class DriftDebugInfo:
 @dataclass(frozen=True)
 class DriftCheckResult:
     """Result of drift evaluation."""
-    drift_score: float               # [0, 1], to write to SAS.current_drift_score
+
+    drift_score: float  # [0, 1], to write to SAS.current_drift_score
     decision: DriftDecision
     evidence: Optional[DriftEvidence] = None  # populated iff REINFORCE should fire
     drift_event: Optional[DriftEvent] = None  # populated iff drift detected
@@ -104,6 +112,7 @@ class DriftCheckResult:
 # ============================================================
 # Sampler (per design doc §4.5)
 # ============================================================
+
 
 def sample_responses(history: list[ReleasedResponse]) -> list[ReleasedResponse]:
     """Sample last 5 valid responses from history.
@@ -137,6 +146,7 @@ def should_invoke_llm_for_sample(sampled: list[ReleasedResponse]) -> bool:
 # DriftDetector
 # ============================================================
 
+
 class DriftDetector:
     """Asynchronous drift detector using pre-filter + cheap LLM.
 
@@ -165,7 +175,7 @@ class DriftDetector:
         # Pre-compile per-soul fingerprints at startup (§4.2 pre-compilation)
         self._fingerprints = build_fingerprints(self._registry)
 
-    def evaluate(self, request: DriftCheckRequest) -> DriftCheckResult:
+    async def evaluate(self, request: DriftCheckRequest) -> DriftCheckResult:
         """Evaluate drift for a (user, character) pair.
 
         Per design doc §3 flow:
@@ -199,9 +209,7 @@ class DriftDetector:
             request.character_id,
             request.soul_spec_version,
         )
-        fingerprint = self._fingerprints.get(
-            (request.character_id, request.soul_spec_version)
-        )
+        fingerprint = self._fingerprints.get((request.character_id, request.soul_spec_version))
         if fingerprint is None:
             # Fallback for souls without fingerprint (shouldn't happen)
             fingerprint = DriftFingerprint.empty()
@@ -240,7 +248,7 @@ class DriftDetector:
 
         if needs_llm:
             # 4. LLM call
-            llm_result = self._llm_client.evaluate_drift(
+            llm_result = await self._llm_client.evaluate_drift(
                 soul=soul,
                 responses=sampled,
                 timeout_seconds=self._LLM_TIMEOUT_SECONDS,
@@ -266,12 +274,8 @@ class DriftDetector:
         ):
             # Build DriftEvidence (reuse existing type from anchor_injector)
             if llm_result and llm_result.violations:
-                sample_messages = tuple(
-                    v["sample_excerpt"] for v in llm_result.violations[:3]
-                )
-                detected_patterns = tuple(
-                    v["detected_pattern"] for v in llm_result.violations[:3]
-                )
+                sample_messages = tuple(v["sample_excerpt"] for v in llm_result.violations[:3])
+                detected_patterns = tuple(v["detected_pattern"] for v in llm_result.violations[:3])
                 required_patterns = tuple(llm_result.required_patterns[:2])
 
                 evidence = DriftEvidence(
@@ -308,9 +312,7 @@ class DriftDetector:
                 prefilter_hits=prefilter_hits,
                 sampled_turn_indices=[r.turn_index for r in sampled],
                 llm_raw_score=llm_score,
-                llm_timeout_occurred=(
-                    llm_result.timeout_occurred if llm_result else False
-                ),
+                llm_timeout_occurred=(llm_result.timeout_occurred if llm_result else False),
             ),
         )
 

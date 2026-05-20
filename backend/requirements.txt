@@ -15,9 +15,9 @@ pydantic-settings>=2.0.0
 # Redis
 redis>=5.0.0
 
-# LLM Clients
-anthropic>=0.34.0
-openai>=1.0.0
+# LLM (via ModelRouter - DeepSeek only)
+# Direct SDK imports are prohibited; use heart.infra.llm.router instead
+httpx>=0.27.0
 
 # Embedding (self-hosted BGE-M3)
 sentence-transformers>=2.2.0

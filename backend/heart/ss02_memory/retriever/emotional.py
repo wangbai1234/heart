@@ -116,8 +116,7 @@ class EmotionalRetriever(RetrievalStrategy):
 
             # Euclidean distance in 2D emotional space
             distance = math.sqrt(
-                (query_valence - mem_valence) ** 2
-                + (query_arousal - mem_arousal) ** 2
+                (query_valence - mem_valence) ** 2 + (query_arousal - mem_arousal) ** 2
             )
 
             # Convert to similarity score [0, 1]

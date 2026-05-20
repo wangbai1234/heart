@@ -21,7 +21,7 @@ import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
 
 import structlog
 import yaml
@@ -100,9 +100,7 @@ class Reconstructor:
         # Load character-specific templates
         template_path = TEMPLATES_DIR / f"{character_id}.yaml"
         if not template_path.exists():
-            raise FileNotFoundError(
-                f"Reconstruction templates not found: {template_path}"
-            )
+            raise FileNotFoundError(f"Reconstruction templates not found: {template_path}")
 
         with open(template_path) as f:
             self.templates = yaml.safe_load(f)
@@ -246,9 +244,7 @@ class Reconstructor:
             "content_question": "",
         }
 
-    def _fill_skeleton(
-        self, skeleton: dict, state: str, core_variants: dict
-    ) -> str:
+    def _fill_skeleton(self, skeleton: dict, state: str, core_variants: dict) -> str:
         """
         Fill skeleton structure with core content + hedge overrides.
 
@@ -262,7 +258,9 @@ class Reconstructor:
         """
         # Check for character-specific structure override
         if state in self.structure_overrides:
-            structure = self.structure_overrides[state].get("structure", skeleton.get("structure", "{content}"))
+            structure = self.structure_overrides[state].get(
+                "structure", skeleton.get("structure", "{content}")
+            )
         else:
             structure = skeleton.get("structure", "{content}")
 
@@ -270,9 +268,7 @@ class Reconstructor:
         if "{content_softened}" in structure or state == "fading":
             content = core_variants.get("content_softened", core_variants["content"])
         elif "{content_fragmentary}" in structure or state in ["faint", "dormant"]:
-            content = core_variants.get(
-                "content_fragmentary", core_variants["content"]
-            )
+            content = core_variants.get("content_fragmentary", core_variants["content"])
         elif "{content_question}" in structure or state == "archived":
             content = core_variants.get("content_question", core_variants["content"])
         else:
@@ -303,9 +299,7 @@ class Reconstructor:
             )
             if isinstance(disorientation_choices, str):
                 disorientation_choices = [disorientation_choices]
-            disorientation = (
-                random.choice(disorientation_choices) if disorientation_choices else ""
-            )
+            disorientation = random.choice(disorientation_choices) if disorientation_choices else ""
 
         # Fill structure
         filled = structure.format(

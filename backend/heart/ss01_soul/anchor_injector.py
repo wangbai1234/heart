@@ -33,6 +33,7 @@ logger = structlog.get_logger()
 # Anchor Mode
 # ============================================================
 
+
 class AnchorMode(str, Enum):
     """Anchor injection mode per SS05 §3.6 and SS01 §3.4."""
 
@@ -45,14 +46,14 @@ class AnchorMode(str, Enum):
 # Token Estimator
 # ============================================================
 
+
 class TokenEstimator(Protocol):
     """Strategy interface for token counting.
 
     Implementations must be thread-safe and side-effect-free.
     """
 
-    def estimate(self, text: str) -> int:
-        ...
+    def estimate(self, text: str) -> int: ...
 
 
 class HeuristicTokenEstimator:
@@ -63,7 +64,7 @@ class HeuristicTokenEstimator:
     """
 
     def estimate(self, text: str) -> int:
-        chinese = sum(1 for c in text if '一' <= c <= '鿿')
+        chinese = sum(1 for c in text if "一" <= c <= "鿿")
         other = len(text) - chinese
         return int(chinese * 1.5 + other * 0.3)
 
@@ -71,6 +72,7 @@ class HeuristicTokenEstimator:
 # ============================================================
 # Activation View (per-request, frozen)
 # ============================================================
+
 
 @dataclass(frozen=True)
 class AnchorActivationView:
@@ -180,21 +182,19 @@ _REINFORCE_TEMPLATE = """══════════════════�
 # Module-level formatters
 # ============================================================
 
+
 def _get_display_name(soul: SoulSpec) -> str:
     dn = soul.display_name
     return dn.zh or dn.ja or dn.en or soul.character_id
 
 
 def _first_line(text: str) -> str:
-    return text.strip().split('\n')[0].strip()
+    return text.strip().split("\n")[0].strip()
 
 
 def _format_defense(defense) -> str:
     if isinstance(defense, DefenseLayer):
-        return (
-            f"第一层 - {defense.layer_1.strip()}; "
-            f"第二层 - {defense.layer_2.strip()}"
-        )
+        return f"第一层 - {defense.layer_1.strip()}; 第二层 - {defense.layer_2.strip()}"
     return defense.strip()
 
 
@@ -210,9 +210,7 @@ def _format_voice_dna_top_n(voice_dna, n: int, compact: bool = False) -> str:
     top = sorted_vd[:n]
 
     if compact:
-        return " | ".join(
-            _first_line(vd.pattern)[:50] for vd in top
-        )
+        return " | ".join(_first_line(vd.pattern)[:50] for vd in top)
 
     lines = [f"- {_first_line(vd.pattern)}" for vd in top]
     return "\n".join(lines)
@@ -262,17 +260,16 @@ def _format_drift_evidence(evidence: DriftEvidence) -> str:
     lines = []
     for msg in evidence.sample_messages[:3]:
         truncated = msg[:80] + ("..." if len(msg) > 80 else "")
-        lines.append(f"  - \"{truncated}\"")
+        lines.append(f'  - "{truncated}"')
     if evidence.detected_patterns:
-        lines.append(
-            f"  检测到的偏离: {', '.join(evidence.detected_patterns[:3])}"
-        )
+        lines.append(f"  检测到的偏离: {', '.join(evidence.detected_patterns[:3])}")
     return "\n".join(lines) if lines else "  （无具体样本）"
 
 
 # ============================================================
 # AnchorInjector
 # ============================================================
+
 
 class AnchorInjector:
     """Generates Anchor Block strings from Soul Specs.
@@ -308,12 +305,15 @@ class AnchorInjector:
         for character_id in self._registry.list_characters():
             for version in self._registry.list_versions(character_id):
                 soul = self._registry.get_soul(character_id, version)
-                skeletons[(character_id, version, AnchorMode.FULL)] = \
-                    self._build_full_skeleton(soul)
-                skeletons[(character_id, version, AnchorMode.LIGHT)] = \
-                    self._build_light_skeleton(soul)
-                skeletons[(character_id, version, AnchorMode.REINFORCE)] = \
+                skeletons[(character_id, version, AnchorMode.FULL)] = self._build_full_skeleton(
+                    soul
+                )
+                skeletons[(character_id, version, AnchorMode.LIGHT)] = self._build_light_skeleton(
+                    soul
+                )
+                skeletons[(character_id, version, AnchorMode.REINFORCE)] = (
                     self._build_reinforce_skeleton(soul)
+                )
         return MappingProxyType(skeletons)
 
     def _build_full_skeleton(self, soul: SoulSpec) -> str:
@@ -370,9 +370,7 @@ class AnchorInjector:
         skeleton = self._get_skeleton(soul, AnchorMode.FULL)
         return skeleton.format(
             resonance_score=f"{activation_state.resonance_score:.2f}",
-            resonance_phase_label=_resonance_phase_label(
-                activation_state.resonance_score
-            ),
+            resonance_phase_label=_resonance_phase_label(activation_state.resonance_score),
             unlocked_facets_summary=_format_unlocked_facets(
                 soul, activation_state.unlocked_facet_ids
             ),
