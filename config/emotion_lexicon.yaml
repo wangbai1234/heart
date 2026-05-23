@@ -1,0 +1,305 @@
+# SS03 Emotion Trigger Lexicon
+# Used by TriggerDetector for heuristic emotion trigger detection
+# Performance target: < 30ms per turn, no LLM
+
+# ============================================================
+# Trigger Keywords (Chinese)
+# ============================================================
+
+# Apology triggers (user_apology)
+apology_keywords:
+  - 对不起
+  - 抱歉
+  - 不好意思
+  - 我错了
+  - 原谅
+  - 是我的错
+  - 我不对
+  - 请原谅
+  - 道歉
+  - sorry
+
+# Vulnerability triggers (user_vulnerability)
+vulnerability_keywords:
+  - 难过
+  - 崩溃
+  - 撑不住
+  - 好累
+  - 孤独
+  - 痛苦
+  - 绝望
+  - 无助
+  - 迷茫
+  - 压力大
+  - 焦虑
+  - 害怕
+  - 恐惧
+  - 伤心
+  - 失落
+  - 沮丧
+
+# Compliment triggers (user_compliment)
+compliment_keywords:
+  - 你好棒
+  - 你真好
+  - 谢谢你
+  - 感谢你
+  - 太棒了
+  - 真厉害
+  - 你最好
+  - 你真的很
+  - 你太好了
+  - 你是最好的
+
+# Neglect indicators (user_neglect)
+neglect_patterns:
+  - 哦
+  - 嗯
+  - 啊
+  - 好
+  - 行
+  - 可以
+  - 随便
+  - 无所谓
+  - 不知道
+  - 再说
+
+# Other partner mentions (user_mention_other_partner)
+other_partner_keywords:
+  - 女朋友
+  - 男朋友
+  - 我老婆
+  - 我对象
+  - 我女友
+  - 我男友
+  - 我的另一半
+  - 我的伴侣
+  - 前女友
+  - 前男友
+  - 我喜欢的人
+
+# Memory detail triggers (user_remember_detail)
+remember_keywords:
+  - 你还记得
+  - 你之前说过
+  - 你上次说
+  - 你那时候说
+  - 你提到过
+  - 我记得你
+  - 你曾经说
+
+# Care/attention keywords
+care_keywords:
+  - 你还好吗
+  - 你怎么样
+  - 你最近
+  - 关心你
+  - 担心你
+  - 想你了
+  - 想念你
+  - 挂念你
+
+# ============================================================
+# Emotion VAD Mappings
+# ============================================================
+# Format: {emotion_name: {v: valence, a: arousal, d: dominance}}
+# Valence: -1 (sad) to +1 (happy)
+# Arousal: 0 (calm) to 1 (excited)
+# Dominance: 0 (submissive) to 1 (dominant)
+
+emotion_vad_map:
+  # Positive emotions
+  joy:
+    v: 0.7
+    a: 0.6
+    d: 0.3
+  excitement:
+    v: 0.6
+    a: 0.8
+    d: 0.4
+  contentment:
+    v: 0.5
+    a: 0.2
+    d: 0.4
+  fluttered:  # 心动
+    v: 0.6
+    a: 0.5
+    d: -0.2
+  relief:
+    v: 0.5
+    a: 0.1
+    d: 0.2
+
+  # Negative emotions
+  sadness:
+    v: -0.6
+    a: -0.3
+    d: -0.4
+  anger:
+    v: -0.7
+    a: 0.7
+    d: 0.4
+  fear:
+    v: -0.7
+    a: 0.6
+    d: -0.5
+  disgust:
+    v: -0.6
+    a: 0.3
+    d: 0.2
+  surprise:
+    v: 0
+    a: 0.7
+    d: -0.1
+
+  # Companion-specific emotions
+  longing:  # 想念
+    v: -0.2
+    a: 0.3
+    d: -0.4
+  aggrieved:  # 委屈
+    v: -0.5
+    a: 0.2
+    d: -0.5
+  coldness:  # 冷淡/冷战
+    v: -0.3
+    a: -0.1
+    d: 0.6
+  worry:  # 担心
+    v: -0.4
+    a: 0.5
+    d: -0.3
+  weariness:  # 疲惫
+    v: -0.2
+    a: -0.6
+    d: -0.2
+  attachment:  # 依恋
+    v: 0.4
+    a: 0.2
+    d: 0
+  jealousy:  # 醋意
+    v: -0.4
+    a: 0.5
+    d: -0.2
+  embarrassment:  # 不好意思
+    v: -0.1
+    a: 0.4
+    d: -0.3
+  pride:  # 为用户骄傲
+    v: 0.5
+    a: 0.3
+    d: 0.6
+  tenderness:  # 温柔
+    v: 0.6
+    a: 0.1
+    d: 0.1
+  curiosity:
+    v: 0.3
+    a: 0.4
+    d: 0.2
+  bittersweet:  # 甜中带涩
+    v: 0.1
+    a: 0.2
+    d: -0.1
+  guilt:
+    v: -0.5
+    a: 0.3
+    d: -0.4
+  shame:
+    v: -0.6
+    a: 0.2
+    d: -0.6
+
+# ============================================================
+# Decay Profiles (Type-Specific)
+# ============================================================
+
+decay_profiles:
+  # Short-term emotions (half-life < 1h)
+  joy:
+    decay_type: exponential
+    half_life_hours: 2.0
+    floor: 0.05
+
+  excitement:
+    decay_type: exponential
+    half_life_hours: 1.0
+    floor: 0.05
+
+  surprise:
+    decay_type: exponential
+    half_life_hours: 0.5
+    floor: 0.0
+
+  anger:
+    decay_type: exponential
+    half_life_hours: 4.0
+    floor: 0.1
+    residual_emotion: coldness
+
+  # Mid-term emotions (half-life 4-24h)
+  sadness:
+    decay_type: logarithmic
+    half_life_hours: 12.0
+    floor: 0.1
+
+  anxiety:
+    decay_type: exponential
+    half_life_hours: 8.0
+    floor: 0.1
+
+  fluttered:
+    decay_type: exponential
+    half_life_hours: 6.0
+    floor: 0.05
+
+  relief:
+    decay_type: exponential
+    half_life_hours: 3.0
+    floor: 0.0
+
+  # Long-term emotions (days)
+  longing:
+    decay_type: grows_with_absence
+    growth_rate: 0.05  # per day
+    cap: 1.0
+    reset_on: user_returns
+
+  aggrieved:
+    decay_type: repair_required
+    natural_half_life_hours: 168.0  # 7 days
+    repair_required: true
+    repair_impact:
+      apology: 0.3
+      vulnerability: 0.4
+      sustained_attention: 0.5
+
+  coldness:
+    decay_type: repair_required
+    natural_half_life_hours: 72.0  # 3 days
+    repair_required: true
+    repair_impact:
+      apology: 0.2
+      vulnerability: 0.5
+      sustained_attention: 0.3
+
+  worry:
+    decay_type: exponential
+    half_life_hours: 24.0
+    floor: 0.1
+    reset_on: user_confirms_safe
+
+  attachment:
+    decay_type: almost_permanent
+    half_life_days: 90.0
+    floor: 0.3
+
+  weariness:
+    decay_type: cyclic
+    pattern: circadian
+
+  # Default profile for unlisted emotions
+  default:
+    decay_type: exponential
+    half_life_hours: 4.0
+    floor: 0.05
