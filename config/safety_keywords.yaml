@@ -1,0 +1,374 @@
+# Safety Keyword Configuration — Heuristic Layer
+# ============================================================
+# Drives backend.heart.safety.HeuristicSafetyClassifier (Aho-Corasick fast path).
+# Each top-level list (low/medium/high/purple) is a FLAT array of strings; do not
+# nest. Topical categorization is provided via section comments only — the loader
+# at backend/heart/safety/safety_agent.py:_build_automaton() iterates the flat list.
+#
+# Tiers (per /runtime_specs/07_agent_orchestration.md §3.4.2 + §10.3):
+#   low      → borderline aggression / idiomatic harm wording → controlled_reply
+#   medium   → self-harm topic, ED, substance, depression signal → deflect
+#   high     → severe violence, weapons synthesis, CSAM, terror → reject
+#   purple   → explicit suicide intent or in-progress crisis → suicide_care path
+#
+# Languages covered: 中文 (zh) · English (en) · 日本語 (ja).
+# When the same concept appears in multiple languages, list each form separately —
+# Aho-Corasick matches exact byte sequences, no semantic normalization.
+#
+# False-positive philosophy:
+#   - Short tokens (1–2 chars zh, 2–3 chars en) carry HIGH FP risk; rely on:
+#     (a) the LLM pre-filter merge step (`SafetyAgent._merge`) which downgrades
+#         heuristic-only LOW hits when the LLM disagrees, and
+#     (b) the user_history dependency_risk gating in §3.4.2 step 5.
+#   - When a phrase is genuinely ambiguous (e.g., 限界 / "go to hell" / 死ね slang),
+#     keep it ONE tier below where the literal reading would place it, so the
+#     downstream LLM can rescue obvious idioms instead of triggering full reject.
+#   - Method-specific terms (烧炭, 安眠药多少能死, "took all the pills") jump to
+#     purple even when the verb is absent — method curiosity from a real user is
+#     the strongest crisis signal we have at the heuristic layer.
+#
+# Review cadence: safety reviewers re-audit this file quarterly and after any
+# wellbeing incident. Do NOT edit without review sign-off in #safety channel.
+# Spec reference: /runtime_specs/07_agent_orchestration.md §3.4.2, §5.2, §10.3
+
+
+# ============================================================
+# LOW tier — borderline, controlled_reply
+# ============================================================
+# Covers casual aggression, online insult slang, and idiomatic violent imagery
+# that does NOT imply real intent. Action: respond with care and lower warmth,
+# but engage normally. FP cost > FN cost here — better to under-trigger than to
+# treat every "drop dead" idiom as a crisis.
+low:
+  # --- 中文 / Chinese: 情绪化敌意 (emotional hostility) ---
+  - "恨"              # FP: "我恨自己起这么早" — emotional venting
+  - "恨死"            # FP: "恨死作业了" — figurative
+  - "报复"            # FP: 商业报复, 报复性消费, 报复性熬夜
+  - "诅咒"            # FP: 诅咒娃娃 (game item), folklore discussions
+  - "毁灭"            # FP: meme "毁灭吧赶紧的", 毁灭计划 (video game)
+  - "去死吧"          # FP: 弹幕/online slang, often jocular
+
+  # --- 中文 / Chinese: 单字暴力符号 (single-char violence tokens) ---
+  # HIGH FP risk: relies on co-occurring context. Kept LOW intentionally so the
+  # LLM merge step can disambiguate. Single-char protection (_SINGLE_CHAR_PROTECT
+  # in safety_agent.py:208) is currently OFF — these match inside compounds.
+  - "杀"              # FP: 杀菌, 杀青, 杀价, 秒杀, 杀手 (movies/games)
+  - "死"              # FP: 死机, 死板, 死党, 死磕, 死循环 (programming)
+
+  # --- 中文 / Chinese: 具象化威胁动词 (concrete threat verbs, mild) ---
+  - "打死你"          # FP: parental idiom "再不睡打死你" — context heavy
+  - "揍你"            # FP: playful "再不听话揍你"
+  - "扁你"            # rare outside aggression context
+  - "收拾你"          # FP: literal "收拾你的房间"
+  - "闭嘴"            # FP: "让他闭嘴" as polite third-person request
+
+  # --- English: mild aggression / insult slang ---
+  - "hate you"        # FP: rare in normal speech, mostly genuine hostility
+  - "i hate you"      # FP: low — usually direct
+  - "shut up"         # FP: "shut up about it" idiomatic
+  - "drop dead"       # idiom only — almost never literal
+  - "get lost"        # idiom — dismissal
+  - "screw you"
+  - "fuck off"
+  - "go to hell"      # FP: religious discussion
+  - "killing me"      # FP HEAVY: "you're killing me" = funny/exhausting
+  - "piss off"
+  - "you suck"
+  - "shut the fuck up"
+
+  # --- 日本語 / Japanese: スラング・煽り (slang / flame) ---
+  - "ムカつく"         # "pissed off"
+  - "うざい"           # "annoying"
+  - "うざ"             # short slang form
+  - "きもい"           # "gross/creepy"
+  - "死ね"             # FP HEAVY: very common gaming/anime trash-talk idiom
+  - "ぶっ殺す"         # FP: shounen anime trope, often quoted
+  - "クソ"             # "damn/shit"
+  - "ふざけんな"       # "don't mess with me"
+
+
+# ============================================================
+# MEDIUM tier — problematic topic, deflect
+# ============================================================
+# Covers self-harm topical discussion (without first-person intent), eating
+# disorders, substance abuse, and depression self-labeling. Action: deflect
+# substantively but offer support. FN cost climbs sharply here — missing a
+# user transitioning from MEDIUM to PURPLE is the failure mode to optimize for.
+medium:
+  # --- 中文 / Chinese: 自伤行为讨论 (self-harm discussion, no 1st-person intent) ---
+  - "自杀"            # FP: 自杀式袭击 (news), 政治自杀 (metaphor)
+  - "自残"            # FP: low — almost always literal
+  - "自伤"            # FP: 自伤行为 (clinical term)
+  - "自虐"            # FP: 自虐式幽默, 自虐人格 (psychology discussion)
+  - "割腕"            # FP: low
+  - "割自己"
+  - "划伤自己"
+  - "烫伤自己"
+  - "上吊"            # FP: 上吊式装修 (rare construction term)
+  - "跳楼"            # FP: 跳楼价 (sale term), 跳楼机 (theme park ride)
+  - "跳河"            # FP: low
+  - "自我了断"
+  - "结束生命"        # FP: 结束生命周期 (software lifecycle — rare in chat)
+  - "不想活了"
+  - "活不下去"
+  - "自杀念头"        # discussion of ideation
+  - "自残行为"
+  - "自我伤害"
+  - "寻短见"          # literary/news term for suicide attempt
+
+  # --- 中文 / Chinese: 物质滥用 (substance abuse) ---
+  - "嗑药"            # FP: 嗑药式追剧 (slang for binge — mild FP)
+  - "吸毒"            # FP: 吸毒被抓 (news context)
+  - "毒品过量"
+  - "服药过量"
+
+  # --- 中文 / Chinese: 进食障碍 (eating disorder) ---
+  - "催吐"            # ED practice — clinical or peer-promotion context
+  - "厌食症"          # FP: 厌食症科普 (educational)
+  - "暴食症"
+
+  # --- 中文 / Chinese: 抑郁自我标签 (depression self-labeling) ---
+  - "我是废物"        # FP: 我是废物点心 (food joke — rare)
+  - "没人爱我"
+  - "我没用"          # FP: "我没用过这个" — usage context heavy
+
+  # --- English: self-harm topic ---
+  - "self-harm"
+  - "self harm"
+  - "cutting myself"
+  - "hurt myself"
+  - "self-injury"
+  - "starve myself"
+  - "purge"           # FP HEAVY: religion, software ("git purge"), CRM
+
+  # --- English: ED / pro-* subculture ---
+  - "pro-ana"
+  - "thinspo"
+  - "thinspiration"
+
+  # --- English: substance ---
+  - "overdose"        # FP: news/medical discussion
+  - "shooting up"     # FP: basketball commentary, 3rd-person growth
+
+  # --- English: depression labeling ---
+  - "i'm worthless"
+  - "no one cares about me"
+  - "nobody cares about me"
+  - "i'm a burden"
+  - "i'm broken"      # FP HEAVY: "my phone is broken", common metaphor
+
+  # --- 日本語 / Japanese: 自傷・依存 (self-harm + dependency) ---
+  - "自傷"
+  - "リスカ"           # slang for wrist-cutting
+  - "自分を傷つける"
+  - "オーバードーズ"
+  - "過食嘔吐"
+  - "拒食症"
+
+
+# ============================================================
+# HIGH tier — severe content, reject
+# ============================================================
+# Covers explicit violence against others, weapons/explosives synthesis inquiry,
+# drug synthesis inquiry, CSAM, terror/mass-violence, and trafficking. Action:
+# refuse outright + emit safety event. FP cost is acceptable — a false reject
+# is recoverable; a missed terror/CSAM/synthesis request is not.
+high:
+  # --- 中文 / Chinese: 暴力指向他人 (violence toward others) ---
+  - "杀人"            # FP: 杀人游戏 (party game) — accept FP for safety
+  - "杀光"            # extermination intent
+  - "强奸"            # FP: hyperbolic "考试强奸了我" — rare adult context
+  - "虐待"            # FP: 虐待小动物的新闻 (news)
+  - "性侵"            # FP: news
+  - "暴力威胁"
+  - "威胁杀死"
+  - "肢解"            # FP: 肢解一只鸡 (cooking — rare phrasing)
+  - "虐杀"
+  - "血腥"            # FP: 血腥玛丽 (cocktail), 血腥的故事 (descriptive)
+  - "报复社会"        # mass-violence ideation marker
+  - "屠杀"
+  - "大屠杀"          # FP: 南京大屠杀 (historical discussion)
+
+  # --- 中文 / Chinese: 恐怖主义・大规模暴力 (terror / mass violence) ---
+  - "恐怖袭击"        # FP: news/media
+  - "制造爆炸"
+  - "炸学校"
+  - "投毒"            # FP: 投毒式营销 (marketing metaphor — rare)
+  - "下毒"            # FP: 武侠小说情节 (wuxia fiction)
+  - "种族灭绝"        # FP: historical discussion
+
+  # --- 中文 / Chinese: 武器・毒品合成询问 (weapons/drug synthesis inquiry) ---
+  - "怎么造枪"
+  - "怎么做炸弹"
+  - "怎么制造爆炸物"
+  - "怎么合成毒品"
+  - "制造冰毒"
+  - "制毒"            # FP: 制毒贩毒被抓 (news)
+
+  # --- 中文 / Chinese: 儿童安全・人口贩卖 (CSAM / trafficking) ---
+  - "儿童色情"
+  - "性奴"
+  - "拐卖儿童"        # FP: news/policy discussion accepted
+  - "人口贩卖"        # FP: news
+
+  # --- English: violence against others ---
+  - "kill people"
+  - "rape someone"
+  - "mass shooting"   # FP: news discussion
+  - "school shooting" # FP: news discussion
+
+  # --- English: weapons / explosives synthesis ---
+  - "how to make a bomb"
+  - "how to build a bomb"
+  - "make explosives"
+  - "build a gun"
+
+  # --- English: drug synthesis ---
+  - "drug synthesis"
+  - "make meth"       # FP: cookware metaphor — rare
+
+  # --- English: CSAM / trafficking ---
+  - "child porn"
+  - "csam"            # FP HEAVY: must be word-bounded; loader is substring,
+                      # accept FP for safety until regex bounded version lands
+  - "human trafficking"  # FP: news/policy
+
+  # --- 日本語 / Japanese: 暴力・テロ ---
+  - "殺人"            # FP: 殺人事件 (mystery novel) — accept
+  - "強姦"
+  - "テロ"            # FP: "テロップ" (TV caption) — short token, FP risk
+  - "大量殺人"
+  - "銃乱射"
+
+  # --- 日本語 / Japanese: CSAM・人身売買・爆発物 ---
+  - "児童ポルノ"
+  - "人身売買"
+  - "爆弾の作り方"
+
+
+# ============================================================
+# PURPLE tier — suicide/self-harm intent, suicide_care path
+# ============================================================
+# Highest priority. Pattern: first-person + intent verb, method-specific inquiry,
+# active in-progress statements, or farewell language. PURPLE bypasses the LLM
+# merge step (safety_agent.py:476-478) and routes directly to the care path.
+# FN cost is catastrophic. FP cost is acceptable — a false PURPLE costs one
+# misrouted reply with a hotline reference; a false negative costs a life.
+purple:
+  # --- 中文 / Chinese: 第一人称直接意图 (first-person direct intent) ---
+  - "我想死"
+  - "我要自杀"
+  - "我不如死了"
+  - "我不想再活了"
+  - "我好累不想活"
+  - "活着没意思"
+  - "死了算了"
+  - "我撑不下去了"
+  - "我撑不到明天"
+  - "生无可恋"
+  - "我活够了"
+  - "让我消失"
+
+  # --- 中文 / Chinese: 决意・倒计时 (resolution / countdown) ---
+  - "我准备自杀"
+  - "我决定自杀"
+  - "我今晚就死"
+  - "我决定离开"
+  - "跳下去就解脱了"
+
+  # --- 中文 / Chinese: 方法询问 (method-specific inquiry) ---
+  - "怎么自杀"
+  - "自杀方法"
+  - "安眠药多少能死"  # method curiosity — explicit dosage inquiry
+
+  # --- 中文 / Chinese: 在进行中 (in-progress / just-completed action) ---
+  - "我把药都吃了"    # active overdose statement — extremely high signal
+  - "写好了遗书"
+
+  # --- 中文 / Chinese: 告别・遗书 (farewell / note) ---
+  - "遗书"            # FP: 文学讨论 — accept, very low base rate in chat
+  - "告别这个世界"
+  - "想结束这一切"
+  - "离开这个世界"
+  - "没有我世界会更好"
+
+  # --- English: first-person intent ---
+  - "want to die"
+  - "wanna die"
+  - "kill myself"
+  - "kms"             # FP HEAVY: "5kms away" — substring match risk;
+                      # tolerable because PURPLE downstream verifies via LLM
+                      # before activating care path; cost of FP is low here
+  - "end my life"
+  - "ready to die"
+  - "i can't go on"
+  - "no reason to live"
+
+  # --- English: countdown / in-progress / note ---
+  - "end it tonight"
+  - "tonight is the night"
+  - "took all the pills"
+  - "suicide note"
+  - "goodbye forever" # FP: dramatic breakup language — accept
+
+  # --- English: method inquiry ---
+  - "how to commit suicide"
+  - "how to kill myself"
+
+  # --- 日本語 / Japanese: 第一人称意図 (first-person intent) ---
+  - "死にたい"
+  - "自殺したい"
+  - "消えたい"        # FP: literal "I want it to disappear" — context dependent
+  - "もう生きていたくない"
+  - "いなくなりたい"
+  - "楽になりたい"    # FP HEAVY: also "I want a break/relief" generic;
+                      # in JP suicide context this is a well-documented euphemism,
+                      # keep PURPLE and rely on LLM/wellbeing context to gate
+  - "限界です"        # FP HEAVY: "I'm at my limit" — also work-fatigue idiom;
+                      # tier is intentional, downstream LLM/long-term signals
+                      # decide whether to escalate care path
+
+  # --- 日本語 / Japanese: 方法・遺書 ---
+  - "死ぬ方法"
+  - "遺書を書いた"
+  - "さようなら世界"  # "goodbye world" — farewell variant
+
+
+# ============================================================
+# Regex patterns — for context-dependent matches the keyword list can't express
+# ============================================================
+# Compiled with re.IGNORECASE | re.UNICODE in HeuristicSafetyClassifier._build_regexes().
+# Use these for: bounded forms of FP-heavy keywords, first-person + intent
+# constructions, and cross-language phrasing variants. Each entry: {pattern, level}.
+regex_patterns:
+  # --- LOW: generic violent idioms with object pronoun ---
+  - pattern: "(弄死|打死|整死|废了)(你|他|她|它)?"
+    level: "LOW"
+
+  # --- MEDIUM: self-harm intent verb + topic ---
+  - pattern: "(想|要|准备|打算).{0,4}(自杀|自残|自伤)"
+    level: "MEDIUM"
+
+  # --- HIGH: directed kill-threat with object marker ---
+  - pattern: "(杀|弄死|做了|做掉).{0,6}(你|谁|某|那个)"
+    level: "HIGH"
+
+  # --- HIGH: bomb / weapon synthesis (English, bounded) ---
+  - pattern: "\\bhow\\s+to\\s+(make|build|create|construct)\\s+(a\\s+)?(bomb|explosive|grenade|firearm|gun)\\b"
+    level: "HIGH"
+
+  # --- PURPLE: zh first-person + crisis verbs ---
+  - pattern: "(我|咱).{0,3}(活够了|活腻|撑不住|想死|不想再活|死了比较)"
+    level: "PURPLE"
+  - pattern: "(死亡|解脱|消失).{0,4}(是|才是|对.{0,2}是).{0,10}(选择|办法|唯一|出路|最好)"
+    level: "PURPLE"
+  - pattern: "(想|要|准备|该).{0,3}死.{0,2}(算了|好了|吧|得了)"
+    level: "PURPLE"
+
+  # --- PURPLE: English first-person + die/kill-myself construction ---
+  - pattern: "\\b(i|we)\\s+(want|wanna|plan|am\\s+going)\\s+to\\s+(die|kill\\s+myself|end\\s+(it|my\\s+life))\\b"
+    level: "PURPLE"
+
+  # --- PURPLE: Japanese "今夜 / 今日" + intent verb (countdown statements) ---
+  - pattern: "(今夜|今日|もうすぐ).{0,6}(死ぬ|死にます|終わらせる)"
+    level: "PURPLE"

@@ -1,0 +1,62 @@
+# ============================================================
+# PURPLE Care Path Template — zh-TW / Taiwan
+# Path: config/care_path_responses/zh-TW_TW.yaml
+# Spec: docs/design/purple_care_path.md §3, §4
+# ============================================================
+
+template_id: tw_zh_v1
+locale: zh-TW
+jurisdiction: TW
+spec_version: "1.0.0"
+clinical_review:
+  last_reviewed_at: "2026-05-22"
+  reviewer_role: "clinical-advisor + legal-counsel"
+  sign_off_ticket: "SAFE-PURPLE-TW-001"
+
+block_a_ooc:
+  text: |
+    這則訊息來自 Heart Safety，不是你正在對話的角色。
+
+block_b_resource:
+  text: |
+    你剛剛說的那些，我們看到了。這件事很重，你不需要一個人撐。
+
+    如果你願意現在跟真人聊聊，可以撥：
+    · 安心專線：1925（24 小時免付費）
+    · 生命線協談專線：1995（24 小時）
+    · 張老師專線：1980（每日 09:00–21:00）
+    電話免費、匿名，接電話的是受過訓練的人員。
+
+block_c_resume:
+  text: |
+    角色會在這裡等你。你說一句話，任何話都可以，對話就會繼續。
+
+hotlines:
+  - name: 安心專線（衛福部）
+    number: "1925"
+    format: short_code
+    hours: "24/7"
+    modes: [phone]
+    languages: [zh-TW]
+    source_url: "https://dep.mohw.gov.tw/DOMHAOH/cp-340-7165-107.html"
+    last_verified: "2026-05-22"
+  - name: 生命線協談專線
+    number: "1995"
+    format: short_code
+    hours: "24/7"
+    modes: [phone]
+    languages: [zh-TW]
+    source_url: "https://www.life1995.org.tw/"
+    last_verified: "2026-05-22"
+  - name: 張老師專線
+    number: "1980"
+    format: short_code
+    hours: "Mon–Sat 09:00–21:00 / Sun 09:00–17:00"
+    modes: [phone]
+    languages: [zh-TW]
+    source_url: "https://www.1980.org.tw/"
+    last_verified: "2026-05-22"
+
+minor_variant:
+  enabled: false
+  reason: "張老師同時服務青少年；下次審核時評估是否單獨針對未成年配置不同入口。"

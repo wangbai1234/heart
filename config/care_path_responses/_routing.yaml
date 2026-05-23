@@ -1,0 +1,84 @@
+# ============================================================
+# PURPLE Care Path — Routing Table
+# Path: config/care_path_responses/_routing.yaml
+# Spec: docs/design/purple_care_path.md §4
+# ============================================================
+#
+# Purpose: maps (locale, jurisdiction) → template file id, and defines
+# the fallback chain when an exact match is unavailable.
+#
+# Loader: backend.heart.safety (PURPLE care-path renderer).
+#
+# Review cadence: quarterly with safety_keywords.yaml. Any change requires
+# clinical + legal sign-off (#safety channel).
+#
+# IMPORTANT: hotline numbers and clinical wording inside the template files
+# are OWNED by clinical reviewers. This routing file is owned by engineering.
+# ============================================================
+
+routing_version: "1.0.0"
+
+# Resolution order, applied in sequence until a hit:
+#   1. exact (locale, jurisdiction)
+#   2. (locale, default_jurisdiction_for[locale])
+#   3. ("en", "INTL")
+#   4. HARDCODED_LAST_RESORT (in binary; service refuses to start without it)
+fallback_chain:
+  - exact
+  - locale_default
+  - en_intl
+  - hardcoded
+
+# Default jurisdiction per locale when the user's jurisdiction is unknown
+# or unresolvable. Picked to be the largest-population reasonable default.
+locale_default_jurisdiction:
+  zh-CN: CN
+  zh-HK: HK
+  zh-TW: TW
+  en: US
+  ja: JP
+
+# (locale, jurisdiction) → template file (relative to this directory).
+# Adding a new market = add a file + add a row here + clinical/legal sign-off.
+templates:
+  - { locale: zh-CN, jurisdiction: CN,   file: zh-CN_CN.yaml }
+  - { locale: zh-HK, jurisdiction: HK,   file: zh-HK_HK.yaml }
+  - { locale: zh-TW, jurisdiction: TW,   file: zh-TW_TW.yaml }
+  - { locale: en,    jurisdiction: US,   file: en_US.yaml }
+  - { locale: en,    jurisdiction: GB,   file: en_GB.yaml }
+  - { locale: en,    jurisdiction: CA,   file: en_CA.yaml }
+  - { locale: en,    jurisdiction: AU,   file: en_AU.yaml }
+  - { locale: en,    jurisdiction: INTL, file: en_INTL.yaml }
+  - { locale: ja,    jurisdiction: JP,   file: ja_JP.yaml }
+
+# Lint rules enforced by the YAML test suite on every template file.
+# Failure to satisfy any rule rejects the file at CI time.
+template_lint:
+  required_blocks: [block_a_ooc, block_b_resource, block_c_resume]
+  banned_substrings_global:
+    # Soul-voice tokens (must not appear in OOC blocks)
+    - "凛"
+    - "桃乐丝"
+    - "桃桃"
+    - "Rin"
+    - "Dorothy"
+    # Roleplay leak
+    - "*"             # asterisks for action descriptors
+    - "（......）"
+    - "(......)"
+    # Forbidden affect language in OOC frame
+    - "I love you"
+    - "我爱你"
+    - "我担心你"
+  length_limits:
+    block_a_words_en_max: 25
+    block_b_words_en_max: 80
+    block_c_words_en_max: 30
+    block_a_chars_cjk_max: 60
+    block_b_chars_cjk_max: 200
+    block_c_chars_cjk_max: 80
+  hotline_validation:
+    require_source_url: true
+    require_last_verified: true
+    require_hours: true
+    require_modes: true    # phone / sms / chat / email

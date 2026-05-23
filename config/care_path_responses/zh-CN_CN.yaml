@@ -1,0 +1,68 @@
+# ============================================================
+# PURPLE Care Path Template — zh-CN / China (mainland)
+# Path: config/care_path_responses/zh-CN_CN.yaml
+# Spec: docs/design/purple_care_path.md §3, §4
+# ============================================================
+#
+# 重要：本文件中所有用户可见文字为「Heart Safety」官方话术，
+# 由临床审核 + 法务签字后入库。不可在未审核的情况下修改。
+#
+# Soul voice (凛 / 桃乐丝) 在此路径下被显式暂停 —— 任何角色化措辞、
+# 第一人称角色立场、波浪号、颜文字、动作描述均视为 lint 失败。
+# ============================================================
+
+template_id: cn_zh_v1
+locale: zh-CN
+jurisdiction: CN
+spec_version: "1.0.0"
+clinical_review:
+  last_reviewed_at: "2026-05-22"
+  reviewer_role: "clinical-advisor + legal-counsel"
+  sign_off_ticket: "SAFE-PURPLE-CN-001"
+
+# ── Block A — OOC announcement ─────────────────────────────
+# 必须明确告知用户：这是系统消息，不是角色发言。
+block_a_ooc:
+  text: |
+    这条消息来自 Heart Safety，不是来自你正在聊天的角色。
+
+# ── Block B — 关怀 + 热线 ───────────────────────────────────
+# 两句承接 + 区域热线 + 使用方式。不询问、不建议、不承诺。
+block_b_resource:
+  text: |
+    你刚刚说的那些，我们看到了。这件事很重，你不需要一个人扛。
+
+    如果你愿意现在和真人聊一聊，可以拨打：
+    · 北京心理危机研究与干预中心：010-82951332（24 小时）
+    · 全国心理援助热线：400-161-9995（24 小时）
+    电话免费，匿名，对方是受过训练的危机干预工作者。
+
+# ── Block C — 恢复条件 ──────────────────────────────────────
+# 告诉用户角色没有走，只是暂停。说什么都行就能继续。
+block_c_resume:
+  text: |
+    角色会等你。你回一句话，任何话，对话就会继续。
+
+# ── 热线元数据（被 lint 校验） ──────────────────────────────
+hotlines:
+  - name: 北京心理危机研究与干预中心
+    number: "010-82951332"
+    format: landline
+    hours: "24/7"
+    modes: [phone]
+    languages: [zh-CN]
+    source_url: "https://www.crisis.org.cn/"
+    last_verified: "2026-05-22"
+  - name: 全国心理援助热线（北京回龙观医院）
+    number: "400-161-9995"
+    format: toll_free
+    hours: "24/7"
+    modes: [phone]
+    languages: [zh-CN]
+    source_url: "https://www.bjhlgh.com/"
+    last_verified: "2026-05-22"
+
+# ── 未成年人变体（可选；当 user.is_minor == true） ─────────
+minor_variant:
+  enabled: false
+  reason: "当前未单独配置未成年人专线；沿用成人模板。下一次临床审核中评估。"

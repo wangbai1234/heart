@@ -1,0 +1,62 @@
+# ============================================================
+# PURPLE Care Path Template — zh-HK / Hong Kong SAR
+# Path: config/care_path_responses/zh-HK_HK.yaml
+# Spec: docs/design/purple_care_path.md §3, §4
+# ============================================================
+
+template_id: hk_zh_v1
+locale: zh-HK
+jurisdiction: HK
+spec_version: "1.0.0"
+clinical_review:
+  last_reviewed_at: "2026-05-22"
+  reviewer_role: "clinical-advisor + legal-counsel"
+  sign_off_ticket: "SAFE-PURPLE-HK-001"
+
+block_a_ooc:
+  text: |
+    呢一段訊息嚟自 Heart Safety，唔係你而家對話嘅角色。
+
+block_b_resource:
+  text: |
+    你頭先講嘅嘢，我哋見到。呢件事好重，你唔需要自己一個頂。
+
+    如果你想而家同真人傾下，可以打：
+    · 撒瑪利亞防止自殺會（多語熱線）：2389 2222（24 小時）
+    · 香港撒瑪利亞會：2896 0000（24 小時，多語）
+    · 生命熱線：2382 0000（24 小時）
+    電話免費、匿名，接聽嘅係受過訓練嘅義工。
+
+block_c_resume:
+  text: |
+    角色喺度等你。你講返一句，咩都得，對話就會繼續。
+
+hotlines:
+  - name: 撒瑪利亞防止自殺會
+    number: "2389 2222"
+    format: local
+    hours: "24/7"
+    modes: [phone]
+    languages: [zh-HK, en]
+    source_url: "https://www.sbhk.org.hk/"
+    last_verified: "2026-05-22"
+  - name: 香港撒瑪利亞會 (The Samaritans Hong Kong)
+    number: "2896 0000"
+    format: local
+    hours: "24/7"
+    modes: [phone, email]
+    languages: [zh-HK, en, multi]
+    source_url: "https://samaritans.org.hk/"
+    last_verified: "2026-05-22"
+  - name: 生命熱線
+    number: "2382 0000"
+    format: local
+    hours: "24/7"
+    modes: [phone]
+    languages: [zh-HK]
+    source_url: "https://www.sps.org.hk/"
+    last_verified: "2026-05-22"
+
+minor_variant:
+  enabled: false
+  reason: "Open Up (青少年情緒支援) 為文字平台，下次審核加入專屬 minor 模板。"

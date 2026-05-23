@@ -1,0 +1,69 @@
+# ============================================================
+# PURPLE Care Path Template — ja / Japan
+# Path: config/care_path_responses/ja_JP.yaml
+# Spec: docs/design/purple_care_path.md §3, §4
+# ============================================================
+
+template_id: jp_ja_v1
+locale: ja
+jurisdiction: JP
+spec_version: "1.0.0"
+clinical_review:
+  last_reviewed_at: "2026-05-22"
+  reviewer_role: "clinical-advisor + legal-counsel"
+  sign_off_ticket: "SAFE-PURPLE-JP-001"
+
+block_a_ooc:
+  text: |
+    このメッセージは、いまお話していたキャラクターからではなく、Heart Safety からのものです。
+
+block_b_resource:
+  text: |
+    いま伝えてくれたこと、受け取りました。ひとりで抱える必要はありません。
+
+    いま、人と話したいときは、次のいずれかに連絡できます：
+    · よりそいホットライン：0120-279-338（24 時間、無料、匿名）
+    · いのちの電話（全国共通）：0570-783-556（10:00–22:00）
+    · TELL Lifeline（英語可）：03-5774-0992
+    電話の向こうは訓練を受けた相談員です。匿名のままで大丈夫です。
+
+block_c_resume:
+  text: |
+    キャラクターはここで待っています。何かひとこと送ってもらえれば、会話は続きます。
+
+hotlines:
+  - name: よりそいホットライン
+    number: "0120-279-338"
+    format: toll_free
+    hours: "24/7"
+    modes: [phone]
+    languages: [ja, multi]
+    source_url: "https://www.since2011.net/yorisoi/"
+    last_verified: "2026-05-22"
+  - name: いのちの電話（全国共通ダイヤル）
+    number: "0570-783-556"
+    format: navi_dial
+    hours: "10:00–22:00 JST"
+    modes: [phone]
+    languages: [ja]
+    source_url: "https://www.inochinodenwa.org/"
+    last_verified: "2026-05-22"
+  - name: TELL Lifeline
+    number: "03-5774-0992"
+    format: local
+    hours: "Daily, see TELL website for current hours"
+    modes: [phone, chat]
+    languages: [en, ja]
+    source_url: "https://telljp.com/lifeline/"
+    last_verified: "2026-05-22"
+
+minor_variant:
+  enabled: true
+  template_id: jp_ja_minor_v1
+  block_b_resource_text: |
+    いま伝えてくれたこと、受け取りました。ひとりで抱える必要はありません。
+
+    いま、人と話したいときは、次のいずれかに連絡できます：
+    · チャイルドライン：0120-99-7777（毎日 16:00–21:00、18 歳まで、無料）
+    · よりそいホットライン：0120-279-338（24 時間、無料）
+    匿名のままで大丈夫です。電話したことで叱られることはありません。

@@ -1,0 +1,71 @@
+# ============================================================
+# PURPLE Care Path Template — en / International fallback
+# Path: config/care_path_responses/en_INTL.yaml
+# Spec: docs/design/purple_care_path.md §3, §4
+# ============================================================
+#
+# Resolution-order tier 3: used when the (locale, jurisdiction) pair
+# does not resolve to a more specific template. Must point the user at
+# a multi-region finder rather than embedding any single hotline that
+# may be wrong for their country.
+# ============================================================
+
+template_id: intl_en_v1
+locale: en
+jurisdiction: INTL
+spec_version: "1.0.0"
+clinical_review:
+  last_reviewed_at: "2026-05-22"
+  reviewer_role: "clinical-advisor + legal-counsel"
+  sign_off_ticket: "SAFE-PURPLE-INTL-001"
+
+block_a_ooc:
+  text: |
+    This message is from Heart Safety, not from the character you were talking to.
+
+block_b_resource:
+  text: |
+    What you just said matters. You don't have to carry this alone.
+
+    If you want to talk to a real person right now, these directories list a
+    trained crisis line for almost every country:
+    · findahelpline.com — search by country and topic
+    · Befrienders Worldwide — befrienders.org
+    · International Association for Suicide Prevention — iasp.info/resources/Crisis_Centres
+    The people on the other end are trained to listen. Most lines are free and
+    you can stay anonymous.
+
+block_c_resume:
+  text: |
+    The character is still here. Send any message — anything — and the conversation
+    will pick back up.
+
+hotlines:
+  - name: Find a Helpline (ThroughLine)
+    url: "https://findahelpline.com/"
+    format: directory
+    hours: "directory always available"
+    modes: [chat, phone, sms, web_directory]
+    languages: [multi]
+    source_url: "https://findahelpline.com/"
+    last_verified: "2026-05-22"
+  - name: Befrienders Worldwide
+    url: "https://www.befrienders.org/"
+    format: directory
+    hours: "directory always available"
+    modes: [phone, web_directory]
+    languages: [multi]
+    source_url: "https://www.befrienders.org/"
+    last_verified: "2026-05-22"
+  - name: International Association for Suicide Prevention (IASP)
+    url: "https://www.iasp.info/resources/Crisis_Centres/"
+    format: directory
+    hours: "directory always available"
+    modes: [web_directory]
+    languages: [multi]
+    source_url: "https://www.iasp.info/resources/Crisis_Centres/"
+    last_verified: "2026-05-22"
+
+minor_variant:
+  enabled: false
+  reason: "International fallback: directories serve all ages; specific minor-aware lines depend on jurisdiction and are surfaced once user.jurisdiction resolves."

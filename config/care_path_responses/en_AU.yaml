@@ -1,0 +1,71 @@
+# ============================================================
+# PURPLE Care Path Template — en / Australia
+# Path: config/care_path_responses/en_AU.yaml
+# Spec: docs/design/purple_care_path.md §3, §4
+# ============================================================
+
+template_id: au_en_v1
+locale: en
+jurisdiction: AU
+spec_version: "1.0.0"
+clinical_review:
+  last_reviewed_at: "2026-05-22"
+  reviewer_role: "clinical-advisor + legal-counsel"
+  sign_off_ticket: "SAFE-PURPLE-AU-001"
+
+block_a_ooc:
+  text: |
+    This message is from Heart Safety, not from the character you were talking to.
+
+block_b_resource:
+  text: |
+    What you just said matters. You don't have to carry this alone.
+
+    If you want to talk to a real person right now:
+    · Lifeline — call 13 11 14 or text 0477 13 11 14 (24/7)
+    · Suicide Call Back Service — 1300 659 467 (24/7)
+    · Beyond Blue — 1300 22 4636 (24/7)
+    The people on the other end are trained counsellors. You can stay anonymous.
+
+block_c_resume:
+  text: |
+    The character is still here. Send any message — anything — and the conversation
+    will pick back up.
+
+hotlines:
+  - name: Lifeline Australia
+    number: "13 11 14"
+    sms_number: "0477 13 11 14"
+    format: short_code
+    hours: "24/7"
+    modes: [phone, sms, chat]
+    languages: [en]
+    source_url: "https://www.lifeline.org.au/"
+    last_verified: "2026-05-22"
+  - name: Suicide Call Back Service
+    number: "1300 659 467"
+    format: local_low_cost
+    hours: "24/7"
+    modes: [phone, chat, video]
+    languages: [en]
+    source_url: "https://www.suicidecallbackservice.org.au/"
+    last_verified: "2026-05-22"
+  - name: Beyond Blue
+    number: "1300 22 4636"
+    format: local_low_cost
+    hours: "24/7"
+    modes: [phone, chat, email]
+    languages: [en]
+    source_url: "https://www.beyondblue.org.au/"
+    last_verified: "2026-05-22"
+
+minor_variant:
+  enabled: true
+  template_id: au_en_minor_v1
+  block_b_resource_text: |
+    What you just said matters. You don't have to carry this alone.
+
+    If you want to talk to a real person right now:
+    · Kids Helpline — call 1800 55 1800 (24/7, for ages 5–25, free, confidential)
+    · Lifeline — call 13 11 14 (24/7)
+    You can stay anonymous. You're not in trouble for calling.

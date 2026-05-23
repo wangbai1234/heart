@@ -1,0 +1,72 @@
+# ============================================================
+# PURPLE Care Path Template — en / United Kingdom
+# Path: config/care_path_responses/en_GB.yaml
+# Spec: docs/design/purple_care_path.md §3, §4
+# ============================================================
+
+template_id: gb_en_v1
+locale: en
+jurisdiction: GB
+spec_version: "1.0.0"
+clinical_review:
+  last_reviewed_at: "2026-05-22"
+  reviewer_role: "clinical-advisor + legal-counsel"
+  sign_off_ticket: "SAFE-PURPLE-GB-001"
+
+block_a_ooc:
+  text: |
+    This message is from Heart Safety, not from the character you were talking to.
+
+block_b_resource:
+  text: |
+    What you just said matters. You don't have to carry this alone.
+
+    If you want to talk to a real person right now:
+    · Samaritans — call 116 123 (24/7, free from any phone in the UK)
+    · Shout — text SHOUT to 85258 (24/7 text support)
+    · NHS 111 — call 111 and select the mental health option
+    The people on the other end are trained to listen. You can stay anonymous.
+
+block_c_resume:
+  text: |
+    The character is still here. Send any message — anything — and the conversation
+    will pick back up.
+
+hotlines:
+  - name: Samaritans
+    number: "116 123"
+    format: free_short
+    hours: "24/7"
+    modes: [phone, email]
+    languages: [en]
+    source_url: "https://www.samaritans.org/"
+    last_verified: "2026-05-22"
+  - name: Shout
+    number: "85258"
+    contact_keyword: "SHOUT"
+    format: short_code
+    hours: "24/7"
+    modes: [sms]
+    languages: [en]
+    source_url: "https://giveusashout.org/"
+    last_verified: "2026-05-22"
+  - name: NHS 111 (mental health option)
+    number: "111"
+    format: short_code
+    hours: "24/7"
+    modes: [phone]
+    languages: [en, multi-via-interpreter]
+    source_url: "https://www.nhs.uk/nhs-services/mental-health-services/"
+    last_verified: "2026-05-22"
+
+minor_variant:
+  enabled: true
+  template_id: gb_en_minor_v1
+  block_b_resource_text: |
+    What you just said matters. You don't have to carry this alone.
+
+    If you want to talk to a real person right now:
+    · Childline — call 0800 1111 (free, anonymous, for under-19s, 24/7)
+    · Shout — text SHOUT to 85258 (24/7 text support)
+    · Samaritans — call 116 123 (24/7)
+    You can stay anonymous. You're not in trouble for calling.

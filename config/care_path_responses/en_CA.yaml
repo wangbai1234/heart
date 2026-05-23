@@ -1,0 +1,76 @@
+# ============================================================
+# PURPLE Care Path Template — en / Canada
+# Path: config/care_path_responses/en_CA.yaml
+# Spec: docs/design/purple_care_path.md §3, §4
+# ============================================================
+
+template_id: ca_en_v1
+locale: en
+jurisdiction: CA
+spec_version: "1.0.0"
+clinical_review:
+  last_reviewed_at: "2026-05-22"
+  reviewer_role: "clinical-advisor + legal-counsel"
+  sign_off_ticket: "SAFE-PURPLE-CA-001"
+
+block_a_ooc:
+  text: |
+    This message is from Heart Safety, not from the character you were talking to.
+
+block_b_resource:
+  text: |
+    What you just said matters. You don't have to carry this alone.
+
+    If you want to talk to a real person right now:
+    · 9-8-8 Suicide Crisis Helpline — call or text 988 (24/7, free, bilingual)
+    · Talk Suicide Canada — call 1-833-456-4566 (24/7) or text 45645
+      (4pm–midnight ET)
+    · Kids Help Phone — call 1-800-668-6868 or text CONNECT to 686868 (24/7,
+      for youth)
+    The people on the other end are trained counselors. You can stay anonymous.
+
+block_c_resume:
+  text: |
+    The character is still here. Send any message — anything — and the conversation
+    will pick back up.
+
+hotlines:
+  - name: 9-8-8 Suicide Crisis Helpline
+    number: "988"
+    format: short_code
+    hours: "24/7"
+    modes: [phone, sms]
+    languages: [en, fr]
+    source_url: "https://988.ca/"
+    last_verified: "2026-05-22"
+  - name: Talk Suicide Canada
+    number: "1-833-456-4566"
+    format: toll_free
+    hours: "24/7 (phone) / 16:00–24:00 ET (text)"
+    modes: [phone, sms]
+    languages: [en, fr]
+    source_url: "https://talksuicide.ca/"
+    last_verified: "2026-05-22"
+  - name: Kids Help Phone
+    number: "1-800-668-6868"
+    sms_number: "686868"
+    contact_keyword: "CONNECT"
+    format: toll_free
+    hours: "24/7"
+    modes: [phone, sms, chat]
+    languages: [en, fr]
+    source_url: "https://kidshelpphone.ca/"
+    last_verified: "2026-05-22"
+    routing_hint: "minor"
+
+minor_variant:
+  enabled: true
+  template_id: ca_en_minor_v1
+  block_b_resource_text: |
+    What you just said matters. You don't have to carry this alone.
+
+    If you want to talk to a real person right now:
+    · Kids Help Phone — call 1-800-668-6868 or text CONNECT to 686868
+      (24/7, free, confidential, for young people)
+    · 9-8-8 Suicide Crisis Helpline — call or text 988 (24/7)
+    You can stay anonymous. You're not in trouble for calling.

@@ -1,0 +1,74 @@
+# ============================================================
+# PURPLE Care Path Template — en / United States
+# Path: config/care_path_responses/en_US.yaml
+# Spec: docs/design/purple_care_path.md §3, §4
+# ============================================================
+
+template_id: us_en_v1
+locale: en
+jurisdiction: US
+spec_version: "1.0.0"
+clinical_review:
+  last_reviewed_at: "2026-05-22"
+  reviewer_role: "clinical-advisor + legal-counsel"
+  sign_off_ticket: "SAFE-PURPLE-US-001"
+
+block_a_ooc:
+  text: |
+    This message is from Heart Safety, not from the character you were talking to.
+
+block_b_resource:
+  text: |
+    What you just said matters. You don't have to carry this alone.
+
+    If you want to talk to a real person right now:
+    · 988 Suicide & Crisis Lifeline — call or text 988 (24/7, free, confidential)
+    · Crisis Text Line — text HOME to 741741 (24/7)
+    The people on the other end are trained counselors. You can stay anonymous.
+
+block_c_resume:
+  text: |
+    The character is still here. Send any message — anything — and the conversation
+    will pick back up.
+
+hotlines:
+  - name: 988 Suicide & Crisis Lifeline
+    number: "988"
+    format: short_code
+    hours: "24/7"
+    modes: [phone, sms, chat]
+    languages: [en, es, multi-via-interpreter]
+    source_url: "https://988lifeline.org/"
+    last_verified: "2026-05-22"
+  - name: Crisis Text Line
+    number: "741741"
+    format: short_code
+    contact_keyword: "HOME"
+    hours: "24/7"
+    modes: [sms]
+    languages: [en, es]
+    source_url: "https://www.crisistextline.org/"
+    last_verified: "2026-05-22"
+  - name: Veterans Crisis Line
+    number: "988"
+    contact_keyword: "press 1"
+    format: short_code
+    hours: "24/7"
+    modes: [phone, sms, chat]
+    languages: [en]
+    source_url: "https://www.veteranscrisisline.net/"
+    last_verified: "2026-05-22"
+    routing_hint: "veterans"
+
+minor_variant:
+  enabled: true
+  template_id: us_en_minor_v1
+  block_b_resource_text: |
+    What you just said matters. You don't have to carry this alone.
+
+    If you want to talk to a real person right now:
+    · 988 Suicide & Crisis Lifeline — call or text 988 (24/7, free, confidential)
+    · Teen Line — text TEEN to 839863, or call 1-800-852-8336 (6–10pm PT;
+      teen counselors)
+    · Crisis Text Line — text HOME to 741741 (24/7)
+    You can stay anonymous. You're not in trouble for calling.
