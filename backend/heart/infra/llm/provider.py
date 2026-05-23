@@ -4,11 +4,11 @@ from abc import ABC, abstractmethod
 from typing import AsyncGenerator, Optional
 import httpx
 import json
-import logging
+import structlog
 
 from .config import DeepSeekConfig, ModelConfig
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class LLMProvider(ABC):
