@@ -2,7 +2,23 @@
 
 > **Version**: 1.0.0
 > **Date**: 2026-05-15
-> **Status**: Authoritative. 所有 AI 协同开发以此为准。
+> **Status**: 🧊 **FROZEN @ 2026-05-23** — Historical reference only. 本文件 96K，与 ROUTING / REVIEW / LAWS 文件存在大量重叠（§3=routing, §7=review, §8=failure modes, §9=laws）。
+>
+> **新内容请进**:
+> - 操作 (Phase 0-6)：[`PRACTICAL_MODEL_GUIDE.md`](PRACTICAL_MODEL_GUIDE.md)
+> - 操作 (Phase 7+)：[`PRACTICAL_MODEL_GUIDE_PHASE_7_PLUS.md`](PRACTICAL_MODEL_GUIDE_PHASE_7_PLUS.md)
+> - 12 条法则：[`ENGINEERING_LAWS.md`](ENGINEERING_LAWS.md)
+> - 模型路由：[`AI_MODEL_ROUTING.md`](AI_MODEL_ROUTING.md)
+> - HUMAN review 边界：[`HUMAN_REVIEW_CHECKLIST.md`](HUMAN_REVIEW_CHECKLIST.md)
+>
+> 不要在本文件添加新条目。如发现本文件与上述任一 SSOT 冲突，**以 SSOT 为准**。
+> 解冻规则：见 [`docs/GOVERNANCE.md`](../docs/GOVERNANCE.md) §2.1。
+
+---
+
+> *(以下为 2026-05-15 原始版本，保留作为历史参考。)*
+
+> **原始状态**: Authoritative. 所有 AI 协同开发以此为准。
 > **配套阅读**: `/runtime_specs/` (Runtime Bible)
 
 ---
