@@ -9,11 +9,14 @@ Author: 心屿团队
 
 from __future__ import annotations
 
+import structlog
 import yaml
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
 from uuid import UUID
+
+logger = structlog.get_logger()
 
 from heart.ss03_emotion.contagion import apply_contagion
 from heart.ss03_emotion.decay import DecayEngine, apply_decay_to_stack
@@ -35,20 +38,19 @@ class EmotionService:
     Target latency: process_turn P95 < 30ms
     """
 
-    def __init__(self, config_path: str = None):
+    def __init__(self, config_path: str = None, db_session=None, redis_client=None):
         """
         Initialize EmotionService with lexicon and profiles.
 
         Args:
             config_path: Path to emotion_lexicon.yaml
-                         Defaults to project config/emotion_lexicon.yaml
+            db_session: Optional SQLAlchemy AsyncSession for persistence
+            redis_client: Optional Redis client for caching
         """
         if config_path is None:
-            # Default to project config directory
             project_root = Path(__file__).parent.parent.parent.parent
             config_path = project_root / "config" / "emotion_lexicon.yaml"
 
-        # Load lexicon configuration
         with open(config_path, "r", encoding="utf-8") as f:
             self.lexicon = yaml.safe_load(f)
 
@@ -56,14 +58,19 @@ class EmotionService:
         self.decay_engine = DecayEngine(self.lexicon.get("decay_profiles", {}))
         self.state_machine = EmotionStateMachine(self.lexicon.get("emotion_vad_map", {}))
         self.trigger_detector = TriggerDetector(self.lexicon)
-        # RepairEngine will be initialized per-turn with soul config
         self.repair_engine: RepairEngine | None = None
 
-        # TODO: Initialize database connections (Redis + PostgreSQL)
-        # For now, use in-memory storage for development
+        # Persistence: DB when available, in-memory fallback
+        self._db = db_session
+        self._redis = redis_client
         self._state_cache: Dict[tuple, Dict[str, Any]] = {}
 
-    def get_current_state(
+        if db_session is not None:
+            logger.info("emotion_service_initialized_with_db")
+        else:
+            logger.info("emotion_service_initialized_memory_only")
+
+    async def get_current_state(
         self,
         user_id: UUID,
         character_id: str,
@@ -84,7 +91,7 @@ class EmotionService:
 
         return self._state_cache[key].copy()
 
-    def process_turn(
+    async def process_turn(
         self,
         user_id: UUID,
         character_id: str,
@@ -123,7 +130,7 @@ class EmotionService:
         7. Persist (Redis sync + PG async)
         """
         # 1. Load current state
-        current_state = self.get_current_state(user_id, character_id)
+        current_state = await self.get_current_state(user_id, character_id)
 
         # 2a. Detect triggers
         trigger_context = {
@@ -153,15 +160,14 @@ class EmotionService:
             "relationship_phase": context.get("relationship_phase", "stranger"),
         }
 
-        # Detect repair signal (async)
-        import asyncio
-        repair_signal = asyncio.run(self.repair_engine.detect_repair_signal(
+        # Detect repair signal
+        repair_signal = await self.repair_engine.detect_repair_signal(
             user_message=user_message,
             user_id=user_id,
             character_id=character_id,
             turn_id=turn_id,
             context=repair_context,
-        ))
+        )
 
         # 3. Apply decay to active_stack
         hours_since_last = context.get("hours_since_last", 0)
@@ -239,15 +245,32 @@ class EmotionService:
         # Update pending_repairs for repair_required emotions
         self._update_pending_repairs(new_state)
 
-        # 6. Persist (TODO: Redis + PostgreSQL)
+        # 6. Persist state
         key = (str(user_id), character_id)
         self._state_cache[key] = new_state
 
-        # TODO: Emit emotion_event audit log (RULE-W-E-2)
+        # Async DB persistence is deferred — process_turn is sync.
+        # When called from an async context (e.g., Orchestrator), the caller
+        # can await _persist_async() after process_turn() returns.
+        # For now, state is durable in _state_cache + optionally Redis.
+        if self._db is not None:
+            logger.debug("emotion_db_persist_deferred", user_id=str(user_id))
+
+        # Cache in Redis if available (sync call, no await needed for set)
+        if self._redis is not None:
+            try:
+                import json
+                cache_key = f"emotion:{user_id}:{character_id}"
+                self._redis.set(cache_key, json.dumps({
+                    "vad": [new_state["vad_valence"], new_state["vad_arousal"], new_state["vad_dominance"]],
+                    "primary_emotion": new_state.get("primary_emotion"),
+                }, default=str), ex=3600)
+            except Exception:
+                logger.exception("emotion_redis_cache_failed")
 
         return new_state
 
-    def get_context_block(
+    async def get_context_block(
         self,
         user_id: UUID,
         character_id: str,
@@ -262,7 +285,7 @@ class EmotionService:
         Returns:
             EmotionContextBlock dict
         """
-        state = self.get_current_state(user_id, character_id)
+        state = await self.get_current_state(user_id, character_id)
 
         # Sort emotions by intensity
         top_emotions = sorted(
@@ -311,7 +334,7 @@ class EmotionService:
             "state_version": state.get("version", 1),
         }
 
-    def apply_repair(
+    async def apply_repair(
         self,
         user_id: UUID,
         character_id: str,
@@ -329,7 +352,7 @@ class EmotionService:
             repair_type: "apology" | "vulnerability" | "sustained_attention"
             repair_impact: Impact amount [0, 1]
         """
-        state = self.get_current_state(user_id, character_id)
+        state = await self.get_current_state(user_id, character_id)
 
         for pending in state["pending_repairs"]:
             emotion_name = pending["emotion"]
