@@ -408,7 +408,9 @@ class TestUtilityMethods:
         # Should return a dict with expected keys
         assert isinstance(metrics, dict)
         assert "status" in metrics
-        assert "available_metrics" in metrics
+        assert "total_calls" in metrics
+        assert "total_cost_usd" in metrics
+        assert "by_model" in metrics
 
 
 # Tests for LLMCall dataclass

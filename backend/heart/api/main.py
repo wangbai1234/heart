@@ -9,6 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from prometheus_client import Counter, Histogram, generate_latest
 from starlette.responses import Response
+from sqlalchemy import text
 import structlog
 import time
 from .routes import router
@@ -87,9 +88,36 @@ def create_app() -> FastAPI:
 
     @app.get("/health/ready")
     async def readiness():
-        """Kubernetes readiness probe."""
-        # TODO: Check DB, Redis, etc.
-        return {"status": "ready"}
+        """Kubernetes readiness probe — checks DB and Redis connectivity."""
+        components = {"api": "ok"}
+
+        # Check DB connectivity
+        try:
+            from heart.core.config import settings
+            from sqlalchemy.ext.asyncio import create_async_engine
+            engine = create_async_engine(settings.database_url, echo=False)
+            async with engine.connect() as conn:
+                await conn.execute(text("SELECT 1"))
+            components["database"] = "ok"
+            await engine.dispose()
+        except Exception:
+            components["database"] = "unavailable"
+
+        # Check Redis connectivity
+        try:
+            import redis.asyncio as aioredis
+            r = aioredis.from_url(settings.redis_url or "redis://localhost:6379")
+            await r.ping()
+            components["redis"] = "ok"
+            await r.close()
+        except Exception:
+            components["redis"] = "unavailable"
+
+        all_ok = all(v == "ok" for v in components.values())
+        return {
+            "status": "ready" if all_ok else "degraded",
+            "components": components,
+        }
 
     @app.get("/metrics")
     async def metrics():

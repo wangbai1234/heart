@@ -70,3 +70,4 @@ migrations/versions/*.pyc
 *.bak
 *.swp
 *~
+.deepseek/

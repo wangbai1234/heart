@@ -80,15 +80,14 @@ class TestRetrieveAPI:
     """Tests for retrieve() main retrieval API."""
 
     @pytest.mark.asyncio
-    async def test_retrieve_not_implemented(self, service, user_id, character_id, query_context):
-        """retrieve() should raise NotImplementedError (stub)."""
-        with pytest.raises(NotImplementedError):
-            await service.retrieve(
-                user_id=user_id,
-                character_id=character_id,
-                query_context=query_context,
-                top_k=5,
-            )
+    async def test_retrieve_returns_result_without_db(self, service, user_id, character_id, query_context):
+        """retrieve() returns empty result when DB is not configured."""
+        result = await service.retrieve(
+            user_id=user_id, character_id=character_id,
+            query_context=query_context, top_k=5,
+        )
+        assert result.memories == []
+        assert result.total_candidates == 0
 
     @pytest.mark.asyncio
     async def test_retrieve_enforces_top_k_limit(self, service, user_id, character_id, query_context):
@@ -117,10 +116,10 @@ class TestGetL4:
     """Tests for get_l4() L4 identity memory read."""
 
     @pytest.mark.asyncio
-    async def test_get_l4_not_implemented(self, service, user_id, character_id):
-        """get_l4() should raise NotImplementedError (stub)."""
-        with pytest.raises(NotImplementedError):
-            await service.get_l4(user_id=user_id, character_id=character_id)
+    async def test_get_l4_returns_empty_without_db(self, service, user_id, character_id):
+        """get_l4() returns empty list when DB is not configured."""
+        result = await service.get_l4(user_id=user_id, character_id=character_id)
+        assert result == []
 
     @pytest.mark.asyncio
     async def test_get_l4_enforces_user_isolation(self, service, user_id, character_id):
@@ -133,15 +132,10 @@ class TestGetRecentEpisodes:
     """Tests for get_recent_episodes() recency-based retrieval."""
 
     @pytest.mark.asyncio
-    async def test_get_recent_episodes_not_implemented(self, service, user_id, character_id):
-        """get_recent_episodes() should raise NotImplementedError (stub)."""
-        with pytest.raises(NotImplementedError):
-            await service.get_recent_episodes(
-                user_id=user_id,
-                character_id=character_id,
-                hours=72,
-                limit=10,
-            )
+    async def test_get_recent_episodes_returns_empty_without_db(self, service, user_id, character_id):
+        """get_recent_episodes() returns empty list when DB is not configured."""
+        result = await service.get_recent_episodes(user_id=user_id, character_id=character_id)
+        assert result == []
 
     @pytest.mark.asyncio
     async def test_get_recent_episodes_enforces_limit(self, service, user_id, character_id):
@@ -154,14 +148,10 @@ class TestGetAnniversaries:
     """Tests for get_anniversaries() anniversary lookup."""
 
     @pytest.mark.asyncio
-    async def test_get_anniversaries_not_implemented(self, service, user_id, character_id):
-        """get_anniversaries() should raise NotImplementedError (stub)."""
-        with pytest.raises(NotImplementedError):
-            await service.get_anniversaries(
-                user_id=user_id,
-                character_id=character_id,
-                window_days=7,
-            )
+    async def test_get_anniversaries_returns_empty_without_db(self, service, user_id, character_id):
+        """get_anniversaries() returns empty list when DB is not configured."""
+        result = await service.get_anniversaries(user_id=user_id, character_id=character_id)
+        assert result == []
 
 
 # ============================================================
@@ -173,72 +163,55 @@ class TestEncodeFast:
     """Tests for encode_fast() real-time encoding."""
 
     @pytest.mark.asyncio
-    async def test_encode_fast_not_implemented(self, service, user_id, character_id):
-        """encode_fast() should raise NotImplementedError (stub)."""
+    async def test_encode_fast_returns_signals(self, service, user_id, character_id):
+        """encode_fast() returns FastSignals without DB."""
         turn = Turn(
-            turn_index=1,
-            role="user",
-            content="我养了一只猫",
-            user_id=user_id,
-            character_id=character_id,
+            turn_index=1, role="user", content="我养了一只猫",
+            user_id=user_id, character_id=character_id,
             timestamp=datetime.now(timezone.utc),
         )
-
-        with pytest.raises(NotImplementedError):
-            await service.encode_fast(turn)
+        result = await service.encode_fast(turn)
+        assert result is not None
+        assert hasattr(result, "sentiment")
+        assert -1.0 <= result.sentiment <= 1.0
 
 
 class TestQueueLLMEncoding:
     """Tests for queue_llm_encoding() async encoding."""
 
     @pytest.mark.asyncio
-    async def test_queue_llm_encoding_not_implemented(self, service):
-        """queue_llm_encoding() should raise NotImplementedError (stub)."""
+    async def test_queue_llm_encoding_does_not_raise(self, service):
+        """queue_llm_encoding() logs warning without DB (no raise)."""
         from heart.ss02_memory.models import MemoryEncodingEvent
-
         event = MemoryEncodingEvent(
-            event_id=uuid4(),
-            user_id=uuid4(),
-            character_id="rin",
-            source_turn_id=uuid4(),
-            status="llm_pending",
+            event_id=uuid4(), user_id=uuid4(), character_id="rin",
+            source_turn_id=uuid4(), status="llm_pending",
             created_at=datetime.now(timezone.utc),
         )
-
-        with pytest.raises(NotImplementedError):
-            await service.queue_llm_encoding(event)
+        # Should not raise — logs warning when no DB
+        await service.queue_llm_encoding(event)
 
 
 class TestReinforce:
     """Tests for reinforce() memory reinforcement."""
 
     @pytest.mark.asyncio
-    async def test_reinforce_not_implemented(self, service):
-        """reinforce() should raise NotImplementedError (stub)."""
+    async def test_reinforce_no_db_no_raise(self, service):
+        """reinforce() does not raise when DB is not configured."""
         trigger = ReinforcementTrigger(
-            trigger_type="user_re_mentioned",
-            context="用户再次提到猫",
-            boost=0.15,
+            trigger_type="user_re_mentioned", context="test", boost=0.15,
         )
-
-        with pytest.raises(NotImplementedError):
-            await service.reinforce(
-                memory_ids=[uuid4()],
-                trigger=trigger,
-            )
+        # Should not raise — silently no-ops without DB
+        await service.reinforce(memory_ids=[uuid4()], trigger=trigger)
 
 
 class TestUserRequestForget:
     """Tests for user_request_forget() user-initiated forgetting."""
 
     @pytest.mark.asyncio
-    async def test_user_request_forget_not_implemented(self, service, user_id):
-        """user_request_forget() should raise NotImplementedError (stub)."""
-        with pytest.raises(NotImplementedError):
-            await service.user_request_forget(
-                user_id=user_id,
-                memory_id=uuid4(),
-            )
+    async def test_user_request_forget_no_db_no_raise(self, service, user_id):
+        """user_request_forget() does not raise when DB is not configured."""
+        await service.user_request_forget(user_id=user_id, memory_id=uuid4())
 
 
 # ============================================================
@@ -250,39 +223,31 @@ class TestApplyDecayBatch:
     """Tests for apply_decay_batch() daily decay."""
 
     @pytest.mark.asyncio
-    async def test_apply_decay_batch_not_implemented(self, service, user_id, character_id):
-        """apply_decay_batch() should raise NotImplementedError (stub)."""
-        with pytest.raises(NotImplementedError):
-            await service.apply_decay_batch(
-                user_id=user_id,
-                character_id=character_id,
-            )
+    async def test_apply_decay_batch_returns_zero_without_db(self, service, user_id, character_id):
+        """apply_decay_batch() returns 0 when DB is not configured."""
+        count = await service.apply_decay_batch(user_id=user_id, character_id=character_id)
+        assert count == 0
 
 
 class TestRunConsolidation:
     """Tests for run_consolidation() daily consolidation."""
 
     @pytest.mark.asyncio
-    async def test_run_consolidation_not_implemented(self, service, user_id, character_id):
-        """run_consolidation() should raise NotImplementedError (stub)."""
-        with pytest.raises(NotImplementedError):
-            await service.run_consolidation(
-                user_id=user_id,
-                character_id=character_id,
-            )
+    async def test_run_consolidation_returns_job_without_db(self, service, user_id, character_id):
+        """run_consolidation() returns ConsolidationJob without DB."""
+        job = await service.run_consolidation(user_id=user_id, character_id=character_id)
+        assert job is not None
+        assert job.status == "triggered"
 
 
 class TestPromoteToL4:
     """Tests for promote_to_l4() L3 → L4 promotion."""
 
     @pytest.mark.asyncio
-    async def test_promote_to_l4_not_implemented(self, service):
-        """promote_to_l4() should raise NotImplementedError (stub)."""
+    async def test_promote_to_l4_still_raises_not_implemented(self, service):
+        """promote_to_l4() still raises NotImplementedError (needs consolidation pipeline)."""
         with pytest.raises(NotImplementedError):
-            await service.promote_to_l4(
-                fact_id=uuid4(),
-                reason="用户核心身份披露",
-            )
+            await service.promote_to_l4(fact_id=uuid4(), reason="test")
 
 
 # ============================================================

@@ -57,7 +57,7 @@ def rin_soul_config():
 class TestRepairIntegration:
     """Test repair integration in EmotionService."""
 
-    def test_apology_detected_and_applied(self, emotion_service, rin_soul_config):
+    async def test_apology_detected_and_applied(self, emotion_service, rin_soul_config):
         """Apology should be detected and applied to pending repairs."""
         user_id = uuid4()
         character_id = "rin"
@@ -135,7 +135,7 @@ class TestRepairIntegration:
             "user_emotion_vad": {"valence": -0.2, "arousal": 0.4, "dominance": 0.3},
         }
 
-        new_state = emotion_service.process_turn(
+        new_state = await emotion_service.process_turn(
             user_id=user_id,
             character_id=character_id,
             user_message="对不起，是我不该提起那件事，让你难受了",
@@ -160,7 +160,7 @@ class TestRepairIntegration:
         assert aggrieved_repair is not None
         assert aggrieved_repair["repair_progress"] > 0.0
 
-    def test_bespoke_phrase_high_impact(self, emotion_service, rin_soul_config):
+    async def test_bespoke_phrase_high_impact(self, emotion_service, rin_soul_config):
         """Rin's bespoke phrase should have high impact."""
         user_id = uuid4()
         character_id = "rin"
@@ -229,7 +229,7 @@ class TestRepairIntegration:
             "user_emotion_vad": {"valence": 0.0, "arousal": 0.3, "dominance": 0.5},
         }
 
-        new_state = emotion_service.process_turn(
+        new_state = await emotion_service.process_turn(
             user_id=user_id,
             character_id=character_id,
             user_message="我还在，不会走的",
@@ -255,7 +255,7 @@ class TestRepairIntegration:
         # Expected impact should be significant
         assert coldness_repair["repair_progress"] >= 0.3
 
-    def test_no_pending_repair_ignored(self, emotion_service, rin_soul_config):
+    async def test_no_pending_repair_ignored(self, emotion_service, rin_soul_config):
         """Apology without pending repairs should be ignored."""
         user_id = uuid4()
         character_id = "rin"
@@ -300,7 +300,7 @@ class TestRepairIntegration:
             "user_emotion_vad": {"valence": 0.0, "arousal": 0.3, "dominance": 0.5},
         }
 
-        new_state = emotion_service.process_turn(
+        new_state = await emotion_service.process_turn(
             user_id=user_id,
             character_id=character_id,
             user_message="对不起",
