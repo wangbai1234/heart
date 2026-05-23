@@ -163,6 +163,12 @@ class LLMCostTracker:
         self.user_cost_store = user_cost_store or NoOpUserCostStore()
         self.alerts = alerts or NoOpAlerts()
 
+        # In-memory accumulators for aggregated metrics
+        self._total_calls: int = 0
+        self._total_cost: float = 0.0
+        self._calls_by_model: Dict[str, int] = {}
+        self._cost_by_model: Dict[str, float] = {}
+
     def _compute_cost(self, call: LLMCall) -> float:
         """
         Compute cost for an LLM call.
@@ -270,6 +276,12 @@ class LLMCostTracker:
                 },
             )
 
+        # Accumulate in-memory metrics
+        self._total_calls += 1
+        self._total_cost += cost
+        self._calls_by_model[call.model] = self._calls_by_model.get(call.model, 0) + 1
+        self._cost_by_model[call.model] = self._cost_by_model.get(call.model, 0.0) + cost
+
         return cost
 
     async def get_user_daily_cost(
@@ -309,16 +321,24 @@ class LLMCostTracker:
         # For now, return a structure that shows what data is available
 
         return {
-            "status": "not_implemented",
-            "note": "In production, query Prometheus for time-series metrics",
-            "available_metrics": [
-                "llm.cost (by model, agent, user_id_bucket)",
-                "llm.tokens (by model, token_type, agent)",
-            ],
+            "status": "active",
+            "total_calls": self._total_calls,
+            "total_cost_usd": round(self._total_cost, 6),
+            "by_model": {
+                model: {
+                    "calls": self._calls_by_model.get(model, 0),
+                    "cost_usd": round(self._cost_by_model.get(model, 0.0), 6),
+                }
+                for model in self._calls_by_model
+            },
+            "pricing_used": {
+                k: v for k, v in self.PRICING.items()
+                if k in self._calls_by_model
+            },
             "data_sources": {
+                "in_memory": "Current session accumulators",
                 "prometheus": "Time-series metrics",
                 "redis": "Per-user daily costs",
-                "clickhouse": "Detailed analytics (V2)",
             },
         }
 
