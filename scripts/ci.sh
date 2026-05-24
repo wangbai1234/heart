@@ -1,231 +1,165 @@
-#!/bin/bash
-# Heart Project - Gitee Go CI Entry Point
+#!/usr/bin/env bash
+# scripts/ci.sh — Heart 项目最小 CI
 #
-# Gitee Go 不兼容 GitHub Actions YAML 语法，因此 .gitee/workflows/ci.yml 仅作参考。
-# 实际 CI 由本脚本驱动，由 Gitee Go UI 上的 BranchPipeline/PRPipeline/MasterPipeline 调用。
+# 设计目标：
+#   - 本地优先：开发者随时 `bash scripts/ci.sh` 跑全套基础检查
+#   - 失败立即退出（set -euo pipefail）
+#   - 不依赖云端 runner / 主机组 / 容器编排
+#   - GitHub Actions 等 CI 也直接调用同一脚本，行为完全一致
 #
-# 用法（在 Gitee Go UI 的 shell step 中）:
-#   bash scripts/ci.sh <stage>
+# 用法：
+#   bash scripts/ci.sh                # 等同于 `all`：lint + unit-tests + schema
+#   bash scripts/ci.sh lint
+#   bash scripts/ci.sh unit-tests
+#   bash scripts/ci.sh schema-validation
+#   bash scripts/ci.sh integration-tests   # 需要本地 postgres + redis + API key
 #
-# 可用 stage:
-#   lint                — ruff + mypy 静态检查
-#   unit-tests          — pytest tests/unit
-#   integration-tests   — pytest tests/integration（需 postgres + redis + DEEPSEEK_API_KEY）
-#   schema-validation   — YAML schema 校验
-#   build-docker        — Docker 镜像构建
-#   all                 — 顺序执行 lint → unit-tests → schema-validation
+# 退出码：
+#   0 成功；1 失败；2 未知 stage
 #
-# 退出码:
-#   0  — 成功
-#   1  — 失败（任何 stage 失败立即终止）
-#   2  — 未知 stage
+# 兼容性：macOS 12+ / Linux（bash 3.2+），不依赖 GNU 专属选项
 
 set -euo pipefail
 
-# ---- 配置 ----
-PYTHON_VERSION="${PYTHON_VERSION:-3.11}"
+# ---- 通用 ----
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BACKEND_DIR="$REPO_ROOT/backend"
 
-# ---- 通用工具 ----
-log() {
-    echo "[ci.sh] $*"
+c_green="\033[32m"
+c_red="\033[31m"
+c_yellow="\033[33m"
+c_reset="\033[0m"
+
+log()  { printf "${c_green}[ci]${c_reset} %s\n" "$*"; }
+warn() { printf "${c_yellow}[ci][warn]${c_reset} %s\n" "$*" >&2; }
+die()  { printf "${c_red}[ci][error]${c_reset} %s\n" "$*" >&2; exit 1; }
+
+require_backend() {
+    [ -d "$BACKEND_DIR" ]                || die "backend/ not found at $BACKEND_DIR"
+    [ -f "$BACKEND_DIR/requirements.txt" ] || die "backend/requirements.txt missing"
 }
 
-die() {
-    echo "[ci.sh] ERROR: $*" >&2
-    exit 1
+# 本地默认假定虚拟环境已激活；CI 走 actions/setup-python 后直接安装。
+pip_install() {
+    pip install --quiet --disable-pip-version-check "$@"
 }
 
-ensure_backend() {
-    [ -d "$BACKEND_DIR" ] || die "backend/ directory not found at $BACKEND_DIR"
-    [ -f "$BACKEND_DIR/requirements.txt" ] || die "backend/requirements.txt not found"
-}
-
-install_python_deps() {
-    local extra_pkgs="$*"
-    log "Installing Python dependencies: $extra_pkgs"
-    cd "$BACKEND_DIR"
-    pip install --upgrade pip --quiet
-    pip install --quiet -r requirements.txt
-    if [ -n "$extra_pkgs" ]; then
-        pip install --quiet $extra_pkgs
-    fi
-}
-
-# ---- Stage: lint ----
+# ---- stage: lint ----
 stage_lint() {
-    log "===== Stage: lint (ruff + mypy) ====="
-    ensure_backend
-    install_python_deps "ruff mypy"
+    log "stage: lint (ruff + mypy)"
+    require_backend
+    pip_install ruff mypy
+    pip_install -r "$BACKEND_DIR/requirements.txt"
 
     cd "$BACKEND_DIR"
-    log "Running ruff check..."
+    log "→ ruff check"
     ruff check heart/ --select E,F,W,I,N --ignore E501
 
-    log "Running ruff format check..."
+    log "→ ruff format --check"
     ruff format --check heart/
 
-    log "Running mypy..."
+    log "→ mypy"
     mypy heart/ --ignore-missing-imports --no-strict-optional
 
-    log "✓ Lint passed"
+    log "✓ lint passed"
 }
 
-# ---- Stage: unit-tests ----
+# ---- stage: unit-tests ----
 stage_unit_tests() {
-    log "===== Stage: unit-tests ====="
-    ensure_backend
-    install_python_deps "pytest pytest-asyncio pytest-cov pytest-mock"
+    log "stage: unit-tests"
+    require_backend
+    pip_install pytest pytest-asyncio pytest-cov pytest-mock
+    pip_install -r "$BACKEND_DIR/requirements.txt"
 
     cd "$BACKEND_DIR"
-    log "Running pytest tests/unit..."
-    pytest tests/unit -v \
-        --cov=heart \
-        --cov-report=xml \
-        --cov-report=term \
-        --cov-report=html
+    pytest tests/unit -v --cov=heart --cov-report=term
 
-    log "✓ Unit tests passed"
+    log "✓ unit-tests passed"
 }
 
-# ---- Stage: integration-tests ----
-stage_integration_tests() {
-    log "===== Stage: integration-tests ====="
-    ensure_backend
-
-    : "${DATABASE_URL:?DATABASE_URL is required for integration tests}"
-    : "${REDIS_URL:?REDIS_URL is required for integration tests}"
-    : "${DEEPSEEK_API_KEY:?DEEPSEEK_API_KEY is required for integration tests}"
-
-    install_python_deps "pytest pytest-asyncio pytest-cov asyncpg redis"
-
-    cd "$BACKEND_DIR"
-
-    log "Waiting for PostgreSQL..."
-    for i in $(seq 1 30); do
-        if pg_isready -h localhost -p 5432 -U heart_test 2>/dev/null; then
-            break
-        fi
-        sleep 2
-    done
-
-    log "Setting up pgvector extension..."
-    PGPASSWORD=test_password psql -h localhost -U heart_test -d heart_test \
-        -c "CREATE EXTENSION IF NOT EXISTS vector;" || true
-
-    if [ -f alembic.ini ]; then
-        log "Running alembic migrations..."
-        pip install --quiet alembic
-        alembic upgrade head || log "WARN: migrations not ready, skipping"
-    fi
-
-    log "Running pytest tests/integration..."
-    pytest tests/integration -v \
-        --cov=heart \
-        --cov-report=xml \
-        --cov-report=term \
-        --cov-report=html
-
-    log "✓ Integration tests passed"
-}
-
-# ---- Stage: schema-validation ----
+# ---- stage: schema-validation ----
 stage_schema_validation() {
-    log "===== Stage: schema-validation ====="
+    log "stage: schema-validation"
     cd "$REPO_ROOT"
-    pip install --quiet --upgrade pip
-    pip install --quiet pyyaml jsonschema pydantic
+    pip_install pyyaml
 
-    python3 <<'PYEOF'
-import sys
-import yaml
+    python3 - <<'PYEOF'
+import sys, yaml
 from pathlib import Path
 
 errors = []
 
-def validate_dir(directory: Path, multi_doc: bool = False) -> None:
-    if not directory.exists():
-        print(f"Directory {directory} not found, skipping")
+def validate(d: Path, multi_doc: bool = False) -> None:
+    if not d.exists():
+        print(f"  (skip) {d} not present")
         return
-    for yaml_file in directory.rglob("*.yaml"):
+    for f in d.rglob("*.yaml"):
         try:
-            with open(yaml_file, "r", encoding="utf-8") as f:
+            with open(f, "r", encoding="utf-8") as fh:
                 if multi_doc:
-                    list(yaml.safe_load_all(f))
+                    list(yaml.safe_load_all(fh))
                 else:
-                    yaml.safe_load(f)
-            print(f"✓ {yaml_file}")
+                    yaml.safe_load(fh)
+            print(f"  ✓ {f}")
         except Exception as e:
-            errors.append(f"✗ {yaml_file}: {e}")
-            print(f"✗ {yaml_file}: {e}")
+            errors.append(f"  ✗ {f}: {e}")
+            print(errors[-1])
 
-validate_dir(Path("soul_specs"))
-validate_dir(Path("config"))
-validate_dir(Path("backend/infra/kubernetes"), multi_doc=True)
+validate(Path("soul_specs"))
+validate(Path("config"))
+validate(Path("backend/infra/kubernetes"), multi_doc=True)
 
 if errors:
-    print(f"\n{len(errors)} validation errors found")
+    print(f"\n{len(errors)} YAML validation error(s)")
     sys.exit(1)
-print("\nAll YAML files are valid")
+print("\nall YAML files valid")
 PYEOF
 
-    log "✓ Schema validation passed"
+    log "✓ schema-validation passed"
 }
 
-# ---- Stage: build-docker ----
-stage_build_docker() {
-    log "===== Stage: build-docker ====="
-    cd "$REPO_ROOT"
+# ---- stage: integration-tests (opt-in) ----
+stage_integration_tests() {
+    log "stage: integration-tests (opt-in)"
+    require_backend
 
-    if ! command -v docker >/dev/null 2>&1; then
-        die "docker command not found; ensure Gitee Go runner has docker installed"
+    : "${DATABASE_URL:?integration-tests requires DATABASE_URL}"
+    : "${REDIS_URL:?integration-tests requires REDIS_URL}"
+    : "${DEEPSEEK_API_KEY:?integration-tests requires DEEPSEEK_API_KEY}"
+
+    pip_install pytest pytest-asyncio asyncpg redis alembic
+    pip_install -r "$BACKEND_DIR/requirements.txt"
+
+    cd "$BACKEND_DIR"
+    if [ -f alembic.ini ]; then
+        log "→ alembic upgrade head"
+        alembic upgrade head || warn "alembic migrations failed; continuing"
     fi
 
-    [ -f "backend/Dockerfile" ] || die "backend/Dockerfile not found"
+    pytest tests/integration -v
 
-    log "Building heart/backend:test..."
-    docker build -f backend/Dockerfile -t heart/backend:test backend/
-
-    if [ -f "backend/Dockerfile.orchestrator" ]; then
-        log "Building heart/orchestrator-service:test..."
-        docker build -f backend/Dockerfile.orchestrator -t heart/orchestrator-service:test backend/
-    fi
-
-    if [ -f "backend/Dockerfile.memory" ]; then
-        log "Building heart/memory-service:test..."
-        docker build -f backend/Dockerfile.memory -t heart/memory-service:test backend/
-    fi
-
-    log "✓ Docker build passed"
+    log "✓ integration-tests passed"
 }
 
-# ---- Main dispatch ----
+# ---- dispatch ----
 stage="${1:-all}"
 
 case "$stage" in
-    lint)
-        stage_lint
-        ;;
-    unit-tests)
-        stage_unit_tests
-        ;;
-    integration-tests)
-        stage_integration_tests
-        ;;
-    schema-validation)
-        stage_schema_validation
-        ;;
-    build-docker)
-        stage_build_docker
-        ;;
+    lint)                stage_lint ;;
+    unit-tests)          stage_unit_tests ;;
+    schema-validation)   stage_schema_validation ;;
+    integration-tests)   stage_integration_tests ;;
     all)
         stage_lint
         stage_unit_tests
         stage_schema_validation
-        log "===== All stages passed ====="
+        log "✓ all default stages passed (lint + unit-tests + schema)"
+        ;;
+    -h|--help|help)
+        sed -n '1,30p' "$0"
+        exit 0
         ;;
     *)
-        die "Unknown stage: $stage. Use one of: lint, unit-tests, integration-tests, schema-validation, build-docker, all"
+        die "unknown stage: $stage (use: lint | unit-tests | schema-validation | integration-tests | all)"
         ;;
 esac

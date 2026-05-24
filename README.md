@@ -2,6 +2,9 @@
 
 An emotionally authentic AI companion system built on 8 specialized subsystems.
 
+> 🚨 **新 AI session 必读**：[`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md) — 当前 phase / blocker / 下一步。
+> 文档导航：[`docs/README.md`](docs/README.md)。历史归档：[`archive/`](archive/)。
+
 ## Project Overview
 
 Heart is an AI companion platform designed to create deep, emotionally authentic relationships between users and AI characters. The system implements sophisticated memory, emotion, and relationship modeling to deliver natural, coherent character interactions.
@@ -189,17 +192,18 @@ Once the server is running, access interactive API docs at:
 ## Testing
 
 ```bash
-# All tests
+# 推荐：本地一键跑全部基础检查（lint + unit-tests + schema-validation）
+bash scripts/ci.sh
+
+# 单独 stage
+bash scripts/ci.sh lint
+bash scripts/ci.sh unit-tests
+bash scripts/ci.sh integration-tests   # opt-in，需 postgres + redis + DEEPSEEK_API_KEY
+
+# Makefile 入口（与 ci.sh 互补，需 docker 服务）
 make test
-
-# Unit tests only
 make test-unit
-
-# Integration tests (requires Docker services)
 make test-integration
-
-# Load tests
-make test-load
 ```
 
 ## Deployment
