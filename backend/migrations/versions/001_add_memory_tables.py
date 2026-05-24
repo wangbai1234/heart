@@ -38,7 +38,7 @@ def upgrade() -> None:
     op.execute(
         """
     CREATE TABLE episodic_memories (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        id UUID NOT NULL DEFAULT gen_random_uuid(),
         user_id UUID NOT NULL,
         character_id VARCHAR(50) NOT NULL,
 
@@ -74,7 +74,9 @@ def upgrade() -> None:
 
         created_at TIMESTAMP NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
-        archived_at TIMESTAMP
+        archived_at TIMESTAMP,
+
+        PRIMARY KEY (id, user_id)
     ) PARTITION BY HASH (user_id)
     """
     )
@@ -126,7 +128,7 @@ def upgrade() -> None:
     op.execute(
         """
     CREATE TABLE fact_nodes (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        id UUID NOT NULL DEFAULT gen_random_uuid(),
         user_id UUID NOT NULL,
         character_id VARCHAR(50) NOT NULL,
 
@@ -168,7 +170,9 @@ def upgrade() -> None:
         reconstruction_hints JSONB NOT NULL DEFAULT '{}'::jsonb,
 
         created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+        updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+
+        PRIMARY KEY (id, user_id)
     ) PARTITION BY HASH (user_id)
     """
     )
@@ -265,7 +269,7 @@ def upgrade() -> None:
     op.execute(
         """
     CREATE TABLE memory_encoding_events (
-        event_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        event_id UUID NOT NULL DEFAULT gen_random_uuid(),
         user_id UUID NOT NULL,
         character_id VARCHAR(50) NOT NULL,
         source_turn_id UUID NOT NULL,
@@ -280,7 +284,9 @@ def upgrade() -> None:
         llm_started_at TIMESTAMP,
         llm_completed_at TIMESTAMP,
         failed_at TIMESTAMP,
-        failure_reason TEXT
+        failure_reason TEXT,
+
+        PRIMARY KEY (event_id, created_at)
     ) PARTITION BY RANGE (created_at)
     """
     )
