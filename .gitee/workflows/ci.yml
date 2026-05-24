@@ -31,25 +31,25 @@ jobs:
             ${{ runner.os }}-pip-
 
       - name: Install dependencies
-        working-directory: ./backend
         run: |
+          cd backend
           pip install --upgrade pip
           pip install ruff mypy pytest
           pip install -r requirements.txt || echo "requirements.txt not found, skipping"
 
       - name: Run ruff (linting)
-        working-directory: ./backend
         run: |
+          cd backend
           ruff check heart/ --select E,F,W,I,N --ignore E501
 
       - name: Run ruff (formatting check)
-        working-directory: ./backend
         run: |
+          cd backend
           ruff format --check heart/
 
       - name: Run mypy (type checking)
-        working-directory: ./backend
         run: |
+          cd backend
           mypy heart/ --ignore-missing-imports --no-strict-optional
 
   unit-tests:
@@ -73,15 +73,15 @@ jobs:
             ${{ runner.os }}-pip-
 
       - name: Install dependencies
-        working-directory: ./backend
         run: |
+          cd backend
           pip install --upgrade pip
           pip install pytest pytest-asyncio pytest-cov pytest-mock
           pip install -r requirements.txt || echo "requirements.txt not found, skipping"
 
       - name: Run unit tests
-        working-directory: ./backend
         run: |
+          cd backend
           pytest tests/unit -v --cov=heart --cov-report=xml --cov-report=term --cov-report=html
 
       - name: Archive coverage report
@@ -146,8 +146,8 @@ jobs:
             ${{ runner.os }}-pip-
 
       - name: Install dependencies
-        working-directory: ./backend
         run: |
+          cd backend
           pip install --upgrade pip
           pip install pytest pytest-asyncio pytest-cov asyncpg redis
           pip install -r requirements.txt || echo "requirements.txt not found, skipping"
@@ -172,8 +172,8 @@ jobs:
           done
 
       - name: Setup database schema
-        working-directory: ./backend
         run: |
+          cd backend
           # Install pgvector extension
           PGPASSWORD=test_password psql -h localhost -U heart_test -d heart_test -c "CREATE EXTENSION IF NOT EXISTS vector;"
 
@@ -184,8 +184,8 @@ jobs:
           fi
 
       - name: Run integration tests
-        working-directory: ./backend
         run: |
+          cd backend
           pytest tests/integration -v --cov=heart --cov-report=xml --cov-report=term --cov-report=html
 
       - name: Archive coverage report
