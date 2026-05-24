@@ -1,3 +1,16 @@
+# ⚠️ REFERENCE ONLY — DO NOT EXPECT GITEE GO TO READ THIS FILE ⚠️
+#
+# Gitee Go does NOT support GitHub Actions YAML syntax.
+# Actual CI is driven by scripts/ci.sh, invoked from Gitee Go UI pipelines
+# (BranchPipeline / PRPipeline / MasterPipeline).
+#
+# This file is kept as:
+#   1. A reference for the intended CI logic
+#   2. A safety net IF the repo is ever migrated back to GitHub Actions
+#   3. Documentation of services / env vars / job topology
+#
+# See: docs/GITEE_GO_UI_SETUP.md for the actual Gitee Go configuration.
+
 name: CI
 
 on:
