@@ -1,5 +1,6 @@
 """应用全局配置"""
 
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -14,6 +15,8 @@ class Settings(BaseSettings):
 
     # Application
     environment: str = "development"
+    heart_env: str = "dev"
+    heart_invariants: str = ""
     debug: bool = True
     log_level: str = "INFO"
 
@@ -78,6 +81,17 @@ class Settings(BaseSettings):
     # Payment (V1)
     stripe_api_key: str = ""
     stripe_webhook_secret: str = ""
+
+    @model_validator(mode="after")
+    def validate_production_secrets(self) -> "Settings":
+        """Enforce mandatory secrets in non-dev environments."""
+        if self.heart_env.lower() not in ("dev", "development", "test"):
+            if self.jwt_secret_key == "your-secret-key-here":
+                raise ValueError(
+                    "jwt_secret_key must be set in production. "
+                    "Default value 'your-secret-key-here' is not allowed."
+                )
+        return self
 
 
 # 全局配置实例

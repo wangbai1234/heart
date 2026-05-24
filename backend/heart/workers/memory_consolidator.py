@@ -22,12 +22,13 @@ Author: 心屿团队
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 from datetime import datetime, timedelta, timezone
 from uuid import UUID, uuid4
 
 import structlog
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from heart.infra.llm.router import get_model_router
@@ -42,6 +43,24 @@ from heart.ss02_memory.models import (
 from heart.ss02_memory.decay_engine import DecayEngine
 
 logger = structlog.get_logger()
+
+
+# ============================================================
+# Helpers
+# ============================================================
+
+
+def _compute_advisory_lock_keys(user_id: UUID, character_id: str) -> tuple[int, int]:
+    """Compute two int32 keys for Postgres advisory lock from user_id and character_id.
+
+    Uses MD5 hash to generate deterministic keys within int32 range.
+    """
+    combined = f"{user_id}:{character_id}".encode("utf-8")
+    digest = hashlib.md5(combined).digest()
+    # Use first 8 bytes: split into two int32 values
+    key1 = int.from_bytes(digest[:4], byteorder="big", signed=True) % 2147483647
+    key2 = int.from_bytes(digest[4:8], byteorder="big", signed=True) % 2147483647
+    return (key1, key2)
 
 
 # ============================================================
@@ -580,12 +599,14 @@ class ConsolidationWorker:
         """Process a consolidation job.
 
         Runs 8-step pipeline per §3.6.
+        Uses Postgres advisory lock per (user_id, character_id) to prevent concurrent consolidation.
 
         Args:
             job: Consolidation job to process
         """
         start_time = datetime.now(timezone.utc)
         job_id = str(job.job_id)
+        lock_key1, lock_key2 = _compute_advisory_lock_keys(job.user_id, job.character_id)
 
         logger.info(
             "consolidation_job_started",
@@ -593,9 +614,26 @@ class ConsolidationWorker:
             user_id=str(job.user_id),
             character_id=job.character_id,
             scheduled_for=job.scheduled_for.isoformat(),
+            lock_keys=(lock_key1, lock_key2),
         )
 
         async with self.db_session_factory() as session:
+            # Acquire advisory lock (non-blocking)
+            lock_result = await session.execute(
+                text("SELECT pg_try_advisory_lock(:key1, :key2)"),
+                {"key1": lock_key1, "key2": lock_key2},
+            )
+            acquired = lock_result.scalar()
+
+            if not acquired:
+                logger.warning(
+                    "consolidation_lock_failed",
+                    job_id=job_id,
+                    user_id=str(job.user_id),
+                    character_id=job.character_id,
+                    reason="another worker holds the lock",
+                )
+                return
             # Reload job to ensure we have latest state
             stmt = select(ConsolidationJob).where(ConsolidationJob.job_id == job.job_id)
             result = await session.execute(stmt)
@@ -618,7 +656,7 @@ class ConsolidationWorker:
             current_job.started_at = start_time
             await session.commit()
 
-            try:
+            try:  # Lock will be released in finally block
                 # Step 1: Aggregate pending events
                 pending_events = await self._aggregate_pending_events(
                     session, job.user_id, job.character_id
@@ -755,6 +793,19 @@ class ConsolidationWorker:
                     exc_info=True,
                 )
                 raise
+
+            finally:
+                # Release advisory lock
+                await session.execute(
+                    text("SELECT pg_advisory_unlock(:key1, :key2)"),
+                    {"key1": lock_key1, "key2": lock_key2},
+                )
+                logger.debug(
+                    "consolidation_lock_released",
+                    job_id=job_id,
+                    user_id=str(job.user_id),
+                    character_id=job.character_id,
+                )
 
     async def _aggregate_pending_events(
         self,
