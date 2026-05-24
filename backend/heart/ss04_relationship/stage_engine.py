@@ -18,6 +18,9 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Optional
 
+from heart.infra.invariants import invariant
+import heart.infra.invariant_predicates  # noqa: F401, E402 isort:skip
+
 from ..ss04_relationship.models import RelationshipState
 
 
@@ -143,6 +146,9 @@ class StagePhaseEngine:
             "vulnerability_unlock_thresholds", []
         )
 
+    @invariant("inv-r-6.cold-war-no-progress")
+    @invariant("inv-r-4.trust-asymmetry")
+    @invariant("inv-r-1.stage-monotonic")
     def evaluate(
         self, state: RelationshipState, signals: SignalBatch
     ) -> StageDecision:

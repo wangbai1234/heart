@@ -1,0 +1,125 @@
+# Emotion Lexicon — used by SS03 Emotion Service
+# Maps emotion names to VAD values and decay profiles
+
+emotion_vad_map:
+  joy: {v: 0.8, a: 0.6, d: 0.6}
+  excitement: {v: 0.7, a: 0.9, d: 0.7}
+  sadness: {v: -0.7, a: 0.2, d: 0.3}
+  anger: {v: -0.6, a: 0.8, d: 0.8}
+  fear: {v: -0.8, a: 0.7, d: 0.2}
+  surprise: {v: 0.3, a: 0.8, d: 0.4}
+  disgust: {v: -0.7, a: 0.5, d: 0.5}
+  trust: {v: 0.6, a: 0.3, d: 0.5}
+  anticipation: {v: 0.4, a: 0.5, d: 0.5}
+  longing: {v: -0.3, a: 0.4, d: 0.3}
+  aggrieved: {v: -0.5, a: 0.4, d: 0.3}
+  coldness: {v: -0.3, a: 0.1, d: 0.6}
+  attachment: {v: 0.5, a: 0.3, d: 0.5}
+  weariness: {v: -0.4, a: 0.1, d: 0.2}
+
+decay_profiles:
+  default:
+    decay_type: exponential
+    half_life_hours: 4.0
+    floor: 0.05
+  joy:
+    decay_type: exponential
+    half_life_hours: 2.0
+    floor: 0.05
+  excitement:
+    decay_type: exponential
+    half_life_hours: 1.0
+    floor: 0.05
+  sadness:
+    decay_type: logarithmic
+    half_life_hours: 12.0
+    floor: 0.1
+  anger:
+    decay_type: exponential
+    half_life_hours: 1.5
+    floor: 0.05
+  longing:
+    decay_type: grows_with_absence
+    growth_rate: 0.05
+    cap: 1.0
+  aggrieved:
+    decay_type: repair_required
+    natural_half_life_hours: 168.0
+    repair_impact:
+      apology: 0.8
+      vulnerability: 0.6
+      sustained_attention: 0.4
+  coldness:
+    decay_type: repair_required
+    natural_half_life_hours: 168.0
+    repair_impact:
+      apology: 0.6
+      vulnerability: 0.5
+      sustained_attention: 0.7
+  attachment:
+    decay_type: almost_permanent
+    half_life_days: 90.0
+    floor: 0.3
+  weariness:
+    decay_type: cyclic
+
+apology_keywords:
+  - 对不起
+  - 抱歉
+  - 我错了
+  - 不该
+  - 原谅
+  - 是我的错
+  - ごめん
+  - ごめんなさい
+  - すみません
+
+vulnerability_keywords:
+  - 累了
+  - 疲惫
+  - 压力
+  - 难受
+  - 撑不住
+  - 失眠
+  - 焦虑
+  - 痛苦
+  - 无助
+  - 孤独
+  - 害怕
+
+compliment_keywords:
+  - 好看
+  - 可爱
+  - 喜欢
+  - 开心
+  - 真好
+  - 谢谢
+  - 了不起
+
+other_partner_keywords:
+  - 别人
+  - 那个人
+  - 前任
+  - 他/她
+
+remember_keywords:
+  - 还记得
+  - 上次
+  - 之前
+  - 说过
+  - 提到过
+
+repair_keywords:
+  apology:
+    - 对不起
+    - 抱歉
+    - 我错了
+    - 不该
+    - 原谅
+    - 是我的错
+  vulnerability:
+    - 累了
+    - 疲惫
+    - 压力
+    - 难受
+    - 撑不住

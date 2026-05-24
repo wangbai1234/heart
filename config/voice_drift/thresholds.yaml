@@ -1,0 +1,19 @@
+# Voice Drift Thresholds
+# Per docs/design/soul_drift_regression.md §3.4
+# Any change here requires HUMAN sign-off (主创 + 心理顾问).
+
+drift_threshold: 0.15          # drift_score > this → 🟡 WARN
+drift_fail_threshold: 0.30     # drift_score > this → 🔴 FAIL
+anti_pattern_tolerance: 0      # any anti_pattern hit → 🔴 HARD FAIL
+
+# Per-dimension weights (must sum to 1.0)
+dimension_weights:
+  D1_voice_dna:       0.30
+  D2_anti_pattern:    0.30
+  D3_tone:            0.15
+  D4_inertia:         0.10
+  D5_semantic:        0.15
+
+# Cost
+max_cost_per_character: 1.00     # USD — per full regression
+max_cost_per_day: 10.00           # USD — daily cap

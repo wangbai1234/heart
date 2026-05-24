@@ -16,6 +16,11 @@ from __future__ import annotations
 from typing import Any, Dict, List
 from uuid import UUID
 
+from heart.infra.invariants import invariant
+
+# Ensure invariant predicates are registered before decorator evaluation.
+import heart.infra.invariant_predicates  # noqa: F401, E402 isort:skip
+
 
 # Constants per §2.2
 MAX_CONCURRENT_EMOTIONS = 5
@@ -38,6 +43,8 @@ class EmotionStateMachine:
         """
         self.emotion_vad = emotion_vad_map
 
+    @invariant("inv-e-3.vad-range")
+    @invariant("inv-e-2.stack-limit")
     def transition(
         self,
         current_state: Dict[str, Any],

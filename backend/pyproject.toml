@@ -73,9 +73,14 @@ python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 markers = [
-    "requires_postgres: tests that need a real Postgres backend (skipped on SQLite)",
+    "contract: Tier A contract tests — verify cross-subsystem interface contracts",
+    "integration: Tier B integration tests — real PG/Redis with fake LLM",
+    "live: Tier C live tests — real DeepSeek calls, cost-capped, skipped by default",
+    "requires_postgres: tests that need a real Postgres backend",
+    "drift: voice drift regression tests (Tier C subcategory)",
+    "properties: property-based invariant tests (Hypothesis)",
 ]
-addopts = "-m 'not requires_postgres'"
+addopts = "-m 'not live and not requires_postgres'"
 
 [tool.ruff]
 line-length = 100

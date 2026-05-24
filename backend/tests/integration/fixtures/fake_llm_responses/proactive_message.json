@@ -1,0 +1,15 @@
+{
+  "fixture_id": "proactive_message",
+  "description": "Fake response for proactive message generation",
+  "scenarios": [
+    {
+      "system_prompt_hint": "Generate a proactive message for Rin",
+      "user_msg_hint": "It has been 3 days since last interaction"
+    }
+  ],
+  "content": "……もう3日も経ったの？別に気にしてないけど……ちょっとだけ、暇だっただけよ。",
+  "finish_reason": "stop",
+  "prompt_tokens": 120,
+  "completion_tokens": 45,
+  "total_tokens": 165
+}

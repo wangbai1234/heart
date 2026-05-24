@@ -35,9 +35,20 @@ test-unit:
 	cd backend && pytest tests/unit -v
 
 # Run integration tests
+# Run contract tests (Tier A)
+test-contract:
+	@echo "Running contract tests..."
+	cd backend && pytest -m contract tests/contract -v
+
+# Run integration tests (Tier B)
 test-integration:
 	@echo "Running integration tests..."
-	cd backend && pytest tests/integration -v
+	cd backend && pytest -m integration tests/integration -v
+
+# Run live tests (Tier C) — requires --live flag + DEEPSEEK_API_KEY
+test-live:
+	@echo "Running live tests (real DeepSeek)..."
+	cd backend && pytest -m live --live tests/live -v
 
 # Run load tests
 test-load:
@@ -124,3 +135,23 @@ db-shell:
 # Shell into redis
 redis-shell:
 	docker-compose exec redis redis-cli
+
+# ── Voice Drift Regression (Phase 7 §1.4) ──
+voice-baseline: ## Generate voice baseline (HUMAN-triggered, uses real LLM)
+	@if [ -z "$(CHARACTER)" ]; then \
+		echo "Usage: make voice-baseline CHARACTER={rin,dorothy,all}"; \
+		echo "  e.g. make voice-baseline CHARACTER=rin"; \
+		exit 1; \
+	fi
+	cd backend && python3 scripts/run_voice_drift.py generate-baseline --character $(CHARACTER)
+
+voice-regress: ## Run voice drift regression (uses real LLM, requires baseline)
+	@if [ -z "$(CHARACTER)" ]; then \
+		echo "Usage: make voice-regress CHARACTER={rin,dorothy,all}"; \
+		echo "  e.g. make voice-regress CHARACTER=rin"; \
+		exit 1; \
+	fi
+	cd backend && python3 -m pytest tests/live/test_voice_drift.py --live -v -k $(CHARACTER)
+
+voice-report: ## Regenerate HTML drift report
+	cd backend && python3 scripts/run_voice_drift.py report --scores $(SCORES) --character $(CHARACTER) --output $(OUTPUT)

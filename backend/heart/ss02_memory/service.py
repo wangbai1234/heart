@@ -26,6 +26,9 @@ from uuid import UUID, uuid4
 
 import structlog
 
+from heart.infra.invariants import invariant
+import heart.infra.invariant_predicates  # noqa: F401, E402 isort:skip
+
 from .models import (
     ConsolidationJob,
     EpisodicMemory,
@@ -610,6 +613,7 @@ class MemoryService:
             status="triggered", started_at=datetime.now(timezone.utc),
         )
 
+    @invariant("inv-m-5.multi-signal-promotion")
     async def promote_to_l4(
         self,
         fact_id: UUID,

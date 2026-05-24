@@ -519,6 +519,7 @@ class ConsolidationWorker:
         self.db_session_factory = db_session_factory
         self.decay_engine = DecayEngine()
         self._should_stop = False
+        self._cleanup_counter = 0  # Trigger cleanup every N loops
 
         logger.info("consolidation_worker_initialized")
 
@@ -531,6 +532,14 @@ class ConsolidationWorker:
 
         while not self._should_stop:
             try:
+                # Periodic cleanup (every 60 loops = ~1 hour)
+                self._cleanup_counter += 1
+                if self._cleanup_counter >= 60:
+                    async with self.db_session_factory() as session:
+                        await self._cleanup_old_encoding_events(session)
+                        await self._cleanup_old_consolidation_jobs(session)
+                    self._cleanup_counter = 0
+
                 # Fetch pending jobs
                 async with self.db_session_factory() as session:
                     jobs = await self._fetch_pending_jobs(session)
@@ -961,3 +970,85 @@ class ConsolidationWorker:
             character_id=character_id,
             count=len(identities),
         )
+
+    async def _cleanup_old_encoding_events(
+        self,
+        session: AsyncSession,
+        retention_days: int = 7,
+    ):
+        """Clean up old encoding events (retention policy per F30).
+
+        Deletes events that are:
+        - status='llm_done' OR status='failed'
+        - AND created_at < (now - retention_days)
+
+        Args:
+            session: Database session
+            retention_days: Retention period in days (default 7)
+        """
+        cutoff_time = datetime.now(timezone.utc) - timedelta(days=retention_days)
+
+        stmt = select(MemoryEncodingEvent).where(
+            and_(
+                MemoryEncodingEvent.status.in_(["llm_done", "failed"]),
+                MemoryEncodingEvent.created_at < cutoff_time,
+            )
+        )
+
+        result = await session.execute(stmt)
+        events_to_delete = result.scalars().all()
+
+        for event in events_to_delete:
+            await session.delete(event)
+
+        await session.commit()
+
+        logger.info(
+            "encoding_events_cleaned_up",
+            deleted_count=len(events_to_delete),
+            retention_days=retention_days,
+            cutoff_time=cutoff_time.isoformat(),
+        )
+
+        return len(events_to_delete)
+
+    async def _cleanup_old_consolidation_jobs(
+        self,
+        session: AsyncSession,
+        retention_days: int = 90,
+    ):
+        """Clean up old consolidation jobs (retention policy per F31).
+
+        Deletes jobs that are:
+        - status='succeeded'
+        - AND completed_at < (now - retention_days)
+
+        Args:
+            session: Database session
+            retention_days: Retention period in days (default 90)
+        """
+        cutoff_time = datetime.now(timezone.utc) - timedelta(days=retention_days)
+
+        stmt = select(ConsolidationJob).where(
+            and_(
+                ConsolidationJob.status == "succeeded",
+                ConsolidationJob.completed_at < cutoff_time,
+            )
+        )
+
+        result = await session.execute(stmt)
+        jobs_to_delete = result.scalars().all()
+
+        for job in jobs_to_delete:
+            await session.delete(job)
+
+        await session.commit()
+
+        logger.info(
+            "consolidation_jobs_cleaned_up",
+            deleted_count=len(jobs_to_delete),
+            retention_days=retention_days,
+            cutoff_time=cutoff_time.isoformat(),
+        )
+
+        return len(jobs_to_delete)
