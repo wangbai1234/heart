@@ -16,14 +16,10 @@ Tables:
 """
 
 from alembic import op
-import sqlalchemy as sa
-from sqlalchemy.dialects import postgresql
-from pgvector.sqlalchemy import Vector
-
 
 # revision identifiers, used by Alembic.
 revision = "001_add_memory_tables"
-down_revision = None
+down_revision = "e814230ade46"
 branch_labels = None
 depends_on = None
 
@@ -349,10 +345,10 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     # Drop tables (automatically drops dependent indexes)
-    op.execute("DROP TABLE IF EXISTS consolidation_jobs")
-    op.execute("DROP TABLE IF EXISTS memory_encoding_events")
-    op.execute("DROP TABLE IF EXISTS identity_memories")
-    op.execute("DROP TABLE IF EXISTS fact_nodes")
-    op.execute("DROP TABLE IF EXISTS episodic_memories")
+    op.execute("DROP TABLE IF EXISTS consolidation_jobs CASCADE")
+    op.execute("DROP TABLE IF EXISTS memory_encoding_events CASCADE")
+    op.execute("DROP TABLE IF EXISTS identity_memories CASCADE")
+    op.execute("DROP TABLE IF EXISTS fact_nodes CASCADE")
+    op.execute("DROP TABLE IF EXISTS episodic_memories CASCADE")
 
     # Note: pgvector extension is kept to avoid issues with other tables
