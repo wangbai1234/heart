@@ -48,6 +48,10 @@ dependencies = [
 
     # Pattern Matching
     "pyahocorasick>=2.0.0",
+
+    # CLI / Demo
+    "rich>=13.0.0",
+    "prompt-toolkit>=3.0.0",
 ]
 
 [project.optional-dependencies]

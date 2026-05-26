@@ -1,14 +1,18 @@
-"""应用全局配置"""
+"""应用全局配置 — per runtime_specs/08_engineering_architecture.md §3 (Configuration)"""
 
+from pathlib import Path
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Resolve .env relative to repo root, not CWD.
+_env_path = Path(__file__).resolve().parent.parent.parent.parent / ".env"
 
 
 class Settings(BaseSettings):
     """应用配置（从环境变量读取）"""
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=str(_env_path) if _env_path.exists() else ".env",
         case_sensitive=False,
         extra="ignore",
     )
