@@ -21,7 +21,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 # ── Migration revision IDs ──
 BASE = "e814230ade46"
 REV_001 = "001_add_memory_tables"
-REV_002 = "002_add_emotion_relationship_tables"
+REV_002 = "002_add_emotion_rel"
 REV_003 = "003_ss04_threshold_tuning_v1_1"
 
 ALL_REVISIONS = [BASE, REV_001, REV_002, REV_003]

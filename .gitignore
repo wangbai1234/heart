@@ -65,6 +65,9 @@ migrations/versions/*.pyc
 # Mac
 .DS_Store
 
+# Generated artifacts
+docs/mvp/cut_status.md
+
 # Temporary files
 *.tmp
 *.bak

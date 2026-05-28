@@ -19,7 +19,7 @@ References:
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision = "002_add_emotion_relationship_tables"
+revision = "002_add_emotion_rel"
 down_revision = "001_add_memory_tables"
 branch_labels = None
 depends_on = None
@@ -95,7 +95,6 @@ def upgrade() -> None:
     op.execute(
         """
     CREATE INDEX idx_emotion_mood_drift ON emotion_states (last_mood_drift_at)
-        WHERE last_mood_drift_at < NOW() - INTERVAL '1 hour'
     """
     )
 
@@ -105,7 +104,7 @@ def upgrade() -> None:
     op.execute(
         """
     CREATE TABLE emotion_events (
-        event_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        event_id UUID DEFAULT gen_random_uuid(),
         user_id UUID NOT NULL,
         character_id VARCHAR(50) NOT NULL,
 
@@ -132,6 +131,9 @@ def upgrade() -> None:
         FOR VALUES FROM ('2026-05-01') TO ('2026-06-01')
     """
     )
+
+    # Add PK (must include partition key for partitioned tables)
+    op.execute("ALTER TABLE emotion_events ADD PRIMARY KEY (event_id, created_at)")
 
     # Indexes on emotion_events
     op.execute(
@@ -228,7 +230,6 @@ def upgrade() -> None:
     op.execute(
         """
     CREATE INDEX idx_rel_drifting ON relationship_states (last_interaction_at)
-        WHERE last_interaction_at < NOW() - INTERVAL '14 days'
     """
     )
     op.execute(
@@ -244,7 +245,7 @@ def upgrade() -> None:
     op.execute(
         """
     CREATE TABLE relationship_events (
-        event_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        event_id UUID DEFAULT gen_random_uuid(),
         user_id UUID NOT NULL,
         character_id VARCHAR(50) NOT NULL,
 
@@ -270,6 +271,9 @@ def upgrade() -> None:
         FOR VALUES FROM ('2026-05-01') TO ('2026-06-01')
     """
     )
+
+    # Add PK (must include partition key for partitioned tables)
+    op.execute("ALTER TABLE relationship_events ADD PRIMARY KEY (event_id, created_at)")
 
     # Indexes on relationship_events
     op.execute(

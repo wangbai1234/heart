@@ -18,7 +18,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "003_ss04_threshold_tuning_v1_1"
-down_revision = "002_add_emotion_relationship_tables"
+down_revision = "002_add_emotion_rel"
 branch_labels = None
 depends_on = None
 
