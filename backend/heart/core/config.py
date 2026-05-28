@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     # Application
     environment: str = "development"
     heart_env: str = "dev"
+    heart_dev_mode: str = ""
     heart_invariants: str = ""
     debug: bool = True
     log_level: str = "INFO"
@@ -68,6 +69,9 @@ class Settings(BaseSettings):
     enable_critic_agent: bool = True
     critic_sampling_rate: float = 0.3
     enable_wellbeing_monitor: bool = True
+
+    # Profiling
+    heart_turn_profiler: str = "0"
 
     # Cost Limits
     user_daily_cost_limit: float = 10.0

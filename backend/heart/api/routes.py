@@ -15,6 +15,7 @@ router = APIRouter(prefix="/api", tags=["api"])
 class LoginRequest(BaseModel):
     def __init__(self, **data):
         super().__init__(**data)
+
     user_id: str
     email: Optional[str] = None
 
@@ -22,6 +23,7 @@ class LoginRequest(BaseModel):
 class ChatMessage(BaseModel):
     def __init__(self, **data):
         super().__init__(**data)
+
     role: str
     content: str
 
@@ -29,6 +31,7 @@ class ChatMessage(BaseModel):
 class ChatRequest(BaseModel):
     def __init__(self, **data):
         super().__init__(**data)
+
     messages: list[ChatMessage]
     character_id: str = "default"
 
@@ -36,6 +39,7 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     def __init__(self, **data):
         super().__init__(**data)
+
     response: str
     character_id: str
     message_id: str
@@ -109,6 +113,7 @@ async def echo_chat(
             detail="No user message found in request",
         )
     import uuid
+
     message_id = str(uuid.uuid4())
     response_text = f"[Echo from {request.character_id}] You said: {last_user_message}"
     return ChatResponse(
@@ -129,6 +134,7 @@ def _get_soul_registry():
     if _soul_registry is not None:
         return _soul_registry
     from heart.ss01_soul.registry import SoulRegistry
+
     _soul_registry = SoulRegistry()
     try:
         _soul_registry.load_all()
@@ -153,6 +159,7 @@ def _get_composer_service():
     if settings.deepseek_api_key:
         try:
             from heart.infra.llm import LLMProviderConfig, DeepSeekConfig, ModelRouter
+
             llm_config = LLMProviderConfig(
                 deepseek=DeepSeekConfig(
                     api_key=settings.deepseek_api_key,
@@ -169,12 +176,33 @@ def _get_composer_service():
             hint="Set DEEPSEEK_API_KEY in .env to enable real LLM responses",
         )
 
+    # Try to create ReplayRecorder if database is configured
+    replay_recorder = None
+    try:
+        import os
+
+        if os.getenv("HEART_DEV_MODE", "").lower() == "true":
+            from sqlalchemy.ext.asyncio import create_async_engine
+            from heart.replay.bundle_dump import ReplayRecorder
+
+            engine = create_async_engine(settings.database_url, echo=False)
+            replay_recorder = ReplayRecorder(engine)
+            logger.info("replay_recorder_initialized")
+    except Exception as e:
+        logger.warning("replay_recorder_init_failed", error=str(e))
+
     from heart.ss05_composer.service import ComposerService
+
     _composer_service = ComposerService(
         soul_registry=registry,
         model_router=model_router,
+        replay_recorder=replay_recorder,
     )
-    logger.info("composer_service_initialized", has_llm=model_router is not None)
+    logger.info(
+        "composer_service_initialized",
+        has_llm=model_router is not None,
+        has_replay=replay_recorder is not None,
+    )
     return _composer_service
 
 
@@ -189,9 +217,14 @@ async def chat(
     Falls back to a character-aware template if LLM is not configured.
     """
     import uuid
-    import time as _time
+
+    from heart.observability.turn_profiler import TurnProfiler
 
     message_id = str(uuid.uuid4())
+    uid = str(current_user.user_id) if hasattr(current_user, "user_id") else str(uuid.uuid4())
+    _user_id_str = uid
+
+    p = TurnProfiler(session_id=_user_id_str)
 
     last_user_message = None
     for msg in reversed(request.messages):
@@ -211,8 +244,6 @@ async def chat(
     from uuid import UUID as _UUID
     from heart.ss05_composer.service import CompositionContext
 
-    # Map user_id string to deterministic UUID (for non-UUID user IDs)
-    _user_id_str = str(current_user.user_id) if hasattr(current_user, "user_id") else str(uuid.uuid4())
     try:
         _user_uuid = _UUID(_user_id_str)
     except ValueError:
@@ -222,32 +253,30 @@ async def chat(
         user_id=_user_uuid,
         character_id=request.character_id,
         turn_id=uuid.UUID(message_id),
+        session_id=_user_uuid,
         max_tokens=2000,
     )
 
-    t0 = _time.monotonic()
-    try:
-        result = await composer.compose(
-            ctx=ctx,
-            user_message=last_user_message,
-            conversation_history=history,
-            temperature=0.7,
-        )
-        response_text = result.response
-    except Exception as exc:
-        logger.error("composer_failed", error=str(exc), exc_info=True)
-        name_map = {"rin": "凛", "dorothy": "Dorothy"}
-        display = name_map.get(request.character_id.lower(), request.character_id)
-        response_text = f"[{display}] 我听到你说的了。能多说一些吗？"
+    with p:
+        with p.span("auth"):
+            pass  # JWT verify already ran via Depends
 
-    latency = int((_time.monotonic() - t0) * 1000)
-    logger.info(
-        "chat_response",
-        character_id=request.character_id,
-        message_id=message_id,
-        latency_ms=latency,
-        response_length=len(response_text),
-    )
+        with p.span("safety_pre"):
+            pass  # SafetyAgent not wired yet in direct /chat path
+
+        try:
+            result = await composer.compose(
+                ctx=ctx,
+                user_message=last_user_message,
+                conversation_history=history,
+                temperature=0.7,
+            )
+            response_text = result.response
+        except Exception as exc:
+            logger.error("composer_failed", error=str(exc), exc_info=True)
+            name_map = {"rin": "凛", "dorothy": "Dorothy"}
+            display = name_map.get(request.character_id.lower(), request.character_id)
+            response_text = f"[{display}] 我听到你说的了。能多说一些吗？"
 
     return ChatResponse(
         response=response_text,
@@ -259,3 +288,21 @@ async def chat(
 @router.get("/health/ready", tags=["health"])
 async def readiness_check():
     return {"status": "ready", "components": {"api": "ok", "auth": "ok"}}
+
+
+@router.get("/profile/records", tags=["debug"])
+async def get_profile_records():
+    """Return collected turn profile records (debug only)."""
+    from heart.observability.turn_profiler import get_collected_profiles
+
+    records = get_collected_profiles()
+    return {"count": len(records), "records": records}
+
+
+@router.post("/profile/reset", tags=["debug"])
+async def reset_profile_records():
+    """Reset collected turn profile records (debug only)."""
+    from heart.observability.turn_profiler import reset_collected_profiles
+
+    reset_collected_profiles()
+    return {"status": "reset"}
