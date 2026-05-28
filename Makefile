@@ -1,4 +1,4 @@
-.PHONY: help dev test lint migrate clean install docker-up docker-down
+.PHONY: help dev test lint migrate clean install docker-up docker-down check-mvp
 
 # Default target
 help:
@@ -12,6 +12,7 @@ help:
 	@echo "  migrate      - Run database migrations"
 	@echo "  docker-up    - Start Docker services (postgres, redis)"
 	@echo "  docker-down  - Stop Docker services"
+	@echo "  check-mvp    - Run MVP gate check (10 gates)"
 	@echo "  clean        - Clean cache and temp files"
 
 # Install dependencies
@@ -88,10 +89,22 @@ docker-up:
 	@echo "Starting Docker services..."
 	docker-compose up -d postgres redis
 
-# Start all Docker services (including MinIO)
+# Start all Docker services (including MinIO + monitoring)
 docker-up-all:
 	@echo "Starting all Docker services..."
-	docker-compose --profile storage up -d
+	docker-compose --profile storage --profile monitoring up -d
+
+# Bring up the full local stack (DB + Redis + Prometheus + Grafana)
+up:
+	@echo "Bringing up full Heart local stack..."
+	docker-compose --profile monitoring up -d postgres redis prometheus grafana
+	@echo ""
+	@echo "Services:"
+	@echo "  API:        http://localhost:8000"
+	@echo "  Grafana:    http://localhost:3000 (admin / admin)"
+	@echo "  Prometheus: http://localhost:9090"
+	@echo ""
+	@echo "Run 'make dev' in another terminal to start the API server."
 
 # Stop Docker services
 docker-down:
@@ -155,3 +168,14 @@ voice-regress: ## Run voice drift regression (uses real LLM, requires baseline)
 
 voice-report: ## Regenerate HTML drift report
 	cd backend && python3 scripts/run_voice_drift.py report --scores $(SCORES) --character $(CHARACTER) --output $(OUTPUT)
+
+# ── Demo Seed Loader ──
+seed-demo: ## Populate DB with demo state for alice×rin + bob×dorothy (idempotent)
+	cd backend && python3 heart/scripts/seed_demo.py
+
+reset-demo: ## Drop demo users and reseed
+	cd backend && python3 heart/scripts/seed_demo.py --reset
+
+# ── MVP Gate Check ──
+check-mvp: ## Run 10-gate MVP readiness check
+	cd backend && python3 scripts/check_mvp.py
