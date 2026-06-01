@@ -195,12 +195,8 @@ def gate_3_cli_loop() -> Tuple[bool, str]:
                 max_tokens=512,
             )
             history = [
-                item
+                {"role": "user", "content": m, "role": "assistant", "content": "[ok]"}
                 for m in messages[:i]
-                for item in (
-                    {"role": "user", "content": m},
-                    {"role": "assistant", "content": "[ok]"},
-                )
             ]
 
             t0 = time.monotonic()
@@ -418,7 +414,6 @@ def gate_8_cost() -> Tuple[bool, str]:
                 "(cost metrics require prometheus scraping heart-api /metrics)",
             )
 
-        import urllib.error
         import urllib.request
 
         url = "http://localhost:9090/api/v1/query?query=heart_turn_model_cost_usd"
@@ -455,8 +450,6 @@ def gate_8_cost() -> Tuple[bool, str]:
 
 def gate_9_latency() -> Tuple[bool, str]:
     try:
-        import urllib.error
-        import urllib.parse
         import urllib.request
 
         prom_url = "http://localhost:9090"
@@ -522,7 +515,6 @@ def gate_9_latency() -> Tuple[bool, str]:
 
 
 def gate_10_observability() -> Tuple[bool, str]:
-    import urllib.error
     import urllib.request
 
     dashboards_dir = REPO_ROOT / "infra" / "grafana" / "dashboards"
