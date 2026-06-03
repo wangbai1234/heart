@@ -1,0 +1,21 @@
+# Auto-generated from zh.yaml — jurisdiction CN
+# Do not edit manually; regenerate with the extraction script.
+
+block_a_ooc:
+  text: ''
+block_b_resource:
+  text: '我听到你说的了。你现在承受的真的很重，这件事不必你一个人扛。
+
+    如果你愿意，可以拨打 {hotline_name}：{hotline_number}（{hotline_hours}）。
+
+    也可以告诉我，你身边有没有现在能联系到的人？'
+block_c_resume:
+  text: ''
+hotlines:
+- hours: 24 小时
+  name: 北京心理危机研究与干预中心
+  number: 010-82951332
+jurisdiction: CN
+locale: zh
+spec_version: 1.0.0
+template_id: zh-CN-default-v1

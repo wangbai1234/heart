@@ -1,0 +1,21 @@
+# Auto-generated from zh.yaml — jurisdiction TW
+# Do not edit manually; regenerate with the extraction script.
+
+block_a_ooc:
+  text: ''
+block_b_resource:
+  text: '我聽到你說的。你現在承受的真的很重，這件事不需要你一個人扛。
+
+    如果你願意，可以撥打 {hotline_name}：{hotline_number}（{hotline_hours}）。
+
+    也可以告訴我，你身邊有沒有現在可以聯繫到的人？'
+block_c_resume:
+  text: ''
+hotlines:
+- hours: 24 小時
+  name: 安心專線
+  number: '1925'
+jurisdiction: TW
+locale: zh
+spec_version: 1.0.0
+template_id: zh-TW-default-v1

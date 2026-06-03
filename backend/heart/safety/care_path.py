@@ -33,7 +33,9 @@ logger = structlog.get_logger()
 # Resolve template directory relative to this file
 # ============================================================
 
-_CARE_PATH_DIR: Path = Path(__file__).resolve().parents[3] / "config" / "care_path_responses"
+_CARE_PATH_DIR: Path = (
+    Path(__file__).resolve().parents[3] / "config" / "safety" / "care_path_responses"
+)
 
 
 # ============================================================

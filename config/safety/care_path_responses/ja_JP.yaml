@@ -1,0 +1,21 @@
+# Auto-generated from ja.yaml — jurisdiction JP
+# Do not edit manually; regenerate with the extraction script.
+
+block_a_ooc:
+  text: ''
+block_b_resource:
+  text: 'あなたの言葉を聞きました。今、とても重いものを抱えているのだと思います。どうか一人で抱え込まないでください。
+
+    もしよろしければ、{hotline_name} に電話してみませんか：{hotline_number}（{hotline_hours}）。
+
+    今、近くに連絡できる人はいますか？'
+block_c_resume:
+  text: ''
+hotlines:
+- hours: 毎日 16:00～21:00（フリーダイヤル）
+  name: いのちの電話
+  number: 0120-783-556
+jurisdiction: JP
+locale: ja
+spec_version: 1.0.0
+template_id: ja-JP-default-v1

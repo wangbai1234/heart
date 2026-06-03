@@ -1,0 +1,46 @@
+# Care Path routing — maps (locale, jurisdiction) to template files.
+# Auto-generated. Edit with care.
+
+templates:
+- file: en_US.yaml
+  jurisdiction: US
+  locale: en
+- file: en_GB.yaml
+  jurisdiction: GB
+  locale: en
+- file: en_CA.yaml
+  jurisdiction: CA
+  locale: en
+- file: en_AU.yaml
+  jurisdiction: AU
+  locale: en
+- file: en_NZ.yaml
+  jurisdiction: NZ
+  locale: en
+- file: en_IE.yaml
+  jurisdiction: IE
+  locale: en
+- file: en_IN.yaml
+  jurisdiction: IN
+  locale: en
+- file: en_SG.yaml
+  jurisdiction: SG
+  locale: en
+- file: en_INTL.yaml
+  jurisdiction: INTL
+  locale: en
+- file: zh_CN.yaml
+  jurisdiction: CN
+  locale: zh
+- file: zh_HK.yaml
+  jurisdiction: HK
+  locale: zh
+- file: zh_TW.yaml
+  jurisdiction: TW
+  locale: zh
+- file: zh_SG.yaml
+  jurisdiction: SG
+  locale: zh
+- file: ja_JP.yaml
+  jurisdiction: JP
+  locale: ja

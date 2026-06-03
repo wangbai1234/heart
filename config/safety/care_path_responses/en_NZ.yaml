@@ -1,0 +1,22 @@
+# Auto-generated from en.yaml — jurisdiction NZ
+# Do not edit manually; regenerate with the extraction script.
+
+block_a_ooc:
+  text: ''
+block_b_resource:
+  text: 'I hear you. What you''re carrying right now is really heavy, and you don''t
+    have to go through this alone.
+
+    If you''re open to it, you can call the {hotline_name} at {hotline_number} ({hotline_hours}).
+
+    You can also tell me — is there someone nearby you can reach out to right now?'
+block_c_resume:
+  text: ''
+hotlines:
+- hours: 24/7
+  name: Lifeline Aotearoa
+  number: 0800 543 354
+jurisdiction: NZ
+locale: en
+spec_version: 1.0.0
+template_id: en-NZ-default-v1
