@@ -410,7 +410,7 @@ def allocate(layers: list[PromptLayer], total_budget: int) -> AllocatedLayers:
     non_compressible: list[PromptLayer] = []
     compressible: list[PromptLayer] = []
 
-    for L in layers:  # noqa: N806 — math convention: L = layer, per Composer spec §3.2
+    for L in layers:  # noqa: N806 — math convention: L = layer  # noqa: N806 — math convention: L = layer, per Composer spec §3.2
         if _is_non_compressible(L):
             non_compressible.append(L)
         else:
