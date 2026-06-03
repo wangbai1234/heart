@@ -48,7 +48,8 @@ class TestEmotionLifecycle:
         assert state["vad_dominance"] == 0.5
         assert state["active_stack"] == []
 
-    def test_process_turn_updates_emotion_state(self, service):
+    @pytest.mark.asyncio
+    async def test_process_turn_updates_emotion_state(self, service):
         """process_turn detects triggers and updates emotion state."""
         user_id = uuid4()
         turn_id = uuid4()
@@ -64,7 +65,7 @@ class TestEmotionLifecycle:
         }
 
         try:
-            new_state = service.process_turn(
+            new_state = await service.process_turn(
                 user_id=user_id,
                 character_id="rin",
                 user_message="你今天真好看！我很开心见到你",

@@ -292,7 +292,7 @@ class FactReconciler:
                     FactNode.predicate == new_fact.predicate,
                     FactNode.subject == new_fact.subject,
                     FactNode.id != new_fact.id,
-                    not FactNode.do_not_recall,
+                    ~FactNode.do_not_recall,
                 )
             )
 
@@ -318,7 +318,7 @@ class FactReconciler:
                 else:
                     # Contradicting
                     existing.contradiction_count = (existing.contradiction_count or 0) + 1
-                    existing.contradicted_by_ids = (existing.contradicted_by_ids or []) + [
+                    existing.contradicting_fact_ids = (existing.contradicting_fact_ids or []) + [
                         new_fact.id
                     ]
                     contradicted.append(existing.id)
@@ -370,11 +370,11 @@ class L4Promoter:
                 and_(
                     FactNode.user_id == user_id,
                     FactNode.character_id == character_id,
-                    FactNode.importance_score >= L4_MIN_IMPORTANCE,
-                    not FactNode.do_not_recall,
+                    FactNode.importance >= L4_MIN_IMPORTANCE,
+                    ~FactNode.do_not_recall,
                 )
             )
-            .order_by(FactNode.importance_score.desc())
+            .order_by(FactNode.importance.desc())
             .limit(50)
         )
 
@@ -394,7 +394,7 @@ class L4Promoter:
             # Trigger B: High confirmation + importance
             elif (
                 fact.confirmation_count >= L4_MIN_CONFIRMATION_COUNT
-                and fact.importance_score >= L4_MIN_IMPORTANCE
+                and fact.importance >= L4_MIN_IMPORTANCE
             ):
                 should_promote = True
                 reason = "high_confirmation_and_importance"
@@ -410,7 +410,7 @@ class L4Promoter:
                     and_(
                         IdentityMemory.user_id == user_id,
                         IdentityMemory.character_id == character_id,
-                        IdentityMemory.source_fact_id == fact.id,
+                        IdentityMemory.source_episode_id == fact.id,  # type: ignore[attr-defined]
                     )
                 )
                 result = await session.execute(existing_stmt)
@@ -904,7 +904,7 @@ class ConsolidationWorker:
             and_(
                 FactNode.user_id == user_id,
                 FactNode.character_id == character_id,
-                not FactNode.do_not_recall,
+                ~FactNode.do_not_recall,
             )
         )
 
@@ -914,10 +914,10 @@ class ConsolidationWorker:
         # Apply decay
         for fact in facts:
             new_importance = self.decay_engine.calculate_current_importance(
-                initial_importance=fact.importance,
+                initial_importance=fact.importance,  # type: ignore[attr-defined]
                 created_at=fact.created_at,
-                emotional_peak_valence=fact.emotional_charge,
-                emotional_peak_arousal=abs(fact.emotional_charge),
+                emotional_peak_valence=fact.emotional_charge,  # type: ignore[attr-defined]
+                emotional_peak_arousal=abs(fact.emotional_charge),  # type: ignore[attr-defined]
                 recall_count=fact.recall_count or 0,
                 decay_immunity=0.0,
             )

@@ -13,7 +13,7 @@ from __future__ import annotations
 from typing import List
 
 import structlog
-from sqlalchemy import func, select
+from sqlalchemy import Float, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from heart.ss02_memory.models import EpisodicMemory, FactNode
@@ -118,16 +118,16 @@ class VectorRetriever(RetrievalStrategy):
                 func.cast(
                     1.0
                     - (
-                        func.cast(text(f"semantic_vector <=> '{embedding_str}'::vector"), float)
+                        func.cast(text(f"semantic_vector <=> '{embedding_str}'::vector"), Float())
                         / 2.0
                     ),
-                    float,
+                    Float(),
                 ).label("similarity"),
             )
             .where(
                 EpisodicMemory.user_id == query_context.user_id,
                 EpisodicMemory.character_id == query_context.character_id,
-                not EpisodicMemory.do_not_recall,
+                ~EpisodicMemory.do_not_recall,
                 EpisodicMemory.semantic_vector.isnot(None),
             )
             .order_by(text(f"semantic_vector <=> '{embedding_str}'::vector"))
@@ -175,16 +175,16 @@ class VectorRetriever(RetrievalStrategy):
                 func.cast(
                     1.0
                     - (
-                        func.cast(text(f"semantic_vector <=> '{embedding_str}'::vector"), float)
+                        func.cast(text(f"semantic_vector <=> '{embedding_str}'::vector"), Float())
                         / 2.0
                     ),
-                    float,
+                    Float(),
                 ).label("similarity"),
             )
             .where(
                 FactNode.user_id == query_context.user_id,
                 FactNode.character_id == query_context.character_id,
-                not FactNode.do_not_recall,
+                ~FactNode.do_not_recall,
                 FactNode.promoted_to_l4_at.is_(None),  # Exclude L4-promoted facts
                 FactNode.semantic_vector.isnot(None),
             )

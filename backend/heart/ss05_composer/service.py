@@ -26,7 +26,7 @@ from uuid import UUID
 import structlog
 from prometheus_client import Counter
 
-from heart.infra.invariants import invariant
+from heart.infra.invariants import Severity, invariant
 
 import heart.infra.invariant_predicates  # noqa: F401, E402 isort:skip
 from heart.observability.turn_profiler import TurnProfiler
@@ -245,7 +245,7 @@ class ComposerService:
         self._sanitizer_config = sanitizer_config or SanitizerConfig()
         self._directive_compiler = directive_compiler or default_compiler()
 
-    @invariant("inv-c-1.no-hard-never-leak", severity="WARN", subsystem="ss05")
+    @invariant("inv-c-1.no-hard-never-leak", severity=Severity.WARN, subsystem="ss05")
     async def compose(
         self,
         ctx: CompositionContext,
@@ -542,8 +542,6 @@ class ComposerService:
 
             qctx = QueryContext(
                 query_text="",
-                recent_turns=[],
-                session_id=ctx.turn_id,
                 user_id=ctx.user_id,
                 character_id=ctx.character_id,
             )

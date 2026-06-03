@@ -279,7 +279,7 @@ class DecayEngine:
         l2_stmt = select(EpisodicMemory).where(
             EpisodicMemory.user_id == user_id,
             EpisodicMemory.character_id == character_id,
-            not EpisodicMemory.do_not_recall,
+            ~EpisodicMemory.do_not_recall,
         )
 
         result = await session.execute(l2_stmt)
@@ -306,7 +306,7 @@ class DecayEngine:
         l3_stmt = select(FactNode).where(
             FactNode.user_id == user_id,
             FactNode.character_id == character_id,
-            not FactNode.do_not_recall,
+            ~FactNode.do_not_recall,
             FactNode.promoted_to_l4_at.is_(None),  # Skip L4-promoted facts
         )
 
@@ -321,7 +321,7 @@ class DecayEngine:
                 stats["l3_processed"] += 1
 
                 # Count as "archived" if importance hit floor and state degraded
-                if fact.importance < 0.15 and old_state != "dormant":
+                if fact.importance < 0.15 and old_state != "dormant":  # type: ignore[attr-defined]
                     stats["l3_archived"] += 1
             except Exception as e:
                 logger.error(

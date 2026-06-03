@@ -247,7 +247,7 @@ class MemoryService:
                 from heart.ss02_memory.retriever.orchestrator import RetrievalOrchestrator
 
                 orchestrator = RetrievalOrchestrator(self._db)
-                return await orchestrator.retrieve(query_context, top_k)
+                return await orchestrator.retrieve(query_context, top_k)  # type: ignore[arg-type,return-value]
             except Exception:
                 logger.exception("retrieve_failed", user_id=str(user_id))
 
@@ -459,7 +459,7 @@ class MemoryService:
         if self._db is not None:
             self._db.add(event)
             await self._db.flush()
-            logger.debug("encoding_queued", event_id=str(event.id))
+            logger.debug("encoding_queued", event_id=str(event.event_id))
         else:
             logger.warning("encoding_queue_no_db")
 

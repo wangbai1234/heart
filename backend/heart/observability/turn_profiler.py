@@ -157,11 +157,11 @@ class TurnProfiler:
         p = _profiler_var.get(None)
         if p is not None:
             return p
-        return _NOOP
+        return _NOOP  # type: ignore[return-value]
 
     def __new__(cls, session_id: str = ""):
         if not _is_enabled():
-            return _NOOP
+            return _NOOP  # type: ignore[return-value]
         return super().__new__(cls)
 
     def __init__(self, session_id: str = ""):

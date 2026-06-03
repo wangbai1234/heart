@@ -88,7 +88,7 @@ class IdentityLookup(RetrievalStrategy):
             # Note: This is a simple implementation
             # In production, use full-text search or vector similarity
             keyword_filters = [
-                IdentityMemory.content.cast(str).contains(kw) for kw in query_context.keywords
+                IdentityMemory.value.cast(str).contains(kw) for kw in query_context.keywords
             ]
             stmt = stmt.where(or_(*keyword_filters))
 
@@ -157,4 +157,4 @@ class IdentityLookup(RetrievalStrategy):
         )
 
         result = await self.session.execute(stmt)
-        return result.scalars().all()
+        return list(result.scalars().all())

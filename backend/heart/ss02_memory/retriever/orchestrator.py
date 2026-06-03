@@ -207,7 +207,7 @@ class RetrievalOrchestrator:
         # Build result dict
         strategy_results = {}
         for strategy, result in zip(self.strategies, results, strict=False):
-            if isinstance(result, Exception):
+            if isinstance(result, BaseException):
                 logger.error(
                     "strategy_failed",
                     strategy=strategy.strategy_name,

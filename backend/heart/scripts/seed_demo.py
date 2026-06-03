@@ -23,6 +23,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import asyncio
 import hashlib
 import sys
 import uuid
@@ -281,6 +282,7 @@ class DemoTracker:
     total_conflicts: int = 0
     total_repairs: int = 0
     total_successful_repairs: int = 0
+    total_proactives: int = 0
 
     active_special_states: List[Dict[str, Any]] = field(default_factory=list)
     recent_conflicts: List[Dict[str, Any]] = field(default_factory=list)
@@ -451,7 +453,7 @@ class SeedRunner:
             _ = self._run_fast_encode(turn)
 
             # Step 2: SS03 Emotion processing
-            self._run_emotion_process(turn, tracker, soul_spec)
+            asyncio.run(self._run_emotion_process(turn, tracker, soul_spec))
 
             # Step 3: Build signals
             signal_batch = self._build_signals(turn, tracker)
@@ -618,6 +620,7 @@ class SeedRunner:
 
             self._fast_encoder = FastEncoder()
 
+        assert self._fast_encoder is not None
         from heart.ss02_memory.service import Turn as MemTurn
 
         mem_turn = MemTurn(
@@ -630,7 +633,7 @@ class SeedRunner:
         )
         return self._fast_encoder.encode(mem_turn)
 
-    def _run_emotion_process(
+    async def _run_emotion_process(
         self, turn: Dict[str, Any], tracker: DemoTracker, soul_spec: Dict[str, Any]
     ):
         """SS03 emotion processing for a turn."""
@@ -646,7 +649,7 @@ class SeedRunner:
             "prev_messages": [],
         }
         try:
-            self.emotion_service.process_turn(
+            await self.emotion_service.process_turn(
                 user_id=turn["user_id"],
                 character_id=turn["character_id"],
                 user_message=turn["user_message"],

@@ -41,7 +41,8 @@ class TestInnerLoopTick:
         # After a turn, energy should still be in valid range
         assert 0.0 <= initial_energy <= 1.0
 
-    def test_recent_vad_history_grows_over_turns(self, service):
+    @pytest.mark.asyncio
+    async def test_recent_vad_history_grows_over_turns(self, service):
         """Recent VAD history accumulates over multiple turns."""
         user_id = uuid4()
         soul_config = {
@@ -55,7 +56,7 @@ class TestInnerLoopTick:
 
         try:
             for i in range(3):
-                state = service.process_turn(
+                state = await service.process_turn(
                     user_id=user_id,
                     character_id="rin",
                     user_message="这是第{}次对话".format(i + 1),
@@ -98,7 +99,8 @@ class TestInnerLoopTick:
         assert isinstance(block["energy_descriptor"], str)
         assert len(block["energy_descriptor"]) > 0
 
-    def test_pending_repairs_propagated_to_context(self, service):
+    @pytest.mark.asyncio
+    async def test_pending_repairs_propagated_to_context(self, service):
         """Pending repairs are visible in context block."""
         user_id = uuid4()
         soul_config = {
@@ -111,7 +113,7 @@ class TestInnerLoopTick:
         }
 
         try:
-            service.process_turn(
+            await service.process_turn(
                 user_id=user_id,
                 character_id="rin",
                 user_message="哦",

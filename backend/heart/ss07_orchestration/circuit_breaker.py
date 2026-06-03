@@ -129,11 +129,12 @@ class BreakerRegistry:
     """
 
     _instance: Optional["BreakerRegistry"] = None
+    _breakers: Dict[str, CircuitBreaker]
 
     def __new__(cls) -> "BreakerRegistry":
         if cls._instance is None:
             instance = super().__new__(cls)
-            instance._breakers: Dict[str, CircuitBreaker] = {}
+            instance._breakers = {}
             instance._init_defaults()
             cls._instance = instance
         return cls._instance

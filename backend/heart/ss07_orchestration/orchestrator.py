@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+from datetime import datetime, timezone
 from typing import Any, Callable
 from uuid import UUID, uuid4
 
@@ -328,7 +329,7 @@ class Orchestrator:
                 content=user_message,
                 user_id=user_id,
                 character_id=character_id,
-                timestamp=uuid4(),
+                timestamp=datetime.now(timezone.utc),
             )
             from heart.ss02_memory.service import MemoryService
 

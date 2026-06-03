@@ -1,7 +1,5 @@
 """Tests for JWT secret validation at Settings load time."""
 
-import os
-
 import pytest
 
 from heart.core.config import Settings
@@ -40,12 +38,9 @@ class TestJwtSecretValidation:
         except RuntimeError:
             pytest.fail("Settings raised RuntimeError for a valid-length secret")
 
-    @pytest.mark.skipif(
-        os.environ.get("JWT_SECRET_KEY") is not None,
-        reason="JWT_SECRET_KEY is set in environment (e.g., CI)"
-    )
-    def test_default_secret_raises(self):
+    def test_default_secret_raises(self, monkeypatch):
         """With no explicit secret, the default placeholder must fail (no .env override)."""
+        monkeypatch.delenv("JWT_SECRET_KEY", raising=False)
         saved = Settings.model_config.get("env_file")
         Settings.model_config["env_file"] = ".env.nonexistent"
         try:

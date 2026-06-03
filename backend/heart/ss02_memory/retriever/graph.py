@@ -157,7 +157,7 @@ class GraphRetriever(RetrievalStrategy):
             stmt = select(FactNode.id).where(
                 FactNode.user_id == query_context.user_id,
                 FactNode.character_id == query_context.character_id,
-                not FactNode.do_not_recall,
+                ~FactNode.do_not_recall,
                 FactNode.promoted_to_l4_at.is_(None),
                 FactNode.predicate.in_(query_context.entry_nodes),
             )
@@ -182,7 +182,7 @@ class GraphRetriever(RetrievalStrategy):
                 .where(
                     FactNode.user_id == query_context.user_id,
                     FactNode.character_id == query_context.character_id,
-                    not FactNode.do_not_recall,
+                    ~FactNode.do_not_recall,
                     FactNode.promoted_to_l4_at.is_(None),
                     or_(*keyword_filters),
                 )
