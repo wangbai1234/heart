@@ -21,6 +21,9 @@
 
 set -euo pipefail
 
+# ---- 环境变量（CI测试用） ----
+export JWT_SECRET_KEY="${JWT_SECRET_KEY:-ci-test-secret-key-do-not-use-in-production-12345678}"
+
 # ---- 通用 ----
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BACKEND_DIR="$REPO_ROOT/backend"
