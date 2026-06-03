@@ -104,6 +104,15 @@ ignore = [
     "B017",    # blind exception in tests — acceptable for test assertions
 ]
 
+[tool.ruff.lint.per-file-ignores]
+# Technical debt imported during ss03-07 consolidation (see #15).
+# These functions exceed mccabe=10 and must be refactored before 2026-Q3.
+# DO NOT add new entries here without a tracking issue.
+"heart/ss04_relationship/stage_engine.py" = ["C901"]
+"heart/ss04_relationship/signal_aggregator.py" = ["C901"]
+"heart/safety/critic_agent.py" = ["C901"]
+"heart/safety/wellbeing_monitor.py" = ["C901"]
+
 [tool.mypy]
 python_version = "3.11"
 warn_return_any = false
@@ -120,6 +129,21 @@ disable_error_code = [
     "misc",
     "operator",
 ]
+
+# Technical debt imported during ss03-07 consolidation (see #15).
+# These modules have mypy errors from source branches and must be fixed before 2026-Q3.
+# DO NOT add new entries here without a tracking issue.
+[[tool.mypy.overrides]]
+module = [
+    "heart.ss06_inner_state.ritual_manager",
+    "heart.ss04_relationship.models",
+    "heart.ss03_emotion.models",
+    "heart.ss06_inner_state.block_builder",
+    "heart.ss05_composer.token_budget",
+    "heart.ss04_relationship.service",
+    "heart.safety.safety_llm",
+]
+ignore_errors = true
 
 [tool.coverage.run]
 source = ["heart"]

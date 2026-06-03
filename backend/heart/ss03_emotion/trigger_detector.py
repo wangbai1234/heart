@@ -19,7 +19,9 @@ Author: 心屿团队
 
 from __future__ import annotations
 
+import re
 from typing import Any, Dict, List
+from uuid import UUID
 
 try:
     import ahocorasick
