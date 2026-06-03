@@ -13,7 +13,7 @@
 - **8 subsystems (SS01–SS08)**: Soul → Memory → Emotion → Relationship → Composer → Inner State → Orchestration → Infrastructure
 - **Spec-driven**: `runtime_specs/0X_*.md` is authoritative. Do not drift from it.
 - **Modular monolith** under `backend/heart/`. Subsystems are plain packages; no microservices yet.
-- **SS03–SS07 code** is on `feature/ss04-stage-engine`, not on `main`. Check which branch is relevant.
+- **SS03–SS07 code** is on `main`（已通过 PR #17 集成）。`feature/ss04-stage-engine` 已完成使命。
 - **JWT uses RS256**, not HS256. Keys are in `.env`.
 
 ## Commands (always from repo root)
@@ -80,8 +80,10 @@ LLM_PROVIDER=deepseek DEEPSEEK_API_KEY=sk-... pytest tests/e2e -m e2e -v  # real
 - **CI is minimal**: `scripts/ci.sh` is the only pipeline. Old Gitee Go workflows are archived.
 - **JWT secret**: `JWT_ALGORITHM=RS256` (in `.env`). Generate key with `openssl rand -hex 32`.
 
-## Project status snapshot (2026-05-24)
+## Project status snapshot (2026-06-03)
 
 - Phase 6 done, Phase 7 blocked by **Top 10 architecture audit findings** (41 total).
-- Priority: fix critical blockers (#1–#4 in `docs/PROJECT_STATUS.md`) before starting Phase 7.
-- Current active branches: `feat/misc-updates` (repo refactor), `feature/ss04-stage-engine` (main work).
+- SS03-07 已合并 main（PR #17），governance 已合并（PR #16）。
+- Priority: fix critical blockers (#4 in `docs/PROJECT_STATUS.md`) before starting Phase 7.
+- 当前执行验证计划：`HEART_PROJECT_VERIFICATION_MASTER_PLAN.md`
+- Current active branch: `main`。

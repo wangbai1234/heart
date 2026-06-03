@@ -101,7 +101,7 @@ heart/
 ## 🚀 标准操作清单
 
 ### 创建新功能时：
-- [ ] 创建特性分支：`git checkout -b feature/xxx`
+- [ ] 创建特性分支：`git checkout -b feat/xxx`
 - [ ] 编写代码
 - [ ] 编写测试
 - [ ] 运行 lint 和测试

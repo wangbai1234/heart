@@ -11,7 +11,7 @@
 | 文件 | 用途 |
 |------|------|
 | [`PROJECT_STATUS.md`](PROJECT_STATUS.md) | 当前 phase、blocker、下一步——任何新 session 必读 |
-| [`PHASE_7_READINESS_CHECKLIST.md`](PHASE_7_READINESS_CHECKLIST.md) | Phase 7 启动详细 checklist（含分支合并策略） |
+| [`../HEART_PROJECT_VERIFICATION_MASTER_PLAN.md`](../HEART_PROJECT_VERIFICATION_MASTER_PLAN.md) | 验证计划（7 Phase 只读验证） |
 | [`audit/2026-05-23_architecture_audit.md`](audit/2026-05-23_architecture_audit.md) | 41 findings 全表 |
 
 ## 2. 设计文档（`docs/design/`）
