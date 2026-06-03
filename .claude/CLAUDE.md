@@ -8,6 +8,26 @@
 
 ---
 
+## 📖 每次 Session 必须执行
+
+无论你是什么模型、何时开始，只要是一个**新 session**，必须先做以下事情（无需等用户提醒）：
+
+### 1. 读取以下文件（按顺序）
+- [ ] `docs/PROJECT_STATUS.md` — 当前 phase、blocker、下一步
+- [ ] `AGENTS.md` — 项目级规范
+- [ ] `.claude/CLAUDE.md` — 本文件（行为规则）
+
+### 2. 工作流
+修改代码后，按以下步骤**自动执行**（无需询问）：
+- [ ] 运行 `bash scripts/ci.sh`（lint + 测试）
+- [ ] `git add + git commit`
+- [ ] `git push`
+- [ ] `gh pr create`
+
+> ⚠️ 不运行测试就 push 是禁止行为（见底部 ❌ 禁止事项）
+
+---
+
 ## 🤖 行为规则 - 直接执行权限
 
 ### ✅ 我应该直接做的事（无需询问）：
@@ -176,5 +196,5 @@ docker build -f backend/Dockerfile -t heart/backend:test .
 
 ---
 
-**最后更新**: 2026-05-16
-**版本**: 1.0.0
+**最后更新**: 2026-06-03
+**版本**: 2.0.0
