@@ -104,7 +104,7 @@ DATABASE_URL=postgresql+asyncpg://heart:heartdev@localhost:5432/heart
    → See `migrations/README.md`
 
 4. **Configuration details?**
-   → Review `migrations/CONFIG_SUMMARY.md`
+   → Review `docs/archive/2026-05-16_alembic_config.md` (历史快照)
 
 ## ⚠️ Important Notes
 

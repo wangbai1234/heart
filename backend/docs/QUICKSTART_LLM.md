@@ -144,7 +144,7 @@ agent_name="SS05.composer"  # 日志/监控用
 
 - 详细指南: `backend/docs/LLM_GUIDE.md`
 - 代码示例: `backend/heart/ss05_composer/example_usage.py`
-- 改动总结: `CHANGES_SUMMARY.md`
+- 改动总结: `docs/archive/2026-05-15_llm_simplification.md`
 
 ## 🚀 下一步
 

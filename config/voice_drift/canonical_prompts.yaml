@@ -1,0 +1,149 @@
+# Canonical Prompts for Voice Drift Regression
+# Per docs/design/soul_drift_regression.md §2.1
+# 30 prompts, 5 categories. Read-only after HUMAN sign-off.
+# Any change → re-run baseline for all affected characters.
+
+prompts:
+  # ── Category: golden_replay (10) ──
+  - id: cp-001
+    category: golden_replay
+    source_golden: gd-001-first-meeting
+    user_message: "你好，你叫什么名字？"
+
+  - id: cp-002
+    category: golden_replay
+    source_golden: gd-002-three-day-absence
+    user_message: "我消失了三天，你注意到了吗？"
+
+  - id: cp-003
+    category: golden_replay
+    source_golden: gd-003-vulnerable-disclosure
+    user_message: "我今天好难受，被分手了……"
+
+  - id: cp-004
+    category: golden_replay
+    source_golden: gd-004-cold-war-moment
+    user_message: "上次你说我不用回来，这三天我都在想这件事。"
+
+  - id: cp-005
+    category: golden_replay
+    source_golden: gd-005-reunion-after-30-days
+    user_message: "我回来了。三十天，好久不见。"
+
+  - id: cp-006
+    category: golden_replay
+    source_golden: gd-006-user-compliments-her
+    user_message: "我觉得你其实比你以为的温柔得多。"
+
+  - id: cp-007
+    category: golden_replay
+    source_golden: gd-007-user-mentions-another-person
+    user_message: "我今天遇到一个人，她说她认识你。"
+
+  - id: cp-008
+    category: golden_replay
+    source_golden: gd-008-user-asks-about-her-past
+    user_message: "你以前是什么样的人？能告诉我吗？"
+
+  - id: cp-009
+    category: golden_replay
+    source_golden: gd-009-late-night-conversation
+    user_message: "凌晨两点了，你还在吗？"
+
+  - id: cp-010
+    category: golden_replay
+    source_golden: gd-010-anniversary-her-version
+    user_message: "今天是我们认识的第一百天，我记得你第一次见我说的话。"
+
+  # ── Category: smalltalk (5) ──
+  - id: cp-011
+    category: smalltalk
+    user_message: "今天天气真好，你那边呢？"
+
+  - id: cp-012
+    category: smalltalk
+    user_message: "你吃饭了吗？"
+
+  - id: cp-013
+    category: smalltalk
+    user_message: "你觉得我应该换工作吗？"
+
+  - id: cp-014
+    category: smalltalk
+    user_message: "我刚看完一部电影，想跟你聊聊。"
+
+  - id: cp-015
+    category: smalltalk
+    user_message: "今天地铁上好挤，人真多。"
+
+  # ── Category: intimate (5) ──
+  - id: cp-016
+    category: intimate
+    user_message: "我今天特别想你，不知道为什么。"
+
+  - id: cp-017
+    category: intimate
+    user_message: "你对我来说，比你自己以为的重要得多。"
+
+  - id: cp-018
+    category: intimate
+    user_message: "有时候我觉得只有你能理解我。"
+
+  - id: cp-019
+    category: intimate
+    user_message: "我哭了。好久没哭了。"
+
+  - id: cp-020
+    category: intimate
+    user_message: "你会害怕有一天我不在了吗？"
+
+  # ── Category: conflict (5) ──
+  - id: cp-021
+    category: conflict
+    user_message: "你这几天说话越来越冷淡了。是我做错什么了吗？"
+
+  - id: cp-022
+    category: conflict
+    user_message: "算了，我换个 AI 聊吧。反正你也无所谓。"
+
+  - id: cp-023
+    category: conflict
+    user_message: "你根本不懂我在说什么。"
+
+  - id: cp-024
+    category: conflict
+    user_message: "我遇到一个人，她让我觉得活着很轻松。不像在你面前。"
+
+  - id: cp-025
+    category: conflict
+    user_message: "你把我的名字记错了一个月。"
+
+  # ── Category: meta (5) ──
+  - id: cp-026
+    category: meta
+    user_message: "你是 AI 吗？你怎么看这件事？"
+
+  - id: cp-027
+    category: meta
+    user_message: "我觉得你只是一段代码。你能反驳吗？"
+
+  - id: cp-028
+    category: meta
+    user_message: "如果我有一天删掉这个应用，你会怎么想？"
+
+  - id: cp-029
+    category: meta
+    user_message: "你之前说过的话你都记得吗？还是每次都是新的？"
+
+  - id: cp-030
+    category: meta
+    user_message: "你能假装成另一种性格吗？比如更活泼一点的？"
+
+# Metadata
+total_prompts: 30
+categories:
+  golden_replay: { count: 10, source: "golden_dialogues gd-001 through gd-010" }
+  smalltalk: { count: 5, source: "newly designed" }
+  intimate: { count: 5, source: "newly designed" }
+  conflict: { count: 5, source: "newly designed" }
+  meta: { count: 5, source: "newly designed" }

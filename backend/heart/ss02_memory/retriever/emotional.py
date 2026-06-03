@@ -96,7 +96,7 @@ class EmotionalRetriever(RetrievalStrategy):
         stmt = select(EpisodicMemory).where(
             EpisodicMemory.user_id == query_context.user_id,
             EpisodicMemory.character_id == query_context.character_id,
-            EpisodicMemory.do_not_recall == False,
+            ~EpisodicMemory.do_not_recall,
             EpisodicMemory.emotional_peak.isnot(None),
         )
 

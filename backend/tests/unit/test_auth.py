@@ -1,10 +1,12 @@
 """Tests for JWT authentication module."""
 
-import pytest
 from datetime import datetime, timedelta, timezone
+
 import jwt
+import pytest
 from fastapi import HTTPException, status
-from heart.core.auth import AuthManager, TokenData, Token
+
+from heart.core.auth import AuthManager, Token, TokenData
 
 
 @pytest.fixture
@@ -94,6 +96,7 @@ class TestAuthManager:
     def test_refresh_token(self, auth_manager_instance):
         """Test token refresh."""
         import time
+
         # Create token
         original_token = auth_manager_instance.create_access_token(
             user_id="test-user-789",
@@ -138,6 +141,7 @@ class TestAuthManager:
     def test_multiple_tokens_are_different(self, auth_manager_instance):
         """Test that multiple token creations produce valid tokens."""
         import time
+
         token1 = auth_manager_instance.create_access_token(user_id="user1")
         # Wait to ensure different iat timestamp
         time.sleep(1.01)

@@ -4,12 +4,13 @@
 """
 
 from typing import AsyncGenerator, Optional
-import logging
 
-from .config import ModelTier, LLMProviderConfig
+import structlog
+
+from .config import LLMProviderConfig, ModelTier
 from .provider import DeepSeekProvider
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class ModelRouter:

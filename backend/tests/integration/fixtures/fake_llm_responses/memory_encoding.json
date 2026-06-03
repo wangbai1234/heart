@@ -1,0 +1,15 @@
+{
+  "fixture_id": "memory_encoding",
+  "description": "Fake response for memory encoding LLM call",
+  "scenarios": [
+    {
+      "system_prompt_hint": "You are a memory encoder",
+      "user_msg_hint": "I adopted a cat named Mochi"
+    }
+  ],
+  "content": "{\"summary\": \"User adopted a cat named Mochi\", \"entities\": [\"cat\", \"Mochi\"], \"emotions\": [\"joy\"], \"topics\": [\"pets\", \"adoption\"]}",
+  "finish_reason": "stop",
+  "prompt_tokens": 100,
+  "completion_tokens": 50,
+  "total_tokens": 150
+}

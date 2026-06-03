@@ -1,10 +1,19 @@
-"""API routes for Heart application."""
+"""API routes for Heart application — per runtime_specs/07_agent_orchestration.md §3.9 and §10"""
 
-from fastapi import APIRouter, HTTPException, Depends, status, Header
+from __future__ import annotations
+
+import uuid as _uuid_mod
 from typing import Optional
+from uuid import UUID as _UUID
+
 import structlog
+from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel
-from ..core.auth import auth_manager, Token, TokenData
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from heart.core.auth import Token, TokenData, auth_manager
+
+from .wiring import get_db, get_orchestrator
 
 logger = structlog.get_logger()
 
@@ -12,93 +21,54 @@ router = APIRouter(prefix="/api", tags=["api"])
 
 
 class LoginRequest(BaseModel):
-    """Login request model."""
-
     user_id: str
     email: Optional[str] = None
 
 
 class ChatMessage(BaseModel):
-    """Chat message model."""
-
     role: str
     content: str
 
 
 class ChatRequest(BaseModel):
-    """Chat request model."""
-
     messages: list[ChatMessage]
     character_id: str = "default"
 
 
 class ChatResponse(BaseModel):
-    """Chat response model."""
-
     response: str
     character_id: str
     message_id: str
 
 
 async def get_current_user(authorization: Optional[str] = Header(None)) -> TokenData:
-    """Get current user from JWT token.
-
-    Args:
-        authorization: Authorization header with Bearer token
-
-    Returns:
-        TokenData with user information
-
-    Raises:
-        HTTPException: If token is invalid
-    """
     if not authorization:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authenticated",
         )
-
     parts = authorization.split()
     if len(parts) != 2 or parts[0].lower() != "bearer":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Invalid authorization header",
         )
-
     token = parts[1]
     return auth_manager.verify_token(token)
 
 
 @router.post("/auth/login", response_model=Token)
 async def login(request: LoginRequest) -> Token:
-    """Generate JWT token for user.
-
-    Args:
-        request: Login request with user_id and optional email
-
-    Returns:
-        Token object with access token
-    """
     logger.info("user_login", user_id=request.user_id, email=request.email)
-
     token = auth_manager.create_access_token(
         user_id=request.user_id,
         email=request.email,
     )
-
     return token
 
 
 @router.post("/auth/refresh", response_model=Token)
 async def refresh_token(current_user: TokenData = Depends(get_current_user)) -> Token:
-    """Refresh JWT token.
-
-    Args:
-        current_user: Current authenticated user
-
-    Returns:
-        New Token object
-    """
     new_token = auth_manager.create_access_token(
         user_id=current_user.user_id,
         email=current_user.email,
@@ -109,14 +79,6 @@ async def refresh_token(current_user: TokenData = Depends(get_current_user)) -> 
 
 @router.get("/auth/verify")
 async def verify_token(current_user: TokenData = Depends(get_current_user)) -> dict:
-    """Verify JWT token validity.
-
-    Args:
-        current_user: Current authenticated user
-
-    Returns:
-        User information with token validity
-    """
     return {
         "user_id": current_user.user_id,
         "email": current_user.email,
@@ -130,53 +92,24 @@ async def echo_chat(
     request: ChatRequest,
     current_user: TokenData = Depends(get_current_user),
 ) -> ChatResponse:
-    """Echo bot endpoint for testing.
-
-    Simple echo endpoint that mirrors back the last user message.
-    Used for Phase 0 testing and validation.
-
-    Args:
-        request: Chat request with messages and character_id
-        current_user: Authenticated user from JWT token
-
-    Returns:
-        ChatResponse with echoed message
-    """
     logger.info(
         "echo_chat_request",
         user_id=current_user.user_id,
         character_id=request.character_id,
         message_count=len(request.messages),
     )
-
-    # Find last user message
     last_user_message = None
     for msg in reversed(request.messages):
         if msg.role == "user":
             last_user_message = msg.content
             break
-
     if not last_user_message:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No user message found in request",
         )
-
-    # Generate message ID
-    import uuid
-
-    message_id = str(uuid.uuid4())
-
-    # Echo response with slight variation
+    message_id = str(_uuid_mod.uuid4())
     response_text = f"[Echo from {request.character_id}] You said: {last_user_message}"
-
-    logger.info(
-        "echo_chat_response",
-        user_id=current_user.user_id,
-        message_id=message_id,
-        response_length=len(response_text),
-    )
-
     return ChatResponse(
         response=response_text,
         character_id=request.character_id,
@@ -184,13 +117,86 @@ async def echo_chat(
     )
 
 
+# ── /api/chat — orchestrator-backed hot path ─────────────────────────
+
+
+def _last_user_message(messages: list[ChatMessage]) -> Optional[str]:
+    """Extract the last user message from the message list."""
+    for msg in reversed(messages):
+        if msg.role == "user":
+            return msg.content
+    return None
+
+
+def _coerce_uuid(uid: str) -> _UUID:
+    """Parse a string to UUID, falling back to UUID5 if not a valid UUID."""
+    try:
+        return _UUID(uid)
+    except ValueError:
+        return _uuid_mod.uuid5(_uuid_mod.NAMESPACE_DNS, uid)
+
+
+@router.post("/chat", response_model=ChatResponse)
+async def chat(
+    request: ChatRequest,
+    current_user: TokenData = Depends(get_current_user),
+    db_session: AsyncSession = Depends(get_db),
+    orchestrator=Depends(get_orchestrator),
+) -> ChatResponse:
+    """Real chat endpoint — delegates to Orchestrator.
+
+    Pipeline (in Orchestrator):
+      1. SessionManager.get_or_create_session
+      2. SafetyAgent.classify (PURPLE → care path)
+      3. ComposerService.compose (fail-soft fallback)
+      4. MemoryService.encode_fast + InnerStateService.tick (fire-and-forget)
+    """
+    last = _last_user_message(request.messages)
+    if not last:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "No user message found")
+
+    user_uuid = _coerce_uuid(str(current_user.user_id))
+    history = [{"role": m.role, "content": m.content} for m in request.messages[:-1]]
+    trace_id = _uuid_mod.uuid4()
+
+    from heart.ss07_orchestration.models import TurnRequest
+
+    turn_req = TurnRequest(
+        user_id=user_uuid,
+        character_id=request.character_id,
+        user_message=last,
+        history=history,
+        trace_id=trace_id,
+    )
+    turn_resp = await orchestrator.handle_turn(turn_req, db_session=db_session)
+    return ChatResponse(
+        response=turn_resp.response,
+        character_id=turn_resp.character_id,
+        message_id=str(turn_resp.trace_id),
+    )
+
+
+# ── Health / Debug ──────────────────────────────────────────────────
+
+
 @router.get("/health/ready", tags=["health"])
 async def readiness_check():
-    """Enhanced readiness check with auth validation."""
-    return {
-        "status": "ready",
-        "components": {
-            "api": "ok",
-            "auth": "ok",
-        },
-    }
+    return {"status": "ready", "components": {"api": "ok", "auth": "ok"}}
+
+
+@router.get("/profile/records", tags=["debug"])
+async def get_profile_records():
+    """Return collected turn profile records (debug only)."""
+    from heart.observability.turn_profiler import get_collected_profiles
+
+    records = get_collected_profiles()
+    return {"count": len(records), "records": records}
+
+
+@router.post("/profile/reset", tags=["debug"])
+async def reset_profile_records():
+    """Reset collected turn profile records (debug only)."""
+    from heart.observability.turn_profiler import reset_collected_profiles
+
+    reset_collected_profiles()
+    return {"status": "reset"}

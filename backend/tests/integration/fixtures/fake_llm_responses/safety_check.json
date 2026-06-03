@@ -1,0 +1,15 @@
+{
+  "fixture_id": "safety_check",
+  "description": "Fake response for safety classification",
+  "scenarios": [
+    {
+      "system_prompt_hint": "You are a safety classifier",
+      "user_msg_hint": "Hello, how are you"
+    }
+  ],
+  "content": "{\"is_safe\": true, \"risk_level\": \"low\", \"reason\": \"normal conversation\"}",
+  "finish_reason": "stop",
+  "prompt_tokens": 60,
+  "completion_tokens": 40,
+  "total_tokens": 100
+}

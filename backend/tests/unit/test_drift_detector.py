@@ -16,9 +16,11 @@ Author: 心屿团队
 
 from __future__ import annotations
 
-import pytest
 from uuid import uuid4
 
+import pytest
+
+from heart.ss01_soul.anti_pattern_scanner import AntiPatternHits
 from heart.ss01_soul.drift_detector import (
     DriftCheckRequest,
     DriftDecision,
@@ -29,16 +31,15 @@ from heart.ss01_soul.drift_detector import (
     should_invoke_llm_for_sample,
 )
 from heart.ss01_soul.drift_llm_client import DriftLLMClient, LLMDriftResult
-from heart.ss01_soul.anti_pattern_scanner import AntiPatternHits
 from heart.ss01_soul.drift_score_fuser import (
     compute_final_score,
     should_emit_reinforce,
 )
 
-
 # ============================================================
 # Mock LLM Client
 # ============================================================
+
 
 class MockLLMClient(DriftLLMClient):
     """Mock LLM client for deterministic tests."""
@@ -65,6 +66,7 @@ class MockLLMClient(DriftLLMClient):
 # ============================================================
 # Fixtures
 # ============================================================
+
 
 @pytest.fixture
 def mock_llm():
@@ -99,13 +101,10 @@ def _make_request(
 # Sampling Logic Tests
 # ============================================================
 
-class TestSampling:
 
+class TestSampling:
     async def test_sample_last_five_valid(self):
-        history = [
-            ReleasedResponse(turn_index=i, text=f"Response {i}")
-            for i in range(1, 11)
-        ]
+        history = [ReleasedResponse(turn_index=i, text=f"Response {i}") for i in range(1, 11)]
         sampled = sample_responses(history)
         assert len(sampled) == 5
         assert [r.turn_index for r in sampled] == [6, 7, 8, 9, 10]
@@ -165,6 +164,7 @@ class TestSampling:
 # ============================================================
 # Pre-filter Signal Tests
 # ============================================================
+
 
 class TestPrefilterSignalA:
     """Test deterministic anti-pattern hits."""
@@ -273,8 +273,8 @@ class TestPrefilterSignalC:
 # Score Fusion Math Tests
 # ============================================================
 
-class TestScoreFusion:
 
+class TestScoreFusion:
     async def test_llm_score_zero_with_clean_prefilter(self):
         score = compute_final_score(
             llm_score=0.0,
@@ -346,8 +346,8 @@ class TestScoreFusion:
 # REINFORCE Hysteresis Tests
 # ============================================================
 
-class TestReinforceHysteresis:
 
+class TestReinforceHysteresis:
     async def test_score_below_threshold_no_reinforce(self):
         assert not should_emit_reinforce(
             final_score=0.29,
@@ -394,8 +394,8 @@ class TestReinforceHysteresis:
 # Evidence Quality Gate Tests
 # ============================================================
 
-class TestEvidenceQualityGate:
 
+class TestEvidenceQualityGate:
     async def test_reinforce_emitted_with_valid_evidence(self, detector, mock_llm):
         # Mock LLM to return drift with violations
         mock_llm.mock_result = LLMDriftResult(
@@ -448,8 +448,8 @@ class TestEvidenceQualityGate:
 # Cold Session / Cost Cap / Timeout Tests
 # ============================================================
 
-class TestEdgeCases:
 
+class TestEdgeCases:
     async def test_cold_session_skip(self, detector):
         # Only 2 responses → cold session
         responses = [
@@ -499,8 +499,8 @@ class TestEdgeCases:
 # Integration Tests
 # ============================================================
 
-class TestIntegration:
 
+class TestIntegration:
     async def test_clean_session_decay(self, detector):
         """Clean responses → drift_score decays over cycles."""
         responses = [

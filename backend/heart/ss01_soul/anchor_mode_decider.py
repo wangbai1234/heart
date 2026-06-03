@@ -23,8 +23,7 @@ Author: 心屿团队
 
 from __future__ import annotations
 
-from .anchor_injector import AnchorMode, AnchorActivationView
-
+from .anchor_injector import AnchorActivationView, AnchorMode
 
 # Periodic FULL re-injection interval (turns).
 # §3.4 example table shows turn 1 → turn 8 (gap 7). Honoring that

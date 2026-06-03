@@ -4,20 +4,18 @@ Unit tests for LLM providers.
 Tests provider interface with mocked HTTP responses.
 """
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
-import json
+
+import pytest
+from heart.infra.llm_providers.deepseek_pro import DeepSeekV4ProProvider
 
 from heart.infra.llm_providers.base import (
-    LLMProvider,
     LLMRequest,
     LLMResponse,
-    StreamChunk,
     Message,
     MessageRole,
     ProviderError,
 )
-from heart.infra.llm_providers.anthropic import DeepSeekV4ProProvider
 from heart.infra.llm_providers.deepseek import DeepSeekV4FlashProvider
 from heart.infra.llm_providers.registry import (
     ProviderRegistry,
@@ -60,7 +58,7 @@ def mock_deepseek_stream_chunks():
         'data: {"id":"chatcmpl-1","object":"chat.completion.chunk","created":1234567890,"model":"deepseek-chat","choices":[{"index":0,"delta":{"content":" there"},"finish_reason":null}]}\n',
         'data: {"id":"chatcmpl-1","object":"chat.completion.chunk","created":1234567890,"model":"deepseek-chat","choices":[{"index":0,"delta":{"content":"!"},"finish_reason":null}]}\n',
         'data: {"id":"chatcmpl-1","object":"chat.completion.chunk","created":1234567890,"model":"deepseek-chat","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":5,"completion_tokens":3,"total_tokens":8}}\n',
-        'data: [DONE]\n',
+        "data: [DONE]\n",
     ]
 
 

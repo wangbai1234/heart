@@ -68,7 +68,7 @@ def _build_system_prompt(soul: SoulSpec) -> str:
     # Voice_DNA top 5
     voice_dna_lines = []
     for i, vd in enumerate(soul.identity_anchor.voice_dna[:5], 1):
-        examples_str = "\n    ".join(vd.examples[:2] if vd.examples else [])
+        examples_str = "\n    ".join(str(ex) for ex in vd.examples[:2]) if vd.examples else ""
         voice_dna_lines.append(f"{i}. {vd.pattern}\n    示例: {examples_str}")
     voice_dna_block = "\n".join(voice_dna_lines)
 

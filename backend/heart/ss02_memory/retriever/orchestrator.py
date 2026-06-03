@@ -23,19 +23,19 @@ import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from heart.ss02_memory.retriever.base import (
+    DEFAULT_WEIGHTS,
     MemoryRetrievalResult,
     QueryContext,
     RetrievalStrategy,
     ScoredMemory,
     combine_scores,
     select_top_k,
-    DEFAULT_WEIGHTS,
 )
-from heart.ss02_memory.retriever.vector import VectorRetriever
-from heart.ss02_memory.retriever.graph import GraphRetriever
-from heart.ss02_memory.retriever.recency import RecencyRetriever
 from heart.ss02_memory.retriever.emotional import EmotionalRetriever
+from heart.ss02_memory.retriever.graph import GraphRetriever
 from heart.ss02_memory.retriever.identity import IdentityLookup
+from heart.ss02_memory.retriever.recency import RecencyRetriever
+from heart.ss02_memory.retriever.vector import VectorRetriever
 
 logger = structlog.get_logger()
 
@@ -206,8 +206,8 @@ class RetrievalOrchestrator:
 
         # Build result dict
         strategy_results = {}
-        for strategy, result in zip(self.strategies, results):
-            if isinstance(result, Exception):
+        for strategy, result in zip(self.strategies, results, strict=False):
+            if isinstance(result, BaseException):
                 logger.error(
                     "strategy_failed",
                     strategy=strategy.strategy_name,
@@ -280,7 +280,7 @@ class RetrievalOrchestrator:
         # Deduplicate by memory_id
         merged: Dict[str, ScoredMemory] = {}
 
-        for strategy_name, candidates in strategy_results.items():
+        for _strategy_name, candidates in strategy_results.items():
             for cand in candidates:
                 key = str(cand.memory_id)
 

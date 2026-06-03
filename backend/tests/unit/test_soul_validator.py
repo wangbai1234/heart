@@ -8,24 +8,24 @@ Author: 心屿团队
 Created: 2026-05-17
 """
 
+from pathlib import Path
+
 import pytest
 import yaml
-from pathlib import Path
 from pydantic import ValidationError
 
+from heart.ss01_soul.registry import SoulRegistry
 from heart.ss01_soul.schema_validator import (
-    SoulSpec,
-    validate_soul_spec_yaml,
-    CoreWound,
     CoreDesire,
+    CoreWound,
     VoiceDNA,
+    validate_soul_spec_yaml,
 )
-from heart.ss01_soul.registry import SoulRegistry, get_soul_registry
-
 
 # ============================================================
 # Fixtures
 # ============================================================
+
 
 @pytest.fixture
 def soul_specs_dir():
@@ -51,20 +51,21 @@ def dorothy_spec_path(soul_specs_dir):
 @pytest.fixture
 def rin_yaml_data(rin_spec_path):
     """Load Rin's YAML data."""
-    with open(rin_spec_path, 'r', encoding='utf-8') as f:
+    with open(rin_spec_path, "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
 
 
 @pytest.fixture
 def dorothy_yaml_data(dorothy_spec_path):
     """Load Dorothy's YAML data."""
-    with open(dorothy_spec_path, 'r', encoding='utf-8') as f:
+    with open(dorothy_spec_path, "r", encoding="utf-8") as f:
         return yaml.safe_load(f)
 
 
 # ============================================================
 # Schema Validator Tests
 # ============================================================
+
 
 class TestSoulSpecValidation:
     """Test Soul Spec schema validation."""
@@ -102,81 +103,81 @@ class TestSoulSpecValidation:
     def test_missing_required_field_fails(self, rin_yaml_data):
         """Test that missing required field causes validation failure."""
         # Remove required field
-        del rin_yaml_data['character_id']
+        del rin_yaml_data["character_id"]
 
         with pytest.raises(ValidationError) as exc_info:
             validate_soul_spec_yaml(rin_yaml_data)
 
-        assert 'character_id' in str(exc_info.value)
+        assert "character_id" in str(exc_info.value)
 
     def test_invalid_character_id_format_fails(self, rin_yaml_data):
         """Test that invalid character_id format fails."""
         # character_id must be lowercase alphanumeric + underscore
-        rin_yaml_data['character_id'] = "Rin-Invalid"
+        rin_yaml_data["character_id"] = "Rin-Invalid"
 
         with pytest.raises(ValidationError) as exc_info:
             validate_soul_spec_yaml(rin_yaml_data)
 
-        assert 'character_id' in str(exc_info.value)
+        assert "character_id" in str(exc_info.value)
 
     def test_invalid_spec_version_format_fails(self, rin_yaml_data):
         """Test that invalid spec_version format fails."""
-        rin_yaml_data['spec_version'] = "1.0"  # Must be semver (X.Y.Z)
+        rin_yaml_data["spec_version"] = "1.0"  # Must be semver (X.Y.Z)
 
         with pytest.raises(ValidationError) as exc_info:
             validate_soul_spec_yaml(rin_yaml_data)
 
-        assert 'spec_version' in str(exc_info.value)
+        assert "spec_version" in str(exc_info.value)
 
     def test_extra_fields_forbidden(self, rin_yaml_data):
         """Test that extra fields are forbidden (strict schema)."""
-        rin_yaml_data['extra_field'] = "not_allowed"
+        rin_yaml_data["extra_field"] = "not_allowed"
 
         with pytest.raises(ValidationError) as exc_info:
             validate_soul_spec_yaml(rin_yaml_data)
 
-        assert 'extra' in str(exc_info.value).lower()
+        assert "extra" in str(exc_info.value).lower()
 
     def test_voice_dna_id_format_enforced(self, rin_yaml_data):
         """Test that voice_dna id must match pattern."""
         # voice_dna id must start with 'vd-'
-        rin_yaml_data['identity_anchor']['voice_dna'][0]['id'] = "invalid-id"
+        rin_yaml_data["identity_anchor"]["voice_dna"][0]["id"] = "invalid-id"
 
         with pytest.raises(ValidationError) as exc_info:
             validate_soul_spec_yaml(rin_yaml_data)
 
-        assert 'vd-' in str(exc_info.value) or 'pattern' in str(exc_info.value).lower()
+        assert "vd-" in str(exc_info.value) or "pattern" in str(exc_info.value).lower()
 
     def test_resonance_score_bounds_enforced(self, rin_yaml_data):
         """Test that resonance_score must be in [0, 1]."""
-        facets = rin_yaml_data['identity_anchor'].get('hidden_facets')
+        facets = rin_yaml_data["identity_anchor"].get("hidden_facets")
         if facets and len(facets) > 0:
-            facets[0]['threshold']['resonance_score'] = 1.5  # Invalid
+            facets[0]["threshold"]["resonance_score"] = 1.5  # Invalid
 
             with pytest.raises(ValidationError) as exc_info:
                 validate_soul_spec_yaml(rin_yaml_data)
 
-            assert 'resonance_score' in str(exc_info.value)
+            assert "resonance_score" in str(exc_info.value)
 
     def test_cognitive_style_bounds_validation(self, rin_yaml_data):
         """Test that cognitive style baseline must be within evolution_bound."""
-        style = rin_yaml_data['cognitive_style']['expression']['verbosity']
-        style['baseline'] = 0.99  # Outside evolution_bound
+        style = rin_yaml_data["cognitive_style"]["expression"]["verbosity"]
+        style["baseline"] = 0.99  # Outside evolution_bound
 
         with pytest.raises(ValidationError) as exc_info:
             validate_soul_spec_yaml(rin_yaml_data)
 
-        assert 'baseline' in str(exc_info.value) or 'evolution_bound' in str(exc_info.value)
+        assert "baseline" in str(exc_info.value) or "evolution_bound" in str(exc_info.value)
 
     def test_golden_dialogue_id_format_enforced(self, rin_yaml_data):
         """Test that golden_dialogue id must match pattern."""
-        gd = rin_yaml_data['test_fixtures']['golden_dialogues'][0]
-        gd['id'] = "invalid-id"  # Must match gd-XXX-...
+        gd = rin_yaml_data["test_fixtures"]["golden_dialogues"][0]
+        gd["id"] = "invalid-id"  # Must match gd-XXX-...
 
         with pytest.raises(ValidationError) as exc_info:
             validate_soul_spec_yaml(rin_yaml_data)
 
-        assert 'gd-' in str(exc_info.value) or 'pattern' in str(exc_info.value).lower()
+        assert "gd-" in str(exc_info.value) or "pattern" in str(exc_info.value).lower()
 
 
 class TestCoreComponents:
@@ -225,6 +226,7 @@ class TestCoreComponents:
 # ============================================================
 # Soul Registry Tests
 # ============================================================
+
 
 class TestSoulRegistry:
     """Test Soul Registry loading and access."""
@@ -388,6 +390,7 @@ meta:
 # ============================================================
 # Integration Tests
 # ============================================================
+
 
 class TestIntegration:
     """Integration tests with real Soul Specs."""

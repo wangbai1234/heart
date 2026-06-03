@@ -1,19 +1,28 @@
-"""应用全局配置"""
+"""应用全局配置 — per runtime_specs/08_engineering_architecture.md §3 (Configuration)"""
 
+from pathlib import Path
+
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Resolve .env relative to repo root, not CWD.
+_env_path = Path(__file__).resolve().parent.parent.parent.parent / ".env"
 
 
 class Settings(BaseSettings):
     """应用配置（从环境变量读取）"""
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=str(_env_path) if _env_path.exists() else ".env",
         case_sensitive=False,
         extra="ignore",
     )
 
     # Application
     environment: str = "development"
+    heart_env: str = "dev"
+    heart_dev_mode: str = ""
+    heart_invariants: str = ""
     debug: bool = True
     log_level: str = "INFO"
 
@@ -62,6 +71,9 @@ class Settings(BaseSettings):
     critic_sampling_rate: float = 0.3
     enable_wellbeing_monitor: bool = True
 
+    # Profiling
+    heart_turn_profiler: str = "0"
+
     # Cost Limits
     user_daily_cost_limit: float = 10.0
     alert_cost_threshold: float = 5.0
@@ -78,6 +90,16 @@ class Settings(BaseSettings):
     # Payment (V1)
     stripe_api_key: str = ""
     stripe_webhook_secret: str = ""
+
+    @model_validator(mode="after")
+    def validate_jwt_secret(self) -> "Settings":
+        """Fail-fast if JWT secret is weak (all environments)."""
+        if (
+            self.jwt_secret_key in {"your-secret-key-here", "", "change-me"}
+            or len(self.jwt_secret_key) < 32
+        ):
+            raise RuntimeError("JWT_SECRET_KEY must be set to a strong random value")
+        return self
 
 
 # 全局配置实例

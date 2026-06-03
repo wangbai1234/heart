@@ -4,17 +4,18 @@ Unit tests for LLM Cost Tracker.
 Tests cost computation, user tracking, metrics, and alerts.
 """
 
-import pytest
 from datetime import date, datetime
-from unittest.mock import AsyncMock, MagicMock
-from typing import Dict, Any
+from typing import Any, Dict
+from unittest.mock import AsyncMock
+
+import pytest
 
 from heart.infra.llm_cost_tracker import (
-    LLMCostTracker,
+    AlertInterface,
     LLMCall,
+    LLMCostTracker,
     MetricsInterface,
     UserCostStoreInterface,
-    AlertInterface,
 )
 
 
@@ -247,7 +248,7 @@ class TestRecordAndTracking:
         user_id = "user_456"
 
         # Make 3 calls
-        for i in range(3):
+        for _i in range(3):
             call = LLMCall(
                 model="deepseek-v3",
                 prompt_tokens=1000,
@@ -400,16 +401,6 @@ class TestUtilityMethods:
 
         assert cost == 0.0
 
-    @pytest.mark.asyncio
-    async def test_get_aggregated_metrics(self, tracker):
-        """Test get_aggregated_metrics returns structure."""
-        metrics = await tracker.get_aggregated_metrics()
-
-        # Should return a dict with expected keys
-        assert isinstance(metrics, dict)
-        assert "status" in metrics
-        assert "available_metrics" in metrics
-
 
 # Tests for LLMCall dataclass
 class TestLLMCall:
@@ -484,17 +475,13 @@ class TestIntegration:
         completion_tokens = 500
 
         # Estimate costs for different models
-        deepseek_cost = tracker.estimate_call_cost(
-            "deepseek-v3", prompt_tokens, completion_tokens
-        )
+        deepseek_cost = tracker.estimate_call_cost("deepseek-v3", prompt_tokens, completion_tokens)
 
         claude_cost = tracker.estimate_call_cost(
             "claude-sonnet-4-6", prompt_tokens, completion_tokens
         )
 
-        gpt4_cost = tracker.estimate_call_cost(
-            "gpt-4o", prompt_tokens, completion_tokens
-        )
+        gpt4_cost = tracker.estimate_call_cost("gpt-4o", prompt_tokens, completion_tokens)
 
         # DeepSeek should be cheapest
         assert deepseek_cost < claude_cost

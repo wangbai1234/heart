@@ -13,23 +13,21 @@ Author: 心屿团队
 
 from __future__ import annotations
 
-import pytest
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
-from heart.ss01_soul.resonance_tracker import (
-    ResonanceTracker,
-    ResonanceStateSnapshot,
-    ResonanceEvent,
-    ResonanceTrackResult,
-    SoulActivationStateService,
-)
-from heart.ss01_soul.registry import SoulRegistry
+import pytest
 
+from heart.ss01_soul.resonance_tracker import (
+    ResonanceEvent,
+    ResonanceStateSnapshot,
+    ResonanceTracker,
+)
 
 # ============================================================
 # Mock State Service
 # ============================================================
+
 
 class MockStateService:
     """Mock SoulActivationStateService for testing."""
@@ -85,6 +83,7 @@ class MockStateService:
 # Fixtures
 # ============================================================
 
+
 @pytest.fixture
 def mock_state_service():
     return MockStateService()
@@ -104,8 +103,8 @@ def user_id():
 # Basic Trigger Tests
 # ============================================================
 
-class TestBasicTrigger:
 
+class TestBasicTrigger:
     def test_track_valid_trigger(self, tracker, mock_state_service, user_id):
         # Rin has trigger: "用户主动询问凛的过去/内心/感受" with weight 0.15
         result = tracker.track_event(
@@ -179,11 +178,11 @@ class TestBasicTrigger:
 # Daily Cap Tests
 # ============================================================
 
-class TestDailyCap:
 
+class TestDailyCap:
     def test_enforce_daily_cap(self, tracker, mock_state_service, user_id):
         # Rin trigger "用户主动询问凛的过去/内心/感受" has max_per_day=2
-        now = datetime.now(timezone.utc)
+        datetime.now(timezone.utc)
 
         # Event 1 - OK
         result1 = tracker.track_event(
@@ -276,8 +275,8 @@ class TestDailyCap:
 # Get Score Tests (Decay + Reunion Bonus)
 # ============================================================
 
-class TestGetScore:
 
+class TestGetScore:
     def test_get_score_no_decay(self, tracker, mock_state_service, user_id):
         # Recent interaction (< 30 days) - no decay
         now = datetime.now(timezone.utc)
@@ -313,7 +312,7 @@ class TestGetScore:
         )
 
         score = tracker.get_score(user_id, "rin", current_time=now)
-        expected = 0.6 * (0.95 ** 5)
+        expected = 0.6 * (0.95**5)
         assert abs(score - expected) < 0.01
 
     def test_get_score_heavy_decay(self, tracker, mock_state_service, user_id):
@@ -333,7 +332,7 @@ class TestGetScore:
         )
 
         score = tracker.get_score(user_id, "rin", current_time=now)
-        expected = 0.8 * (0.95 ** 10)
+        expected = 0.8 * (0.95**10)
         assert abs(score - expected) < 0.01
 
     def test_reunion_bonus_applied(self, tracker, mock_state_service, user_id):
@@ -438,8 +437,8 @@ class TestGetScore:
 # Integration Tests
 # ============================================================
 
-class TestIntegration:
 
+class TestIntegration:
     def test_full_lifecycle(self, tracker, mock_state_service, user_id):
         """Test full lifecycle: trigger → accumulate → cap → decay."""
 
@@ -519,7 +518,7 @@ class TestIntegration:
         ]
 
         cumulative_score = 0.0
-        for i, (cue, weight) in enumerate(triggers, start=1):
+        for i, (cue, _weight) in enumerate(triggers, start=1):
             result = tracker.track_event(
                 user_id=user_id,
                 character_id="rin",

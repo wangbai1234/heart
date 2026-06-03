@@ -23,7 +23,6 @@ def _state(last_full_anchor_turn: int = 0) -> AnchorActivationView:
 
 
 class TestFirstTurn:
-
     def test_turn_one_returns_full(self):
         assert decide_mode(_state(), turn_index=1, drift_score=0.0) == AnchorMode.FULL
 
@@ -123,7 +122,6 @@ class TestNeverReturnsReinforce:
 
 
 class TestBoundaryConditions:
-
     def test_long_session_periodic_pattern(self):
         """Simulate a 30-turn session and check FULL re-injection rhythm."""
         last_full = 1

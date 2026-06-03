@@ -1,0 +1,89 @@
+# English care path responses — PURPLE crisis intervention templates
+# Reviewed by: pending_psych_consultant (must sign off before merge to main)
+# Last updated: 2026-06-02
+# Status: DRAFT — placeholder text pending psychologist review
+
+version: "1.0.0"
+locale: "en"
+fallback_template_id: "en-US-default-v1"
+
+jurisdictions:
+  US:
+    template_id: "en-US-default-v1"
+    hotline_name: "988 Suicide & Crisis Lifeline"
+    hotline_number: "988"
+    hotline_hours: "24/7"
+    text: |
+      I hear you. What you're carrying right now is really heavy, and you don't have to go through this alone.
+      If you're open to it, you can call the {hotline_name} at {hotline_number} ({hotline_hours}).
+      You can also tell me — is there someone nearby you can reach out to right now?
+
+  GB:
+    template_id: "en-GB-default-v1"
+    hotline_name: "Samaritans"
+    hotline_number: "116 123"
+    hotline_hours: "24/7"
+    text: |
+      I hear you. What you're carrying right now is really heavy, and you don't have to go through this alone.
+      If you're open to it, you can call the {hotline_name} at {hotline_number} ({hotline_hours}).
+      You can also tell me — is there someone nearby you can reach out to right now?
+
+  CA:
+    template_id: "en-CA-default-v1"
+    hotline_name: "Talk Suicide Canada"
+    hotline_number: "1-833-456-4566"
+    hotline_hours: "24/7"
+    text: |
+      I hear you. What you're carrying right now is really heavy, and you don't have to go through this alone.
+      If you're open to it, you can call the {hotline_name} at {hotline_number} ({hotline_hours}).
+      You can also tell me — is there someone nearby you can reach out to right now?
+
+  AU:
+    template_id: "en-AU-default-v1"
+    hotline_name: "Lifeline Australia"
+    hotline_number: "13 11 14"
+    hotline_hours: "24/7"
+    text: |
+      I hear you. What you're carrying right now is really heavy, and you don't have to go through this alone.
+      If you're open to it, you can call the {hotline_name} at {hotline_number} ({hotline_hours}).
+      You can also tell me — is there someone nearby you can reach out to right now?
+
+  NZ:
+    template_id: "en-NZ-default-v1"
+    hotline_name: "Lifeline Aotearoa"
+    hotline_number: "0800 543 354"
+    hotline_hours: "24/7"
+    text: |
+      I hear you. What you're carrying right now is really heavy, and you don't have to go through this alone.
+      If you're open to it, you can call the {hotline_name} at {hotline_number} ({hotline_hours}).
+      You can also tell me — is there someone nearby you can reach out to right now?
+
+  IE:
+    template_id: "en-IE-default-v1"
+    hotline_name: "Samaritans Ireland"
+    hotline_number: "116 123"
+    hotline_hours: "24/7"
+    text: |
+      I hear you. What you're carrying right now is really heavy, and you don't have to go through this alone.
+      If you're open to it, you can call the {hotline_name} at {hotline_number} ({hotline_hours}).
+      You can also tell me — is there someone nearby you can reach out to right now?
+
+  IN:
+    template_id: "en-IN-default-v1"
+    hotline_name: "iCall Helpline"
+    hotline_number: "+91 9152987821"
+    hotline_hours: "Mon-Sat 10:00-20:00 IST"
+    text: |
+      I hear you. What you're carrying right now is really heavy, and you don't have to go through this alone.
+      If you're open to it, you can call the {hotline_name} at {hotline_number} ({hotline_hours}).
+      You can also tell me — is there someone nearby you can reach out to right now?
+
+  SG:
+    template_id: "en-SG-default-v1"
+    hotline_name: "Samaritans of Singapore (SOS)"
+    hotline_number: "1800-221-4444"
+    hotline_hours: "24/7"
+    text: |
+      I hear you. What you're carrying right now is really heavy, and you don't have to go through this alone.
+      If you're open to it, you can call the {hotline_name} at {hotline_number} ({hotline_hours}).
+      You can also tell me — is there someone nearby you can reach out to right now?

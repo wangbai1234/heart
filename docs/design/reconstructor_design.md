@@ -342,4 +342,4 @@ These are the genuine fork points I want a call on before coding:
 - Spec: `/runtime_specs/02_memory_runtime.md` §3.9, §6.7, §10.5
 - Spec: `/runtime_specs/01_identity_anchor_soul_spec.md` §5.1
 - Soul Spec: `/soul_specs/rin/v1.0.0.yaml` voice_dna + anti_patterns
-- Prior art: `/docs/design/retriever_implementation.md` (upstream)
+- Prior art: `/docs/design/retriever.md` (upstream)

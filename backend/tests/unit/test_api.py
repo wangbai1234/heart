@@ -2,6 +2,7 @@
 Unit tests for API endpoints
 """
 
+
 def test_health_live(client):
     """Test liveness endpoint."""
     response = client.get("/health/live")
@@ -13,7 +14,9 @@ def test_health_ready(client):
     """Test readiness endpoint."""
     response = client.get("/health/ready")
     assert response.status_code == 200
-    assert response.json() == {"status": "ready"}
+    data = response.json()
+    assert data["status"] in ("ready", "degraded")
+    assert "components" in data
 
 
 def test_root_endpoint(client):

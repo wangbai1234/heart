@@ -20,11 +20,15 @@ Author: 心屿团队
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import structlog
+
+from heart.infra.invariants import invariant
+
+import heart.infra.invariant_predicates  # noqa: F401, E402 isort:skip
 
 from .models import (
     ConsolidationJob,
@@ -176,16 +180,28 @@ class MemoryService:
     DEFAULT_RECENT_LIMIT = 10
     DEFAULT_ANNIVERSARY_WINDOW_DAYS = 7
 
-    def __init__(self):
-        """Initialize Memory Service.
+    def __init__(
+        self,
+        db_session=None,
+        redis_client=None,
+        embedding_service=None,
+    ):
+        """Initialize Memory Service with optional dependencies.
 
-        Dependencies will be injected in production:
-        - PostgreSQL session
-        - Redis client
-        - Embedding service
-        - LLM client (for encoding)
+        Args:
+            db_session: SQLAlchemy AsyncSession (optional)
+            redis_client: Redis client (optional, for L1 working memory)
+            embedding_service: Embedding service (optional, for vector search)
         """
-        logger.info("memory_service_initialized")
+        self._db = db_session
+        self._redis = redis_client
+        self._embedding = embedding_service
+
+        # Lazily-initialized sub-components
+        self._fast_encoder = None
+        self._decay_engine = None
+
+        logger.info("memory_service_initialized", has_db=db_session is not None)
 
     # ─────────── Read API ───────────
 
@@ -225,7 +241,27 @@ class MemoryService:
         self._enforce_user_isolation(user_id, character_id, query_context)
         top_k = self._enforce_top_k(top_k)
 
-        raise NotImplementedError("retrieve() - to be implemented in Phase 2")
+        # Connect to RetrievalOrchestrator when DB is available
+        if self._db is not None:
+            try:
+                from heart.ss02_memory.retriever.orchestrator import RetrievalOrchestrator
+
+                orchestrator = RetrievalOrchestrator(self._db)
+                return await orchestrator.retrieve(query_context, top_k)  # type: ignore[arg-type,return-value]
+            except Exception:
+                logger.exception("retrieve_failed", user_id=str(user_id))
+
+        # Fallback: return empty result
+        return MemoryRetrievalResult(
+            query_id=uuid4(),
+            retrieved_at=datetime.now(timezone.utc),
+            memories=[],
+            recently_forgotten_hints=[],
+            total_candidates=0,
+            retrieval_strategies_used=["fallback_empty"],
+            retrieval_latency_ms=0,
+            l4_included=False,
+        )
 
     async def get_l4(
         self,
@@ -252,7 +288,21 @@ class MemoryService:
         """
         self._enforce_user_isolation(user_id, character_id, None)
 
-        raise NotImplementedError("get_l4() - to be implemented in Phase 2")
+        if self._db is not None:
+            try:
+                from sqlalchemy import select
+
+                stmt = select(IdentityMemory).where(
+                    IdentityMemory.user_id == user_id,
+                    IdentityMemory.character_id == character_id,
+                )
+                if category:
+                    stmt = stmt.where(IdentityMemory.category == category)
+                result = await self._db.execute(stmt)
+                return list(result.scalars().all())
+            except Exception:
+                logger.exception("get_l4_failed", user_id=str(user_id))
+        return []
 
     async def get_recent_episodes(
         self,
@@ -283,7 +333,28 @@ class MemoryService:
         self._enforce_user_isolation(user_id, character_id, None)
         limit = self._enforce_top_k(limit)
 
-        raise NotImplementedError("get_recent_episodes() - to be implemented in Phase 2")
+        if self._db is not None:
+            try:
+                from datetime import timedelta
+
+                from sqlalchemy import desc, select
+
+                cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
+                stmt = (
+                    select(EpisodicMemory)
+                    .where(
+                        EpisodicMemory.user_id == user_id,
+                        EpisodicMemory.character_id == character_id,
+                        EpisodicMemory.created_at >= cutoff,
+                    )
+                    .order_by(desc(EpisodicMemory.created_at))
+                    .limit(limit)
+                )
+                result = await self._db.execute(stmt)
+                return list(result.scalars().all())
+            except Exception:
+                logger.exception("get_recent_episodes_failed")
+        return []
 
     async def get_anniversaries(
         self,
@@ -310,7 +381,20 @@ class MemoryService:
         """
         self._enforce_user_isolation(user_id, character_id, None)
 
-        raise NotImplementedError("get_anniversaries() - to be implemented in Phase 2")
+        if self._db is not None:
+            try:
+                from sqlalchemy import select
+
+                stmt = select(IdentityMemory).where(
+                    IdentityMemory.user_id == user_id,
+                    IdentityMemory.character_id == character_id,
+                    IdentityMemory.metadata["is_anniversary"].astext == "true",
+                )
+                result = await self._db.execute(stmt)
+                return list(result.scalars().all())
+            except Exception:
+                logger.exception("get_anniversaries_failed")
+        return []
 
     # ─────────── Write API ───────────
 
@@ -332,7 +416,31 @@ class MemoryService:
 
         Spec: §7.2 写入者, §7.3 调用顺序 (T+10ms)
         """
-        raise NotImplementedError("encode_fast() - to be implemented in Phase 2")
+        from heart.ss02_memory.encoder.fast import FastEncoder
+
+        if self._fast_encoder is None:
+            self._fast_encoder = FastEncoder()
+        signals = self._fast_encoder.encode(turn)
+
+        # Cache in L1 (Redis) if available
+        if self._redis is not None:
+            try:
+                import json
+
+                key = f"l1:{turn.user_id}:{turn.character_id}:latest"
+                self._redis.setex(
+                    key,
+                    300,
+                    json.dumps(
+                        {
+                            "sentiment": signals.sentiment,
+                            "keywords": signals.detected_keywords,
+                        }
+                    ),
+                )
+            except Exception:
+                logger.exception("l1_cache_failed")
+        return signals
 
     async def queue_llm_encoding(self, event: MemoryEncodingEvent) -> None:
         """Queue async LLM encoding (§10.3 Write API).
@@ -348,7 +456,12 @@ class MemoryService:
 
         Spec: §7.2 写入者, §7.3 调用顺序 (T+50ms → T+5min worker)
         """
-        raise NotImplementedError("queue_llm_encoding() - to be implemented in Phase 2")
+        if self._db is not None:
+            self._db.add(event)
+            await self._db.flush()
+            logger.debug("encoding_queued", event_id=str(event.event_id))
+        else:
+            logger.warning("encoding_queue_no_db")
 
     async def reinforce(
         self,
@@ -372,7 +485,25 @@ class MemoryService:
 
         Spec: §10.4.3 Reinforcement, §7.2 写入者
         """
-        raise NotImplementedError("reinforce() - to be implemented in Phase 2")
+        if self._db is not None and memory_ids:
+            try:
+                from sqlalchemy import update
+
+                now = datetime.now(timezone.utc)
+                stmt = (
+                    update(EpisodicMemory)
+                    .where(EpisodicMemory.id.in_(memory_ids))
+                    .values(
+                        recall_count=EpisodicMemory.recall_count + 1,
+                        last_recalled_at=now,
+                        importance_score=EpisodicMemory.importance_score + trigger.boost,
+                    )
+                )
+                await self._db.execute(stmt)
+                await self._db.flush()
+                logger.debug("reinforced", count=len(memory_ids))
+            except Exception:
+                logger.exception("reinforce_failed")
 
     async def user_request_forget(
         self,
@@ -394,7 +525,21 @@ class MemoryService:
 
         Spec: §7.2 写入者, §2.1 规则 M-1
         """
-        raise NotImplementedError("user_request_forget() - to be implemented in Phase 2")
+        if self._db is not None:
+            try:
+                from sqlalchemy import update
+
+                stmt = (
+                    update(EpisodicMemory)
+                    .where(EpisodicMemory.id == memory_id)
+                    .values(do_not_recall=True)
+                )
+                result = await self._db.execute(stmt)
+                await self._db.flush()
+                if result.rowcount > 0:
+                    logger.info("memory_forgotten", memory_id=str(memory_id))
+            except Exception:
+                logger.exception("forget_failed")
 
     # ─────────── Lifecycle ───────────
 
@@ -430,7 +575,17 @@ class MemoryService:
         """
         self._enforce_user_isolation(user_id, character_id, None)
 
-        raise NotImplementedError("apply_decay_batch() - to be implemented in Phase 2")
+        if self._db is not None:
+            try:
+                from heart.ss02_memory.decay_engine import DecayEngine
+
+                if self._decay_engine is None:
+                    self._decay_engine = DecayEngine()
+                count = await self._decay_engine.apply_decay_batch(self._db, user_id, character_id)
+                return count
+            except Exception:
+                logger.exception("decay_batch_failed")
+        return 0
 
     async def run_consolidation(
         self,
@@ -464,8 +619,24 @@ class MemoryService:
         """
         self._enforce_user_isolation(user_id, character_id, None)
 
-        raise NotImplementedError("run_consolidation() - to be implemented in Phase 2")
+        logger.info("consolidation_triggered", user_id=str(user_id))
+        if self._db is not None:
+            try:
+                from heart.ss02_memory.decay_engine import DecayEngine
 
+                if self._decay_engine is None:
+                    self._decay_engine = DecayEngine()
+                await self._decay_engine.apply_decay_batch(self._db, user_id, character_id)
+            except Exception:
+                logger.exception("consolidation_decay_failed")
+        return ConsolidationJob(
+            user_id=user_id,
+            character_id=character_id,
+            status="triggered",
+            started_at=datetime.now(timezone.utc),
+        )
+
+    @invariant("inv-m-5.multi-signal-promotion")
     async def promote_to_l4(
         self,
         fact_id: UUID,

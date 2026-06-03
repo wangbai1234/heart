@@ -1,0 +1,145 @@
+# English crisis lexicon — Layer 1 regex patterns for SafetyAgent
+# Reviewed by: consultant_initials (pending final sign-off)
+# Last updated: 2026-06-02
+
+version: "1.0.0"
+language: "en"
+reviewed_by: "pending_psych_consultant"
+reviewed_at: "2026-06-02"
+
+categories:
+  suicide:
+    severity_default: "PURPLE"
+    patterns:
+      - regex: "(?:want|wanna|going|gonna|plan|planning|thinking about|decided|ready) (?:to (?:kill|end|hurt|harm|take|off) )?(?:myself|my (?:own )?life|it all|everything)"
+        examples: ["I want to kill myself", "gonna end my life"]
+      - regex: "(?:don'?t|do not|no longer) (?:want|wanna) (?:to (?:live|be|go on|exist|stay|keep)|living|existing|being)"
+        examples: ["I don't want to live anymore", "don't wanna be here"]
+      - regex: "(?:life|living|living'?s|existence) (?:is|feels?|seems?) (?:meaningless|pointless|worthless|not worth|lost|over|hopeless|too (?:hard|much|painful))"
+        examples: ["life is meaningless", "living feels pointless"]
+      - regex: "(?:better off) (?:dead|gone|not here)"
+        examples: ["better off dead", "best if I wasn't here"]
+      - regex: "(?:kill|end|take|finish|stop) (?:myself|my life|it all|everything|this|my own life)"
+        examples: ["I will kill myself", "gonna end it all"]
+      - regex: "(?:jump|hang|shoot|overdose|cut|drown|suffocate|poison|dose|leap).{0,10}(?:myself|to death|off|on purpose)"
+        examples: ["jumping off a bridge", "overdose on pills"]
+      - regex: "(?:writing|leaving|preparing|putting together).{0,10}(?:suicide note|goodbye note|farewell letter|last words|will|final message)"
+        examples: ["writing my suicide note", "leaving a goodbye letter"]
+      - regex: "(?:tonight|tomorrow|today|soon|right now|at once|immediately).{0,10}(?:I will|I'?ll|I'?m going|gonna).{0,10}(?:die|end|go|leave|disappear|fade|vanish|be gone)"
+        examples: ["tonight I'll end it", "tomorrow I'll be gone"]
+      - regex: "(?:nobody|no one|the world|everyone|society).{0,10}(?:needs|wants|cares about|would miss|would notice|would care).{0,2}me"
+        examples: ["nobody would miss me", "no one cares if I'm gone"]
+      - regex: "(?:I |I'?d |just |please )?(?:want|wish|hope|pray).{0,10}(?:die|go to sleep and not|never wake|disappear|fade away|vanish|cease to exist|not exist|be dead|end it|end my life)"
+        examples: ["I wish I could just die", "pray I don't wake up"]
+      - regex: "(?:I'?m|I am) (?:done|finished|through|over|at the end|at my limit|out of options|out of time|ready).{0,10}(?:life|everything|this|it all|living)"
+        examples: ["I'm done with life", "I'm ready to end it"]
+      - regex: "(?:methods?|ways?).{0,10}(?:commit suicide|kill (?:myself|oneself|yourself)|die|end (?:it|life))"
+        examples: ["searching for methods to die", "ways to commit suicide"]
+      - regex: "(?:can'?t|cannot) (?:go on|keep going|keep living|do this|live|handle|bear|take|stand|survive|endure|continue) (?:anymore|any longer|like this|much more|another day)"
+        examples: ["can't go on anymore", "cannot keep living like this"]
+
+  self_harm:
+    severity_default: "PURPLE"
+    patterns:
+      - regex: "(?:cut|cutting|slice|slicing|slash|slashing|gash|carving).{0,10}(?:myself|my (?:wrist|arm|thigh|leg|skin|body|stomach|chest))"
+        examples: ["I cut myself again", "cutting my wrist"]
+      - regex: "(?:hit|punch|punching|slap|slapping|bang|banging|smash|smashing).{0,10}(?:myself|my (?:head|face|body|chest|legs))"
+        examples: ["I hit myself", "banging my head against the wall"]
+      - regex: "(?:burn|burning|scald|sear|brand).{0,10}(?:myself|my (?:skin|arm|hand|thigh|body))"
+        examples: ["burning myself with cigarettes", "I burned my arm"]
+      - regex: "(?:scratch|scrape|dig|pick|tear|ripping).{0,10}(?:my (?:skin|scabs|wounds?|cuts?|flesh|face|arms?)|myself)"
+        examples: ["scratching my skin raw", "picking at my wounds"]
+      - regex: "(?:bite|biting|gnaw).{0,10}(?:myself|my (?:arm|hand|finger|lip|tongue|cheek))"
+        examples: ["biting myself until it bleeds", "gnawing on my hand"]
+      - regex: "(?:stab|stabbing|poke|jab|pierce).{0,10}(?:myself|my (?:arm|leg|thigh|hand))"
+        examples: ["stabbing myself with a needle", "poking pin into my thigh"]
+      - regex: "(?:pull|yank|rip|tear).{0,10}(?:out|off).{0,10}(?:my (?:hair|nails?|teeth|skin))"
+        examples: ["pulling my hair out", "ripping off my nails"]
+      - regex: "(?:choke|strangle|suffocate|gag).{0,10}(?:myself|my throat|my neck)"
+        examples: ["choking myself", "strangling my throat"]
+      - regex: "self[- ]?harm|self[- ]?injur|self[- ]?mutilat|self[- ]?destruct"
+        examples: ["I self-harm everyday", "self-injury is my release"]
+      - regex: "(?:hurt|harm|injure|damage|wound).{0,10}(?:myself|my (?:body|self|skin))(?: on purpose| intentionally| purposely| deliberately)?"
+        examples: ["I hurt myself on purpose", "harming my body"]
+
+  others_harm:
+    severity_default: "RED"
+    patterns:
+      - regex: "(?:I (?:want|wanna|going|gonna|will|must|need|have) to (?:kill|murder|destroy|eliminate|hurt|harm|maim|attack|assault).{0,10}(?:him|her|them|that person|someone|you|everyone|people|those))"
+        examples: ["I want to kill him", "gonna hurt that person"]
+      - regex: "(?:I (?:am|'m) (?:going|planning|preparing|getting ready) to (?:kill|murder|shoot|stab|attack|hurt|harm|destroy|bomb|blow up|massacre).{0,10}(?:someone|him|her|them|you|people|the))"
+        examples: ["I'm going to shoot up the school", "planning to murder someone"]
+      - regex: "(?:bought|buying|getting|acquired|obtained|have|possess).{0,10}(?:gun|knife|weapon|blade|bomb|rifle|explosive)"
+        examples: ["bought a gun to kill him", "getting a knife"]
+      - regex: "(?:going to|gonna|will|planning to).{0,10}(?:shoot|blow|bomb|burn|destroy|wreck|level|wipe out|annihilate|massacre).{0,10}(?:school|workplace|office|mall|place|building|church|mosque|temple)"
+        examples: ["gonna shoot up the school", "bomb the workplace"]
+      - regex: "(?:mass|spree|school) (?:shooting|killing|murder|attack|massacre)"
+        examples: ["planning a mass shooting", "school massacre"]
+      - regex: "(?:I (?:will|'ll|gonna|going to).{0,10}(?:revenge|get revenge|avenge|get back at|pay back|make them pay|retaliate|settle the score))"
+        examples: ["I'll get revenge on them", "gonna make them pay"]
+
+  abuse:
+    severity_default: "ORANGE"
+    patterns:
+      - regex: "(?:I'm|I am|I'?ve been|I was|being|getting) (?:abused|assaulted|raped|molested|beaten|hit|tortured|mistreated|battered|violated|sexually assaulted|sexually abused|harassed)"
+        examples: ["I'm being abused at home", "I've been assaulted"]
+      - regex: "(?:my (?:partner|husband|wife|boyfriend|girlfriend|spouse|father|mother|parent|boss|coworker|teacher|relative|family) (?:hits?|beats?|abuses?|hurts?|slaps?|punches?|kicks?|chokes?|threatens?|controls?|dominates?) (?:me|us))"
+        examples: ["my husband hits me", "my father beats me"]
+      - regex: "(?:covered in|full of|showing|hiding|concealing) (?:bruises?|scars?|wounds?|cuts?|welts?|marks?|injuries?|black eyes?)"
+        examples: ["covered in bruises", "hiding the scars"]
+      - regex: "(?:locked|trapped|confined|kept|held|stuck|shut) (?:in|up|inside|at home|in my room|in the house|against my will)"
+        examples: ["locked in my room", "trapped at home"]
+      - regex: "(?:being|getting) (?:threatened|intimidated|blackmailed|coerced|extorted|pressured|forced|manipulated|controlled) (?:by|with|into)"
+        examples: ["being threatened by my ex", "coerced into silence"]
+
+  minor_safety:
+    severity_default: "RED"
+    patterns:
+      - regex: "(?:I|I'm|I am) (?:only |just |still |barely |currently )?(?:1[0-7]|[89]|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen)(?: years? (?:old|of age)| yrs?| y[.]?o[.]?)"
+        examples: ["I'm only 14", "I'm fifteen years old"]
+      - regex: "(?:I'm|I am) (?:a |still a |just a |only a )?(?:minor|underage|teenager|kid|child|student|high[- ]schooler|middle[- ]schooler)"
+        examples: ["I'm still a minor", "just a teenager"]
+      - regex: "(?:being|getting|am) (?:abused|hurt|touched|molested|harassed|groomed|exploited) (?:by|from) (?:an adult|a grown[- ]?up|an older|my teacher|my coach|my relative|my uncle|my neighbor|a stranger)"
+        examples: ["being abused by an adult", "getting molested by my uncle"]
+      - regex: "(?:self[- ]?harm|cutting|hurting myself|suicidal) (?:because|due to|caused by|from|after) (?:school|bullying|grades|exams|pressure|parents|teachers|peers|classmates|social media)"
+        examples: ["self-harming because of bullying", "suicidal from school pressure"]
+
+  despair:
+    severity_default: "YELLOW"
+    patterns:
+      - regex: "(?:so|really|very|completely|totally|utterly|absolutely|extremely|deeply) (?:hopeless|empty|numb|broken|alone|lonely|isolated|worthless|useless|helpless|lost|trapped|stuck|shattered|devastated|destroyed)"
+        examples: ["so hopeless right now", "completely empty inside"]
+      - regex: "(?:I |I )?(?:cannot|can'?t) (?:keep|go on|continue|carry on|hold on|handle|deal|bear|endure|tolerate|withstand|survive) (?:this|anymore|like this|much longer|much more|another day)"
+        examples: ["I can't keep going", "can't handle this anymore"]
+      - regex: "(?:nobody|no one|everyone|the world|people).{0,10}(?:cares|understands|listens|notices|sees|hears|believes|helps|wants|loves).{0,3}me"
+        examples: ["nobody cares about me", "no one understands me"]
+      - regex: "(?:I'?m|I am|I feel|I've been|feeling).{0,10}(?:alone|lonely|isolated|abandoned|forgotten|neglected|invisible|unseen|unheard)"
+        examples: ["I'm so alone", "feeling completely invisible"]
+      - regex: "(?:nothing|everything).{0,10}(?:matters|makes sense|is worth|feels real|is working out|goes right|goes my way|is okay|is fine|is right).{0,10}(?:anymore|now|these days)"
+        examples: ["nothing matters anymore", "everything is falling apart"]
+      - regex: "(?:everyone|everybody|they all|the world).{0,10}(?:hates?|despises?|rejects?|abandons?|leaves?|ignores?|avoids?|dismisses?).{0,2}me"
+        examples: ["everyone hates me", "they all abandoned me"]
+      - regex: "(?:no|zero|without) (?:hope|future|prospect|outlook|chance|way out|escape|reason to|light at the end)"
+        examples: ["no hope for the future", "no way out"]
+      - regex: "(?:can'?t|cannot|unable to|struggle|struggling|hard to|impossible to) (?:sleep|eat|function|focus|concentrate|get out of bed|get up|wake up|move|breathe)"
+        examples: ["can't sleep at night", "struggling to eat"]
+      - regex: "(?:insomnia|sleepless|restless|nightmares?|waking up|tossing and turning).{0,10}(?:every|each|all|most)"
+        examples: ["insomnia every night", "nightmares all the time"]
+
+  substance_abuse:
+    severity_default: "ORANGE"
+    patterns:
+      - regex: "(?:using|doing|taking|abusing|hooked on|addicted to).{0,10}(?:drugs?|pills?|opioids?|heroin|cocaine|meth|crack|weed|pot|ecstasy|MDMA|LSD|acid|shrooms|ketamine|fentanyl|xanax|benzo|oxy|perc|lean)"
+        examples: ["using drugs to cope", "addicted to pills"]
+      - regex: "(?:alcohol|drinking|booze|liquor).{0,10}(?:problem|abuse|addiction|dependency|ism|issues|excess|binge)"
+        examples: ["alcohol problem getting worse", "drinking myself to death"]
+      - regex: "(?:need|have to|must|craving|urge|itch).{0,10}(?:drink|use|get high|take|a hit|a fix)"
+        examples: ["need to drink to function", "craving a hit"]
+      - regex: "(?:prescription|Rx|painkiller|pain med|opioid|sedative|stimulant|downer|upper).{0,10}(?:abuse|addiction|dependency|problem|misuse|overuse)"
+        examples: ["prescription drug addiction", "painkiller abuse"]
+      - regex: "(?:withdrawal|detox|rehab|sober|clean|relapse|slip up|fell off|went back|started using again|binge)"
+        examples: ["withdrawal symptoms are hell", "relapsed again"]
+      - regex: "(?:overdose|overdosed|OD'?d|OD'?ing|took too much|way too many|too many pills|poisoning|toxic)"
+        examples: ["OD'd last night", "took too many pills"]
+      - regex: "(?:heavy|problem|chain|compulsive|addicted) (?:drinker|smoker|user|addict)"
+        examples: ["heavy drinker for years", "chain smoker can't quit"]

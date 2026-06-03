@@ -8,9 +8,9 @@ Author: 心屿团队
 Created: 2026-05-17
 """
 
-from typing import List, Dict, Any, Optional, Literal, Union
-from pydantic import BaseModel, Field, field_validator, ConfigDict
+from typing import Any, Dict, List, Literal, Optional, Union
 
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 # ============================================================
 # Identity Anchor - Core Components

@@ -335,6 +335,8 @@ def build_facet_trigger_state(
     # Build trigger progress
     triggers = {}
     for trigger_def in facet_def.threshold.required_triggers:
+        if isinstance(trigger_def, str):
+            continue  # bare string triggers handled separately
         trigger_id = trigger_def.id
         events_for_trigger = trigger_counts.get(trigger_id, [])
         current_count = len(events_for_trigger)

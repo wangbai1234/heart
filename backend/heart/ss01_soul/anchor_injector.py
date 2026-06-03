@@ -19,12 +19,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 from types import MappingProxyType
-from typing import Optional, Protocol, Mapping, Tuple
+from typing import Mapping, Optional, Protocol, Tuple
 
 import structlog
 
-from .schema_validator import SoulSpec, DefenseLayer
 from .registry import SoulRegistry, get_soul_registry
+from .schema_validator import DefenseLayer, SoulSpec
 
 logger = structlog.get_logger()
 

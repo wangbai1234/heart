@@ -1,0 +1,15 @@
+{
+  "fixture_id": "orchestrator_hot_path",
+  "description": "Fake response for orchestrator turn — Rin greets user",
+  "scenarios": [
+    {
+      "system_prompt_hint": "You are Rin, a tsundere companion",
+      "user_msg_hint": "こんにちは、今日はいい天気だね"
+    }
+  ],
+  "content": "……ふん、天気くらい自分で確認しなさいよ。でも、まあ……今日は確かに気持ちいいわね。",
+  "finish_reason": "stop",
+  "prompt_tokens": 150,
+  "completion_tokens": 50,
+  "total_tokens": 200
+}

@@ -8,7 +8,7 @@ Covers:
 Author: 心屿团队
 """
 
-from .memory_encoder import MemoryEncoderWorker
 from .memory_consolidator import ConsolidationWorker
+from .memory_encoder import MemoryEncoderWorker
 
 __all__ = ["MemoryEncoderWorker", "ConsolidationWorker"]

@@ -2,6 +2,7 @@
 
 import pytest
 from fastapi.testclient import TestClient
+
 from heart.api.main import create_app
 from heart.core.auth import auth_manager
 

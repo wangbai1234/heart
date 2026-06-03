@@ -49,25 +49,27 @@ print(f"Cost: ${cost:.6f}")
 ### 2. Integration with LLM Providers
 
 ```python
-from heart.infra.llm_providers import get_provider_for_model, LLMRequest
+from heart.infra.llm.router import ModelRouter
+from heart.infra.llm.config import LLMProviderConfig
 from heart.infra.llm_cost_tracker import LLMCostTracker, LLMCall
 
 # Initialize
-provider = get_provider_for_model("deepseek-reasoner")
+config = LLMProviderConfig()
+router = ModelRouter(config)
 tracker = LLMCostTracker()
 
 # Make LLM call
-request = LLMRequest(messages=[...], model="deepseek-reasoner")
-response = await provider.call(request)
+messages = [{"role": "user", "content": "Hello"}]
+response_text = await router.call_main(messages=messages)
 
-# Record cost
+# Record cost (note: requires token counts from provider response)
 call = LLMCall(
-    model=response.model,
-    prompt_tokens=response.usage["prompt_tokens"],
-    completion_tokens=response.usage["completion_tokens"],
+    model="deepseek-reasoner",
+    prompt_tokens=150,
+    completion_tokens=50,
     user_id="user_123",
     agent_name="main_companion",
-    provider=response.provider,
+    provider="deepseek",
 )
 
 await tracker.record(call)
@@ -201,7 +203,7 @@ Cost = (10 / 1M) * $0.55 + (50 / 1M) * $2.19
 
 ### Daily Cost Target
 
-- **Goal**: $0.007 - $0.01 per user per day (per CHANGES_SUMMARY.md)
+- **Goal**: $0.007 - $0.01 per user per day (per `docs/archive/2026-05-15_llm_simplification.md`)
 - **Budget**: 100 exchanges/day with DeepSeek
 - **Actual**: ~$0.01/day for typical usage
 
@@ -501,7 +503,7 @@ backend/tests/unit/
 
 - **Spec**: `/runtime_specs/08_engineering_architecture.md` §6.2
 - **LLM Providers**: `backend/heart/infra/llm_providers/README.md`
-- **Strategy**: `/CHANGES_SUMMARY.md`
+- **Strategy**: `/docs/archive/2026-05-15_llm_simplification.md`
 
 ---
 

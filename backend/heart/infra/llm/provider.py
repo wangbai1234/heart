@@ -1,14 +1,17 @@
 """LLM 提供商抽象和 DeepSeek 实现"""
 
+import json
 from abc import ABC, abstractmethod
 from typing import AsyncGenerator, Optional
+
 import httpx
-import json
-import logging
+import structlog
+
+from heart.observability.turn_profiler import TurnProfiler
 
 from .config import DeepSeekConfig, ModelConfig
 
-logger = logging.getLogger(__name__)
+logger = structlog.get_logger()
 
 
 class LLMProvider(ABC):
@@ -96,9 +99,19 @@ class DeepSeekProvider(LLMProvider):
 
             # 记录 token 使用量用于成本计算
             usage = data.get("usage", {})
-            await self._record_usage(
-                model.name, usage.get("prompt_tokens", 0), usage.get("completion_tokens", 0)
-            )
+            prompt_tokens = usage.get("prompt_tokens", 0)
+            completion_tokens = usage.get("completion_tokens", 0)
+            cost = await self._record_usage(model.name, prompt_tokens, completion_tokens)
+
+            # Annotate active profiler span with usage data
+            p = TurnProfiler.current()
+            if p.enabled and p.current_span_name() == "model_router":
+                p.annotate(
+                    model_name=model.name,
+                    input_tokens=prompt_tokens,
+                    output_tokens=completion_tokens,
+                    cost_usd=cost,
+                )
 
             return data["choices"][0]["message"]["content"]
 
@@ -155,7 +168,7 @@ class DeepSeekProvider(LLMProvider):
         output_cost = (output_tokens / 1_000_000) * pricing.get("output", 0)
         return input_cost + output_cost
 
-    async def _record_usage(self, model_name: str, input_tokens: int, output_tokens: int):
+    async def _record_usage(self, model_name: str, input_tokens: int, output_tokens: int) -> float:
         """记录 token 使用量（用于监控和计费）"""
         cost = await self.estimate_cost(
             ModelConfig(name=model_name, provider="deepseek", max_tokens=4000),
@@ -166,6 +179,7 @@ class DeepSeekProvider(LLMProvider):
             f"LLM usage: model={model_name}, input={input_tokens}, "
             f"output={output_tokens}, cost=${cost:.4f}"
         )
+        return cost
 
     async def close(self):
         """关闭连接"""

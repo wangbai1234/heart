@@ -16,7 +16,6 @@ from uuid import UUID
 
 from heart.ss02_memory.models import EpisodicMemory, FactNode, IdentityMemory
 
-
 # ============================================================
 # Query Context
 # ============================================================

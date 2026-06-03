@@ -22,16 +22,18 @@ Author: 心屿团队
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 from datetime import datetime, timedelta, timezone
 from uuid import UUID, uuid4
 
 import structlog
-from sqlalchemy import select, and_
+from sqlalchemy import and_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from heart.infra.llm.router import get_model_router
 from heart.prompts.episode_summary import EPISODE_SUMMARY_PROMPT
+from heart.ss02_memory.decay_engine import DecayEngine
 from heart.ss02_memory.models import (
     ConsolidationJob,
     EpisodicMemory,
@@ -39,9 +41,26 @@ from heart.ss02_memory.models import (
     IdentityMemory,
     MemoryEncodingEvent,
 )
-from heart.ss02_memory.decay_engine import DecayEngine
 
 logger = structlog.get_logger()
+
+
+# ============================================================
+# Helpers
+# ============================================================
+
+
+def _compute_advisory_lock_keys(user_id: UUID, character_id: str) -> tuple[int, int]:
+    """Compute two int32 keys for Postgres advisory lock from user_id and character_id.
+
+    Uses MD5 hash to generate deterministic keys within int32 range.
+    """
+    combined = f"{user_id}:{character_id}".encode("utf-8")
+    digest = hashlib.md5(combined).digest()
+    # Use first 8 bytes: split into two int32 values
+    key1 = int.from_bytes(digest[:4], byteorder="big", signed=True) % 2147483647
+    key2 = int.from_bytes(digest[4:8], byteorder="big", signed=True) % 2147483647
+    return (key1, key2)
 
 
 # ============================================================
@@ -108,7 +127,7 @@ class EpisodeClusterer:
         episodes = []
         current_episode = []
 
-        for i, turn_id in enumerate(turn_ids):
+        for _i, turn_id in enumerate(turn_ids):
             current_episode.append(turn_id)
 
             # Check if we should start new episode
@@ -190,13 +209,13 @@ class EpisodeSummarizer:
                 timeout=LLM_TIMEOUT_SECONDS,
             )
         except asyncio.TimeoutError:
-            raise TimeoutError(f"LLM call timed out after {LLM_TIMEOUT_SECONDS}s")
+            raise TimeoutError(f"LLM call timed out after {LLM_TIMEOUT_SECONDS}s") from None
 
         # Parse JSON
         try:
             data = json.loads(response)
         except json.JSONDecodeError as e:
-            raise ValueError(f"Invalid JSON from LLM: {e}")
+            raise ValueError(f"Invalid JSON from LLM: {e}") from e
 
         # Validate required fields
         required_fields = [
@@ -273,7 +292,7 @@ class FactReconciler:
                     FactNode.predicate == new_fact.predicate,
                     FactNode.subject == new_fact.subject,
                     FactNode.id != new_fact.id,
-                    FactNode.do_not_recall == False,
+                    ~FactNode.do_not_recall,
                 )
             )
 
@@ -299,7 +318,7 @@ class FactReconciler:
                 else:
                     # Contradicting
                     existing.contradiction_count = (existing.contradiction_count or 0) + 1
-                    existing.contradicted_by_ids = (existing.contradicted_by_ids or []) + [
+                    existing.contradicting_fact_ids = (existing.contradicting_fact_ids or []) + [
                         new_fact.id
                     ]
                     contradicted.append(existing.id)
@@ -351,11 +370,11 @@ class L4Promoter:
                 and_(
                     FactNode.user_id == user_id,
                     FactNode.character_id == character_id,
-                    FactNode.importance_score >= L4_MIN_IMPORTANCE,
-                    FactNode.do_not_recall == False,
+                    FactNode.importance >= L4_MIN_IMPORTANCE,
+                    ~FactNode.do_not_recall,
                 )
             )
-            .order_by(FactNode.importance_score.desc())
+            .order_by(FactNode.importance.desc())
             .limit(50)
         )
 
@@ -375,7 +394,7 @@ class L4Promoter:
             # Trigger B: High confirmation + importance
             elif (
                 fact.confirmation_count >= L4_MIN_CONFIRMATION_COUNT
-                and fact.importance_score >= L4_MIN_IMPORTANCE
+                and fact.importance >= L4_MIN_IMPORTANCE
             ):
                 should_promote = True
                 reason = "high_confirmation_and_importance"
@@ -391,7 +410,7 @@ class L4Promoter:
                     and_(
                         IdentityMemory.user_id == user_id,
                         IdentityMemory.character_id == character_id,
-                        IdentityMemory.source_fact_id == fact.id,
+                        IdentityMemory.source_episode_id == fact.id,  # type: ignore[attr-defined]
                     )
                 )
                 result = await session.execute(existing_stmt)
@@ -500,6 +519,7 @@ class ConsolidationWorker:
         self.db_session_factory = db_session_factory
         self.decay_engine = DecayEngine()
         self._should_stop = False
+        self._cleanup_counter = 0  # Trigger cleanup every N loops
 
         logger.info("consolidation_worker_initialized")
 
@@ -512,6 +532,14 @@ class ConsolidationWorker:
 
         while not self._should_stop:
             try:
+                # Periodic cleanup (every 60 loops = ~1 hour)
+                self._cleanup_counter += 1
+                if self._cleanup_counter >= 60:
+                    async with self.db_session_factory() as session:
+                        await self._cleanup_old_encoding_events(session)
+                        await self._cleanup_old_consolidation_jobs(session)
+                    self._cleanup_counter = 0
+
                 # Fetch pending jobs
                 async with self.db_session_factory() as session:
                     jobs = await self._fetch_pending_jobs(session)
@@ -576,16 +604,18 @@ class ConsolidationWorker:
 
         return list(jobs)
 
-    async def _process_job(self, job: ConsolidationJob):
+    async def _process_job(self, job: ConsolidationJob):  # noqa: C901
         """Process a consolidation job.
 
         Runs 8-step pipeline per §3.6.
+        Uses Postgres advisory lock per (user_id, character_id) to prevent concurrent consolidation.
 
         Args:
             job: Consolidation job to process
         """
         start_time = datetime.now(timezone.utc)
         job_id = str(job.job_id)
+        lock_key1, lock_key2 = _compute_advisory_lock_keys(job.user_id, job.character_id)
 
         logger.info(
             "consolidation_job_started",
@@ -593,9 +623,26 @@ class ConsolidationWorker:
             user_id=str(job.user_id),
             character_id=job.character_id,
             scheduled_for=job.scheduled_for.isoformat(),
+            lock_keys=(lock_key1, lock_key2),
         )
 
         async with self.db_session_factory() as session:
+            # Acquire advisory lock (non-blocking)
+            lock_result = await session.execute(
+                text("SELECT pg_try_advisory_lock(:key1, :key2)"),
+                {"key1": lock_key1, "key2": lock_key2},
+            )
+            acquired = lock_result.scalar()
+
+            if not acquired:
+                logger.warning(
+                    "consolidation_lock_failed",
+                    job_id=job_id,
+                    user_id=str(job.user_id),
+                    character_id=job.character_id,
+                    reason="another worker holds the lock",
+                )
+                return
             # Reload job to ensure we have latest state
             stmt = select(ConsolidationJob).where(ConsolidationJob.job_id == job.job_id)
             result = await session.execute(stmt)
@@ -618,7 +665,7 @@ class ConsolidationWorker:
             current_job.started_at = start_time
             await session.commit()
 
-            try:
+            try:  # Lock will be released in finally block
                 # Step 1: Aggregate pending events
                 pending_events = await self._aggregate_pending_events(
                     session, job.user_id, job.character_id
@@ -756,6 +803,19 @@ class ConsolidationWorker:
                 )
                 raise
 
+            finally:
+                # Release advisory lock
+                await session.execute(
+                    text("SELECT pg_advisory_unlock(:key1, :key2)"),
+                    {"key1": lock_key1, "key2": lock_key2},
+                )
+                logger.debug(
+                    "consolidation_lock_released",
+                    job_id=job_id,
+                    user_id=str(job.user_id),
+                    character_id=job.character_id,
+                )
+
     async def _aggregate_pending_events(
         self,
         session: AsyncSession,
@@ -844,7 +904,7 @@ class ConsolidationWorker:
             and_(
                 FactNode.user_id == user_id,
                 FactNode.character_id == character_id,
-                FactNode.do_not_recall == False,
+                ~FactNode.do_not_recall,
             )
         )
 
@@ -854,10 +914,10 @@ class ConsolidationWorker:
         # Apply decay
         for fact in facts:
             new_importance = self.decay_engine.calculate_current_importance(
-                initial_importance=fact.importance,
+                initial_importance=fact.importance,  # type: ignore[attr-defined]
                 created_at=fact.created_at,
-                emotional_peak_valence=fact.emotional_charge,
-                emotional_peak_arousal=abs(fact.emotional_charge),
+                emotional_peak_valence=fact.emotional_charge,  # type: ignore[attr-defined]
+                emotional_peak_arousal=abs(fact.emotional_charge),  # type: ignore[attr-defined]
                 recall_count=fact.recall_count or 0,
                 decay_immunity=0.0,
             )
@@ -910,3 +970,85 @@ class ConsolidationWorker:
             character_id=character_id,
             count=len(identities),
         )
+
+    async def _cleanup_old_encoding_events(
+        self,
+        session: AsyncSession,
+        retention_days: int = 7,
+    ):
+        """Clean up old encoding events (retention policy per F30).
+
+        Deletes events that are:
+        - status='llm_done' OR status='failed'
+        - AND created_at < (now - retention_days)
+
+        Args:
+            session: Database session
+            retention_days: Retention period in days (default 7)
+        """
+        cutoff_time = datetime.now(timezone.utc) - timedelta(days=retention_days)
+
+        stmt = select(MemoryEncodingEvent).where(
+            and_(
+                MemoryEncodingEvent.status.in_(["llm_done", "failed"]),
+                MemoryEncodingEvent.created_at < cutoff_time,
+            )
+        )
+
+        result = await session.execute(stmt)
+        events_to_delete = result.scalars().all()
+
+        for event in events_to_delete:
+            await session.delete(event)
+
+        await session.commit()
+
+        logger.info(
+            "encoding_events_cleaned_up",
+            deleted_count=len(events_to_delete),
+            retention_days=retention_days,
+            cutoff_time=cutoff_time.isoformat(),
+        )
+
+        return len(events_to_delete)
+
+    async def _cleanup_old_consolidation_jobs(
+        self,
+        session: AsyncSession,
+        retention_days: int = 90,
+    ):
+        """Clean up old consolidation jobs (retention policy per F31).
+
+        Deletes jobs that are:
+        - status='succeeded'
+        - AND completed_at < (now - retention_days)
+
+        Args:
+            session: Database session
+            retention_days: Retention period in days (default 90)
+        """
+        cutoff_time = datetime.now(timezone.utc) - timedelta(days=retention_days)
+
+        stmt = select(ConsolidationJob).where(
+            and_(
+                ConsolidationJob.status == "succeeded",
+                ConsolidationJob.completed_at < cutoff_time,
+            )
+        )
+
+        result = await session.execute(stmt)
+        jobs_to_delete = result.scalars().all()
+
+        for job in jobs_to_delete:
+            await session.delete(job)
+
+        await session.commit()
+
+        logger.info(
+            "consolidation_jobs_cleaned_up",
+            deleted_count=len(jobs_to_delete),
+            retention_days=retention_days,
+            cutoff_time=cutoff_time.isoformat(),
+        )
+
+        return len(jobs_to_delete)

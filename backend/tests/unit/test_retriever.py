@@ -16,24 +16,23 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime, timedelta, timezone
+from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 
 from heart.ss02_memory.models import EpisodicMemory, FactNode, IdentityMemory
 from heart.ss02_memory.retriever import (
-    QueryContext,
-    ScoredMemory,
-    RetrievalOrchestrator,
-    VectorRetriever,
-    RecencyRetriever,
     EmotionalRetriever,
     IdentityLookup,
+    QueryContext,
+    RecencyRetriever,
+    RetrievalOrchestrator,
+    ScoredMemory,
+    VectorRetriever,
     combine_scores,
     select_top_k,
 )
-
 
 # ============================================================
 # Fixtures
@@ -184,14 +183,7 @@ class TestScoreCombination:
 
         combine_scores(candidates)
 
-        expected = (
-            0.30 * 0.9
-            + 0.20 * 0.7
-            + 0.15 * 0.6
-            + 0.15 * 0.8
-            + 0.10 * 0.5
-            + 0.10 * 1.0
-        )
+        expected = 0.30 * 0.9 + 0.20 * 0.7 + 0.15 * 0.6 + 0.15 * 0.8 + 0.10 * 0.5 + 0.10 * 1.0
 
         assert abs(candidates[0].score - expected) < 0.01
 
@@ -381,18 +373,17 @@ class TestRetrievalOrchestrator:
     """Tests for RetrievalOrchestrator."""
 
     @pytest.mark.asyncio
-    async def test_orchestrator_runs_strategies_in_parallel(
-        self, mock_db_session, query_context
-    ):
+    async def test_orchestrator_runs_strategies_in_parallel(self, mock_db_session, query_context):
         """Should run all strategies in parallel."""
         orchestrator = RetrievalOrchestrator(mock_db_session)
 
         # Mock strategies to return empty results
-        with patch.object(VectorRetriever, "retrieve", new_callable=AsyncMock) as mock_vector, \
-             patch.object(RecencyRetriever, "retrieve", new_callable=AsyncMock) as mock_recency, \
-             patch.object(EmotionalRetriever, "retrieve", new_callable=AsyncMock) as mock_emotional, \
-             patch.object(IdentityLookup, "retrieve", new_callable=AsyncMock) as mock_identity:
-
+        with (
+            patch.object(VectorRetriever, "retrieve", new_callable=AsyncMock) as mock_vector,
+            patch.object(RecencyRetriever, "retrieve", new_callable=AsyncMock) as mock_recency,
+            patch.object(EmotionalRetriever, "retrieve", new_callable=AsyncMock) as mock_emotional,
+            patch.object(IdentityLookup, "retrieve", new_callable=AsyncMock) as mock_identity,
+        ):
             mock_vector.return_value = []
             mock_recency.return_value = []
             mock_emotional.return_value = []
@@ -409,9 +400,7 @@ class TestRetrievalOrchestrator:
             assert result.total_candidates == 0
 
     @pytest.mark.asyncio
-    async def test_orchestrator_merges_candidates(
-        self, mock_db_session, query_context, l2_memory
-    ):
+    async def test_orchestrator_merges_candidates(self, mock_db_session, query_context, l2_memory):
         """Should merge candidates from different strategies."""
         orchestrator = RetrievalOrchestrator(mock_db_session)
 
@@ -432,11 +421,12 @@ class TestRetrievalOrchestrator:
             retrieved_by=["recency"],
         )
 
-        with patch.object(VectorRetriever, "retrieve", new_callable=AsyncMock) as mock_vector, \
-             patch.object(RecencyRetriever, "retrieve", new_callable=AsyncMock) as mock_recency, \
-             patch.object(EmotionalRetriever, "retrieve", new_callable=AsyncMock) as mock_emotional, \
-             patch.object(IdentityLookup, "retrieve", new_callable=AsyncMock) as mock_identity:
-
+        with (
+            patch.object(VectorRetriever, "retrieve", new_callable=AsyncMock) as mock_vector,
+            patch.object(RecencyRetriever, "retrieve", new_callable=AsyncMock) as mock_recency,
+            patch.object(EmotionalRetriever, "retrieve", new_callable=AsyncMock) as mock_emotional,
+            patch.object(IdentityLookup, "retrieve", new_callable=AsyncMock) as mock_identity,
+        ):
             mock_vector.return_value = [scored_memory_1]
             mock_recency.return_value = [scored_memory_2]
             mock_emotional.return_value = []
@@ -456,15 +446,14 @@ class TestRetrievalOrchestrator:
             assert set(merged.retrieved_by) == {"vector", "recency"}
 
     @pytest.mark.asyncio
-    async def test_orchestrator_handles_strategy_failure(
-        self, mock_db_session, query_context
-    ):
+    async def test_orchestrator_handles_strategy_failure(self, mock_db_session, query_context):
         """Should continue if one strategy fails."""
         orchestrator = RetrievalOrchestrator(mock_db_session)
 
-        with patch.object(VectorRetriever, "retrieve", new_callable=AsyncMock) as mock_vector, \
-             patch.object(RecencyRetriever, "retrieve", new_callable=AsyncMock) as mock_recency:
-
+        with (
+            patch.object(VectorRetriever, "retrieve", new_callable=AsyncMock) as mock_vector,
+            patch.object(RecencyRetriever, "retrieve", new_callable=AsyncMock) as mock_recency,
+        ):
             # Vector fails
             mock_vector.side_effect = Exception("Vector search error")
 
@@ -575,9 +564,7 @@ class TestEmotionalRetriever:
     """Tests for EmotionalRetriever."""
 
     @pytest.mark.asyncio
-    async def test_emotional_retriever_skips_low_arousal(
-        self, mock_db_session, query_context
-    ):
+    async def test_emotional_retriever_skips_low_arousal(self, mock_db_session, query_context):
         """Should skip query if arousal too low."""
         retriever = EmotionalRetriever(mock_db_session, min_arousal=0.3)
 
@@ -591,7 +578,9 @@ class TestEmotionalRetriever:
         mock_db_session.execute.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_emotional_similarity(self, mock_db_session, query_context, user_id, character_id):
+    async def test_emotional_similarity(
+        self, mock_db_session, query_context, user_id, character_id
+    ):
         """Should score by emotional distance."""
         retriever = EmotionalRetriever(mock_db_session)
 
@@ -661,9 +650,7 @@ class TestPerformance:
     """Performance tests for retriever."""
 
     @pytest.mark.asyncio
-    async def test_parallel_execution_is_faster(
-        self, mock_db_session, query_context
-    ):
+    async def test_parallel_execution_is_faster(self, mock_db_session, query_context):
         """Parallel execution should be faster than sequential."""
         orchestrator = RetrievalOrchestrator(mock_db_session)
 
@@ -672,11 +659,12 @@ class TestPerformance:
             await asyncio.sleep(0.05)
             return []
 
-        with patch.object(VectorRetriever, "retrieve", slow_retrieve), \
-             patch.object(RecencyRetriever, "retrieve", slow_retrieve), \
-             patch.object(EmotionalRetriever, "retrieve", slow_retrieve), \
-             patch.object(IdentityLookup, "retrieve", slow_retrieve):
-
+        with (
+            patch.object(VectorRetriever, "retrieve", slow_retrieve),
+            patch.object(RecencyRetriever, "retrieve", slow_retrieve),
+            patch.object(EmotionalRetriever, "retrieve", slow_retrieve),
+            patch.object(IdentityLookup, "retrieve", slow_retrieve),
+        ):
             result = await orchestrator.retrieve(query_context)
 
             # 4 strategies × 50ms = 200ms if sequential

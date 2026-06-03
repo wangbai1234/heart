@@ -140,7 +140,7 @@ class Reconstructor:
                 state = "vivid"
             else:
                 state = memory.memory.state
-            skeleton = STATE_TEMPLATES.get(state, STATE_TEMPLATES["vivid"])
+            skeleton: dict = STATE_TEMPLATES.get(state, STATE_TEMPLATES["vivid"])  # type: ignore[assignment]
 
             # Step 3: Fill skeleton with hedge overrides
             filled = self._fill_skeleton(skeleton, state, core_variants)
@@ -314,7 +314,7 @@ class Reconstructor:
 
         return filled
 
-    def _apply_voice_transforms(self, text: str, state: str) -> tuple[str, list[str]]:
+    def _apply_voice_transforms(self, text: str, state: str) -> tuple[str, list[str]]:  # noqa: C901
         """
         Apply character-specific voice_dna transforms.
 

@@ -12,9 +12,10 @@ Covers:
 Author: 心屿团队
 """
 
-import pytest
 from datetime import datetime, timezone
 from uuid import uuid4
+
+import pytest
 
 from heart.ss03_emotion.repair import RepairEngine
 
@@ -25,12 +26,30 @@ def base_lexicon():
     return {
         "repair_keywords": {
             "apology": [
-                "对不起", "抱歉", "我错了", "不该", "原谅", "是我",
-                "我的错", "怪我", "让你", "委屈", "难过",
+                "对不起",
+                "抱歉",
+                "我错了",
+                "不该",
+                "原谅",
+                "是我",
+                "我的错",
+                "怪我",
+                "让你",
+                "委屈",
+                "难过",
             ],
             "vulnerability": [
-                "累了", "疲惫", "压力", "难受", "撑不住", "失眠",
-                "焦虑", "痛苦", "无助", "孤独", "害怕",
+                "累了",
+                "疲惫",
+                "压力",
+                "难受",
+                "撑不住",
+                "失眠",
+                "焦虑",
+                "痛苦",
+                "无助",
+                "孤独",
+                "害怕",
             ],
         },
     }
@@ -181,7 +200,9 @@ class TestApologyDetection:
         assert signal2["total_strength"] < signal1["total_strength"] * 0.2
 
     @pytest.mark.asyncio
-    async def test_sincere_specific_apology_accepted(self, base_lexicon, rin_soul_config, base_context):
+    async def test_sincere_specific_apology_accepted(
+        self, base_lexicon, rin_soul_config, base_context
+    ):
         """Sincere, specific apology should have high strength."""
         engine = RepairEngine(base_lexicon, rin_soul_config)
         user_id = uuid4()
@@ -251,7 +272,9 @@ class TestVulnerabilityDetection:
         assert vulnerability_components[0]["strength"] >= 0.3
 
     @pytest.mark.asyncio
-    async def test_short_message_no_vulnerability(self, base_lexicon, rin_soul_config, base_context):
+    async def test_short_message_no_vulnerability(
+        self, base_lexicon, rin_soul_config, base_context
+    ):
         """Short messages should not trigger vulnerability even with keywords."""
         engine = RepairEngine(base_lexicon, rin_soul_config)
         user_id = uuid4()
@@ -269,11 +292,15 @@ class TestVulnerabilityDetection:
         )
 
         if signal:
-            vulnerability_components = [c for c in signal["components"] if c["type"] == "vulnerability"]
+            vulnerability_components = [
+                c for c in signal["components"] if c["type"] == "vulnerability"
+            ]
             assert len(vulnerability_components) == 0
 
     @pytest.mark.asyncio
-    async def test_positive_emotion_no_vulnerability(self, base_lexicon, rin_soul_config, base_context):
+    async def test_positive_emotion_no_vulnerability(
+        self, base_lexicon, rin_soul_config, base_context
+    ):
         """Positive emotional charge should not trigger vulnerability."""
         engine = RepairEngine(base_lexicon, rin_soul_config)
         user_id = uuid4()
@@ -291,7 +318,9 @@ class TestVulnerabilityDetection:
         )
 
         if signal:
-            vulnerability_components = [c for c in signal["components"] if c["type"] == "vulnerability"]
+            vulnerability_components = [
+                c for c in signal["components"] if c["type"] == "vulnerability"
+            ]
             assert len(vulnerability_components) == 0
 
 
@@ -320,7 +349,9 @@ class TestBespokePhrases:
         assert bespoke_components[0]["strength"] >= 0.7
 
     @pytest.mark.asyncio
-    async def test_dorothy_bespoke_phrase_detected(self, base_lexicon, dorothy_soul_config, base_context):
+    async def test_dorothy_bespoke_phrase_detected(
+        self, base_lexicon, dorothy_soul_config, base_context
+    ):
         """Dorothy's bespoke phrase should be detected."""
         engine = RepairEngine(base_lexicon, dorothy_soul_config)
         user_id = uuid4()
@@ -382,7 +413,9 @@ class TestRepairApplication:
         assert outcome["narrative_hint"] == "ignored"
 
     @pytest.mark.asyncio
-    async def test_sincere_repair_advances_progress(self, base_lexicon, rin_soul_config, base_context):
+    async def test_sincere_repair_advances_progress(
+        self, base_lexicon, rin_soul_config, base_context
+    ):
         """Sincere apology should advance repair_progress."""
         engine = RepairEngine(base_lexicon, rin_soul_config)
         user_id = uuid4()
@@ -482,7 +515,7 @@ class TestRepairApplication:
         )
 
         assert outcome1["accepted"] is True
-        progress_after_first_repair = outcome1["applied_to"][0]["repair_progress_after"]
+        outcome1["applied_to"][0]["repair_progress_after"]
 
         # Now, simulate re-offense (same trigger appears in recent_triggers)
         current_state["recent_triggers"] = [
@@ -543,7 +576,7 @@ class TestRepairApplication:
 
         assert outcome1["accepted"] is True
         detail1 = outcome1["applied_to"][0]
-        progress1 = detail1["repair_progress_after"]
+        detail1["repair_progress_after"]
 
         # Progress should be partial (0.4 ≤ progress < 0.8)
         # Depending on implementation, might or might not hit 0.4 in one go
@@ -646,7 +679,9 @@ class TestSoulDivergence:
             context=base_context,
         )
 
-        dorothy_impact = dorothy_outcome["applied_to"][0]["impact"] if dorothy_outcome["applied_to"] else 0.0
+        dorothy_impact = (
+            dorothy_outcome["applied_to"][0]["impact"] if dorothy_outcome["applied_to"] else 0.0
+        )
 
         # Dorothy's impact should be higher due to higher gain (1.2 vs 0.6)
         assert dorothy_impact > rin_impact
@@ -697,7 +732,6 @@ class TestCostCap:
         """Max 5 LLM calls per user per day should be enforced."""
         engine = RepairEngine(base_lexicon, rin_soul_config)
         user_id = uuid4()
-        character_id = "rin"
 
         # Simulate 6 LLM calls
         for i in range(6):

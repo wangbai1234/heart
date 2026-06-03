@@ -21,7 +21,6 @@ import pytest
 from heart.ss02_memory.encoder.fast import FastEncoder
 from heart.ss02_memory.service import Turn
 
-
 # ============================================================
 # Fixtures
 # ============================================================
@@ -99,7 +98,9 @@ class TestIdentitySignals:
         turn = make_turn("我是一名程序员", user_id, character_id)
         result = encoder.encode(turn)
 
-        occupation_signals = [s for s in result.candidate_identity_signals if s.type == "occupation"]
+        occupation_signals = [
+            s for s in result.candidate_identity_signals if s.type == "occupation"
+        ]
         assert len(occupation_signals) == 1
         assert "程序员" in occupation_signals[0].value
 
@@ -262,9 +263,9 @@ class TestDiverseSentences:
 
         # Check sentiment range
         min_sentiment, max_sentiment = expected_sentiment_range
-        assert (
-            min_sentiment <= result.sentiment <= max_sentiment
-        ), f"Sentiment {result.sentiment} not in [{min_sentiment}, {max_sentiment}] for: {sentence}"
+        assert min_sentiment <= result.sentiment <= max_sentiment, (
+            f"Sentiment {result.sentiment} not in [{min_sentiment}, {max_sentiment}] for: {sentence}"
+        )
 
 
 # ============================================================

@@ -13,24 +13,25 @@ Author: 心屿团队
 
 from __future__ import annotations
 
-import pytest
 from datetime import datetime, timezone
 from uuid import uuid4
 
+import pytest
+
 from heart.ss01_soul.facet_unlocker import (
-    FacetUnlocker,
     ActivationStateForUnlock,
-    UnlockedFacet,
     FacetTriggerState,
+    FacetUnlocker,
     TriggerProgress,
+    UnlockedFacet,
     build_facet_trigger_state,
 )
 from heart.ss01_soul.registry import get_soul_registry
 
-
 # ============================================================
 # Mock Event Bus
 # ============================================================
+
 
 class MockEventBus:
     """Mock event bus for testing."""
@@ -48,6 +49,7 @@ class MockEventBus:
 # ============================================================
 # Fixtures
 # ============================================================
+
 
 @pytest.fixture
 def mock_event_bus():
@@ -75,6 +77,7 @@ def soul():
 # Helper: Create Activation State
 # ============================================================
 
+
 def make_activation_state(
     resonance_score: float = 0.0,
     unlocked_facets: list[UnlockedFacet] | None = None,
@@ -92,8 +95,8 @@ def make_activation_state(
 # Basic Threshold Tests
 # ============================================================
 
-class TestThresholdChecks:
 
+class TestThresholdChecks:
     def test_resonance_below_threshold_no_unlock(self, unlocker, user_id):
         # facet-found-witness requires resonance >= 0.55
         state = make_activation_state(resonance_score=0.40)
@@ -124,8 +127,8 @@ class TestThresholdChecks:
 # Corroboration Tests (Multi-Signal Requirement)
 # ============================================================
 
-class TestCorroboration:
 
+class TestCorroboration:
     def test_single_trigger_satisfied_no_unlock(self, unlocker, user_id, soul):
         # facet-found-witness requires corroboration_count=3
         # Only satisfy 1 trigger → no unlock
@@ -320,8 +323,8 @@ class TestCorroboration:
 # Idempotent Tests
 # ============================================================
 
-class TestIdempotent:
 
+class TestIdempotent:
     def test_already_unlocked_not_unlocked_again(self, unlocker, user_id):
         # facet-found-witness already unlocked
         facet_id = "facet-found-witness"
@@ -378,8 +381,8 @@ class TestIdempotent:
 # Prerequisites Tests
 # ============================================================
 
-class TestPrerequisites:
 
+class TestPrerequisites:
     def test_prerequisite_not_met_no_unlock(self, unlocker, user_id):
         # facet-allows-want requires facet-found-witness to be unlocked
         facet_id = "facet-allows-want"
@@ -466,8 +469,8 @@ class TestPrerequisites:
 # Event Emission Tests
 # ============================================================
 
-class TestEventEmission:
 
+class TestEventEmission:
     def test_unlock_emits_event(self, unlocker, user_id, mock_event_bus):
         facet_id = "facet-found-witness"
 
@@ -499,7 +502,7 @@ class TestEventEmission:
             },
         )
 
-        result = unlocker.check_unlock_conditions(
+        unlocker.check_unlock_conditions(
             user_id=user_id,
             character_id="rin",
             activation_state=state,
@@ -519,7 +522,7 @@ class TestEventEmission:
         # Threshold not met
         state = make_activation_state(resonance_score=0.40)
 
-        result = unlocker.check_unlock_conditions(
+        unlocker.check_unlock_conditions(
             user_id=user_id,
             character_id="rin",
             activation_state=state,
@@ -534,8 +537,8 @@ class TestEventEmission:
 # Integration Tests
 # ============================================================
 
-class TestIntegration:
 
+class TestIntegration:
     def test_gradual_unlock_sequence(self, unlocker, user_id):
         """Test realistic unlock sequence: facet-found-witness → facet-allows-want."""
 
@@ -642,8 +645,8 @@ class TestIntegration:
 # Helper Function Tests
 # ============================================================
 
-class TestBuildFacetTriggerState:
 
+class TestBuildFacetTriggerState:
     def test_build_from_empty_events(self, soul):
         facet_id = "facet-found-witness"
         events = []

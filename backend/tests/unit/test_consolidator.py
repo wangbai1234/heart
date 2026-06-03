@@ -16,7 +16,7 @@ Author: 心屿团队
 
 import json
 from datetime import datetime, timedelta, timezone
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
 import pytest
@@ -34,14 +34,12 @@ from heart.ss02_memory.models import (
     MemoryEncodingEvent,
 )
 from heart.workers.memory_consolidator import (
-    AssociationBuilder,
     ConsolidationWorker,
     EpisodeClusterer,
     EpisodeSummarizer,
     FactReconciler,
     L4Promoter,
 )
-
 
 # ============================================================
 # Fixtures
@@ -63,20 +61,22 @@ def character_id():
 @pytest.fixture
 def mock_llm_response():
     """Mock LLM response for episode summarization."""
-    return json.dumps({
-        "episode_summary": "User discussed their cat named Laotie who is afraid of thunder.",
-        "emotional_peak": {
-            "valence": 0.6,
-            "arousal": 0.4,
-            "label": "joy",
-        },
-        "emotional_end": {
-            "valence": 0.5,
-            "arousal": 0.3,
-            "label": "contentment",
-        },
-        "importance_estimate": 0.7,
-    })
+    return json.dumps(
+        {
+            "episode_summary": "User discussed their cat named Laotie who is afraid of thunder.",
+            "emotional_peak": {
+                "valence": 0.6,
+                "arousal": 0.4,
+                "label": "joy",
+            },
+            "emotional_end": {
+                "valence": 0.5,
+                "arousal": 0.3,
+                "label": "contentment",
+            },
+            "importance_estimate": 0.7,
+        }
+    )
 
 
 @pytest.fixture
@@ -195,9 +195,7 @@ async def fact_nodes(async_session, user_id, character_id):
 class TestIdempotency:
     """Test consolidation job idempotency."""
 
-    async def test_unique_constraint_enforced(
-        self, async_session, user_id, character_id
-    ):
+    async def test_unique_constraint_enforced(self, async_session, user_id, character_id):
         """Cannot create duplicate job for same (user, character, scheduled_for)."""
         scheduled_for = datetime.now(timezone.utc)
 
@@ -230,9 +228,7 @@ class TestIdempotency:
         with pytest.raises(Exception):  # IntegrityError
             await async_session.commit()
 
-    async def test_already_processed_job_skipped(
-        self, async_session, consolidation_job
-    ):
+    async def test_already_processed_job_skipped(self, async_session, consolidation_job):
         """Worker should skip jobs that are already processed."""
         # Mark job as succeeded
         consolidation_job.status = "succeeded"
@@ -246,9 +242,7 @@ class TestIdempotency:
         await worker._process_job(consolidation_job)
 
         # Reload job
-        stmt = select(ConsolidationJob).where(
-            ConsolidationJob.job_id == consolidation_job.job_id
-        )
+        stmt = select(ConsolidationJob).where(ConsolidationJob.job_id == consolidation_job.job_id)
         result = await async_session.execute(stmt)
         job = result.scalar_one()
 
@@ -278,13 +272,9 @@ class TestEpisodeClustering:
         assert len(clusters[1]) == 10
         assert len(clusters[2]) == 5
 
-    async def test_empty_turns_returns_empty_clusters(
-        self, async_session, user_id, character_id
-    ):
+    async def test_empty_turns_returns_empty_clusters(self, async_session, user_id, character_id):
         """Empty turn list should return empty clusters."""
-        clusters = await EpisodeClusterer.cluster_turns(
-            async_session, [], user_id, character_id
-        )
+        clusters = await EpisodeClusterer.cluster_turns(async_session, [], user_id, character_id)
 
         assert clusters == []
 
@@ -309,9 +299,7 @@ class TestEpisodeSummarization:
 
         turn_ids = [uuid4(), uuid4(), uuid4()]
 
-        result = await EpisodeSummarizer.summarize_episode(
-            async_session, turn_ids, character_id
-        )
+        result = await EpisodeSummarizer.summarize_episode(async_session, turn_ids, character_id)
 
         # Check result structure
         assert "episode_summary" in result
@@ -327,9 +315,7 @@ class TestEpisodeSummarization:
         assert abs(result["emotional_significance"] - 0.46) < 0.01
 
     @patch("heart.workers.memory_consolidator.get_model_router")
-    async def test_summarize_episode_invalid_json(
-        self, mock_router, async_session, character_id
-    ):
+    async def test_summarize_episode_invalid_json(self, mock_router, async_session, character_id):
         """Invalid JSON from LLM should raise ValueError."""
         # Mock LLM call with invalid JSON
         mock_router_instance = AsyncMock()
@@ -339,14 +325,10 @@ class TestEpisodeSummarization:
         turn_ids = [uuid4()]
 
         with pytest.raises(ValueError, match="Invalid JSON"):
-            await EpisodeSummarizer.summarize_episode(
-                async_session, turn_ids, character_id
-            )
+            await EpisodeSummarizer.summarize_episode(async_session, turn_ids, character_id)
 
     @patch("heart.workers.memory_consolidator.get_model_router")
-    async def test_summarize_episode_missing_fields(
-        self, mock_router, async_session, character_id
-    ):
+    async def test_summarize_episode_missing_fields(self, mock_router, async_session, character_id):
         """Missing required fields should raise ValueError."""
         # Mock LLM call with incomplete response
         mock_router_instance = AsyncMock()
@@ -358,9 +340,7 @@ class TestEpisodeSummarization:
         turn_ids = [uuid4()]
 
         with pytest.raises(ValueError, match="Missing required field"):
-            await EpisodeSummarizer.summarize_episode(
-                async_session, turn_ids, character_id
-            )
+            await EpisodeSummarizer.summarize_episode(async_session, turn_ids, character_id)
 
 
 # ============================================================
@@ -528,18 +508,14 @@ class TestL4Promotion:
     ):
         """High importance + high confirmation should promote to L4."""
         # fact_nodes[0] has importance=0.85, confirmation=5
-        promoted = await L4Promoter.check_promotions(
-            async_session, user_id, character_id
-        )
+        promoted = await L4Promoter.check_promotions(async_session, user_id, character_id)
 
         # Should have promoted 1 fact
         assert len(promoted) == 1
         assert fact_nodes[0].id in promoted
 
         # Check L4 created
-        stmt = select(IdentityMemory).where(
-            IdentityMemory.source_fact_id == fact_nodes[0].id
-        )
+        stmt = select(IdentityMemory).where(IdentityMemory.source_fact_id == fact_nodes[0].id)
         result = await async_session.execute(stmt)
         identity = result.scalar_one()
 
@@ -554,42 +530,30 @@ class TestL4Promotion:
         """Low importance facts should not promote."""
         # fact_nodes[1] has importance=0.4
         # Before promotion, check count
-        stmt = select(IdentityMemory).where(
-            IdentityMemory.user_id == user_id
-        )
+        stmt = select(IdentityMemory).where(IdentityMemory.user_id == user_id)
         result = await async_session.execute(stmt)
-        before_count = len(result.scalars().all())
+        len(result.scalars().all())
 
-        promoted = await L4Promoter.check_promotions(
-            async_session, user_id, character_id
-        )
+        promoted = await L4Promoter.check_promotions(async_session, user_id, character_id)
 
         # fact_nodes[1] should not be in promoted
         assert fact_nodes[1].id not in promoted
 
-    async def test_already_promoted_skipped(
-        self, async_session, user_id, character_id, fact_nodes
-    ):
+    async def test_already_promoted_skipped(self, async_session, user_id, character_id, fact_nodes):
         """Facts already promoted should be skipped."""
         # Promote fact_nodes[0] first time
-        promoted1 = await L4Promoter.check_promotions(
-            async_session, user_id, character_id
-        )
+        promoted1 = await L4Promoter.check_promotions(async_session, user_id, character_id)
 
         assert len(promoted1) == 1
 
         # Try to promote again
-        promoted2 = await L4Promoter.check_promotions(
-            async_session, user_id, character_id
-        )
+        await L4Promoter.check_promotions(async_session, user_id, character_id)
 
         # Should not promote again (already exists)
         # But promoted2 might be empty or contain it - implementation dependent
         # The key is no duplicate L4 entries
 
-        stmt = select(IdentityMemory).where(
-            IdentityMemory.source_fact_id == fact_nodes[0].id
-        )
+        stmt = select(IdentityMemory).where(IdentityMemory.source_fact_id == fact_nodes[0].id)
         result = await async_session.execute(stmt)
         identities = result.scalars().all()
 
@@ -605,9 +569,7 @@ class TestL4Promotion:
 class TestCrossUserIsolation:
     """Test that consolidation doesn't leak across users."""
 
-    async def test_no_cross_user_fact_reconciliation(
-        self, async_session, character_id
-    ):
+    async def test_no_cross_user_fact_reconciliation(self, async_session, character_id):
         """Fact reconciliation should not match facts from different users."""
         user1 = uuid4()
         user2 = uuid4()
@@ -685,9 +647,7 @@ class TestCrossUserIsolation:
 class TestBatchDecay:
     """Test batch decay application."""
 
-    async def test_decay_applied_to_episodes(
-        self, async_session, user_id, character_id
-    ):
+    async def test_decay_applied_to_episodes(self, async_session, user_id, character_id):
         """Decay should be applied to all episodes."""
         # Create old episode
         old_episode = EpisodicMemory(
@@ -756,9 +716,7 @@ class TestFullPipeline:
         await worker._process_job(consolidation_job)
 
         # Reload job
-        stmt = select(ConsolidationJob).where(
-            ConsolidationJob.job_id == consolidation_job.job_id
-        )
+        stmt = select(ConsolidationJob).where(ConsolidationJob.job_id == consolidation_job.job_id)
         result = await async_session.execute(stmt)
         job = result.scalar_one()
 

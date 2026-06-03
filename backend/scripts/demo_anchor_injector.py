@@ -15,16 +15,17 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import logging
+
 import structlog
 
-from heart.ss01_soul.registry import get_soul_registry
 from heart.ss01_soul.anchor_injector import (
-    get_anchor_injector,
     AnchorActivationView,
     AnchorMode,
     DriftEvidence,
+    get_anchor_injector,
 )
 from heart.ss01_soul.anchor_mode_decider import decide_mode
+from heart.ss01_soul.registry import get_soul_registry
 
 structlog.configure(wrapper_class=structlog.make_filtering_bound_logger(logging.WARNING))
 
@@ -82,7 +83,7 @@ def demo_reinforce(injector, soul) -> None:
 
 def demo_mode_cadence() -> None:
     banner("Mode Decider Cadence (§3.4) — 20-turn dry run")
-    state = AnchorActivationView(
+    AnchorActivationView(
         resonance_score=0.5,
         unlocked_facet_ids=(),
         last_full_anchor_turn=0,

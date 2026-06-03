@@ -12,26 +12,26 @@ Covers:
 Author: 心屿团队
 """
 
-from .decay_engine import DecayEngine, reinforce_memory, ReinforcementTrigger
+from .decay_engine import DecayEngine, ReinforcementTrigger, reinforce_memory
 from .forgetting_affect import (
-    ForgettingAffectEngine,
     ForgettingAffectConfig,
     ForgettingAffectDecision,
+    ForgettingAffectEngine,
     InjectionMode,
     MemoryStateDistribution,
 )
 from .models import EpisodicMemory, FactNode, IdentityMemory, MemoryEncodingEvent
 from .reconstructor import Reconstructor, ReconstructResult
 from .retriever import (
-    RetrievalOrchestrator,
-    VectorRetriever,
-    GraphRetriever,
-    RecencyRetriever,
     EmotionalRetriever,
+    GraphRetriever,
     IdentityLookup,
-    QueryContext,
-    ScoredMemory,
     MemoryRetrievalResult,
+    QueryContext,
+    RecencyRetriever,
+    RetrievalOrchestrator,
+    ScoredMemory,
+    VectorRetriever,
 )
 
 __all__ = [

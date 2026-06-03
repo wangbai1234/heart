@@ -5,7 +5,7 @@ Detects persona drift (voice_dna loss, anti_pattern violations, style drift)
 asynchronously (post-response-release) using a cheap LLM (Haiku) with 70%
 pre-filter skip rate.
 
-Design doc: backend/heart/ss01_soul/DRIFT_DETECTOR_DESIGN.md
+Design doc: docs/design/drift_detector.md
 Spec authority: runtime_specs/01_identity_anchor_soul_spec.md §6.5, §10.1
 
 Author: 心屿团队
@@ -25,7 +25,6 @@ from .drift_fingerprint import DriftFingerprint, build_fingerprints
 from .drift_llm_client import DriftLLMClient, LLMDriftResult
 from .drift_score_fuser import compute_final_score, should_emit_reinforce
 from .registry import get_soul_registry
-
 
 # ============================================================
 # Types (per design doc §2)

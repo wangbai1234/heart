@@ -1,0 +1,15 @@
+{
+  "fixture_id": "emotion_trigger",
+  "description": "Fake response for emotion classification",
+  "scenarios": [
+    {
+      "system_prompt_hint": "You are an emotion classifier",
+      "user_msg_hint": "我今天心情很好"
+    }
+  ],
+  "content": "{\"emotion\": \"joy\", \"intensity\": 0.7, \"valence\": 0.8}",
+  "finish_reason": "stop",
+  "prompt_tokens": 80,
+  "completion_tokens": 30,
+  "total_tokens": 110
+}
