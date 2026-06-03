@@ -6,7 +6,7 @@ Verifies that ModelRouter exposes call_main and call_cheap.
 """
 
 import pytest
-from tests.contract.conftest import RouterProviderProtocol
+
 from heart.infra.llm.router import ModelRouter
 
 
@@ -25,6 +25,7 @@ class TestRouterProviderProtocol:
     def test_call_main_signature_matches_protocol(self):
         """call_main signature must match: (messages, temperature, max_tokens, agent_name) -> str."""
         import inspect
+
         sig = inspect.signature(ModelRouter.call_main)
         params = list(sig.parameters.keys())
         assert "messages" in params
@@ -35,6 +36,7 @@ class TestRouterProviderProtocol:
     def test_call_cheap_signature_matches_protocol(self):
         """call_cheap signature must match: (messages, temperature, max_tokens, json_mode, agent_name) -> str."""
         import inspect
+
         sig = inspect.signature(ModelRouter.call_cheap)
         params = list(sig.parameters.keys())
         assert "messages" in params

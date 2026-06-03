@@ -13,7 +13,7 @@ from __future__ import annotations
 from typing import List
 
 import structlog
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from heart.ss02_memory.models import EpisodicMemory, FactNode
@@ -127,7 +127,7 @@ class VectorRetriever(RetrievalStrategy):
             .where(
                 EpisodicMemory.user_id == query_context.user_id,
                 EpisodicMemory.character_id == query_context.character_id,
-                EpisodicMemory.do_not_recall == False,
+                not EpisodicMemory.do_not_recall,
                 EpisodicMemory.semantic_vector.isnot(None),
             )
             .order_by(text(f"semantic_vector <=> '{embedding_str}'::vector"))
@@ -184,7 +184,7 @@ class VectorRetriever(RetrievalStrategy):
             .where(
                 FactNode.user_id == query_context.user_id,
                 FactNode.character_id == query_context.character_id,
-                FactNode.do_not_recall == False,
+                not FactNode.do_not_recall,
                 FactNode.promoted_to_l4_at.is_(None),  # Exclude L4-promoted facts
                 FactNode.semantic_vector.isnot(None),
             )

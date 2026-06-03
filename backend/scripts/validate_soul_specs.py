@@ -14,9 +14,11 @@ from pathlib import Path
 # Add backend to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from heart.ss01_soul.registry import SoulRegistry
-import structlog
 import logging
+
+import structlog
+
+from heart.ss01_soul.registry import SoulRegistry
 
 structlog.configure(
     wrapper_class=structlog.make_filtering_bound_logger(logging.INFO),
@@ -48,13 +50,13 @@ def main():
         print()
 
     except Exception as e:
-        print(f"❌ Failed to load Soul Specs:")
+        print("❌ Failed to load Soul Specs:")
         print(f"   {e}")
         return 1
 
     # Print summary
     characters = registry.list_characters()
-    print(f"📊 Summary:")
+    print("📊 Summary:")
     print(f"   Total characters: {len(characters)}")
     print()
 
@@ -73,7 +75,7 @@ def main():
         print(f"   Display Name: {display_name}")
 
         # Archetype (first line)
-        archetype_line = spec.identity_anchor.archetype.split('\n')[0].strip()
+        archetype_line = spec.identity_anchor.archetype.split("\n")[0].strip()
         print(f"   Archetype: {archetype_line}")
 
         # Voice DNA count
@@ -109,7 +111,9 @@ def main():
         # Check 1: At least 3 voice_dna patterns
         voice_dna_count = len(spec.identity_anchor.voice_dna)
         if voice_dna_count < 3:
-            print(f"   ⚠️  {character_id}: Only {voice_dna_count} voice DNA patterns (recommend ≥ 3)")
+            print(
+                f"   ⚠️  {character_id}: Only {voice_dna_count} voice DNA patterns (recommend ≥ 3)"
+            )
             all_passed = False
 
         # Check 2: At least 5 golden_dialogues

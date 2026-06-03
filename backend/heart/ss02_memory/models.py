@@ -23,6 +23,8 @@ from uuid import UUID
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     UUID as SQLUUID,
+)
+from sqlalchemy import (
     VARCHAR,
     BigInteger,
     Boolean,
@@ -35,7 +37,7 @@ from sqlalchemy import (
     UniqueConstraint,
     text,
 )
-from sqlalchemy.dialects.postgresql import JSONB, ARRAY
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 

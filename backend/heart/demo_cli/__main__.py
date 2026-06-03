@@ -15,16 +15,17 @@ import sys
 from typing import Optional
 
 from . import renderer as r
-from .commands import is_command, dispatch
+from .commands import dispatch, is_command
 from .session import ClientSession
 
 # ── prompt_toolkit (optional) ──────────────────────────────────────
 
 try:
     from prompt_toolkit import PromptSession as PTSession
-    from prompt_toolkit.history import FileHistory
     from prompt_toolkit.auto_suggest import AutoSuggestFromHistory
     from prompt_toolkit.formatted_text import HTML
+    from prompt_toolkit.history import FileHistory
+
     HAS_PROMPT_TOOLKIT = True
 except ImportError:
     HAS_PROMPT_TOOLKIT = False
@@ -58,6 +59,7 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
 
 
 # ── Prompt styling ─────────────────────────────────────────────────
+
 
 def _prompt_style(character_id: str) -> str:
     """Return an HTML-styled prompt string for prompt_toolkit."""
@@ -127,9 +129,7 @@ async def repl(session: ClientSession) -> None:
             response = await session.send_message(line)
         except Exception as exc:
             r.render_error(f"发送消息失败: {exc}")
-            r.render_warning(
-                "请确认 API 已启动 (make up 或 make dev)。"
-            )
+            r.render_warning("请确认 API 已启动 (make up 或 make dev)。")
             continue
 
         # Render response with streaming effect
@@ -171,8 +171,7 @@ async def main() -> None:
     healthy = await session.check_health()
     if not healthy:
         r.render_error(
-            f"无法连接到 Heart API ({session.api_url})。\n"
-            f"请先启动后端: make up 或 make dev"
+            f"无法连接到 Heart API ({session.api_url})。\n请先启动后端: make up 或 make dev"
         )
         sys.exit(1)
     r.render_success(f"API 连接成功 ({session.api_url})")

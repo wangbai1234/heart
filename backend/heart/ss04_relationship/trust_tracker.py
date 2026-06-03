@@ -9,12 +9,8 @@ Author: 心屿团队
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Any
-
 from ..ss04_relationship.models import RelationshipState
-from ..ss04_relationship.stage_engine import Signal, SignalBatch, RelationshipStage
-
+from ..ss04_relationship.stage_engine import RelationshipStage, SignalBatch
 
 # ============================================================
 # Trust Signal Weights (§3.9 + Appendix A)
@@ -84,7 +80,7 @@ def compute_trust_decay_factor(days_since_last: float, highest_stage: Relationsh
         decay_rate = 0.985
         days_decay = days_since_last - 90
 
-    return decay_rate ** days_decay
+    return decay_rate**days_decay
 
 
 def compute_trust_floor(highest_stage: RelationshipStage) -> float:

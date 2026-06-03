@@ -32,6 +32,7 @@ class RealisticCircuitBreaker:
         if self._failure_counts[provider] >= self.failure_threshold:
             self._state[provider] = "open"
             import time
+
             self._open_since[provider] = time.time()
 
     def is_open(self, provider: str) -> bool:

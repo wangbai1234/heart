@@ -1,11 +1,11 @@
 """FastAPI 应用主入口"""
 
+import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-import structlog
 
 from heart.core.config import settings
-from heart.infra.llm import LLMProviderConfig, DeepSeekConfig, initialize_router, shutdown_router
+from heart.infra.llm import DeepSeekConfig, LLMProviderConfig, initialize_router, shutdown_router
 
 logger = structlog.get_logger()
 

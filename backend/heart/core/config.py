@@ -1,6 +1,7 @@
 """应用全局配置 — per runtime_specs/08_engineering_architecture.md §3 (Configuration)"""
 
 from pathlib import Path
+
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -91,14 +92,13 @@ class Settings(BaseSettings):
     stripe_webhook_secret: str = ""
 
     @model_validator(mode="after")
-    def validate_production_secrets(self) -> "Settings":
-        """Enforce mandatory secrets in non-dev environments."""
-        if self.heart_env.lower() not in ("dev", "development", "test"):
-            if self.jwt_secret_key == "your-secret-key-here":
-                raise ValueError(
-                    "jwt_secret_key must be set in production. "
-                    "Default value 'your-secret-key-here' is not allowed."
-                )
+    def validate_jwt_secret(self) -> "Settings":
+        """Fail-fast if JWT secret is weak (all environments)."""
+        if (
+            self.jwt_secret_key in {"your-secret-key-here", "", "change-me"}
+            or len(self.jwt_secret_key) < 32
+        ):
+            raise RuntimeError("JWT_SECRET_KEY must be set to a strong random value")
         return self
 
 

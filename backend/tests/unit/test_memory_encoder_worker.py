@@ -17,20 +17,18 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timezone
+from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 
+from heart.ss02_memory.models import FactNode, MemoryEncodingEvent
 from heart.workers.memory_encoder import (
     MemoryEncoderWorker,
     build_extraction_prompt,
     validate_extraction_output,
     write_facts_to_l3,
 )
-from heart.ss02_memory.models import FactNode, MemoryEncodingEvent
-from heart.prompts.memory_extraction import MEMORY_EXTRACTION_PROMPT
-
 
 # ============================================================
 # Fixtures
@@ -314,9 +312,7 @@ class TestFactWriting:
         assert mock_db_session.add.call_count == 2
 
     @pytest.mark.asyncio
-    async def test_skip_low_confidence_facts(
-        self, mock_db_session, sample_encoding_event
-    ):
+    async def test_skip_low_confidence_facts(self, mock_db_session, sample_encoding_event):
         """Should skip facts with confidence < 0.7."""
         extraction = {
             "facts": [
@@ -338,9 +334,7 @@ class TestFactWriting:
             "contains_first_event": False,
         }
 
-        fact_ids = await write_facts_to_l3(
-            mock_db_session, sample_encoding_event, extraction
-        )
+        fact_ids = await write_facts_to_l3(mock_db_session, sample_encoding_event, extraction)
 
         # Should skip low-confidence fact
         assert len(fact_ids) == 0
@@ -476,9 +470,7 @@ class TestMemoryEncoderWorker:
 
         # Mock LLM failure
         with patch("heart.workers.memory_encoder.get_model_router") as mock_router:
-            mock_router.return_value.call_cheap = AsyncMock(
-                side_effect=Exception("LLM error")
-            )
+            mock_router.return_value.call_cheap = AsyncMock(side_effect=Exception("LLM error"))
 
             with pytest.raises(Exception, match="LLM error"):
                 await worker._process_event(sample_encoding_event)
@@ -506,9 +498,7 @@ class TestMemoryEncoderWorker:
 
         # Mock LLM failure
         with patch("heart.workers.memory_encoder.get_model_router") as mock_router:
-            mock_router.return_value.call_cheap = AsyncMock(
-                side_effect=Exception("LLM error")
-            )
+            mock_router.return_value.call_cheap = AsyncMock(side_effect=Exception("LLM error"))
 
             with pytest.raises(Exception, match="LLM error"):
                 await worker._process_event(sample_encoding_event)
@@ -533,9 +523,7 @@ class TestMemoryEncoderWorker:
 
         # Mock LLM returning invalid JSON
         with patch("heart.workers.memory_encoder.get_model_router") as mock_router:
-            mock_router.return_value.call_cheap = AsyncMock(
-                return_value="not valid json"
-            )
+            mock_router.return_value.call_cheap = AsyncMock(return_value="not valid json")
 
             with pytest.raises(ValueError, match="Invalid JSON"):
                 await worker._process_event(sample_encoding_event)
@@ -562,9 +550,7 @@ class TestMemoryEncoderWorker:
         }
 
         with patch("heart.workers.memory_encoder.get_model_router") as mock_router:
-            mock_router.return_value.call_cheap = AsyncMock(
-                return_value=json.dumps(invalid_output)
-            )
+            mock_router.return_value.call_cheap = AsyncMock(return_value=json.dumps(invalid_output))
 
             with pytest.raises(ValueError, match="Invalid extraction schema"):
                 await worker._process_event(sample_encoding_event)

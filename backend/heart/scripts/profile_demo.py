@@ -21,8 +21,9 @@ from typing import Any, Dict, List
 # Enable turn profiling for this demo
 os.environ["HEART_TURN_PROFILER"] = "1"
 
-import httpx
 import uuid
+
+import httpx
 
 DEMO_MESSAGES = [
     "你好，今天天气不错。",

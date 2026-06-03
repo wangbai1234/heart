@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Optional
 
 import httpx
 
@@ -106,8 +106,13 @@ class ClientSession:
         """Refresh side-panel snapshot.  Currently a local stub."""
         msg_count = sum(1 for m in self.messages if m["role"] == "user")
         stages = [
-            "STRANGER", "ACQUAINTANCE", "FRIEND",
-            "CONFIDANT", "ROMANTIC_INTEREST", "LOVER", "BONDED",
+            "STRANGER",
+            "ACQUAINTANCE",
+            "FRIEND",
+            "CONFIDANT",
+            "ROMANTIC_INTEREST",
+            "LOVER",
+            "BONDED",
         ]
         stage_idx = min(msg_count // 3, len(stages) - 1)
         self.side_panel.current_stage = stages[stage_idx]
@@ -121,23 +126,36 @@ class ClientSession:
         if not self.dev_mode:
             return "错误：/jump 仅在 --dev 模式下可用。"
         valid = {
-            "1", "2", "3", "4", "5", "6", "7",
-            "stranger", "acquaintance", "friend",
-            "confidant", "romantic_interest", "lover", "bonded",
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6",
+            "7",
+            "stranger",
+            "acquaintance",
+            "friend",
+            "confidant",
+            "romantic_interest",
+            "lover",
+            "bonded",
         }
         key = stage.lower()
         if key not in valid:
             return f"无效 stage: {stage}。可用: 1-7 或阶段名。"
         stage_map = {
-            "1": "STRANGER", "2": "ACQUAINTANCE", "3": "FRIEND",
-            "4": "CONFIDANT", "5": "ROMANTIC_INTEREST", "6": "LOVER",
+            "1": "STRANGER",
+            "2": "ACQUAINTANCE",
+            "3": "FRIEND",
+            "4": "CONFIDANT",
+            "5": "ROMANTIC_INTEREST",
+            "6": "LOVER",
             "7": "BONDED",
         }
         target = stage_map.get(key, key.upper())
         self.side_panel.current_stage = target
-        self.side_panel.current_stage_num = (
-            list(stage_map.values()).index(target) + 1
-        )
+        self.side_panel.current_stage_num = list(stage_map.values()).index(target) + 1
         return f"已跳过至阶段 {target} ({self.side_panel.current_stage_num}/7)。"
 
     def dev_toggle_cold_war(self) -> str:

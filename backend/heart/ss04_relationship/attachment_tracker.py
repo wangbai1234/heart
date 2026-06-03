@@ -10,12 +10,8 @@ Author: 心屿团队
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Any
-
 from ..ss04_relationship.models import RelationshipState
-from ..ss04_relationship.stage_engine import Signal, SignalBatch, RelationshipStage
-
+from ..ss04_relationship.stage_engine import RelationshipStage, SignalBatch
 
 # ============================================================
 # Attachment Event Weights (§3.9 + Appendix A)
@@ -67,7 +63,7 @@ def compute_attachment_decay_factor(days_since_last: float) -> float:
     if days_since_last <= 30:
         return 1.0
     excess_days = days_since_last - 30
-    return 0.99 ** excess_days
+    return 0.99**excess_days
 
 
 # ============================================================

@@ -58,18 +58,10 @@ def upgrade() -> None:
     )
 
     op.execute("ALTER TABLE replay_snapshots ADD PRIMARY KEY (id)")
-    op.execute(
-        "CREATE INDEX idx_replay_session_turn ON replay_snapshots (session_id, created_at)"
-    )
-    op.execute(
-        "CREATE INDEX idx_replay_user ON replay_snapshots (user_id)"
-    )
-    op.execute(
-        "CREATE INDEX idx_replay_turn ON replay_snapshots (turn_id)"
-    )
-    op.execute(
-        "CREATE INDEX idx_replay_created ON replay_snapshots (created_at)"
-    )
+    op.execute("CREATE INDEX idx_replay_session_turn ON replay_snapshots (session_id, created_at)")
+    op.execute("CREATE INDEX idx_replay_user ON replay_snapshots (user_id)")
+    op.execute("CREATE INDEX idx_replay_turn ON replay_snapshots (turn_id)")
+    op.execute("CREATE INDEX idx_replay_created ON replay_snapshots (created_at)")
 
 
 def downgrade() -> None:

@@ -14,12 +14,22 @@ class TestEmotionStateSchemaV1:
     """SS03 EmotionState must expose v1 contract fields."""
 
     REQUIRED_FIELDS = [
-        "user_id", "character_id",
-        "vad_valence", "vad_arousal", "vad_dominance",
-        "vad_target_valence", "vad_target_arousal", "vad_target_dominance",
-        "active_stack", "mood", "energy", "energy_baseline",
-        "recent_vad_history", "recent_triggers",
-        "pending_repairs", "version",
+        "user_id",
+        "character_id",
+        "vad_valence",
+        "vad_arousal",
+        "vad_dominance",
+        "vad_target_valence",
+        "vad_target_arousal",
+        "vad_target_dominance",
+        "active_stack",
+        "mood",
+        "energy",
+        "energy_baseline",
+        "recent_vad_history",
+        "recent_triggers",
+        "pending_repairs",
+        "version",
     ]
 
     def test_emotion_state_has_required_fields(self, make_emotion_state):
@@ -37,9 +47,9 @@ class TestEmotionStateSchemaV1:
 
     def test_active_stack_is_list_of_dicts(self, make_emotion_state):
         """active_stack must be a list of emotion dicts."""
-        state = make_emotion_state(active_stack=[
-            {"emotion": "joy", "intensity": 0.5, "source": "user_trigger"}
-        ])
+        state = make_emotion_state(
+            active_stack=[{"emotion": "joy", "intensity": 0.5, "source": "user_trigger"}]
+        )
         assert isinstance(state["active_stack"], list)
         assert len(state["active_stack"]) > 0
         assert "emotion" in state["active_stack"][0]

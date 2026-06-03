@@ -18,22 +18,19 @@ from __future__ import annotations
 import math
 import time
 from datetime import datetime, timedelta, timezone
+from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
 
 from heart.ss02_memory.decay_engine import (
+    MAX_IMPORTANCE,
+    REINFORCEMENT_DELTAS,
     DecayEngine,
     ReinforcementTrigger,
-    REINFORCEMENT_DELTAS,
     reinforce_memory,
-    MAX_IMPORTANCE,
-    TAU_L2,
-    TAU_L3,
 )
 from heart.ss02_memory.models import EpisodicMemory, FactNode, IdentityMemory
-
 
 # ============================================================
 # Fixtures
@@ -374,7 +371,7 @@ class TestInvariantI6:
         for i in range(len(importances) - 1):
             assert importances[i] < importances[i + 1], (
                 f"Importance not monotone at recalls={recall_counts[i]}: "
-                f"{importances[i]} >= {importances[i+1]}"
+                f"{importances[i]} >= {importances[i + 1]}"
             )
 
 
@@ -517,8 +514,7 @@ class TestInvariantI10:
         for importance, expected_state in test_cases:
             state = engine._compute_state(importance)
             assert state == expected_state, (
-                f"State mismatch at importance={importance}: "
-                f"expected {expected_state}, got {state}"
+                f"State mismatch at importance={importance}: expected {expected_state}, got {state}"
             )
 
 
@@ -812,9 +808,7 @@ class TestReinforcement:
     """Tests for reinforcement functionality."""
 
     @pytest.mark.asyncio
-    async def test_reinforcement_boosts_initial_importance(
-        self, mock_db_session, l2_memory, now
-    ):
+    async def test_reinforcement_boosts_initial_importance(self, mock_db_session, l2_memory, now):
         """Reinforcement should boost initial_importance."""
         # Mock DB query
         mock_result = MagicMock()
@@ -848,9 +842,7 @@ class TestReinforcement:
         assert l2_memory.initial_importance == MAX_IMPORTANCE
 
     @pytest.mark.asyncio
-    async def test_reinforcement_increments_recall_count(
-        self, mock_db_session, l2_memory, now
-    ):
+    async def test_reinforcement_increments_recall_count(self, mock_db_session, l2_memory, now):
         """Reinforcement should increment recall_count."""
         old_count = l2_memory.recall_count
 
@@ -868,9 +860,7 @@ class TestReinforcement:
         assert l2_memory.recall_count == old_count + 1
 
     @pytest.mark.asyncio
-    async def test_reinforcement_works_on_l3_fact(
-        self, mock_db_session, l3_fact, now
-    ):
+    async def test_reinforcement_works_on_l3_fact(self, mock_db_session, l3_fact, now):
         """Reinforcement should work on L3 FactNode."""
         # Add required fields for decay
         l3_fact.importance_score = l3_fact.importance

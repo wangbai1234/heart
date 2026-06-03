@@ -20,11 +20,10 @@ import asyncio
 import os
 from logging.config import fileConfig
 
+from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
-
-from alembic import context
 
 # Alembic Config object provides access to values in alembic.ini
 config = context.config
@@ -33,6 +32,7 @@ config = context.config
 # This line sets up loggers basically.
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
+
 
 # Load DATABASE_URL from environment variable
 # This allows different databases for dev/test/prod environments
@@ -48,18 +48,19 @@ def get_db_url() -> str:
     from dotenv import load_dotenv
 
     # Load .env if present
-    env_path = os.path.join(os.path.dirname(__file__), '..', '..', '.env')
+    env_path = os.path.join(os.path.dirname(__file__), "..", "..", ".env")
     if os.path.exists(env_path):
         load_dotenv(env_path)
 
-    db_url = os.getenv('DATABASE_URL')
+    db_url = os.getenv("DATABASE_URL")
     if not db_url:
         raise RuntimeError(
-            'DATABASE_URL environment variable not set.\n'
-            'Please set DATABASE_URL in your environment or .env file.\n'
-            'Example: postgresql+asyncpg://heart:heartdev@localhost:5432/heart'
+            "DATABASE_URL environment variable not set.\n"
+            "Please set DATABASE_URL in your environment or .env file.\n"
+            "Example: postgresql+asyncpg://heart:heartdev@localhost:5432/heart"
         )
     return db_url
+
 
 # SQLAlchemy MetaData for autogenerate support
 # Once you create your database models in heart.infra.db.Base,

@@ -11,10 +11,16 @@ Tests:
 Author: 心屿团队
 """
 
-import pytest
 from datetime import datetime, timezone
 from uuid import uuid4
 
+import pytest
+
+from heart.ss04_relationship.attachment_tracker import (
+    ATTACHMENT_FLOORS,
+    AttachmentTracker,
+    compute_attachment_decay_factor,
+)
 from heart.ss04_relationship.models import RelationshipState
 from heart.ss04_relationship.stage_engine import (
     RelationshipStage,
@@ -22,18 +28,11 @@ from heart.ss04_relationship.stage_engine import (
     SignalBatch,
 )
 from heart.ss04_relationship.trust_tracker import (
-    TrustTracker,
     MAX_TRUST_INCREASE_PER_TURN,
-    MAX_TRUST_DECREASE_PER_TURN,
+    TrustTracker,
     compute_trust_decay_factor,
     compute_trust_floor,
 )
-from heart.ss04_relationship.attachment_tracker import (
-    AttachmentTracker,
-    ATTACHMENT_FLOORS,
-    compute_attachment_decay_factor,
-)
-
 
 # ============================================================
 # Fixtures
@@ -176,7 +175,7 @@ def test_trust_decay_14_30_days(base_state):
     factor = compute_trust_decay_factor(days_since_last, RelationshipStage.FRIEND)
 
     # 6 days of decay at 0.995/day
-    expected_factor = 0.995 ** 6
+    expected_factor = 0.995**6
     assert factor == pytest.approx(expected_factor, abs=0.001)
 
 
@@ -187,7 +186,7 @@ def test_trust_decay_30_90_days(base_state):
     factor = compute_trust_decay_factor(days_since_last, RelationshipStage.FRIEND)
 
     # 20 days of decay at 0.99/day
-    expected_factor = 0.99 ** 20
+    expected_factor = 0.99**20
     assert factor == pytest.approx(expected_factor, abs=0.001)
 
 
@@ -293,7 +292,7 @@ def test_attachment_decay_after_30_days(base_state):
     factor = compute_attachment_decay_factor(days_since_last)
 
     # 15 days of decay at 0.99/day
-    expected_factor = 0.99 ** 15
+    expected_factor = 0.99**15
     assert factor == pytest.approx(expected_factor, abs=0.001)
 
 

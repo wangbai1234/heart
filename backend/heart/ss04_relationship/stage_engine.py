@@ -19,10 +19,10 @@ from enum import Enum
 from typing import Any, Optional
 
 from heart.infra.invariants import invariant
+
 import heart.infra.invariant_predicates  # noqa: F401, E402 isort:skip
 
 from ..ss04_relationship.models import RelationshipState
-
 
 # ============================================================
 # Stage Enum
@@ -149,9 +149,7 @@ class StagePhaseEngine:
     @invariant("inv-r-6.cold-war-no-progress")
     @invariant("inv-r-4.trust-asymmetry")
     @invariant("inv-r-1.stage-monotonic")
-    def evaluate(
-        self, state: RelationshipState, signals: SignalBatch
-    ) -> StageDecision:
+    def evaluate(self, state: RelationshipState, signals: SignalBatch) -> StageDecision:
         """
         Evaluate stage transition for current turn (§3.5 step 5).
 
@@ -403,7 +401,10 @@ class StagePhaseEngine:
                 return False, f"Need trust >= 0.90, have {state.trust_score:.2f}"
             if state.attachment_strength < 0.85:
                 return False, f"Need attachment >= 0.85, have {state.attachment_strength:.2f}"
-            if state.total_promises_made == 0 or state.total_promises_kept / state.total_promises_made < 0.8:
+            if (
+                state.total_promises_made == 0
+                or state.total_promises_kept / state.total_promises_made < 0.8
+            ):
                 return False, "Need promise keeping ratio >= 80%"
 
         return True, "Requirements satisfied"
@@ -426,7 +427,10 @@ class StagePhaseEngine:
         if target_stage == RelationshipStage.ACQUAINTANCE:
             required_elapsed = self.intimacy_resistance * 10 * 0.3  # Formula from §3.7
             if days_since_first < required_elapsed:
-                return False, f"Soul gate: need {required_elapsed:.1f} days, have {days_since_first}"
+                return (
+                    False,
+                    f"Soul gate: need {required_elapsed:.1f} days, have {days_since_first}",
+                )
 
         # Apply vulnerability unlock thresholds
         if target_stage == RelationshipStage.FRIEND:
@@ -434,7 +438,10 @@ class StagePhaseEngine:
             if self.vulnerability_thresholds and len(self.vulnerability_thresholds) > 0:
                 threshold = self.vulnerability_thresholds[0].get("intimacy_level", 0.40)
                 if state.intimacy_level < threshold:
-                    return False, f"Soul gate: need intimacy >= {threshold} for vulnerability unlock"
+                    return (
+                        False,
+                        f"Soul gate: need intimacy >= {threshold} for vulnerability unlock",
+                    )
 
         elif target_stage == RelationshipStage.ROMANTIC_INTEREST:
             # Check second vulnerability threshold

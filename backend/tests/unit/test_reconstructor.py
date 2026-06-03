@@ -15,12 +15,10 @@ from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 import pytest
-import yaml
 
-from heart.ss02_memory.models import EpisodicMemory, FactNode, IdentityMemory
+from heart.ss02_memory.models import EpisodicMemory, IdentityMemory
 from heart.ss02_memory.reconstructor import Reconstructor
 from heart.ss02_memory.retriever.base import ScoredMemory
-
 
 # ============================================================
 # Fixtures
@@ -402,9 +400,7 @@ class TestRinReconstruction:
 class TestDorothyReconstruction:
     """Test Dorothy reconstruction across all 5 states."""
 
-    def test_dorothy_vivid_with_mood_particle(
-        self, l2_memory_vivid, dorothy_soul_spec, user_id
-    ):
+    def test_dorothy_vivid_with_mood_particle(self, l2_memory_vivid, dorothy_soul_spec, user_id):
         """Dorothy vivid must have 语气词 at end."""
         # Create Dorothy version
         mem = EpisodicMemory(
@@ -444,16 +440,14 @@ class TestDorothyReconstruction:
         result = reconstructor.reconstruct(scored)
 
         # CRITICAL: Must end with 语气词
-        assert any(
-            result.endswith(p) for p in ["呀", "哦", "嘛", "啦", "呢", "~"]
-        ), f"Dorothy must end with 语气词, got: {result}"
+        assert any(result.endswith(p) for p in ["呀", "哦", "嘛", "啦", "呢", "~"]), (
+            f"Dorothy must end with 语气词, got: {result}"
+        )
 
         # Should NOT have ellipsis (Dorothy forbids it)
         assert "……" not in result, f"Dorothy forbids ellipsis, got: {result}"
 
-    def test_dorothy_fading_with_onomatopoeia(
-        self, l2_memory_fading, dorothy_soul_spec, user_id
-    ):
+    def test_dorothy_fading_with_onomatopoeia(self, l2_memory_fading, dorothy_soul_spec, user_id):
         """CRITICAL: Dorothy fading must have 拟声词 (诶嘿嘿, 呜哇, 嘿嘿)."""
         mem = EpisodicMemory(
             id=uuid4(),
@@ -492,9 +486,9 @@ class TestDorothyReconstruction:
         result = reconstructor.reconstruct(scored)
 
         # CRITICAL: Must have 拟声词
-        assert any(
-            ono in result for ono in ["诶嘿嘿", "呜哇", "嘿嘿"]
-        ), f"Dorothy fading must have 拟声词, got: {result}"
+        assert any(ono in result for ono in ["诶嘿嘿", "呜哇", "嘿嘿"]), (
+            f"Dorothy fading must have 拟声词, got: {result}"
+        )
 
         # Must end with 语气词
         assert any(result.endswith(p) for p in ["呀", "哦", "嘛", "啦", "呢", "~"])
@@ -589,9 +583,7 @@ class TestDorothyReconstruction:
         # Must end with 语气词 or ！
         assert result.endswith(("呀", "哦", "嘛", "啦", "呢", "~", "！"))
 
-    def test_dorothy_archived_state(
-        self, l2_memory_archived, dorothy_soul_spec, user_id
-    ):
+    def test_dorothy_archived_state(self, l2_memory_archived, dorothy_soul_spec, user_id):
         """Dorothy archived state."""
         mem = EpisodicMemory(
             id=uuid4(),
@@ -660,9 +652,7 @@ class TestAntiPatternChecks:
         with pytest.raises(ValueError, match="宝贝"):
             reconstructor.reconstruct(scored)
 
-    def test_rin_forbidden_pattern_violation_raises(
-        self, l2_memory_vivid, rin_soul_spec
-    ):
+    def test_rin_forbidden_pattern_violation_raises(self, l2_memory_vivid, rin_soul_spec):
         """Rin forbidden_pattern (波浪号) violation should raise."""
         # Inject banned pattern
         l2_memory_vivid.episode_summary = "你的猫很可爱~"
@@ -679,9 +669,7 @@ class TestAntiPatternChecks:
         with pytest.raises(ValueError, match="波浪号"):
             reconstructor.reconstruct(scored)
 
-    def test_dorothy_ellipsis_forbidden(
-        self, l2_memory_vivid, dorothy_soul_spec, user_id
-    ):
+    def test_dorothy_ellipsis_forbidden(self, l2_memory_vivid, dorothy_soul_spec, user_id):
         """Dorothy hard_never includes ……, should not appear in output."""
         mem = EpisodicMemory(
             id=uuid4(),
@@ -750,9 +738,7 @@ class TestVoiceTransforms:
         assert "你和我" in result
         assert "我们" not in result
 
-    def test_dorothy_third_person_transform(
-        self, l2_memory_vivid, dorothy_soul_spec, user_id
-    ):
+    def test_dorothy_third_person_transform(self, l2_memory_vivid, dorothy_soul_spec, user_id):
         """Dorothy vd-DOROTHY-001: 我 → 桃桃."""
         mem = EpisodicMemory(
             id=uuid4(),

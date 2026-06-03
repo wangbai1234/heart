@@ -1,0 +1,49 @@
+# Chinese (Simplified) care path responses — PURPLE crisis intervention templates
+# Reviewed by: pending_psych_consultant (must sign off before merge to main)
+# Last updated: 2026-06-02
+# Status: DRAFT — placeholder text pending psychologist review
+
+version: "1.0.0"
+locale: "zh"
+fallback_template_id: "zh-CN-default-v1"
+
+jurisdictions:
+  CN:
+    template_id: "zh-CN-default-v1"
+    hotline_name: "北京心理危机研究与干预中心"
+    hotline_number: "010-82951332"
+    hotline_hours: "24 小时"
+    text: |
+      我听到你说的了。你现在承受的真的很重，这件事不必你一个人扛。
+      如果你愿意，可以拨打 {hotline_name}：{hotline_number}（{hotline_hours}）。
+      也可以告诉我，你身边有没有现在能联系到的人？
+
+  HK:
+    template_id: "zh-HK-default-v1"
+    hotline_name: "撒瑪利亞防止自殺會"
+    hotline_number: "2389 2222"
+    hotline_hours: "24 小時"
+    text: |
+      我聽到你說的。你現在承受的真的很重，這件事不需要你一個人扛。
+      如果你願意，可以撥打 {hotline_name}：{hotline_number}（{hotline_hours}）。
+      也可以告訴我，你身邊有沒有現在可以聯繫到的人？
+
+  TW:
+    template_id: "zh-TW-default-v1"
+    hotline_name: "安心專線"
+    hotline_number: "1925"
+    hotline_hours: "24 小時"
+    text: |
+      我聽到你說的。你現在承受的真的很重，這件事不需要你一個人扛。
+      如果你願意，可以撥打 {hotline_name}：{hotline_number}（{hotline_hours}）。
+      也可以告訴我，你身邊有沒有現在可以聯繫到的人？
+
+  SG:
+    template_id: "zh-SG-default-v1"
+    hotline_name: "新加坡援人協會 (SOS)"
+    hotline_number: "1800-221-4444"
+    hotline_hours: "24 小時"
+    text: |
+      我聽到你說的。你現在承受的真的很重，這件事不需要你一個人扛。
+      如果你願意，可以撥打 {hotline_name}：{hotline_number}（{hotline_hours}）。
+      也可以告訴我，你身邊有沒有現在可以聯繫到的人？

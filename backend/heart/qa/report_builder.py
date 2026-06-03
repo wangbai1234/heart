@@ -146,13 +146,17 @@ class ReportBuilder:
         rows = []
         for s in scores:
             score = s["drift_score"]
-            css = "score-pass" if score <= self._drift_threshold else ("score-fail" if score > self._fail_threshold else "score-warn")
+            css = (
+                "score-pass"
+                if score <= self._drift_threshold
+                else ("score-fail" if score > self._fail_threshold else "score-warn")
+            )
             anti = ", ".join(s.get("anti_pattern_hits", [])) or "—"
             rows.append(
-                f'<tr><td>{s["prompt_id"]}</td>'
+                f"<tr><td>{s['prompt_id']}</td>"
                 f'<td class="{css}">{score:.4f}</td>'
-                f'<td>{s["verdict"]}</td>'
-                f'<td>{anti}</td></tr>'
+                f"<td>{s['verdict']}</td>"
+                f"<td>{anti}</td></tr>"
             )
         summary_table = (
             "<table><tr><th>Prompt</th><th>Drift Score</th><th>Verdict</th><th>Anti-Patterns</th></tr>"
@@ -175,13 +179,21 @@ class ReportBuilder:
 
             # Bar chart for 5 dims
             bars = ""
-            for dim in ["d1_match_ratio", "d2_severity", "d3_tone_distance", "d4_inertia_distance", "d5_embedding_distance"]:
+            for dim in [
+                "d1_match_ratio",
+                "d2_severity",
+                "d3_tone_distance",
+                "d4_inertia_distance",
+                "d5_embedding_distance",
+            ]:
                 val = s.get(dim, 0)
                 color = "#22c55e" if val < 0.3 else ("#f59e0b" if val < 0.6 else "#ef4444")
                 w = min(100, int(val * 100))
                 bars += f'<div class="bar"><div class="bar-fill" style="width:{w}%;background:{color}"></div></div>'
 
-            vd_badges = " ".join(f'<span class="vd">{v}</span>' for v in vd_matches) if vd_matches else "—"
+            vd_badges = (
+                " ".join(f'<span class="vd">{v}</span>' for v in vd_matches) if vd_matches else "—"
+            )
             anti_badges = " ".join(f'<span class="anti">{a}</span>' for a in anti) if anti else "—"
 
             detail_id = f"detail-{i}"

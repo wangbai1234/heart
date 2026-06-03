@@ -12,19 +12,22 @@ Graceful degradation: skips integration tests when testcontainers not available.
 """
 
 import os
-import pytest
 from pathlib import Path
 from uuid import uuid4
+
+import pytest
 
 # ─── Testcontainers availability check ───
 try:
     import testcontainers  # noqa: F401
+
     TESTCONTAINERS_AVAILABLE = True
 except ImportError:
     TESTCONTAINERS_AVAILABLE = False
 
 
 # ─── Fake LLM Provider ───
+
 
 @pytest.fixture(scope="session")
 def fake_llm_provider():
@@ -37,6 +40,7 @@ def fake_llm_provider():
 
 
 # ─── PostgreSQL Testcontainer (session-scope) ───
+
 
 @pytest.fixture(scope="session")
 def postgres_container():
@@ -71,6 +75,7 @@ def postgres_container():
 
 # ─── Redis Testcontainer (session-scope) ───
 
+
 @pytest.fixture(scope="session")
 def redis_container():
     """Session-scope Redis testcontainer."""
@@ -83,7 +88,9 @@ def redis_container():
         container = RedisContainer(image="redis:7-alpine")
         container.start()
 
-        os.environ["TEST_REDIS_URL"] = f"redis://{container.get_container_host_ip()}:{container.get_exposed_port(6379)}"
+        os.environ["TEST_REDIS_URL"] = (
+            f"redis://{container.get_container_host_ip()}:{container.get_exposed_port(6379)}"
+        )
 
     except Exception as e:
         pytest.skip(f"Failed to start Redis container: {e}")
@@ -95,16 +102,20 @@ def redis_container():
 
 # ─── Database Session (function-scope, transaction rollback) ───
 
+
 @pytest.fixture
 async def db_session(postgres_container):
     """Function-scope async DB session with transaction rollback."""
-    from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
     from sqlalchemy.orm import sessionmaker
+
     from heart.ss02_memory.models import Base as MemoryBase
     from heart.ss03_emotion.models import Base as EmotionBase
     from heart.ss04_relationship.models import Base as RelationshipBase
 
-    db_url = os.environ.get("TEST_ASYNC_DATABASE_URL", "postgresql+asyncpg://heart:heart_test@localhost:5432/heart_test")
+    db_url = os.environ.get(
+        "TEST_ASYNC_DATABASE_URL", "postgresql+asyncpg://heart:heart_test@localhost:5432/heart_test"
+    )
 
     engine = create_async_engine(db_url, echo=False, future=True)
 
@@ -127,6 +138,7 @@ async def db_session(postgres_container):
 
 # ─── Redis Client (function-scope, flushdb teardown) ───
 
+
 @pytest.fixture
 def redis_client(redis_container):
     """Function-scope Redis client with key prefix isolation."""
@@ -148,6 +160,7 @@ def redis_client(redis_container):
 
 # ─── Frozen Clock (function-scope, freezegun) ───
 
+
 @pytest.fixture
 def frozen_clock():
     """Function-scope frozen clock using freezegun.
@@ -155,8 +168,9 @@ def frozen_clock():
     Use: frozen_clock.move_to("2026-01-15") to set a specific date.
     """
     try:
-        from freezegun import freeze_time
         from datetime import datetime, timezone
+
+        from freezegun import freeze_time
 
         freezer = freeze_time("2026-06-01 12:00:00", tz_offset=0)
         freezer.start()
@@ -167,6 +181,7 @@ def frozen_clock():
 
 
 # ─── Soul Registry (function-scope) ───
+
 
 @pytest.fixture
 def soul_registry():
@@ -180,6 +195,7 @@ def soul_registry():
 
 # ─── Emotion Service (function-scope) ───
 
+
 @pytest.fixture
 def emotion_service():
     """EmotionService initialized with real lexicon config."""
@@ -189,6 +205,7 @@ def emotion_service():
 
 
 # ─── Memory Service (function-scope) ───
+
 
 @pytest.fixture
 def memory_service(db_session, redis_client):

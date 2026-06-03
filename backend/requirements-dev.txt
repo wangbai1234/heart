@@ -9,6 +9,10 @@ pytest-mock>=3.14.0
 hypothesis>=6.92.0
 aiosqlite>=0.20.0
 
+# E2E (Tier E) — real HTTP + Playwright APIRequestContext, ready for browser tests
+pytest-playwright>=0.5.0
+playwright>=1.45.0
+
 # Load testing
 locust>=2.20.0
 

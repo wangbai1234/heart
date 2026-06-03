@@ -10,9 +10,10 @@ Supports:
 
 import os
 from typing import Dict, Optional, Type
-from heart.infra.llm_providers.base import LLMProvider, CircuitBreakerInterface
-from heart.infra.llm_providers.deepseek_pro import DeepSeekV4ProProvider
+
+from heart.infra.llm_providers.base import CircuitBreakerInterface, LLMProvider
 from heart.infra.llm_providers.deepseek import DeepSeekV4FlashProvider
+from heart.infra.llm_providers.deepseek_pro import DeepSeekV4ProProvider
 
 
 class ProviderRegistry:

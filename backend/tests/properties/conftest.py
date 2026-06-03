@@ -10,12 +10,12 @@ Constraint: Full suite must complete in < 30s.
 from __future__ import annotations
 
 import importlib
+
 import pytest
-from hypothesis import settings, HealthCheck
+from hypothesis import HealthCheck, settings
 
-from heart.infra.invariants import InvariantRegistry
 import heart.infra.invariant_predicates as predicates_module
-
+from heart.infra.invariants import InvariantRegistry
 
 # ── Hypothesis profile ───────────────────────────────────────────
 
@@ -37,6 +37,7 @@ settings.load_profile("ci")
 
 
 # ── Fixtures ─────────────────────────────────────────────────────
+
 
 @pytest.fixture(autouse=True)
 def reset_registry():

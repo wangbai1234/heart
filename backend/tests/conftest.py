@@ -9,10 +9,10 @@ Tier C: live tests — real DeepSeek, cost-capped, opt-in via --live
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
-from heart.ss02_memory.models import Base
 
+from heart.ss02_memory.models import Base
 
 # Test database URL (in-memory SQLite for unit tests)
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"

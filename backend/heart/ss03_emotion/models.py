@@ -15,11 +15,13 @@ Author: 心屿团队
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional, TypedDict, List
+from typing import List, Optional, TypedDict
 from uuid import UUID
 
 from sqlalchemy import (
     UUID as SQLUUID,
+)
+from sqlalchemy import (
     VARCHAR,
     BigInteger,
     Boolean,
@@ -27,7 +29,6 @@ from sqlalchemy import (
     DateTime,
     Float,
     Index,
-    Text,
     text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
@@ -279,4 +280,6 @@ class RepairOutcome(TypedDict):
     applied_to: List[RepairApplicationDetail]
     residual_score: float  # [0, 1], higher = more unrepaired
     flags: RepairOutcomeFlags
-    narrative_hint: str  # "advanced" | "stalled" | "rejected" | "reversed" | "completed" | "ignored"
+    narrative_hint: (
+        str  # "advanced" | "stalled" | "rejected" | "reversed" | "completed" | "ignored"
+    )

@@ -53,7 +53,7 @@ stage_lint() {
 
     cd "$BACKEND_DIR"
     log "→ ruff check"
-    ruff check heart/ --select E,F,W,I,N --ignore E501
+    ruff check heart/
 
     log "→ ruff format --check"
     ruff format --check heart/

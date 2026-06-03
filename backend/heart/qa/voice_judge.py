@@ -80,9 +80,7 @@ class VoiceJudge:
         humor_str = ", ".join(f"{k}={v}" for k, v in humor.items()) if humor else "none"
 
         # Build baseline samples
-        baseline_str = "\n".join(
-            f"  {i + 1}. {resp}" for i, resp in enumerate(baseline_responses)
-        )
+        baseline_str = "\n".join(f"  {i + 1}. {resp}" for i, resp in enumerate(baseline_responses))
 
         prompt = f"""You are evaluating a candidate response against an established voice profile.
 

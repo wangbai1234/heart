@@ -5,17 +5,17 @@ per runtime_specs/02_memory_runtime.md §3.4-3.6
 Uses real PG + Redis (testcontainers) + fake LLM.
 """
 
-import pytest
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
-from heart.ss02_memory.service import (
-    MemoryService,
-    Turn,
-    QueryContext,
-)
+import pytest
+
 from heart.ss02_memory.decay_engine import DecayEngine
 from heart.ss02_memory.models import EpisodicMemory
+from heart.ss02_memory.service import (
+    QueryContext,
+    Turn,
+)
 
 
 @pytest.mark.integration

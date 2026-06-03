@@ -86,6 +86,7 @@ def _is_partition_table(name: str) -> bool:
 
 # ── Helpers ──
 
+
 def _make_alembic_cfg(db_url: str, migrations_dir: str) -> Config:
     """Build an Alembic Config pointed at the test database."""
     cfg = Config()
@@ -119,11 +120,7 @@ async def _get_table_names(db_url: str) -> set[str]:
         def get_tables(connection):
             inspector = inspect(connection)
             tables = inspector.get_table_names()
-            return {
-                t
-                for t in tables
-                if t != "alembic_version" and not _is_partition_table(t)
-            }
+            return {t for t in tables if t != "alembic_version" and not _is_partition_table(t)}
 
         tables = await conn.run_sync(get_tables)
     await engine.dispose()
@@ -181,7 +178,6 @@ async def _assert_schema_identical(schema1: dict, schema2: dict, label: str) -> 
             assert n1 == n2, f"{label}: column '{table}.{col}' nullable mismatch: {n1} vs {n2}"
 
 
-
 async def _clean_database(db_url: str) -> None:
     """Drop all known tables to ensure a clean state before each test."""
     engine = create_async_engine(db_url, echo=False)
@@ -201,8 +197,8 @@ async def _clean_database(db_url: str) -> None:
     await engine.dispose()
 
 
-
 # ── Fixtures ──
+
 
 @pytest.fixture
 def migrations_dir():
@@ -221,6 +217,7 @@ def alembic_cfg(postgres_container, migrations_dir):
 
 # ── Test: Roundtrip — Full Chain ──
 
+
 @pytest.mark.asyncio
 async def test_full_chain_roundtrip(postgres_container, alembic_cfg, migrations_dir):
     """Full migration chain: head → base → head → base.
@@ -234,9 +231,7 @@ async def test_full_chain_roundtrip(postgres_container, alembic_cfg, migrations_
     _run_upgrade(alembic_cfg, "head")
     schema_up1 = await _get_table_schema(db_url)
     tables_up1 = await _get_table_names(db_url)
-    assert tables_up1 == TABLES_BY_REV[REV_003], (
-        f"Tables after 1st upgrade: {tables_up1}"
-    )
+    assert tables_up1 == TABLES_BY_REV[REV_003], f"Tables after 1st upgrade: {tables_up1}"
 
     # ── Phase 2: downgrade to base, verify empty ──
     _run_downgrade(alembic_cfg, "base")
@@ -249,9 +244,7 @@ async def test_full_chain_roundtrip(postgres_container, alembic_cfg, migrations_
     _run_upgrade(alembic_cfg, "head")
     schema_up2 = await _get_table_schema(db_url)
     tables_up2 = await _get_table_names(db_url)
-    assert tables_up2 == TABLES_BY_REV[REV_003], (
-        f"Tables after 2nd upgrade: {tables_up2}"
-    )
+    assert tables_up2 == TABLES_BY_REV[REV_003], f"Tables after 2nd upgrade: {tables_up2}"
     await _assert_schema_identical(schema_up1, schema_up2, "Full chain roundtrip")
 
     # ── Phase 4: downgrade to base, verify empty ──
@@ -263,6 +256,7 @@ async def test_full_chain_roundtrip(postgres_container, alembic_cfg, migrations_
 
 
 # ── Test: Roundtrip — Per-Pair ──
+
 
 @pytest.mark.asyncio
 async def test_pair_001_to_base_roundtrip(postgres_container, alembic_cfg, migrations_dir):
@@ -364,6 +358,7 @@ async def test_pair_003_to_002_roundtrip(postgres_container, alembic_cfg, migrat
 
 # ── Test: Stamps ──
 
+
 @pytest.mark.asyncio
 async def test_alembic_stamp_head_matches_current(postgres_container, alembic_cfg, migrations_dir):
     """alembic stamp head + alembic current must match."""
@@ -382,17 +377,13 @@ async def test_alembic_stamp_head_matches_current(postgres_container, alembic_cf
     # Read alembic_version to verify the stamped revision
     engine = create_async_engine(db_url)
     async with engine.connect() as conn:
-        result = await conn.execute(
-            text("SELECT version_num FROM alembic_version")
-        )
+        result = await conn.execute(text("SELECT version_num FROM alembic_version"))
         rows = result.fetchall()
     await engine.dispose()
 
     assert len(rows) == 1, f"Expected 1 row in alembic_version, got {len(rows)}"
     stamped_rev = rows[0][0]
-    assert stamped_rev == REV_003, (
-        f"Stamped revision {stamped_rev} does not match head {REV_003}"
-    )
+    assert stamped_rev == REV_003, f"Stamped revision {stamped_rev} does not match head {REV_003}"
 
     # Verify stamp didn't actually create any tables
     tables_after = await _get_table_names(db_url)
@@ -407,7 +398,9 @@ async def test_alembic_stamp_head_matches_current(postgres_container, alembic_cf
 
 
 @pytest.mark.asyncio
-async def test_alembic_head_is_consistently_reachable(postgres_container, alembic_cfg, migrations_dir):
+async def test_alembic_head_is_consistently_reachable(
+    postgres_container, alembic_cfg, migrations_dir
+):
     """Each migration can be reached from base and from its down_revision."""
     db_url = os.environ["TEST_ASYNC_DATABASE_URL"]
     await _clean_database(db_url)
@@ -436,6 +429,7 @@ async def test_alembic_head_is_consistently_reachable(postgres_container, alembi
 
 # ── Test: Migration Chain Integrity ──
 
+
 @pytest.mark.asyncio
 async def test_migration_chain_has_no_gaps(postgres_container, alembic_cfg, migrations_dir):
     """Verify the down_revision chain is continuous with no broken links."""
@@ -453,19 +447,25 @@ async def test_migration_chain_has_no_gaps(postgres_container, alembic_cfg, migr
     # Verify down_revision chain
     rev_001 = revisions[REV_001]
     assert rev_001.down_revision is not None, f"{REV_001} should have down_revision"
-    assert BASE in (rev_001.down_revision if isinstance(rev_001.down_revision, tuple) else (rev_001.down_revision,)), (
-        f"{REV_001} down_revision {rev_001.down_revision} != {BASE}"
-    )
+    assert BASE in (
+        rev_001.down_revision
+        if isinstance(rev_001.down_revision, tuple)
+        else (rev_001.down_revision,)
+    ), f"{REV_001} down_revision {rev_001.down_revision} != {BASE}"
 
     rev_002 = revisions[REV_002]
-    assert REV_001 in (rev_002.down_revision if isinstance(rev_002.down_revision, tuple) else (rev_002.down_revision,)), (
-        f"{REV_002} down_revision {rev_002.down_revision} != {REV_001}"
-    )
+    assert REV_001 in (
+        rev_002.down_revision
+        if isinstance(rev_002.down_revision, tuple)
+        else (rev_002.down_revision,)
+    ), f"{REV_002} down_revision {rev_002.down_revision} != {REV_001}"
 
     rev_003 = revisions[REV_003]
-    assert REV_002 in (rev_003.down_revision if isinstance(rev_003.down_revision, tuple) else (rev_003.down_revision,)), (
-        f"{REV_003} down_revision {rev_003.down_revision} != {REV_002}"
-    )
+    assert REV_002 in (
+        rev_003.down_revision
+        if isinstance(rev_003.down_revision, tuple)
+        else (rev_003.down_revision,)
+    ), f"{REV_003} down_revision {rev_003.down_revision} != {REV_002}"
 
     # Verify no duplicate heads (exactly one head)
     heads = sd.get_heads()

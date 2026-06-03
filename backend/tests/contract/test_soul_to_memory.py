@@ -12,6 +12,7 @@ P-10: Runtime agents cannot modify Soul Spec.
 """
 
 import pytest
+
 from heart.ss02_memory.reconstructor import Reconstructor
 
 

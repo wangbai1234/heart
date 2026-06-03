@@ -2,9 +2,11 @@
 
 from datetime import datetime, timedelta, timezone
 from typing import Optional
+
 import jwt
-from pydantic import BaseModel
 from fastapi import HTTPException, status
+from pydantic import BaseModel
+
 from .config import settings
 
 

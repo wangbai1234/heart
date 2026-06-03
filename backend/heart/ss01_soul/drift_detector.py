@@ -26,7 +26,6 @@ from .drift_llm_client import DriftLLMClient, LLMDriftResult
 from .drift_score_fuser import compute_final_score, should_emit_reinforce
 from .registry import get_soul_registry
 
-
 # ============================================================
 # Types (per design doc §2)
 # ============================================================

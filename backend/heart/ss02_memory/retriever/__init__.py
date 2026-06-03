@@ -12,13 +12,13 @@ Author: 心屿团队
 """
 
 from .base import (
+    DEFAULT_WEIGHTS,
     MemoryRetrievalResult,
     QueryContext,
     RetrievalStrategy,
     ScoredMemory,
     combine_scores,
     select_top_k,
-    DEFAULT_WEIGHTS,
 )
 from .emotional import EmotionalRetriever
 from .graph import GraphRetriever

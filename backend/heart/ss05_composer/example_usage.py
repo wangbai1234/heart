@@ -5,6 +5,7 @@ SS05 Composer - 示例使用 Model Router
 """
 
 from typing import AsyncGenerator
+
 from heart.infra.llm import get_model_router
 
 # ============================================================================

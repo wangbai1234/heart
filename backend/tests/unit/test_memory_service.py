@@ -15,17 +15,17 @@ Author: 心屿团队
 
 from __future__ import annotations
 
-import pytest
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from uuid import uuid4
+
+import pytest
 
 from heart.ss02_memory.service import (
     MemoryService,
     QueryContext,
-    Turn,
     ReinforcementTrigger,
+    Turn,
 )
-
 
 # ============================================================
 # Fixtures
@@ -80,17 +80,23 @@ class TestRetrieveAPI:
     """Tests for retrieve() main retrieval API."""
 
     @pytest.mark.asyncio
-    async def test_retrieve_returns_result_without_db(self, service, user_id, character_id, query_context):
+    async def test_retrieve_returns_result_without_db(
+        self, service, user_id, character_id, query_context
+    ):
         """retrieve() returns empty result when DB is not configured."""
         result = await service.retrieve(
-            user_id=user_id, character_id=character_id,
-            query_context=query_context, top_k=5,
+            user_id=user_id,
+            character_id=character_id,
+            query_context=query_context,
+            top_k=5,
         )
         assert result.memories == []
         assert result.total_candidates == 0
 
     @pytest.mark.asyncio
-    async def test_retrieve_enforces_top_k_limit(self, service, user_id, character_id, query_context):
+    async def test_retrieve_enforces_top_k_limit(
+        self, service, user_id, character_id, query_context
+    ):
         """retrieve() should enforce INV-M-3: top_k ≤ MAX_TOP_K."""
         # Should clamp to MAX_TOP_K (10)
         clamped = service._enforce_top_k(20)
@@ -132,7 +138,9 @@ class TestGetRecentEpisodes:
     """Tests for get_recent_episodes() recency-based retrieval."""
 
     @pytest.mark.asyncio
-    async def test_get_recent_episodes_returns_empty_without_db(self, service, user_id, character_id):
+    async def test_get_recent_episodes_returns_empty_without_db(
+        self, service, user_id, character_id
+    ):
         """get_recent_episodes() returns empty list when DB is not configured."""
         result = await service.get_recent_episodes(user_id=user_id, character_id=character_id)
         assert result == []
@@ -166,8 +174,11 @@ class TestEncodeFast:
     async def test_encode_fast_returns_signals(self, service, user_id, character_id):
         """encode_fast() returns FastSignals without DB."""
         turn = Turn(
-            turn_index=1, role="user", content="我养了一只猫",
-            user_id=user_id, character_id=character_id,
+            turn_index=1,
+            role="user",
+            content="我养了一只猫",
+            user_id=user_id,
+            character_id=character_id,
             timestamp=datetime.now(timezone.utc),
         )
         result = await service.encode_fast(turn)
@@ -183,9 +194,13 @@ class TestQueueLLMEncoding:
     async def test_queue_llm_encoding_does_not_raise(self, service):
         """queue_llm_encoding() logs warning without DB (no raise)."""
         from heart.ss02_memory.models import MemoryEncodingEvent
+
         event = MemoryEncodingEvent(
-            event_id=uuid4(), user_id=uuid4(), character_id="rin",
-            source_turn_id=uuid4(), status="llm_pending",
+            event_id=uuid4(),
+            user_id=uuid4(),
+            character_id="rin",
+            source_turn_id=uuid4(),
+            status="llm_pending",
             created_at=datetime.now(timezone.utc),
         )
         # Should not raise — logs warning when no DB
@@ -199,7 +214,9 @@ class TestReinforce:
     async def test_reinforce_no_db_no_raise(self, service):
         """reinforce() does not raise when DB is not configured."""
         trigger = ReinforcementTrigger(
-            trigger_type="user_re_mentioned", context="test", boost=0.15,
+            trigger_type="user_re_mentioned",
+            context="test",
+            boost=0.15,
         )
         # Should not raise — silently no-ops without DB
         await service.reinforce(memory_ids=[uuid4()], trigger=trigger)
@@ -283,7 +300,9 @@ class TestInvariants:
         with pytest.raises(ValueError, match="INV-M-6.*user_id"):
             service._enforce_user_isolation(user_id, character_id, bad_context)
 
-    def test_enforce_user_isolation_rejects_character_mismatch(self, service, user_id, character_id):
+    def test_enforce_user_isolation_rejects_character_mismatch(
+        self, service, user_id, character_id
+    ):
         """_enforce_user_isolation() should reject character_id mismatch."""
         bad_context = QueryContext(
             current_message="test",

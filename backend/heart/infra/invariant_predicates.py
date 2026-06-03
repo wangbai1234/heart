@@ -10,13 +10,12 @@ Author: Heart Platform
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from heart.infra.invariants import (
     InvariantContext,
     InvariantRegistry,
     Severity,
-    invariant,
 )
 
 
@@ -134,6 +133,7 @@ def _register_all() -> None:
 
 # ── Predicate implementations ────────────────────────────────────
 
+
 def _inv_m_3_predicate(ctx: InvariantContext) -> bool:
     """L4 count must not decrease."""
     before = ctx.before_state
@@ -171,7 +171,7 @@ def _inv_m_6_predicate(ctx: InvariantContext) -> bool:
         return True
     before_total = _get_total_memory_count(before)
     after_total = _get_total_memory_count(after)
-    decayed = _get_decayed_count(after) if hasattr(after, 'get') else 0
+    decayed = _get_decayed_count(after) if hasattr(after, "get") else 0
     return after_total >= before_total - decayed
 
 
@@ -193,7 +193,9 @@ def _inv_e_2_predicate(ctx: InvariantContext) -> bool:
     after = ctx.after_state
     if after is None:
         return True
-    stack = after.get("active_stack") if isinstance(after, dict) else getattr(after, "active_stack", [])
+    stack = (
+        after.get("active_stack") if isinstance(after, dict) else getattr(after, "active_stack", [])
+    )
     return len(stack) <= 5
 
 
@@ -280,6 +282,7 @@ def _inv_o_3_predicate(ctx: InvariantContext) -> bool:
 
 # ── Helpers ──────────────────────────────────────────────────────
 
+
 def _get_l4_count(state: Any) -> int:
     if isinstance(state, dict):
         return state.get("l4_count", 0)
@@ -288,7 +291,9 @@ def _get_l4_count(state: Any) -> int:
 
 def _get_total_memory_count(state: Any) -> int:
     if isinstance(state, dict):
-        return sum(state.get(layer, 0) for layer in ("l1_count", "l2_count", "l3_count", "l4_count"))
+        return sum(
+            state.get(layer, 0) for layer in ("l1_count", "l2_count", "l3_count", "l4_count")
+        )
     return (
         getattr(state, "l1_count", 0)
         + getattr(state, "l2_count", 0)
@@ -318,8 +323,13 @@ def _safe_vad_val(state: Any, dim: str, default: float = 0.0) -> float:
 
 def _get_stage_ordinal(state: Any) -> int:
     stages = {
-        "STRANGER": 0, "ACQUAINTANCE": 1, "FRIEND": 2,
-        "CONFIDANT": 3, "ROMANTIC_INTEREST": 4, "LOVER": 5, "BONDED": 6,
+        "STRANGER": 0,
+        "ACQUAINTANCE": 1,
+        "FRIEND": 2,
+        "CONFIDANT": 3,
+        "ROMANTIC_INTEREST": 4,
+        "LOVER": 5,
+        "BONDED": 6,
     }
     if isinstance(state, dict):
         return stages.get(state.get("current_stage", "").upper(), -1)

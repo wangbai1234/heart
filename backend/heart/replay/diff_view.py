@@ -80,9 +80,11 @@ def render_diff(bundle: PromptBundle) -> None:
         summary_parts.append(Text.assemble((" [red bold](BLOCKED)[/]", "")))
 
     summary = Panel(
-        Text.assemble(*summary_parts) if len(summary_parts) == 1 else
-        Text("\n").join(summary_parts) if summary_parts else
-        Text("No changes"),
+        Text.assemble(*summary_parts)
+        if len(summary_parts) == 1
+        else Text("\n").join(summary_parts)
+        if summary_parts
+        else Text("No changes"),
         title="Summary",
         border_style="dim",
     )
@@ -107,7 +109,7 @@ def _highlight_terms(text: str, terms: set[str], color: str, text_cls: type) -> 
             idx = lower.find(term, pos)
             if idx < 0:
                 break
-            matches.append((idx, idx + len(term), text[idx:idx + len(term)]))
+            matches.append((idx, idx + len(term), text[idx : idx + len(term)]))
             pos = idx + 1
 
     if not matches:

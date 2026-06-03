@@ -16,11 +16,11 @@ class FakeComposer:
     """Minimal Composer that accepts Director hints from SS07."""
 
     DEFAULT_DIRECTOR_HINTS = {
-        "response_length": "auto",      # auto | short | medium | long
-        "pacing": "normal",             # slow | normal | quick
-        "modality": "text",             # text | voice | proactive
-        "fallback_mode": False,         # True when circuit breaker is open
-        "deflect_directive": None,      # set when safety is ORANGE
+        "response_length": "auto",  # auto | short | medium | long
+        "pacing": "normal",  # slow | normal | quick
+        "modality": "text",  # text | voice | proactive
+        "fallback_mode": False,  # True when circuit breaker is open
+        "deflect_directive": None,  # set when safety is ORANGE
     }
 
     def apply_director_hints(self, hints: dict) -> dict:

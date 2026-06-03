@@ -13,7 +13,7 @@ from __future__ import annotations
 from typing import List
 
 import structlog
-from sqlalchemy import select, or_
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from heart.ss02_memory.models import IdentityMemory

@@ -10,7 +10,6 @@ arrive at the Orchestrator's ProactiveScheduler in the expected shape.
 """
 
 import pytest
-from datetime import datetime, timezone
 
 
 class FakeProactiveScheduler:
@@ -20,7 +19,7 @@ class FakeProactiveScheduler:
 
     def __init__(self):
         self.quiet_hours_start = 2  # 2 AM
-        self.quiet_hours_end = 7     # 7 AM
+        self.quiet_hours_end = 7  # 7 AM
         self.daily_quota = 3
         self.min_proactive_gap_minutes = 120
 
@@ -48,7 +47,7 @@ class FakeProactiveScheduler:
         if unfinished_count > self.MAX_UNFINISHED:
             unfinished_count = self.MAX_UNFINISHED
 
-        initiative_score = (energy * 0.3 + longing * 0.5 + (unfinished_count / 10) * 0.2)
+        initiative_score = energy * 0.3 + longing * 0.5 + (unfinished_count / 10) * 0.2
 
         return {
             "should_act": initiative_score > 0.5,
@@ -101,7 +100,9 @@ class TestInnerStateToOrchestrator:
         assert result["should_act"] is False
         assert result["reason"] == "cold_war"
 
-    def test_unfinished_thoughts_contribute_to_score(self, make_inner_state, make_relationship_state):
+    def test_unfinished_thoughts_contribute_to_score(
+        self, make_inner_state, make_relationship_state
+    ):
         """INV-I-6: Unfinished thoughts contribute to initiative score."""
         scheduler = FakeProactiveScheduler()
         inner = make_inner_state()

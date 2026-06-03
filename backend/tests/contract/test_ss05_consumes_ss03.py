@@ -7,7 +7,6 @@ Any field rename in SS03 must break this test.
 """
 
 import pytest
-from datetime import datetime, timezone
 
 
 class FakeComposer:
@@ -17,9 +16,7 @@ class FakeComposer:
         """Build EmotionContextBlock from EmotionState — mirrors SS03.get_context_block()."""
         # Sort emotions by intensity
         active_stack = emotion_state.get("active_stack", [])
-        top_emotions = sorted(
-            active_stack, key=lambda e: e.get("intensity", 0), reverse=True
-        )[:3]
+        top_emotions = sorted(active_stack, key=lambda e: e.get("intensity", 0), reverse=True)[:3]
 
         return {
             "vad": {
@@ -59,11 +56,13 @@ class TestComposerConsumesSS03:
 
     def test_reads_active_emotions_sorted_by_intensity(self, make_emotion_state):
         """Composer sorts active emotions by intensity descending."""
-        state = make_emotion_state(active_stack=[
-            {"emotion": "joy", "intensity": 0.3, "source": "test"},
-            {"emotion": "sadness", "intensity": 0.8, "source": "test"},
-            {"emotion": "anger", "intensity": 0.2, "source": "test"},
-        ])
+        state = make_emotion_state(
+            active_stack=[
+                {"emotion": "joy", "intensity": 0.3, "source": "test"},
+                {"emotion": "sadness", "intensity": 0.8, "source": "test"},
+                {"emotion": "anger", "intensity": 0.2, "source": "test"},
+            ]
+        )
         composer = FakeComposer()
         block = composer.build_emotion_context_block(state)
 
@@ -91,9 +90,9 @@ class TestComposerConsumesSS03:
 
     def test_reads_pending_repairs(self, make_emotion_state):
         """Composer reads pending_repairs from EmotionState."""
-        state = make_emotion_state(pending_repairs=[
-            {"emotion": "aggrieved", "repair_progress": 0.0}
-        ])
+        state = make_emotion_state(
+            pending_repairs=[{"emotion": "aggrieved", "repair_progress": 0.0}]
+        )
         composer = FakeComposer()
         block = composer.build_emotion_context_block(state)
 

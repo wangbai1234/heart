@@ -27,6 +27,7 @@ from uuid import UUID, uuid4
 import structlog
 
 from heart.infra.invariants import invariant
+
 import heart.infra.invariant_predicates  # noqa: F401, E402 isort:skip
 
 from .models import (
@@ -244,13 +245,13 @@ class MemoryService:
         if self._db is not None:
             try:
                 from heart.ss02_memory.retriever.orchestrator import RetrievalOrchestrator
+
                 orchestrator = RetrievalOrchestrator(self._db)
                 return await orchestrator.retrieve(query_context, top_k)
             except Exception:
                 logger.exception("retrieve_failed", user_id=str(user_id))
 
         # Fallback: return empty result
-        import time as _time
         return MemoryRetrievalResult(
             query_id=uuid4(),
             retrieved_at=datetime.now(timezone.utc),
@@ -290,6 +291,7 @@ class MemoryService:
         if self._db is not None:
             try:
                 from sqlalchemy import select
+
                 stmt = select(IdentityMemory).where(
                     IdentityMemory.user_id == user_id,
                     IdentityMemory.character_id == character_id,
@@ -333,13 +335,18 @@ class MemoryService:
 
         if self._db is not None:
             try:
-                from sqlalchemy import select, desc
                 from datetime import timedelta
+
+                from sqlalchemy import desc, select
+
                 cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
                 stmt = (
                     select(EpisodicMemory)
-                    .where(EpisodicMemory.user_id == user_id, EpisodicMemory.character_id == character_id,
-                           EpisodicMemory.created_at >= cutoff)
+                    .where(
+                        EpisodicMemory.user_id == user_id,
+                        EpisodicMemory.character_id == character_id,
+                        EpisodicMemory.created_at >= cutoff,
+                    )
                     .order_by(desc(EpisodicMemory.created_at))
                     .limit(limit)
                 )
@@ -377,8 +384,10 @@ class MemoryService:
         if self._db is not None:
             try:
                 from sqlalchemy import select
+
                 stmt = select(IdentityMemory).where(
-                    IdentityMemory.user_id == user_id, IdentityMemory.character_id == character_id,
+                    IdentityMemory.user_id == user_id,
+                    IdentityMemory.character_id == character_id,
                     IdentityMemory.metadata["is_anniversary"].astext == "true",
                 )
                 result = await self._db.execute(stmt)
@@ -408,6 +417,7 @@ class MemoryService:
         Spec: §7.2 写入者, §7.3 调用顺序 (T+10ms)
         """
         from heart.ss02_memory.encoder.fast import FastEncoder
+
         if self._fast_encoder is None:
             self._fast_encoder = FastEncoder()
         signals = self._fast_encoder.encode(turn)
@@ -416,11 +426,18 @@ class MemoryService:
         if self._redis is not None:
             try:
                 import json
+
                 key = f"l1:{turn.user_id}:{turn.character_id}:latest"
-                self._redis.setex(key, 300, json.dumps({
-                    "sentiment": signals.sentiment,
-                    "keywords": signals.detected_keywords,
-                }))
+                self._redis.setex(
+                    key,
+                    300,
+                    json.dumps(
+                        {
+                            "sentiment": signals.sentiment,
+                            "keywords": signals.detected_keywords,
+                        }
+                    ),
+                )
             except Exception:
                 logger.exception("l1_cache_failed")
         return signals
@@ -471,6 +488,7 @@ class MemoryService:
         if self._db is not None and memory_ids:
             try:
                 from sqlalchemy import update
+
                 now = datetime.now(timezone.utc)
                 stmt = (
                     update(EpisodicMemory)
@@ -510,6 +528,7 @@ class MemoryService:
         if self._db is not None:
             try:
                 from sqlalchemy import update
+
                 stmt = (
                     update(EpisodicMemory)
                     .where(EpisodicMemory.id == memory_id)
@@ -559,6 +578,7 @@ class MemoryService:
         if self._db is not None:
             try:
                 from heart.ss02_memory.decay_engine import DecayEngine
+
                 if self._decay_engine is None:
                     self._decay_engine = DecayEngine()
                 count = await self._decay_engine.apply_decay_batch(self._db, user_id, character_id)
@@ -603,14 +623,17 @@ class MemoryService:
         if self._db is not None:
             try:
                 from heart.ss02_memory.decay_engine import DecayEngine
+
                 if self._decay_engine is None:
                     self._decay_engine = DecayEngine()
                 await self._decay_engine.apply_decay_batch(self._db, user_id, character_id)
             except Exception:
                 logger.exception("consolidation_decay_failed")
         return ConsolidationJob(
-            user_id=user_id, character_id=character_id,
-            status="triggered", started_at=datetime.now(timezone.utc),
+            user_id=user_id,
+            character_id=character_id,
+            status="triggered",
+            started_at=datetime.now(timezone.utc),
         )
 
     @invariant("inv-m-5.multi-signal-promotion")

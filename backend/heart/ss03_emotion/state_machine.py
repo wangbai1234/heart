@@ -14,7 +14,6 @@ Author: 心屿团队
 from __future__ import annotations
 
 from typing import Any, Dict, List
-from uuid import UUID
 
 from heart.infra.invariants import invariant
 
@@ -184,20 +183,22 @@ class EmotionStateMachine:
                     # Get VAD for this emotion
                     vad = self.emotion_vad.get(emotion_name, {"v": 0, "a": 0.3, "d": 0.5})
 
-                    active_stack.append({
-                        "emotion": emotion_name,
-                        "intensity": max(0.0, min(1.0, abs(intensity_delta))),
-                        "source": "user_trigger",
-                        "triggered_by": trigger["trigger_type"],
-                        "started_at": None,  # Will be set by service
-                        "vad_contribution": {
-                            "valence": vad["v"],
-                            "arousal": vad["a"],
-                            "dominance": vad["d"],
-                        },
-                        "decay_state": "natural",
-                        "repair_progress": 0.0,
-                    })
+                    active_stack.append(
+                        {
+                            "emotion": emotion_name,
+                            "intensity": max(0.0, min(1.0, abs(intensity_delta))),
+                            "source": "user_trigger",
+                            "triggered_by": trigger["trigger_type"],
+                            "started_at": None,  # Will be set by service
+                            "vad_contribution": {
+                                "valence": vad["v"],
+                                "arousal": vad["a"],
+                                "dominance": vad["d"],
+                            },
+                            "decay_state": "natural",
+                            "repair_progress": 0.0,
+                        }
+                    )
 
         # Remove emotions with intensity < 0.05
         state["active_stack"] = [e for e in active_stack if e["intensity"] >= 0.05]
@@ -239,6 +240,7 @@ class EmotionStateMachine:
         Formula per §10.3:
         new_vad = current_vad + clamp(target_vad - current_vad, -cap, +cap)
         """
+
         def clamp_delta(delta: float, cap: float) -> float:
             return max(-cap, min(cap, delta))
 
@@ -247,15 +249,12 @@ class EmotionStateMachine:
         max_d_change = inertia_profile.get("max_dominance_change_per_turn", 0.15)
 
         return {
-            "valence": current_vad["valence"] + clamp_delta(
-                target_vad["valence"] - current_vad["valence"], max_v_change
-            ),
-            "arousal": current_vad["arousal"] + clamp_delta(
-                target_vad["arousal"] - current_vad["arousal"], max_a_change
-            ),
-            "dominance": current_vad["dominance"] + clamp_delta(
-                target_vad["dominance"] - current_vad["dominance"], max_d_change
-            ),
+            "valence": current_vad["valence"]
+            + clamp_delta(target_vad["valence"] - current_vad["valence"], max_v_change),
+            "arousal": current_vad["arousal"]
+            + clamp_delta(target_vad["arousal"] - current_vad["arousal"], max_a_change),
+            "dominance": current_vad["dominance"]
+            + clamp_delta(target_vad["dominance"] - current_vad["dominance"], max_d_change),
         }
 
 

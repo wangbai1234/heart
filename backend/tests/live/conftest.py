@@ -7,11 +7,12 @@ Three-layer kill switch per design doc:
 3. pytest --live --max-cost=2.0 -> CLI hard limit
 """
 
-import os
 import json
-import pytest
+import os
 from datetime import datetime, timezone
 from pathlib import Path
+
+import pytest
 
 
 class LiveTestCostTracker:
@@ -64,12 +65,14 @@ def cost_tracker(request):
             with open(audit_file, "r") as f:
                 existing = json.load(f)
 
-        existing.append({
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "total_cost": tracker.total_spent,
-            "tests_run": len(tracker.per_test),
-            "per_test": tracker.per_test,
-        })
+        existing.append(
+            {
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "total_cost": tracker.total_spent,
+                "tests_run": len(tracker.per_test),
+                "per_test": tracker.per_test,
+            }
+        )
 
         with open(audit_file, "w") as f:
             json.dump(existing, f, indent=2, ensure_ascii=False)
@@ -84,6 +87,7 @@ def real_deepseek_provider():
         pytest.skip("DEEPSEEK_API_KEY not set. Required for Tier C live tests.")
 
     from heart.infra.llm_providers.deepseek import DeepSeekV4FlashProvider
+
     return DeepSeekV4FlashProvider(api_key=api_key)
 
 
@@ -95,5 +99,8 @@ def per_test_budget(request, cost_tracker):
     yield
     spent = cost_tracker.end_test(request.node.nodeid)
     if spent > budget:
-        print("[live] WARNING: {} exceeded budget (${:.4f} > ${:.2f})".format(
-            request.node.nodeid, spent, budget))
+        print(
+            "[live] WARNING: {} exceeded budget (${:.4f} > ${:.2f})".format(
+                request.node.nodeid, spent, budget
+            )
+        )

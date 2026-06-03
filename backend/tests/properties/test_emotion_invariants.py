@@ -10,16 +10,14 @@ Author: Heart Platform
 
 from __future__ import annotations
 
-import pytest
 from hypothesis import given, settings
 
-from heart.infra.invariants import InvariantContext, InvariantRegistry
 import heart.infra.invariant_predicates  # noqa: F401
-
+from heart.infra.invariants import InvariantContext, InvariantRegistry
 from tests.properties.strategies import emotion_state_dict_strategy
 
-
 # ── INV-E-2: Stack limit ────────────────────────────────────────
+
 
 @given(state=emotion_state_dict_strategy())
 @settings(max_examples=200, deadline=2000)
@@ -51,6 +49,7 @@ def test_inv_e_2_stack_limit(state):
 
 # ── INV-E-3: VAD range ──────────────────────────────────────────
 
+
 @given(state=emotion_state_dict_strategy())
 @settings(max_examples=200, deadline=2000)
 def test_inv_e_3_vad_range(state):
@@ -73,11 +72,6 @@ def test_inv_e_3_vad_range(state):
     in_range = (-1.0 <= v <= 1.0) and (0.0 <= a <= 1.0) and (0.0 <= d <= 1.0)
 
     if in_range:
-        assert result, (
-            f"INV-E-3: false positive for valid VAD ({v:.2f}, {a:.2f}, {d:.2f})"
-        )
+        assert result, f"INV-E-3: false positive for valid VAD ({v:.2f}, {a:.2f}, {d:.2f})"
     else:
-        assert not result, (
-            f"INV-E-3: out-of-range VAD ({v:.2f}, {a:.2f}, {d:.2f}) "
-            f"but check passed"
-        )
+        assert not result, f"INV-E-3: out-of-range VAD ({v:.2f}, {a:.2f}, {d:.2f}) but check passed"

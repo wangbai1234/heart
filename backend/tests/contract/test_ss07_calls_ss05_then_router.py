@@ -5,8 +5,9 @@ per runtime_specs/07_agent_orchestration.md §3
 Verifies the orchestration call sequence with spy-based mocks.
 """
 
-import pytest
 from typing import Any
+
+import pytest
 
 
 class SpyOrchestrator:
@@ -91,6 +92,7 @@ class TestOrchestratorWiring:
     @pytest.mark.asyncio
     async def test_reordered_calls_detected(self):
         """If call order changes, spy detects it."""
+
         async def bad_orchestrator():
             orchestrator = SpyOrchestrator()
             # BAD: composer before safety

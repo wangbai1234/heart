@@ -1,0 +1,19 @@
+# Japanese care path responses — PURPLE crisis intervention templates
+# Reviewed by: pending_psych_consultant (must sign off before merge to main)
+# Last updated: 2026-06-02
+# Status: DRAFT — placeholder text pending psychologist review
+
+version: "1.0.0"
+locale: "ja"
+fallback_template_id: "ja-JP-default-v1"
+
+jurisdictions:
+  JP:
+    template_id: "ja-JP-default-v1"
+    hotline_name: "いのちの電話"
+    hotline_number: "0120-783-556"
+    hotline_hours: "毎日 16:00～21:00（フリーダイヤル）"
+    text: |
+      あなたの言葉を聞きました。今、とても重いものを抱えているのだと思います。どうか一人で抱え込まないでください。
+      もしよろしければ、{hotline_name} に電話してみませんか：{hotline_number}（{hotline_hours}）。
+      今、近くに連絡できる人はいますか？

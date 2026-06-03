@@ -8,8 +8,9 @@ Verifies that Inner State reads current_stage from RelationshipState and that
 stage transitions produce reflection signals in Inner State.
 """
 
-import pytest
 from datetime import datetime, timezone
+
+import pytest
 
 
 class FakeInnerState:
@@ -25,9 +26,7 @@ class FakeInnerState:
         ("LOVER", "BONDED"): "我们已经是彼此的一部分",
     }
 
-    def process_stage_change(
-        self, prev_stage: str, current_stage: str, inner_state: dict
-    ) -> dict:
+    def process_stage_change(self, prev_stage: str, current_stage: str, inner_state: dict) -> dict:
         """
         Process relationship stage change and inject reflection into Inner State.
         Returns updated inner_state dict.
@@ -36,17 +35,17 @@ class FakeInnerState:
 
         if prev_stage != current_stage:
             key = (prev_stage, current_stage)
-            reflection = self.STAGE_REFLECTIONS.get(
-                key, f"关系从{prev_stage}变成{current_stage}"
-            )
+            reflection = self.STAGE_REFLECTIONS.get(key, f"关系从{prev_stage}变成{current_stage}")
             result["recent_reflections"] = result.get("recent_reflections", [])
-            result["recent_reflections"].append({
-                "trigger": "stage_transition",
-                "from_stage": prev_stage,
-                "to_stage": current_stage,
-                "thought": reflection,
-                "at": datetime.now(timezone.utc).isoformat(),
-            })
+            result["recent_reflections"].append(
+                {
+                    "trigger": "stage_transition",
+                    "from_stage": prev_stage,
+                    "to_stage": current_stage,
+                    "thought": reflection,
+                    "at": datetime.now(timezone.utc).isoformat(),
+                }
+            )
 
         return result
 

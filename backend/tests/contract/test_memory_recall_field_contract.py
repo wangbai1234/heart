@@ -13,10 +13,15 @@ class TestMemoryRecallFieldContract:
     """RetrievedMemory must expose fields Composer and InnerState depend on."""
 
     REQUIRED_FIELDS = [
-        "memory_id", "memory_type", "state",
-        "reconstructed_text", "raw_content",
-        "score", "score_breakdown",
-        "uncertainty_level", "voice_dna_applied",
+        "memory_id",
+        "memory_type",
+        "state",
+        "reconstructed_text",
+        "raw_content",
+        "score",
+        "score_breakdown",
+        "uncertainty_level",
+        "voice_dna_applied",
         "source_evidence",
     ]
 

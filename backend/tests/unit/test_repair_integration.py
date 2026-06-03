@@ -9,9 +9,10 @@ Tests end-to-end repair flow:
 Author: 心屿团队
 """
 
-import pytest
 from datetime import datetime, timezone
 from uuid import uuid4
+
+import pytest
 
 from heart.ss03_emotion import EmotionService
 
@@ -153,8 +154,7 @@ class TestRepairIntegration:
 
         # Check that repair_progress increased
         aggrieved_repair = next(
-            (r for r in new_state["pending_repairs"] if r["emotion"] == "aggrieved"),
-            None
+            (r for r in new_state["pending_repairs"] if r["emotion"] == "aggrieved"), None
         )
 
         assert aggrieved_repair is not None
@@ -246,8 +246,7 @@ class TestRepairIntegration:
 
         # Bespoke phrase should have higher impact than regular apology
         coldness_repair = next(
-            (r for r in new_state["pending_repairs"] if r["emotion"] == "coldness"),
-            None
+            (r for r in new_state["pending_repairs"] if r["emotion"] == "coldness"), None
         )
 
         assert coldness_repair is not None

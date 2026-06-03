@@ -1,4 +1,4 @@
-.PHONY: help dev test lint migrate clean install docker-up docker-down check-mvp
+.PHONY: help dev test lint migrate clean install docker-up docker-down check-mvp test-e2e
 
 # Default target
 help:
@@ -8,6 +8,7 @@ help:
 	@echo "  install      - Install Python dependencies"
 	@echo "  dev          - Start development server"
 	@echo "  test         - Run tests"
+	@echo "  test-e2e     - Run end-to-end tests (real uvicorn + PG + Playwright)"
 	@echo "  lint         - Run linters (ruff, mypy)"
 	@echo "  migrate      - Run database migrations"
 	@echo "  docker-up    - Start Docker services (postgres, redis)"
@@ -50,6 +51,15 @@ test-integration:
 test-live:
 	@echo "Running live tests (real DeepSeek)..."
 	cd backend && pytest -m live --live tests/live -v
+
+# Run end-to-end tests (Tier E) — real uvicorn + real PG + Playwright APIRequestContext
+test-e2e:
+	@echo "Running end-to-end tests (real uvicorn + PG)..."
+	@echo "Checking docker services..."
+	@docker compose ps postgres 2>/dev/null | grep -q "Up" || (echo "Starting postgres/redis..." && docker compose up -d postgres redis)
+	@echo "Checking migrations..."
+	cd backend && alembic current | grep -q "head" || alembic upgrade head
+	cd backend && pytest tests/e2e -m e2e -v
 
 # Run load tests
 test-load:

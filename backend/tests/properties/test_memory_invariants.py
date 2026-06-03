@@ -11,23 +11,18 @@ Author: Heart Platform
 
 from __future__ import annotations
 
-import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
 
+import heart.infra.invariant_predicates  # noqa: F401
 from heart.infra.invariants import (
     InvariantContext,
     InvariantRegistry,
-    Severity,
-    invariant,
 )
-
-import heart.infra.invariant_predicates  # noqa: F401
-
 from tests.properties.strategies import memory_count_strategy
 
-
 # ── INV-M-3: L4 count monotonic ─────────────────────────────────
+
 
 @given(
     before=memory_count_strategy(),
@@ -55,15 +50,14 @@ def test_inv_m_3_l4_monotonic(before, after):
 
 # ── INV-M-5: Multi-signal promotion gate ────────────────────────
 
+
 @given(
     before=memory_count_strategy(),
     sacred_signals_count=st.integers(min_value=0, max_value=5),
     consolidation_round=st.integers(min_value=0, max_value=5),
 )
 @settings(max_examples=200, deadline=2000)
-def test_inv_m_5_multi_signal_promotion(
-    before, sacred_signals_count, consolidation_round
-):
+def test_inv_m_5_multi_signal_promotion(before, sacred_signals_count, consolidation_round):
     """L4 promotion requires ≥2 sacred signals AND consolidation_round ≥ 1."""
     registry = InvariantRegistry.instance()
     record = registry.get("inv-m-5.multi-signal-promotion")
@@ -86,7 +80,9 @@ def test_inv_m_5_multi_signal_promotion(
 
     meets_gate = sacred_signals_count >= 2 and consolidation_round >= 1
     if meets_gate:
-        assert result, f"INV-M-5: gate passed but rejected — {sacred_signals_count} signals, round {consolidation_round}"
+        assert result, (
+            f"INV-M-5: gate passed but rejected — {sacred_signals_count} signals, round {consolidation_round}"
+        )
     else:
         # When L4 increases but gate not met, should fail
         assert not result or sacred_signals_count <= 0, (
@@ -96,6 +92,7 @@ def test_inv_m_5_multi_signal_promotion(
 
 
 # ── INV-M-6: No silent memory loss ──────────────────────────────
+
 
 @given(
     before=memory_count_strategy(),

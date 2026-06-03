@@ -6,7 +6,6 @@ Tests auth → safety → composer → router → memory_encode with fake LLM.
 """
 
 import pytest
-from uuid import uuid4
 
 
 @pytest.mark.integration
@@ -76,8 +75,14 @@ class TestOrchestratorHotPath:
 
         request = LLMRequest(
             messages=[
-                Message(role=MessageRole.SYSTEM, content="COMPLETELY UNKNOWN SYSTEM PROMPT NEVER SEEN BEFORE"),
-                Message(role=MessageRole.USER, content="COMPLETELY UNKNOWN MESSAGE THAT DOES NOT MATCH ANY FIXTURE"),
+                Message(
+                    role=MessageRole.SYSTEM,
+                    content="COMPLETELY UNKNOWN SYSTEM PROMPT NEVER SEEN BEFORE",
+                ),
+                Message(
+                    role=MessageRole.USER,
+                    content="COMPLETELY UNKNOWN MESSAGE THAT DOES NOT MATCH ANY FIXTURE",
+                ),
             ],
             model="deepseek-chat",
         )

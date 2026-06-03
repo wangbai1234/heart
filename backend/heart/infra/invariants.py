@@ -42,12 +42,14 @@ INVARIANT_CHECK_DURATION = Histogram(
 
 # ── Severity ─────────────────────────────────────────────────────
 
+
 class Severity(str, Enum):
     FATAL = "FATAL"
     WARN = "WARN"
 
 
 # ── Invariant mode ───────────────────────────────────────────────
+
 
 class InvariantMode(str, Enum):
     """Behaviour modes for invariant checking."""
@@ -72,16 +74,18 @@ def _resolve_mode() -> InvariantMode:
 
 
 # Always-on safety invariant IDs (forced to ALWAYS regardless of env).
-ALWAYS_ON_SAFETY_IDS: frozenset[str] = frozenset({
-    "inv-o-2.message-severity-cap",
-    "inv-o-3.purple-blocked-from-soul",
-    "inv-o-5.no-raw-sdk-leak",
-})
+ALWAYS_ON_SAFETY_IDS: frozenset[str] = frozenset(
+    {
+        "inv-o-2.message-severity-cap",
+        "inv-o-3.purple-blocked-from-soul",
+        "inv-o-5.no-raw-sdk-leak",
+    }
+)
 
 
 def _sample_decision(trace_id: str, rate: float = 0.01) -> bool:
     """Deterministic sampling via hash of trace_id.
-    
+
     Same trace_id always produces the same decision, keeping
     consistency within a single multi-invariant turn.
     """
@@ -91,6 +95,7 @@ def _sample_decision(trace_id: str, rate: float = 0.01) -> bool:
 
 
 # ── InvariantViolation ───────────────────────────────────────────
+
 
 class InvariantViolation(Exception):
     """Raised for FATAL invariant violations in DEV/TEST mode."""
@@ -104,12 +109,11 @@ class InvariantViolation(Exception):
         self.invariant_id = invariant_id
         self.severity = severity
         self.details = details
-        super().__init__(
-            f"Invariant {invariant_id} ({severity.value}) violated: {details}"
-        )
+        super().__init__(f"Invariant {invariant_id} ({severity.value}) violated: {details}")
 
 
 # ── InvariantRecord ──────────────────────────────────────────────
+
 
 @dataclass
 class InvariantRecord:
@@ -125,6 +129,7 @@ class InvariantRecord:
 
 
 # ── InvariantRegistry ────────────────────────────────────────────
+
 
 class InvariantRegistry:
     """Singleton registry for all Layer-2 invariants."""
@@ -197,6 +202,7 @@ class InvariantRegistry:
 
 # ── Invariant context helper ─────────────────────────────────────
 
+
 @dataclass
 class InvariantContext:
     """Bundled state passed to check_invariants.
@@ -213,6 +219,7 @@ class InvariantContext:
 
 
 # ── check_invariants ─────────────────────────────────────────────
+
 
 def check_invariants(
     ctx: InvariantContext,
@@ -297,6 +304,7 @@ def check_invariants(
 
 # ── @invariant decorator ─────────────────────────────────────────
 
+
 def invariant(
     name: str,
     *,
@@ -358,12 +366,14 @@ def invariant(
                     try:
                         passed = record.predicate(ctx)
                         INVARIANT_CHECK_TOTAL.labels(
-                            id=name, result="ok" if passed else "violation",
+                            id=name,
+                            result="ok" if passed else "violation",
                             severity=record.severity.value,
                         ).inc()
                         if not passed:
                             INVARIANT_VIOLATIONS_TOTAL.labels(
-                                name=record.name, severity=record.severity.value,
+                                name=record.name,
+                                severity=record.severity.value,
                             ).inc()
                             logger.warning(
                                 "invariant_violation",
@@ -391,11 +401,14 @@ def invariant(
                     except Exception:
                         logger.exception("invariant_predicate_error", id=name)
             return result
+
         return wrapper
+
     return decorator
 
 
 # ── Internal helpers for @invariant decorator ────────────────────
+
 
 def _extract_trace_id(*args, **kwargs) -> str:
     """Walk args/kwargs to find a trace_id."""

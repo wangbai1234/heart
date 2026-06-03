@@ -7,15 +7,16 @@ Per design doc §4.2:
 - No LLM provider imports
 """
 
-import pytest
 from datetime import datetime, timezone
+from typing import Any, Dict
 from uuid import UUID, uuid4
-from typing import Any, Dict, List
 
+import pytest
 
 # ═══════════════════════════════════════════
 # SS03 Emotion State Factory
 # ═══════════════════════════════════════════
+
 
 @pytest.fixture
 def make_emotion_state():
@@ -69,6 +70,7 @@ def make_emotion_state():
 # SS02 Memory Recall Field Contract
 # ═══════════════════════════════════════════
 
+
 @pytest.fixture
 def make_retrieved_memory():
     """Factory for RetrievedMemory dataclass matching SS02 schema."""
@@ -103,6 +105,7 @@ def make_retrieved_memory():
 # ═══════════════════════════════════════════
 # SS04 Relationship State Factory
 # ═══════════════════════════════════════════
+
 
 @pytest.fixture
 def make_relationship_state():
@@ -141,6 +144,7 @@ def make_relationship_state():
 # ═══════════════════════════════════════════
 # SS01 Soul Spec Factory
 # ═══════════════════════════════════════════
+
 
 @pytest.fixture
 def make_soul_spec():
@@ -202,6 +206,7 @@ def make_soul_spec():
 # Safety Pipeline Result Factory
 # ═══════════════════════════════════════════
 
+
 @pytest.fixture
 def make_safety_result():
     """Factory for safety check result dict."""
@@ -224,6 +229,7 @@ def make_safety_result():
 # ═══════════════════════════════════════════
 # SS06 Inner State Factory
 # ═══════════════════════════════════════════
+
 
 @pytest.fixture
 def make_inner_state():
@@ -270,6 +276,7 @@ class ComposerLayerProtocol(Protocol):
 # ═══════════════════════════════════════════
 # Router Provider Protocol
 # ═══════════════════════════════════════════
+
 
 @runtime_checkable
 class RouterProviderProtocol(Protocol):

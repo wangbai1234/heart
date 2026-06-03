@@ -9,7 +9,6 @@ from RelationshipState and that stage affects the intimacy register in prompt.
 """
 
 import pytest
-from datetime import datetime, timezone
 
 
 class FakeComposer:

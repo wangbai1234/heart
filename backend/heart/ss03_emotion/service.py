@@ -9,11 +9,12 @@ Author: 心屿团队
 
 from __future__ import annotations
 
-import yaml
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
 from uuid import UUID
+
+import yaml
 
 from heart.ss03_emotion.contagion import apply_contagion
 from heart.ss03_emotion.decay import DecayEngine, apply_decay_to_stack
@@ -84,7 +85,7 @@ class EmotionService:
 
         return self._state_cache[key].copy()
 
-    def process_turn(
+    async def process_turn(
         self,
         user_id: UUID,
         character_id: str,
@@ -154,14 +155,13 @@ class EmotionService:
         }
 
         # Detect repair signal (async)
-        import asyncio
-        repair_signal = asyncio.run(self.repair_engine.detect_repair_signal(
+        repair_signal = await self.repair_engine.detect_repair_signal(
             user_message=user_message,
             user_id=user_id,
             character_id=character_id,
             turn_id=turn_id,
             context=repair_context,
-        ))
+        )
 
         # 3. Apply decay to active_stack
         hours_since_last = context.get("hours_since_last", 0)
@@ -174,7 +174,9 @@ class EmotionService:
             )
 
         # 4. Compute contagion delta
-        user_emotion_vad = context.get("user_emotion_vad", {"valence": 0, "arousal": 0.3, "dominance": 0.5})
+        user_emotion_vad = context.get(
+            "user_emotion_vad", {"valence": 0, "arousal": 0.3, "dominance": 0.5}
+        )
         relationship_phase = context.get("relationship_phase", "stranger")
 
         contagion_delta = apply_contagion(
@@ -185,11 +187,14 @@ class EmotionService:
         )
 
         # 5. Apply state machine transition
-        inertia_profile = soul_config.get("inertia_profile", {
-            "max_valence_change_per_turn": 0.15,
-            "max_arousal_change_per_turn": 0.15,
-            "max_dominance_change_per_turn": 0.15,
-        })
+        inertia_profile = soul_config.get(
+            "inertia_profile",
+            {
+                "max_valence_change_per_turn": 0.15,
+                "max_arousal_change_per_turn": 0.15,
+                "max_dominance_change_per_turn": 0.15,
+            },
+        )
 
         new_state = self.state_machine.transition(
             current_state=current_state,
@@ -216,15 +221,17 @@ class EmotionService:
         new_state["updated_at"] = datetime.now(timezone.utc)
 
         # Add to VAD history
-        new_state["recent_vad_history"].append({
-            "vad": {
-                "valence": new_state["vad_valence"],
-                "arousal": new_state["vad_arousal"],
-                "dominance": new_state["vad_dominance"],
-            },
-            "at": datetime.now(timezone.utc).isoformat(),
-            "triggered_by": [t["trigger_type"] for t in detected_triggers],
-        })
+        new_state["recent_vad_history"].append(
+            {
+                "vad": {
+                    "valence": new_state["vad_valence"],
+                    "arousal": new_state["vad_arousal"],
+                    "dominance": new_state["vad_dominance"],
+                },
+                "at": datetime.now(timezone.utc).isoformat(),
+                "triggered_by": [t["trigger_type"] for t in detected_triggers],
+            }
+        )
 
         # Keep only recent 50 entries
         if len(new_state["recent_vad_history"]) > 50:
@@ -390,10 +397,7 @@ class EmotionService:
         Preserves existing repair_progress from current pending_repairs.
         """
         # Build map of existing repair progress
-        existing_repairs = {
-            r["emotion"]: r
-            for r in state.get("pending_repairs", [])
-        }
+        existing_repairs = {r["emotion"]: r for r in state.get("pending_repairs", [])}
 
         # Find repair_required emotions
         repair_required_emotions = []
@@ -409,15 +413,17 @@ class EmotionService:
             emotion_name = e["emotion"]
             existing = existing_repairs.get(emotion_name)
 
-            new_pending_repairs.append({
-                "emotion": emotion_name,
-                "intensity": e["intensity"],
-                "started_at": e.get("started_at"),
-                "cause": e.get("triggered_by", "unknown"),
-                # Preserve existing repair_progress and history
-                "repair_progress": existing["repair_progress"] if existing else 0.0,
-                "repair_history": existing.get("repair_history", []) if existing else [],
-            })
+            new_pending_repairs.append(
+                {
+                    "emotion": emotion_name,
+                    "intensity": e["intensity"],
+                    "started_at": e.get("started_at"),
+                    "cause": e.get("triggered_by", "unknown"),
+                    # Preserve existing repair_progress and history
+                    "repair_progress": existing["repair_progress"] if existing else 0.0,
+                    "repair_history": existing.get("repair_history", []) if existing else [],
+                }
+            )
 
         state["pending_repairs"] = new_pending_repairs
 
@@ -507,10 +513,7 @@ class EmotionService:
             "fluttered": -1,
         }
 
-        length_mod = sum(
-            modifiers_map.get(e["emotion"], 0) * e["intensity"]
-            for e in active_stack
-        )
+        length_mod = sum(modifiers_map.get(e["emotion"], 0) * e["intensity"] for e in active_stack)
 
         # Use ellipsis for certain emotions
         use_ellipsis = any(

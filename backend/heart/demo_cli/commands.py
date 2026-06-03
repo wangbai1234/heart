@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Callable
 
-from . import renderer as r
 from .session import ClientSession
 
 # ── Result type ────────────────────────────────────────────────────
@@ -29,6 +28,7 @@ def _reg(cmd: str, help_text: str, *, dev_only: bool = False):
     def deco(fn: CmdHandler):
         _registry[cmd] = {"handler": fn, "help": help_text, "dev_only": dev_only}
         return fn
+
     return deco
 
 
@@ -89,10 +89,7 @@ def _jump(session: ClientSession, args: list[str]) -> CommandResult:
 
 
 async def _sleep_impl(session: ClientSession, _args: list[str]) -> CommandResult:
-    return CommandResult(
-        text="时间已快进 24 小时。\n"
-             "(衰减和 inner loop 将在后端 API 就绪后触发。)"
-    )
+    return CommandResult(text="时间已快进 24 小时。\n(衰减和 inner loop 将在后端 API 就绪后触发。)")
 
 
 @_reg("/sleep", "快进时间 24 小时 (触发衰减 + inner loop)")

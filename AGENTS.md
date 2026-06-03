@@ -4,6 +4,8 @@
 
 **Start every session by reading `docs/PROJECT_STATUS.md`.** It is the single source of truth: current phase, active blockers, next steps. The README also says this.
 
+**Claude Code 自动行为**: 每个 session 开始时自动读取 `.claude/CLAUDE.md`；当任务匹配时自动加载 `.claude/skills/` 下对应的技能（如 e2e-test）。无需手动指定。
+
 ## Tech & architecture
 
 - **Stack**: Python 3.11, FastAPI, PostgreSQL 15+ (pgvector), Redis 7, SQLAlchemy 2.0 + Alembic, Docker
@@ -38,6 +40,27 @@ cd backend && pytest tests/unit/ss01_soul -v
 - Prefer `python3.11` over bare `python3` — CI enforces 3.11.
 - Tests have markers: `pytest -m 'not live and not requires_postgres'` is the default filter.
 - Migration tip: `alembic upgrade heads` (plural) — there may be multiple heads.
+
+## Testing — Tier E End-to-End
+
+Real path: uvicorn subprocess → FastAPI → Orchestrator → PostgreSQL. Use this to prove a change
+works end-to-end (not just unit/integration mocks). Default uses fake LLM; opt into real with env vars.
+
+```bash
+# Prerequisites (one-time)
+docker compose up -d postgres redis
+cd backend && alembic upgrade head
+pip install -r requirements-dev.txt
+python -m playwright install chromium
+
+# Run (opt-in by default)
+pytest tests/e2e -m e2e -v           # fake LLM
+LLM_PROVIDER=deepseek DEEPSEEK_API_KEY=sk-... pytest tests/e2e -m e2e -v  # real DeepSeek
+```
+
+**Files**:
+- `backend/tests/e2e/` — test suite (login → chat → DB assertion)
+- `.claude/skills/e2e-test/SKILL.md` — detailed SOP (when to run, how to diagnose failures)
 
 ## Git & branching
 

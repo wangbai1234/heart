@@ -17,12 +17,12 @@ from pathlib import Path
 from typing import AsyncIterator, Dict, Optional
 
 from heart.infra.llm_providers.base import (
+    CircuitBreakerInterface,
+    CostEstimate,
     LLMProvider,
     LLMRequest,
     LLMResponse,
     StreamChunk,
-    CostEstimate,
-    CircuitBreakerInterface,
 )
 
 
@@ -92,8 +92,7 @@ class FakeLLMProvider(LLMProvider):
                 "Add a fixture to {}/. "
                 "System (first 100): {}. "
                 "User (first 100): {}.".format(
-                    sys_hash, user_hash, self.fixtures_dir,
-                    system_content[:100], user_content[:100]
+                    sys_hash, user_hash, self.fixtures_dir, system_content[:100], user_content[:100]
                 )
             )
 
@@ -121,23 +120,21 @@ class FakeLLMProvider(LLMProvider):
 
     async def call(self, request: LLMRequest) -> LLMResponse:
         raw_messages = [
-            {"role": msg.role.value, "content": msg.content}
-            for msg in request.messages
+            {"role": msg.role.value, "content": msg.content} for msg in request.messages
         ]
         response_data = self._lookup_response(raw_messages)
         return self._build_response(response_data, request)
 
     async def stream(self, request: LLMRequest) -> AsyncIterator[StreamChunk]:
         raw_messages = [
-            {"role": msg.role.value, "content": msg.content}
-            for msg in request.messages
+            {"role": msg.role.value, "content": msg.content} for msg in request.messages
         ]
         response_data = self._lookup_response(raw_messages)
         content = response_data.get("content", "")
         words = content.split()
         chunk_size = 5
         for i in range(0, len(words), chunk_size):
-            chunk_text = " ".join(words[i:i + chunk_size])
+            chunk_text = " ".join(words[i : i + chunk_size])
             if i + chunk_size >= len(words):
                 yield StreamChunk(
                     content=chunk_text,

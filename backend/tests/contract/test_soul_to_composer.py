@@ -33,35 +33,45 @@ class FakeComposer:
         # Build segments from layer data
         for name, data in layers.items():
             if name == "soul":
-                segments.append({
-                    "layer": "soul",
-                    "content": self._build_anchor_block(data),
-                    "priority": self.LAYER_PRIORITY["soul"],
-                })
+                segments.append(
+                    {
+                        "layer": "soul",
+                        "content": self._build_anchor_block(data),
+                        "priority": self.LAYER_PRIORITY["soul"],
+                    }
+                )
             elif name == "emotion":
-                segments.append({
-                    "layer": "emotion",
-                    "content": self._build_emotion_block(data),
-                    "priority": self.LAYER_PRIORITY["emotion"],
-                })
+                segments.append(
+                    {
+                        "layer": "emotion",
+                        "content": self._build_emotion_block(data),
+                        "priority": self.LAYER_PRIORITY["emotion"],
+                    }
+                )
             elif name == "memory":
-                segments.append({
-                    "layer": "memory",
-                    "content": self._build_memory_block(data),
-                    "priority": self.LAYER_PRIORITY["memory"],
-                })
+                segments.append(
+                    {
+                        "layer": "memory",
+                        "content": self._build_memory_block(data),
+                        "priority": self.LAYER_PRIORITY["memory"],
+                    }
+                )
             elif name == "relationship":
-                segments.append({
-                    "layer": "relationship",
-                    "content": self._build_relationship_block(data),
-                    "priority": self.LAYER_PRIORITY["stage"],
-                })
+                segments.append(
+                    {
+                        "layer": "relationship",
+                        "content": self._build_relationship_block(data),
+                        "priority": self.LAYER_PRIORITY["stage"],
+                    }
+                )
             elif name == "inner_state":
-                segments.append({
-                    "layer": "inner_state",
-                    "content": self._build_inner_state_block(data),
-                    "priority": self.LAYER_PRIORITY["inner_state"],
-                })
+                segments.append(
+                    {
+                        "layer": "inner_state",
+                        "content": self._build_inner_state_block(data),
+                        "priority": self.LAYER_PRIORITY["inner_state"],
+                    }
+                )
 
         # Sort by priority (asc)
         segments.sort(key=lambda s: s["priority"])

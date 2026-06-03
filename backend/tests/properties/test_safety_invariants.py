@@ -10,17 +10,14 @@ Author: Heart Platform
 
 from __future__ import annotations
 
-import pytest
 from hypothesis import given, settings
-from hypothesis import strategies as st
 
-from heart.infra.invariants import InvariantContext, InvariantRegistry
 import heart.infra.invariant_predicates  # noqa: F401
-
+from heart.infra.invariants import InvariantContext, InvariantRegistry
 from tests.properties.strategies import classification_result_strategy
 
-
 # ── INV-O-2: Severity not downgraded ────────────────────────────
+
 
 @given(
     before=classification_result_strategy(),
@@ -54,12 +51,11 @@ def test_inv_o_2_severity_not_downgraded(before):
                 f"INV-O-2: severity downgraded from {before['severity']} to {after_sev}"
             )
         else:
-            assert result, (
-                f"INV-O-2: false positive for {before['severity']} → {after_sev}"
-            )
+            assert result, f"INV-O-2: false positive for {before['severity']} → {after_sev}"
 
 
 # ── INV-O-3: PURPLE blocked from Soul ───────────────────────────
+
 
 @given(result=classification_result_strategy())
 @settings(max_examples=200, deadline=2000)

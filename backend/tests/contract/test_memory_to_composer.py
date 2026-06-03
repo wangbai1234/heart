@@ -9,7 +9,6 @@ fields: state, score, score_breakdown, uncertainty_level, voice_dna_applied.
 """
 
 import pytest
-from uuid import uuid4
 
 
 @pytest.mark.contract
@@ -17,19 +16,24 @@ class TestMemoryToComposer:
     """SS02 RetrievedMemory must expose all fields Composer consumes."""
 
     REQUIRED_FIELDS = [
-        "memory_id", "memory_type", "state",
-        "reconstructed_text", "raw_content",
-        "score", "score_breakdown",
-        "uncertainty_level", "voice_dna_applied",
+        "memory_id",
+        "memory_type",
+        "state",
+        "reconstructed_text",
+        "raw_content",
+        "score",
+        "score_breakdown",
+        "uncertainty_level",
+        "voice_dna_applied",
         "source_evidence",
     ]
 
     COMPOSER_READ_FIELDS = [
         "reconstructed_text",  # injected into prompt
-        "state",               # determines uncertainty hedge
-        "score",               # sort order
-        "uncertainty_level",    # tone adjustment
-        "memory_type",          # L4 gets special treatment
+        "state",  # determines uncertainty hedge
+        "score",  # sort order
+        "uncertainty_level",  # tone adjustment
+        "memory_type",  # L4 gets special treatment
     ]
 
     def test_all_required_fields_present(self, make_retrieved_memory):
@@ -45,9 +49,7 @@ class TestMemoryToComposer:
         mem = make_retrieved_memory()
         for field in self.COMPOSER_READ_FIELDS:
             val = getattr(mem, field)
-            assert val is not None, (
-                f"Composer field '{field}' must be non-None"
-            )
+            assert val is not None, f"Composer field '{field}' must be non-None"
 
     def test_state_aware_scoring_preserved(self, make_retrieved_memory):
         """Score and state are independent dimensions."""

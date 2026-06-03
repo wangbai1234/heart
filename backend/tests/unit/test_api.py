@@ -2,6 +2,7 @@
 Unit tests for API endpoints
 """
 
+
 def test_health_live(client):
     """Test liveness endpoint."""
     response = client.get("/health/live")

@@ -6,11 +6,11 @@ Verifies that StagePhaseEngine accepts SignalBatch with required fields.
 """
 
 import pytest
+
 from heart.ss04_relationship.stage_engine import (
-    StagePhaseEngine,
     Signal,
     SignalBatch,
-    RelationshipStage,
+    StagePhaseEngine,
     TransitionAction,
 )
 
@@ -39,9 +39,10 @@ class TestRelationshipConsumesSignals:
 
     def test_stage_engine_evaluate_returns_stay_for_empty_signals(self, make_soul_spec):
         """Stage engine returns STAY when no signals."""
-        from heart.ss04_relationship.models import RelationshipState
         from datetime import datetime, timezone
         from uuid import uuid4
+
+        from heart.ss04_relationship.models import RelationshipState
 
         soul_spec = make_soul_spec()
         engine = StagePhaseEngine(soul_spec)

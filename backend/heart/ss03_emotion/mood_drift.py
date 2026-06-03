@@ -99,17 +99,23 @@ def drift_mood(
         "valence": (
             current_mood_vad["valence"]
             + mood_volatility * (blended_vad["valence"] - current_mood_vad["valence"])
-            + (1 - mood_volatility) * drift_rate_to_baseline * (soul_baseline["valence"] - current_mood_vad["valence"])
+            + (1 - mood_volatility)
+            * drift_rate_to_baseline
+            * (soul_baseline["valence"] - current_mood_vad["valence"])
         ),
         "arousal": (
             current_mood_vad["arousal"]
             + mood_volatility * (blended_vad["arousal"] - current_mood_vad["arousal"])
-            + (1 - mood_volatility) * drift_rate_to_baseline * (soul_baseline["arousal"] - current_mood_vad["arousal"])
+            + (1 - mood_volatility)
+            * drift_rate_to_baseline
+            * (soul_baseline["arousal"] - current_mood_vad["arousal"])
         ),
         "dominance": (
             current_mood_vad["dominance"]
             + mood_volatility * (blended_vad["dominance"] - current_mood_vad["dominance"])
-            + (1 - mood_volatility) * drift_rate_to_baseline * (soul_baseline["dominance"] - current_mood_vad["dominance"])
+            + (1 - mood_volatility)
+            * drift_rate_to_baseline
+            * (soul_baseline["dominance"] - current_mood_vad["dominance"])
         ),
     }
 
@@ -130,18 +136,20 @@ def drift_mood(
 
     # Update drift history
     drift_history = mood.get("drift_history", [])
-    drift_history.append({
-        "from": current_mood_vad,
-        "to": target_vad,
-        "at": current_local_time.isoformat(),
-        "cause": {
-            "recent_average": recent_average,
-            "ewma": ewma,
-            "volatility": mood_volatility,
-            "environmental_applied": True,
-            "longing_applied": days_since_last_interaction > 0,
-        },
-    })
+    drift_history.append(
+        {
+            "from": current_mood_vad,
+            "to": target_vad,
+            "at": current_local_time.isoformat(),
+            "cause": {
+                "recent_average": recent_average,
+                "ewma": ewma,
+                "volatility": mood_volatility,
+                "environmental_applied": True,
+                "longing_applied": days_since_last_interaction > 0,
+            },
+        }
+    )
 
     # Keep only last 50 drift history entries
     if len(drift_history) > 50:

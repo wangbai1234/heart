@@ -9,16 +9,14 @@ Author: Heart Platform
 
 from __future__ import annotations
 
-import asyncio
 import inspect
 import time
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable
 from uuid import UUID
 
 import structlog
 
 from heart.infra.invariants import (
-    INVARIANT_CHECK_DURATION,
     InvariantContext,
     InvariantRegistry,
     check_invariants,
@@ -51,7 +49,6 @@ async def orchestrate_with_invariants(
     """
     registry = InvariantRegistry.instance()
     trace_id = str(turn_id)
-    mode = registry._mode
     should_sample = registry.should_check("_any_", trace_id)
 
     # Execute the inner turn-processing function

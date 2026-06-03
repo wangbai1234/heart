@@ -75,9 +75,7 @@ def render_layer_tree(bundle: PromptBundle) -> None:  # noqa: C901
                 branch.add(f"[dim]{mk}:[/] {mv}")
 
     # Anti-pattern section
-    ap_branch = tree.add(
-        f"[bold ]Anti-Pattern Filter[/] — {len(bundle.anti_pattern_hits)} hit(s)"
-    )
+    ap_branch = tree.add(f"[bold ]Anti-Pattern Filter[/] — {len(bundle.anti_pattern_hits)} hit(s)")
     if bundle.anti_pattern_hits:
         for hit in bundle.anti_pattern_hits:
             ap_branch.add(f"[red]✗ {hit}[/]")
@@ -87,10 +85,8 @@ def render_layer_tree(bundle: PromptBundle) -> None:  # noqa: C901
             term = hit.split(":", 1)[-1] if ":" in hit else hit
             idx = final.lower().find(term.lower())
             if idx >= 0:
-                snippet = final[max(0, idx - 20):idx + len(term) + 20]
-                ap_branch.add(
-                    f"[red]…{snippet.replace(term, f'[bold red]{term}[/]')}…[/]"
-                )
+                snippet = final[max(0, idx - 20) : idx + len(term) + 20]
+                ap_branch.add(f"[red]…{snippet.replace(term, f'[bold red]{term}[/]')}…[/]")
     else:
         ap_branch.add("[green]✓ clean[/]")
 
@@ -133,4 +129,6 @@ def _fallback_layer_print(bundle: PromptBundle) -> None:
     if bundle.critic_score is not None:
         print(f"\n--- Critic Score: {bundle.critic_score:.2f} ---")
     print("\n--- Metadata ---")
-    print(f"  Model: {bundle.model_name}  Latency: {bundle.latency_ms}ms  Tokens: {bundle.token_count}")
+    print(
+        f"  Model: {bundle.model_name}  Latency: {bundle.latency_ms}ms  Tokens: {bundle.token_count}"
+    )

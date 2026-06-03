@@ -6,6 +6,7 @@ Verifies that Composer exposes a build_layers method with correct signature.
 """
 
 import pytest
+
 from tests.contract.conftest import ComposerLayerProtocol
 
 
@@ -41,7 +42,9 @@ class TestComposerLayerAggregatorProtocol:
         composer = ConcreteComposer()
         assert isinstance(composer, ComposerLayerProtocol)
 
-    def test_build_layers_returns_dict(self, make_emotion_state, make_inner_state, make_relationship_state):
+    def test_build_layers_returns_dict(
+        self, make_emotion_state, make_inner_state, make_relationship_state
+    ):
         """build_layers must return a dict with meta and prompt_context."""
         composer = ConcreteComposer()
         emotion = make_emotion_state(vad_valence=0.7)
@@ -63,6 +66,7 @@ class TestComposerLayerAggregatorProtocol:
 
     def test_build_layers_wrong_signature_rejected(self):
         """Protocol check catches wrong signature via structural validation."""
+
         class BadComposer:
             def build_layers(self, emotion):  # missing params
                 return {}
@@ -74,12 +78,14 @@ class TestComposerLayerAggregatorProtocol:
         assert hasattr(bad, "build_layers")  # has method, but wrong signature
         # Calling with full args would raise TypeError
         import inspect
+
         sig = inspect.signature(bad.build_layers)
         params = list(sig.parameters.keys())
         assert len(params) == 1  # only 'emotion', not the full set
 
     def test_build_layers_missing_method_rejected(self):
         """Protocol check rejects missing method."""
+
         class NoComposer:
             pass
 

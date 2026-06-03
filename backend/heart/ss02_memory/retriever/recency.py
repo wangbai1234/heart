@@ -89,7 +89,7 @@ class RecencyRetriever(RetrievalStrategy):
             .where(
                 EpisodicMemory.user_id == query_context.user_id,
                 EpisodicMemory.character_id == query_context.character_id,
-                EpisodicMemory.do_not_recall == False,
+                not EpisodicMemory.do_not_recall,
                 EpisodicMemory.created_at >= cutoff,
             )
             .order_by(EpisodicMemory.created_at.desc())

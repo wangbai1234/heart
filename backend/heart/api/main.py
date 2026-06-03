@@ -4,14 +4,16 @@ Heart API Main Application
 FastAPI application entry point with health endpoints and middleware.
 """
 
+import time
+
+import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from prometheus_client import Counter, Histogram, generate_latest
-from starlette.responses import Response
 from sqlalchemy import text
-import structlog
-import time
+from starlette.responses import Response
+
 from .routes import router
 
 logger = structlog.get_logger()
@@ -93,8 +95,10 @@ def create_app() -> FastAPI:
 
         # Check DB connectivity
         try:
-            from heart.core.config import settings
             from sqlalchemy.ext.asyncio import create_async_engine
+
+            from heart.core.config import settings
+
             engine = create_async_engine(settings.database_url, echo=False)
             async with engine.connect() as conn:
                 await conn.execute(text("SELECT 1"))
@@ -106,6 +110,7 @@ def create_app() -> FastAPI:
         # Check Redis connectivity
         try:
             import redis.asyncio as aioredis
+
             r = aioredis.from_url(settings.redis_url or "redis://localhost:6379")
             await r.ping()
             components["redis"] = "ok"

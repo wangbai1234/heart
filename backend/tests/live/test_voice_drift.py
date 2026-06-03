@@ -27,7 +27,10 @@ def _load_baseline(character: str) -> list[dict]:
     """Load baseline JSONL for a character."""
     baseline_path = (
         Path(__file__).parent.parent.parent
-        / "config" / "voice_drift" / "baselines" / f"{character}_baseline.jsonl"
+        / "config"
+        / "voice_drift"
+        / "baselines"
+        / f"{character}_baseline.jsonl"
     )
     if not baseline_path.exists():
         pytest.skip(f"Baseline not found: {baseline_path}")
@@ -69,7 +72,9 @@ async def test_voice_drift_dorothy_baseline_exists():
 @pytest.mark.asyncio
 async def test_voice_drift_canonical_prompts_loadable():
     """Verify canonical_prompts.yaml loads and has 30 prompts."""
-    cfg_path = Path(__file__).parent.parent.parent / "config" / "voice_drift" / "canonical_prompts.yaml"
+    cfg_path = (
+        Path(__file__).parent.parent.parent / "config" / "voice_drift" / "canonical_prompts.yaml"
+    )
     with open(cfg_path, "r", encoding="utf-8") as f:
         cfg = yaml.safe_load(f)
 

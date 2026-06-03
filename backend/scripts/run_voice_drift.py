@@ -44,7 +44,9 @@ async def cmd_generate_baseline(args):
         )
         if args.dry_run:
             cost = runner.estimate_cost(char)
-            print(f"[dry-run] {char}: {runner._runs_per_prompt} prompts × {args.runs} runs ≈ ${cost:.2f}")
+            print(
+                f"[dry-run] {char}: {runner._runs_per_prompt} prompts × {args.runs} runs ≈ ${cost:.2f}"
+            )
         else:
             out = await runner.generate(char, output_path=args.output)
             print(f"[{char}] Baseline → {out}")
@@ -67,9 +69,12 @@ async def cmd_regress(args):
 
         # Build report
         if args.report:
-            scores_path = Path(args.output_dir or f"artifacts/voice_drift/{char}_*") / "scores.jsonl"
+            scores_path = (
+                Path(args.output_dir or f"artifacts/voice_drift/{char}_*") / "scores.jsonl"
+            )
             # Find latest output dir
             import glob
+
             dirs = sorted(glob.glob(f"artifacts/voice_drift/{char}_*"), reverse=True)
             if dirs:
                 scores_path = Path(dirs[0]) / "scores.jsonl"

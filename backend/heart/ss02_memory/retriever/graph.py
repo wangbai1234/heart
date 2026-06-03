@@ -157,7 +157,7 @@ class GraphRetriever(RetrievalStrategy):
             stmt = select(FactNode.id).where(
                 FactNode.user_id == query_context.user_id,
                 FactNode.character_id == query_context.character_id,
-                FactNode.do_not_recall == False,
+                not FactNode.do_not_recall,
                 FactNode.promoted_to_l4_at.is_(None),
                 FactNode.predicate.in_(query_context.entry_nodes),
             )
@@ -182,7 +182,7 @@ class GraphRetriever(RetrievalStrategy):
                 .where(
                     FactNode.user_id == query_context.user_id,
                     FactNode.character_id == query_context.character_id,
-                    FactNode.do_not_recall == False,
+                    not FactNode.do_not_recall,
                     FactNode.promoted_to_l4_at.is_(None),
                     or_(*keyword_filters),
                 )
@@ -216,7 +216,7 @@ class GraphRetriever(RetrievalStrategy):
         # Recursive CTE query
         # Note: This is V1 implementation using related_facts array
         # V2 will use Neo4j for better graph traversal
-        query = text(f"""
+        query = text("""
             WITH RECURSIVE activated AS (
                 -- Base case: entry nodes (distance = 0)
                 SELECT

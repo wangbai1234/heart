@@ -6,14 +6,12 @@ Cost-capped at $0.40/run. Skipped without --live flag.
 """
 
 import json
-import os
-import pytest
-from pathlib import Path
 from datetime import datetime, timezone
-from uuid import uuid4
+from pathlib import Path
+
+import pytest
 
 from heart.infra.llm_providers.base import LLMRequest, Message, MessageRole
-
 
 # 10 representative prompts for Rin
 BASELINE_PROMPTS = [
@@ -35,7 +33,9 @@ class TestVoiceDNABaseline:
     """Generate 10 response turns for Rin and save as baseline."""
 
     @pytest.mark.asyncio
-    async def test_live__generate_rin_baseline(self, real_deepseek_provider, cost_tracker, per_test_budget):
+    async def test_live__generate_rin_baseline(
+        self, real_deepseek_provider, cost_tracker, per_test_budget
+    ):
         """Generate 10 turns with Rin, save to golden_responses_baseline.jsonl.
 
         per runtime_specs/01_identity_anchor_soul_spec.md §5.3
@@ -73,14 +73,16 @@ class TestVoiceDNABaseline:
             total_cost += cost.total_cost_usd
             cost_tracker.record_cost(cost.total_cost_usd)
 
-            results.append({
-                "index": i,
-                "prompt": prompt,
-                "response": response.content,
-                "model": response.model,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-                "cost_usd": cost.total_cost_usd,
-            })
+            results.append(
+                {
+                    "index": i,
+                    "prompt": prompt,
+                    "response": response.content,
+                    "model": response.model,
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "cost_usd": cost.total_cost_usd,
+                }
+            )
 
         # Save baseline file
         baseline_dir = Path(__file__).parent.parent.parent / "golden" / "voice_baselines"
@@ -109,7 +111,9 @@ class TestVoiceDnaSmoke:
     """Smoke test: 1 turn to verify Voice DNA is present."""
 
     @pytest.mark.asyncio
-    async def test_live__rin_uses_voice_dna_patterns(self, real_deepseek_provider, cost_tracker, per_test_budget):
+    async def test_live__rin_uses_voice_dna_patterns(
+        self, real_deepseek_provider, cost_tracker, per_test_budget
+    ):
         """Verify Rin's response contains voice DNA patterns (……, ふん, etc.).
 
         per runtime_specs/01_identity_anchor_soul_spec.md §5.3

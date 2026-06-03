@@ -19,6 +19,7 @@ from pathlib import Path
 
 import pytest
 
+import heart.ss01_soul.registry as registry_module
 from heart.ss01_soul.anchor_injector import (
     AnchorActivationView,
     AnchorInjector,
@@ -29,7 +30,6 @@ from heart.ss01_soul.anchor_injector import (
     reset_anchor_injector,
 )
 from heart.ss01_soul.registry import SoulRegistry
-import heart.ss01_soul.registry as registry_module
 
 
 @pytest.fixture
@@ -59,8 +59,8 @@ def injector() -> AnchorInjector:
 # HeuristicTokenEstimator
 # ============================================================
 
-class TestHeuristicTokenEstimator:
 
+class TestHeuristicTokenEstimator:
     def test_estimates_chinese_higher(self):
         est = HeuristicTokenEstimator()
         # 10 Chinese chars vs 10 ASCII chars
@@ -91,18 +91,14 @@ class TestHeuristicTokenEstimator:
 # Skeleton Compilation (boot)
 # ============================================================
 
-class TestSkeletonCompilation:
 
+class TestSkeletonCompilation:
     def test_skeletons_built_for_all_characters_and_modes(self, injector):
         skeletons = injector._skeletons  # noqa: SLF001 - intentional internal check
 
         # Both rin and dorothy × 3 modes = 6 skeletons (v1.0.0 only)
-        rin_modes = {
-            mode for (cid, _v, mode) in skeletons.keys() if cid == "rin"
-        }
-        dorothy_modes = {
-            mode for (cid, _v, mode) in skeletons.keys() if cid == "dorothy"
-        }
+        rin_modes = {mode for (cid, _v, mode) in skeletons.keys() if cid == "rin"}
+        dorothy_modes = {mode for (cid, _v, mode) in skeletons.keys() if cid == "dorothy"}
 
         assert rin_modes == {AnchorMode.FULL, AnchorMode.LIGHT, AnchorMode.REINFORCE}
         assert dorothy_modes == {AnchorMode.FULL, AnchorMode.LIGHT, AnchorMode.REINFORCE}
@@ -146,8 +142,8 @@ class TestSkeletonCompilation:
 # FULL Anchor Generation
 # ============================================================
 
-class TestGenerateFullAnchor:
 
+class TestGenerateFullAnchor:
     def test_returns_string(self, injector):
         soul = registry_module._soul_registry.get_soul("rin", "1.0.0")
         state = AnchorActivationView(
@@ -196,12 +192,9 @@ class TestGenerateFullAnchor:
             (0.9, "共鸣"),
         ]
         for score, expected_label in cases:
-            state = AnchorActivationView(
-                resonance_score=score, unlocked_facet_ids=()
-            )
+            state = AnchorActivationView(resonance_score=score, unlocked_facet_ids=())
             result = injector.generate_full_anchor(soul, state)
-            assert expected_label in result, \
-                f"score={score} expected label={expected_label}"
+            assert expected_label in result, f"score={score} expected label={expected_label}"
 
     def test_no_facets_unlocked(self, injector):
         soul = registry_module._soul_registry.get_soul("rin", "1.0.0")
@@ -222,8 +215,9 @@ class TestGenerateFullAnchor:
         soul = registry_module._soul_registry.get_soul("rin", "1.0.0")
         state_a = AnchorActivationView(resonance_score=0.1, unlocked_facet_ids=())
         state_b = AnchorActivationView(resonance_score=0.9, unlocked_facet_ids=())
-        assert injector.generate_full_anchor(soul, state_a) != \
-            injector.generate_full_anchor(soul, state_b)
+        assert injector.generate_full_anchor(soul, state_a) != injector.generate_full_anchor(
+            soul, state_b
+        )
 
     def test_works_for_dorothy(self, injector):
         soul = registry_module._soul_registry.get_soul("dorothy", "1.0.0")
@@ -237,8 +231,8 @@ class TestGenerateFullAnchor:
 # LIGHT Anchor Generation
 # ============================================================
 
-class TestGenerateLightAnchor:
 
+class TestGenerateLightAnchor:
     def test_returns_string(self, injector):
         soul = registry_module._soul_registry.get_soul("rin", "1.0.0")
         state = AnchorActivationView(resonance_score=0.5, unlocked_facet_ids=())
@@ -257,8 +251,9 @@ class TestGenerateLightAnchor:
         soul = registry_module._soul_registry.get_soul("rin", "1.0.0")
         state_a = AnchorActivationView(resonance_score=0.1, unlocked_facet_ids=())
         state_b = AnchorActivationView(resonance_score=0.9, unlocked_facet_ids=("foo",))
-        assert injector.generate_light_anchor(soul, state_a) == \
-            injector.generate_light_anchor(soul, state_b)
+        assert injector.generate_light_anchor(soul, state_a) == injector.generate_light_anchor(
+            soul, state_b
+        )
 
     def test_contains_essence_and_voice_dna(self, injector):
         soul = registry_module._soul_registry.get_soul("rin", "1.0.0")
@@ -273,8 +268,8 @@ class TestGenerateLightAnchor:
 # REINFORCE Anchor Generation
 # ============================================================
 
-class TestGenerateReinforceAnchor:
 
+class TestGenerateReinforceAnchor:
     def test_returns_string_with_sections(self, injector):
         soul = registry_module._soul_registry.get_soul("rin", "1.0.0")
         evidence = DriftEvidence(
@@ -351,8 +346,8 @@ class TestGenerateReinforceAnchor:
 # Token Estimation
 # ============================================================
 
-class TestTokenEstimation:
 
+class TestTokenEstimation:
     def test_full_anchor_within_reasonable_range(self, injector):
         soul = registry_module._soul_registry.get_soul("rin", "1.0.0")
         state = AnchorActivationView(resonance_score=0.5, unlocked_facet_ids=())
@@ -382,8 +377,8 @@ class TestTokenEstimation:
 # Thread Safety
 # ============================================================
 
-class TestThreadSafety:
 
+class TestThreadSafety:
     def test_concurrent_generate_full_no_corruption(self, injector):
         """20 threads × 50 generations should all return identical results."""
         soul = registry_module._soul_registry.get_soul("rin", "1.0.0")
@@ -427,27 +422,21 @@ class TestThreadSafety:
         def run_full():
             try:
                 for _ in range(30):
-                    results["full"].append(
-                        injector.generate_full_anchor(soul, state)
-                    )
+                    results["full"].append(injector.generate_full_anchor(soul, state))
             except Exception as e:
                 errors.append(e)
 
         def run_light():
             try:
                 for _ in range(30):
-                    results["light"].append(
-                        injector.generate_light_anchor(soul, state)
-                    )
+                    results["light"].append(injector.generate_light_anchor(soul, state))
             except Exception as e:
                 errors.append(e)
 
         def run_reinforce():
             try:
                 for _ in range(30):
-                    results["reinforce"].append(
-                        injector.generate_reinforce_anchor(soul, evidence)
-                    )
+                    results["reinforce"].append(injector.generate_reinforce_anchor(soul, evidence))
             except Exception as e:
                 errors.append(e)
 
@@ -475,8 +464,8 @@ class TestThreadSafety:
 # Singleton
 # ============================================================
 
-class TestSingleton:
 
+class TestSingleton:
     def test_get_anchor_injector_returns_same_instance(self):
         a = get_anchor_injector()
         b = get_anchor_injector()
@@ -493,17 +482,18 @@ class TestSingleton:
 # Unknown soul handling
 # ============================================================
 
-class TestUnknownSoul:
 
+class TestUnknownSoul:
     def test_unknown_character_raises_key_error(self, injector):
         # Construct a SoulSpec-like with unknown id by reusing a real one
         # but mutating character_id won't work (frozen + validated). Use
         # a soul with bumped version, which has no skeleton.
-        soul = registry_module._soul_registry.get_soul("rin", "1.0.0")
+        registry_module._soul_registry.get_soul("rin", "1.0.0")
         # Pydantic models in this codebase have validate_assignment=True,
         # but mutating character_id triggers re-validation, not pattern
         # change. We test the negative path by directly poking _get_skeleton.
         from heart.ss01_soul.anchor_injector import AnchorMode
+
         with pytest.raises(KeyError):
             # call private method directly with a tuple that doesn't exist
             injector._skeletons[("ghost_character", "9.9.9", AnchorMode.FULL)]  # noqa: SLF001

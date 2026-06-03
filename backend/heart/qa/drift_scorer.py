@@ -114,9 +114,7 @@ class DriftScorer:
         tone_scores = judgment.tone_scores
         if tone_scores:
             # Normalize: each tone axis is 0-1, average deviation from 0.5 midpoint
-            d3_distance = sum(abs(v - 0.5) for v in tone_scores.values()) / max(
-                len(tone_scores), 1
-            )
+            d3_distance = sum(abs(v - 0.5) for v in tone_scores.values()) / max(len(tone_scores), 1)
         else:
             d3_distance = 0.5
 

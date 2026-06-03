@@ -31,7 +31,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, Generator, List, Optional
 
 import structlog
-from prometheus_client import Histogram
+from prometheus_client import Counter, Histogram
 
 logger = structlog.get_logger(__name__)
 
@@ -56,6 +56,18 @@ TURN_MODEL_TOKENS = Histogram(
     "Per-turn LLM token usage",
     ["model", "direction"],
     buckets=[10, 50, 100, 250, 500, 1000, 2500, 5000, 10000, 20000, 40000, 80000],
+)
+
+LLM_COST_DOLLARS_TOTAL = Counter(
+    "heart_llm_cost_dollars_total",
+    "Cumulative LLM cost in USD",
+    ["provider", "model"],
+)
+
+LLM_TOKENS_TOTAL = Counter(
+    "heart_llm_tokens_total",
+    "Cumulative LLM token usage",
+    ["model", "token_type"],
 )
 
 # ── Context-var thread / asyncio safe ─────────────────────────────
@@ -245,21 +257,21 @@ class TurnProfiler:
         breakdown: Dict[str, float] = {}
         for rec in self._phases:
             breakdown[rec.phase] = rec.elapsed_ms
+            model_name = rec.annotations.get("model_name", "unknown")
+            provider = rec.annotations.get("provider", model_name)
             if "cost_usd" in rec.annotations:
-                total_cost += float(rec.annotations["cost_usd"])
-                TURN_MODEL_COST_USD.labels(
-                    model=rec.annotations.get("model_name", "unknown"),
-                ).observe(float(rec.annotations["cost_usd"]))
+                cost = float(rec.annotations["cost_usd"])
+                total_cost += cost
+                TURN_MODEL_COST_USD.labels(model=model_name).observe(cost)
+                LLM_COST_DOLLARS_TOTAL.labels(provider=provider, model=model_name).inc(cost)
             if "input_tokens" in rec.annotations:
-                TURN_MODEL_TOKENS.labels(
-                    model=rec.annotations.get("model_name", "unknown"),
-                    direction="input",
-                ).observe(float(rec.annotations["input_tokens"]))
+                itok = float(rec.annotations["input_tokens"])
+                TURN_MODEL_TOKENS.labels(model=model_name, direction="input").observe(itok)
+                LLM_TOKENS_TOTAL.labels(model=model_name, token_type="input").inc(itok)
             if "output_tokens" in rec.annotations:
-                TURN_MODEL_TOKENS.labels(
-                    model=rec.annotations.get("model_name", "unknown"),
-                    direction="output",
-                ).observe(float(rec.annotations["output_tokens"]))
+                otok = float(rec.annotations["output_tokens"])
+                TURN_MODEL_TOKENS.labels(model=model_name, direction="output").observe(otok)
+                LLM_TOKENS_TOTAL.labels(model=model_name, token_type="output").inc(otok)
 
         hot_ms = sum(v for k, v in breakdown.items() if k in hot_path_phases)
         cold_ms = sum(v for k, v in breakdown.items() if k in cold_path_phases)

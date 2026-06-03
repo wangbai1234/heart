@@ -5,18 +5,18 @@ per runtime_specs/04_relationship_phase_engine.md §3 + §10
 Tests stage engine with real Soul spec and time-travel (freezegun).
 """
 
-import pytest
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
+import pytest
+
+from heart.ss04_relationship.models import RelationshipState
 from heart.ss04_relationship.stage_engine import (
-    StagePhaseEngine,
     Signal,
     SignalBatch,
-    RelationshipStage,
+    StagePhaseEngine,
     TransitionAction,
 )
-from heart.ss04_relationship.models import RelationshipState
 
 
 @pytest.mark.integration
@@ -27,6 +27,7 @@ class TestRelationshipProgression:
     def rin_soul_spec(self):
         """Real Rin soul spec for testing."""
         from heart.ss01_soul.registry import SoulRegistry
+
         registry = SoulRegistry()
         registry.load_all()
         return registry.get_soul("rin").model_dump()
@@ -72,8 +73,12 @@ class TestRelationshipProgression:
         signals = SignalBatch(
             positive=[
                 Signal(type="meaningful_disclosure", strength=0.8, metadata={"topic": "dreams"}),
-                Signal(type="trust_building", strength=0.7, metadata={"action": "shared_vulnerability"}),
-                Signal(type="emotional_resonance", strength=0.9, metadata={"emotion": "understood"}),
+                Signal(
+                    type="trust_building", strength=0.7, metadata={"action": "shared_vulnerability"}
+                ),
+                Signal(
+                    type="emotional_resonance", strength=0.9, metadata={"emotion": "understood"}
+                ),
             ],
             negative=[],
             events=[],

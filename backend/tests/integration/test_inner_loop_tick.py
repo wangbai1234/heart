@@ -5,9 +5,9 @@ per runtime_specs/06_inner_state_behavior_runtime.md §3-4
 Tests that the inner state runtime correctly decides when to send proactive messages.
 """
 
-import pytest
-from datetime import datetime, timezone, timedelta
 from uuid import uuid4
+
+import pytest
 
 from heart.ss03_emotion.service import EmotionService
 
@@ -19,9 +19,12 @@ class TestInnerLoopTick:
     @pytest.fixture
     def service(self):
         from pathlib import Path
+
         config_path = Path("/Users/wanglixun/heart/config/encoder_lexicon.yaml")
         if not config_path.exists():
-            config_path = Path(__file__).parent.parent.parent.parent / "config" / "encoder_lexicon.yaml"
+            config_path = (
+                Path(__file__).parent.parent.parent.parent / "config" / "encoder_lexicon.yaml"
+            )
         if not config_path.exists():
             pytest.skip("emotion_lexicon.yaml not found")
         return EmotionService(config_path=str(config_path))
@@ -47,7 +50,7 @@ class TestInnerLoopTick:
                 "max_arousal_change_per_turn": 0.15,
                 "max_dominance_change_per_turn": 0.15,
             },
-            "relational_template": {"repair_profile": {}}
+            "relational_template": {"repair_profile": {}},
         }
 
         try:
@@ -55,7 +58,7 @@ class TestInnerLoopTick:
                 state = service.process_turn(
                     user_id=user_id,
                     character_id="rin",
-                    user_message="这是第{}次对话".format(i+1),
+                    user_message="这是第{}次对话".format(i + 1),
                     turn_id=uuid4(),
                     context={
                         "days_since_last": 0,
@@ -104,11 +107,11 @@ class TestInnerLoopTick:
                 "max_arousal_change_per_turn": 0.15,
                 "max_dominance_change_per_turn": 0.15,
             },
-            "relational_template": {"repair_profile": {}}
+            "relational_template": {"repair_profile": {}},
         }
 
         try:
-            state = service.process_turn(
+            service.process_turn(
                 user_id=user_id,
                 character_id="rin",
                 user_message="哦",

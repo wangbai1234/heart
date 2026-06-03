@@ -8,11 +8,12 @@ Author: 心屿团队
 Created: 2026-05-17
 """
 
-import yaml
 from pathlib import Path
 from typing import Dict, Optional
-from pydantic import ValidationError
+
 import structlog
+import yaml
+from pydantic import ValidationError
 
 from .schema_validator import SoulSpec, validate_soul_spec_yaml
 

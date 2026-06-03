@@ -5,14 +5,11 @@ per runtime_specs/03_emotion_state_machine.md §3-4
 Tests with real PG (testcontainers). Uses EmotionService directly (in-memory cache).
 """
 
-import pytest
-from datetime import datetime, timezone
 from uuid import uuid4
 
+import pytest
+
 from heart.ss03_emotion.service import EmotionService
-from heart.ss03_emotion.trigger_detector import TriggerDetector
-from heart.ss03_emotion.decay import DecayEngine
-from heart.ss03_emotion.state_machine import EmotionStateMachine
 
 
 @pytest.mark.integration
@@ -22,9 +19,12 @@ class TestEmotionLifecycle:
     @pytest.fixture
     def service(self):
         from pathlib import Path
+
         config_path = Path("/Users/wanglixun/heart/config/encoder_lexicon.yaml")
         if not config_path.exists():
-            config_path = Path(__file__).parent.parent.parent.parent / "config" / "encoder_lexicon.yaml"
+            config_path = (
+                Path(__file__).parent.parent.parent.parent / "config" / "encoder_lexicon.yaml"
+            )
         if not config_path.exists():
             pytest.skip("emotion_lexicon.yaml not found")
         return EmotionService(config_path=str(config_path))
@@ -60,9 +60,7 @@ class TestEmotionLifecycle:
                 "max_arousal_change_per_turn": 0.15,
                 "max_dominance_change_per_turn": 0.15,
             },
-            "relational_template": {
-                "repair_profile": {}
-            }
+            "relational_template": {"repair_profile": {}},
         }
 
         try:

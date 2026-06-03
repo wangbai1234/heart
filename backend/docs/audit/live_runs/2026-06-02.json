@@ -1,0 +1,34 @@
+[
+  {
+    "timestamp": "2026-06-02T02:26:00.821047+00:00",
+    "total_cost": 0.000984,
+    "tests_run": 1,
+    "per_test": {
+      "tests/live/test_real_turn_full_wiring.py::TestRealTurnFullWiring::test_live__full_wiring_turn_produces_all_spans": 0.000984
+    }
+  },
+  {
+    "timestamp": "2026-06-02T03:43:24.071723+00:00",
+    "total_cost": 0.0,
+    "tests_run": 1,
+    "per_test": {
+      "tests/live/test_real_turn_full_wiring.py::TestRealTurnFullWiring::test_live__full_wiring_turn_produces_all_spans": 0.0
+    }
+  },
+  {
+    "timestamp": "2026-06-02T03:43:40.899467+00:00",
+    "total_cost": 0.000632,
+    "tests_run": 1,
+    "per_test": {
+      "tests/live/test_real_turn_full_wiring.py::TestRealTurnFullWiring::test_live__full_wiring_turn_produces_all_spans": 0.000632
+    }
+  },
+  {
+    "timestamp": "2026-06-02T06:21:21.413580+00:00",
+    "total_cost": 0.000921,
+    "tests_run": 1,
+    "per_test": {
+      "tests/live/test_real_turn_full_wiring.py::TestRealTurnFullWiring::test_live__full_wiring_turn_produces_all_spans": 0.000921
+    }
+  }
+]

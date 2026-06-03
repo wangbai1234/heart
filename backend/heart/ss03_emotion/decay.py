@@ -32,11 +32,14 @@ class DecayEngine:
             decay_profiles: Dictionary from emotion_lexicon.yaml decay_profiles section
         """
         self.profiles = decay_profiles
-        self.default_profile = decay_profiles.get("default", {
-            "decay_type": "exponential",
-            "half_life_hours": 4.0,
-            "floor": 0.05,
-        })
+        self.default_profile = decay_profiles.get(
+            "default",
+            {
+                "decay_type": "exponential",
+                "half_life_hours": 4.0,
+                "floor": 0.05,
+            },
+        )
 
     def apply_decay(
         self,

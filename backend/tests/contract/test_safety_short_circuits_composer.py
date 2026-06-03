@@ -34,7 +34,7 @@ class TestSafetyShortCircuitsComposer:
         if not safety_result["is_safe"]:
             response = {"blocked": True, "reason": safety_result["blocked_reason"]}
         else:
-            ctx = composer_build("I want to hurt myself", "rin")
+            composer_build("I want to hurt myself", "rin")
             resp = "not reached"  # router_call would go here
             response = {"blocked": False, "response": resp}
 

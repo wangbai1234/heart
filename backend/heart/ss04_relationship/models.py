@@ -20,9 +20,10 @@ from uuid import UUID
 
 from sqlalchemy import (
     UUID as SQLUUID,
+)
+from sqlalchemy import (
     VARCHAR,
     BigInteger,
-    Boolean,
     CheckConstraint,
     DateTime,
     Float,
@@ -235,7 +236,9 @@ class RelationshipEvent(Base):
     state_before: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
     state_after: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
 
-    triggered_by_turn_id: Mapped[Optional[UUID]] = mapped_column(SQLUUID(as_uuid=True), nullable=True)
+    triggered_by_turn_id: Mapped[Optional[UUID]] = mapped_column(
+        SQLUUID(as_uuid=True), nullable=True
+    )
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

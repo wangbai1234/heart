@@ -14,19 +14,17 @@ Author: 心屿团队
 
 from __future__ import annotations
 
-import hashlib
 import json
-import re
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from uuid import UUID, uuid4
 
 from heart.ss03_emotion.models import (
+    RepairApplicationDetail,
+    RepairOutcome,
+    RepairOutcomeFlags,
     RepairSignal,
     RepairSignalComponent,
-    RepairOutcome,
-    RepairApplicationDetail,
-    RepairOutcomeFlags,
 )
 
 
@@ -62,15 +60,39 @@ class RepairEngine:
         self.soul_config = soul_config or {}
 
         # Load repair keywords from lexicon
-        self.apology_keywords = lexicon.get("repair_keywords", {}).get("apology", [
-            "对不起", "抱歉", "我错了", "不该", "原谅", "是我",
-            "我的错", "怪我", "让你", "委屈", "难过",
-        ])
+        self.apology_keywords = lexicon.get("repair_keywords", {}).get(
+            "apology",
+            [
+                "对不起",
+                "抱歉",
+                "我错了",
+                "不该",
+                "原谅",
+                "是我",
+                "我的错",
+                "怪我",
+                "让你",
+                "委屈",
+                "难过",
+            ],
+        )
 
-        self.vulnerability_keywords = lexicon.get("repair_keywords", {}).get("vulnerability", [
-            "累了", "疲惫", "压力", "难受", "撑不住", "失眠",
-            "焦虑", "痛苦", "无助", "孤独", "害怕",
-        ])
+        self.vulnerability_keywords = lexicon.get("repair_keywords", {}).get(
+            "vulnerability",
+            [
+                "累了",
+                "疲惫",
+                "压力",
+                "难受",
+                "撑不住",
+                "失眠",
+                "焦虑",
+                "痛苦",
+                "无助",
+                "孤独",
+                "害怕",
+            ],
+        )
 
         # Load soul repair profile (if available)
         self.soul_repair_profile = self._load_soul_repair_profile()
@@ -345,7 +367,7 @@ class RepairEngine:
     def _compute_trigrams(text: str) -> set:
         """Compute 3-gram set from text."""
         text = text.lower()
-        return {text[i:i+3] for i in range(len(text) - 2)}
+        return {text[i : i + 3] for i in range(len(text) - 2)}
 
     @staticmethod
     def _jaccard_similarity(set1: set, set2: set) -> float:
@@ -384,7 +406,9 @@ class RepairEngine:
             return None
 
         # Gate 3: Not pure apology topic
-        apology_ratio = sum(1 for kw in self.apology_keywords if kw in user_message) / max(len(user_message), 1)
+        apology_ratio = sum(1 for kw in self.apology_keywords if kw in user_message) / max(
+            len(user_message), 1
+        )
         if apology_ratio > 0.3:  # Too apology-heavy
             return None
 
@@ -479,7 +503,7 @@ class RepairEngine:
 - 真诚 = 具体承担责任，非套话
 - 不真诚 = 公式化 / 回避 / 无关话题
 
-仅返回 JSON：{{"sincerity": <float>, "reason": "<简短理由>"}}"""
+仅返回 JSON：{{"sincerity": <float>, "reason": "<简短理由>"}}""",
             }
         ]
 
@@ -508,7 +532,7 @@ class RepairEngine:
 
             return sincerity
 
-        except Exception as e:
+        except Exception:
             # On timeout or error, fall back to heuristic
             return None
 
@@ -663,13 +687,15 @@ class RepairEngine:
             if "repair_history" not in pending:
                 pending["repair_history"] = []
 
-            pending["repair_history"].append({
-                "turn_id": signal["source_turn_id"],
-                "signal_components": signal["components"],
-                "impact": impact,
-                "post_progress": repair_progress_after,
-                "at": signal["detected_at"],
-            })
+            pending["repair_history"].append(
+                {
+                    "turn_id": signal["source_turn_id"],
+                    "signal_components": signal["components"],
+                    "impact": impact,
+                    "post_progress": repair_progress_after,
+                    "at": signal["detected_at"],
+                }
+            )
 
             # Compute new intensity (per §4.5: intensity × (1 - progress × 0.8))
             initial_intensity = pending.get("intensity", 0.5)
@@ -682,14 +708,16 @@ class RepairEngine:
             elif 0.4 <= repair_progress_after < 0.8:
                 transitioned = "semi_repaired"
 
-            applied_to.append({
-                "emotion": emotion,
-                "impact": impact,
-                "repair_progress_before": repair_progress_before,
-                "repair_progress_after": repair_progress_after,
-                "intensity_after": intensity_after,
-                "transitioned": transitioned,
-            })
+            applied_to.append(
+                {
+                    "emotion": emotion,
+                    "impact": impact,
+                    "repair_progress_before": repair_progress_before,
+                    "repair_progress_after": repair_progress_after,
+                    "intensity_after": intensity_after,
+                    "transitioned": transitioned,
+                }
+            )
 
             # Update cumulative session progress
             session_state["cumulative_progress_this_session"] += impact
@@ -840,7 +868,7 @@ class RepairEngine:
 
         # Get last apology time
         last_apology = repair_history[-1]
-        last_apology_at = datetime.fromisoformat(last_apology["at"])
+        datetime.fromisoformat(last_apology["at"])
 
         # Check if offense re-occurred after last apology
         recidivism_window = 5  # turns

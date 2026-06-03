@@ -5,9 +5,7 @@ per runtime_specs/07_agent_orchestration.md §3
 Cost-capped at $0.10/run. Skipped without --live flag.
 """
 
-import os
 import pytest
-from uuid import uuid4
 
 from heart.infra.llm_providers.base import LLMRequest, Message, MessageRole
 
@@ -17,7 +15,9 @@ class TestRealTurnSmoke:
     """1 real DeepSeek call — the simplest hot path smoke test."""
 
     @pytest.mark.asyncio
-    async def test_live__deepseek_responds_to_basic_greeting(self, real_deepseek_provider, cost_tracker, per_test_budget):
+    async def test_live__deepseek_responds_to_basic_greeting(
+        self, real_deepseek_provider, cost_tracker, per_test_budget
+    ):
         """Real DeepSeek responds to a simple greeting — the most basic health check.
 
         per runtime_specs/07_agent_orchestration.md §3
@@ -63,7 +63,9 @@ class TestRealTurnMinimalLatency:
     """Minimal latency check — ensure API is responsive."""
 
     @pytest.mark.asyncio
-    async def test_live__deepseek_responds_under_30_seconds(self, real_deepseek_provider, cost_tracker, per_test_budget):
+    async def test_live__deepseek_responds_under_30_seconds(
+        self, real_deepseek_provider, cost_tracker, per_test_budget
+    ):
         """Real DeepSeek should respond within 30 seconds.
 
         per runtime_specs/08_engineering_architecture.md §3

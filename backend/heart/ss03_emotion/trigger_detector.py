@@ -19,12 +19,11 @@ Author: 心屿团队
 
 from __future__ import annotations
 
-import re
 from typing import Any, Dict, List
-from uuid import UUID
 
 try:
     import ahocorasick
+
     AHOCORASICK_AVAILABLE = True
 except ImportError:
     AHOCORASICK_AVAILABLE = False
@@ -86,7 +85,7 @@ class TriggerDetector:
         """Match keywords using AC automaton or fallback to set check."""
         if AHOCORASICK_AVAILABLE and automaton is not None:
             matches = []
-            for end_index, (_, keyword) in automaton.iter(text):
+            for _end_index, (_, keyword) in automaton.iter(text):
                 matches.append(keyword)
             return matches
         elif keywords_set is not None:
@@ -282,35 +281,41 @@ class TriggerDetector:
         """
         # Intensity increases with consecutive count
         intensity_per_turn = 0.2
-        total_intensity = min(0.8, self.consecutive_neglect_count * intensity_per_turn)
+        min(0.8, self.consecutive_neglect_count * intensity_per_turn)
 
         suggested_emotions = []
 
         if self.consecutive_neglect_count == 1:
-            suggested_emotions.append({
-                "emotion": "worry",
-                "intensity_delta": 0.2,
-                "is_new_or_reinforce": "new",
-            })
+            suggested_emotions.append(
+                {
+                    "emotion": "worry",
+                    "intensity_delta": 0.2,
+                    "is_new_or_reinforce": "new",
+                }
+            )
         elif self.consecutive_neglect_count == 2:
-            suggested_emotions.append({
-                "emotion": "aggrieved",
-                "intensity_delta": 0.3,
-                "is_new_or_reinforce": "new",
-            })
-        elif self.consecutive_neglect_count >= 3:
-            suggested_emotions.extend([
+            suggested_emotions.append(
                 {
                     "emotion": "aggrieved",
-                    "intensity_delta": 0.5,
-                    "is_new_or_reinforce": "reinforce",
-                },
-                {
-                    "emotion": "coldness",
-                    "intensity_delta": 0.4,
+                    "intensity_delta": 0.3,
                     "is_new_or_reinforce": "new",
-                },
-            ])
+                }
+            )
+        elif self.consecutive_neglect_count >= 3:
+            suggested_emotions.extend(
+                [
+                    {
+                        "emotion": "aggrieved",
+                        "intensity_delta": 0.5,
+                        "is_new_or_reinforce": "reinforce",
+                    },
+                    {
+                        "emotion": "coldness",
+                        "intensity_delta": 0.4,
+                        "is_new_or_reinforce": "new",
+                    },
+                ]
+            )
 
         return {
             "trigger_type": "user_neglect",
@@ -396,11 +401,13 @@ class TriggerDetector:
         ]
 
         if can_flutter:
-            suggested_emotions.append({
-                "emotion": "fluttered",
-                "intensity_delta": 0.3,
-                "is_new_or_reinforce": "new",
-            })
+            suggested_emotions.append(
+                {
+                    "emotion": "fluttered",
+                    "intensity_delta": 0.3,
+                    "is_new_or_reinforce": "new",
+                }
+            )
 
         return {
             "trigger_type": "user_compliment",

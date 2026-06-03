@@ -210,7 +210,7 @@ async def write_facts_to_l3(
             FactNode.character_id == event.character_id,
             FactNode.predicate == fact["predicate"],
             FactNode.subject == fact["subject"],
-            FactNode.do_not_recall == False,
+            not FactNode.do_not_recall,
         )
 
         result = await session.execute(existing_stmt)

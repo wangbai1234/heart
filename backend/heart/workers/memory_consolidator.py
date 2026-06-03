@@ -28,11 +28,12 @@ from datetime import datetime, timedelta, timezone
 from uuid import UUID, uuid4
 
 import structlog
-from sqlalchemy import select, and_, text
+from sqlalchemy import and_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from heart.infra.llm.router import get_model_router
 from heart.prompts.episode_summary import EPISODE_SUMMARY_PROMPT
+from heart.ss02_memory.decay_engine import DecayEngine
 from heart.ss02_memory.models import (
     ConsolidationJob,
     EpisodicMemory,
@@ -40,7 +41,6 @@ from heart.ss02_memory.models import (
     IdentityMemory,
     MemoryEncodingEvent,
 )
-from heart.ss02_memory.decay_engine import DecayEngine
 
 logger = structlog.get_logger()
 
@@ -127,7 +127,7 @@ class EpisodeClusterer:
         episodes = []
         current_episode = []
 
-        for i, turn_id in enumerate(turn_ids):
+        for _i, turn_id in enumerate(turn_ids):
             current_episode.append(turn_id)
 
             # Check if we should start new episode
@@ -292,7 +292,7 @@ class FactReconciler:
                     FactNode.predicate == new_fact.predicate,
                     FactNode.subject == new_fact.subject,
                     FactNode.id != new_fact.id,
-                    FactNode.do_not_recall == False,
+                    not FactNode.do_not_recall,
                 )
             )
 
@@ -371,7 +371,7 @@ class L4Promoter:
                     FactNode.user_id == user_id,
                     FactNode.character_id == character_id,
                     FactNode.importance_score >= L4_MIN_IMPORTANCE,
-                    FactNode.do_not_recall == False,
+                    not FactNode.do_not_recall,
                 )
             )
             .order_by(FactNode.importance_score.desc())
@@ -904,7 +904,7 @@ class ConsolidationWorker:
             and_(
                 FactNode.user_id == user_id,
                 FactNode.character_id == character_id,
-                FactNode.do_not_recall == False,
+                not FactNode.do_not_recall,
             )
         )
 

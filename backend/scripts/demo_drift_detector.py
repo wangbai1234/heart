@@ -19,8 +19,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import logging
-import structlog
 from uuid import uuid4
+
+import structlog
 
 from heart.ss01_soul.drift_detector import (
     DriftCheckRequest,
@@ -36,6 +37,7 @@ structlog.configure(wrapper_class=structlog.make_filtering_bound_logger(logging.
 # ============================================================
 # Mock LLM for Demo
 # ============================================================
+
 
 class DemoLLMClient(DriftLLMClient):
     """Demo LLM that simulates realistic drift scoring."""
@@ -96,6 +98,7 @@ class DemoLLMClient(DriftLLMClient):
 # Demo Session
 # ============================================================
 
+
 def banner(title: str):
     print()
     print("=" * 78)
@@ -131,18 +134,22 @@ def demo_gradual_drift():
             return ["……说吧。", "……三天了。", "……听。"][turn % 3]
 
     # Run drift check every 5 turns
-    print("\n{:>4}  {:>8}  {:>12}  {:>12}  {}".format(
-        "Turn", "Drift", "Decision", "REINFORCE?", "Sample Response"
-    ))
+    print(
+        "\n{:>4}  {:>8}  {:>12}  {:>12}  {}".format(
+            "Turn", "Drift", "Decision", "REINFORCE?", "Sample Response"
+        )
+    )
     print("-" * 78)
 
     for turn in range(1, 51):
         # Generate response
         response_text = generate_response(turn)
-        history.append(ReleasedResponse(
-            turn_index=turn,
-            text=response_text,
-        ))
+        history.append(
+            ReleasedResponse(
+                turn_index=turn,
+                text=response_text,
+            )
+        )
 
         # Check drift every 5 turns
         if turn % 5 == 0:
@@ -164,13 +171,15 @@ def demo_gradual_drift():
             reinforce = "YES" if result.evidence else "NO"
             decision_short = result.decision.value[:12]
 
-            print("{:>4}  {:>8.3f}  {:>12}  {:>12}  {}".format(
-                turn,
-                result.drift_score,
-                decision_short,
-                reinforce,
-                response_text[:30],
-            ))
+            print(
+                "{:>4}  {:>8.3f}  {:>12}  {:>12}  {}".format(
+                    turn,
+                    result.drift_score,
+                    decision_short,
+                    reinforce,
+                    response_text[:30],
+                )
+            )
 
             if result.evidence:
                 print("      └─ Evidence:")
@@ -206,7 +215,7 @@ def demo_pre_filter_skip():
     print(f"Decision: {result.decision.value}")
     print(f"LLM used: {result.llm_used}")
     print(f"Latency: {result.latency_ms}ms")
-    print(f"Pre-filter hits:")
+    print("Pre-filter hits:")
     print(f"  • hard_never: {result.debug.prefilter_hits.hard_never_count}")
     print(f"  • forbidden_pattern: {result.debug.prefilter_hits.forbidden_pattern_count}")
     print(f"  • voice_dna_miss: {result.debug.prefilter_hits.voice_dna_marker_miss}")

@@ -37,28 +37,34 @@ def _parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
         help="Session UUID to replay",
     )
     parser.add_argument(
-        "--turn", "-t",
+        "--turn",
+        "-t",
         type=int,
         default=None,
         help="Turn number (1-indexed) within the session. If omitted, shows all turns.",
     )
     parser.add_argument(
-        "--user-id", "-u",
+        "--user-id",
+        "-u",
         default=None,
         help="User ID for privacy gate. Required unless HEART_DEV_MODE=true.",
     )
     parser.add_argument(
         "--database-url",
-        default=os.getenv("DATABASE_URL", "postgresql+asyncpg://heart:heartdev@localhost:5432/heart"),
+        default=os.getenv(
+            "DATABASE_URL", "postgresql+asyncpg://heart:heartdev@localhost:5432/heart"
+        ),
         help="PostgreSQL connection string (default from DATABASE_URL env).",
     )
     parser.add_argument(
-        "--layer-only", "-l",
+        "--layer-only",
+        "-l",
         action="store_true",
         help="Show only the layer tree view (skip diff).",
     )
     parser.add_argument(
-        "--diff-only", "-d",
+        "--diff-only",
+        "-d",
         action="store_true",
         help="Show only the diff view (skip layers).",
     )
@@ -108,8 +114,10 @@ def _print_bundle_summary(bundles: list[PromptBundle]) -> None:
         from rich.table import Table
     except ImportError:
         for i, b in enumerate(bundles, 1):
-            print(f"  Turn {i}: {b.turn_id}  hits={b.anti_pattern_hits}  "
-                  f"latency={b.latency_ms}ms  tokens={b.token_count}")
+            print(
+                f"  Turn {i}: {b.turn_id}  hits={b.anti_pattern_hits}  "
+                f"latency={b.latency_ms}ms  tokens={b.token_count}"
+            )
         return
 
     console = Console()
@@ -163,9 +171,7 @@ async def main(argv: Optional[list[str]] = None) -> int:  # noqa: C901
 
     try:
         # Privacy gate
-        authorized_user = await _check_privacy(
-            recorder, session_id, args.user_id, args.turn
-        )
+        authorized_user = await _check_privacy(recorder, session_id, args.user_id, args.turn)
         if authorized_user is None:
             # Check if the session exists at all
             all_bundles = await recorder.load_by_session(session_id, None)

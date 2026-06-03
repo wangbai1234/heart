@@ -86,9 +86,9 @@ class TestBaseFrequency:
         # So 30 ± 11 is reasonable (2σ)
         expected = 30
         tolerance = 15  # Wider tolerance for randomness
-        assert (
-            expected - tolerance <= injection_count <= expected + tolerance
-        ), f"Expected ~{expected}, got {injection_count}"
+        assert expected - tolerance <= injection_count <= expected + tolerance, (
+            f"Expected ~{expected}, got {injection_count}"
+        )
 
     def test_frequency_reported_correctly(self, rin_soul_spec):
         """Frequency should be 0.03 when days_since_last = 0."""
@@ -255,10 +255,7 @@ class TestModeSelection:
                 modes_seen.add(decision.mode)
 
         # Should see tip_of_tongue or apologetic
-        assert (
-            InjectionMode.TIP_OF_TONGUE in modes_seen
-            or InjectionMode.APOLOGETIC in modes_seen
-        )
+        assert InjectionMode.TIP_OF_TONGUE in modes_seen or InjectionMode.APOLOGETIC in modes_seen
 
     def test_default_mode_is_missing_hint(self, rin_soul_spec):
         """Default mode should be missing_hint when no dominant state."""

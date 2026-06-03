@@ -209,9 +209,7 @@ class ReplayRecorder:
             return []
         return bundles
 
-    async def _load_one(
-        self, where: str, params: Dict[str, Any]
-    ) -> Optional[PromptBundle]:
+    async def _load_one(self, where: str, params: Dict[str, Any]) -> Optional[PromptBundle]:
         if self._engine is None:
             return None
         try:
@@ -240,9 +238,7 @@ class ReplayRecorder:
             logger.exception("replay_load_failed")
             return None
 
-    async def _load_many(
-        self, session_id: uuid.UUID
-    ) -> List[PromptBundle]:
+    async def _load_many(self, session_id: uuid.UUID) -> List[PromptBundle]:
         if self._engine is None:
             return []
         try:
@@ -270,18 +266,20 @@ class ReplayRecorder:
 
     def _row_to_bundle(self, row: Any) -> PromptBundle:
         bundle_data = row.prompt_bundle or {}
-        bundle_data.update({
-            "raw_response": row.raw_response,
-            "final_response": row.final_response,
-            "latency_ms": row.latency_ms or 0,
-            "model_name": row.model_name or "unknown",
-            "token_count": row.token_count or 0,
-            "anti_pattern_hits": row.anti_pattern_hits or [],
-            "blocked": row.blocked or False,
-            "critic_score": float(row.critic_score) if row.critic_score else None,
-            "critic_feedback": row.critic_feedback,
-            "created_at": row.created_at.isoformat() if row.created_at else None,
-        })
+        bundle_data.update(
+            {
+                "raw_response": row.raw_response,
+                "final_response": row.final_response,
+                "latency_ms": row.latency_ms or 0,
+                "model_name": row.model_name or "unknown",
+                "token_count": row.token_count or 0,
+                "anti_pattern_hits": row.anti_pattern_hits or [],
+                "blocked": row.blocked or False,
+                "critic_score": float(row.critic_score) if row.critic_score else None,
+                "critic_feedback": row.critic_feedback,
+                "created_at": row.created_at.isoformat() if row.created_at else None,
+            }
+        )
         return PromptBundle.from_dict(bundle_data)
 
     # ── Prune ───────────────────────────────────────────────────
@@ -331,7 +329,5 @@ class ReplayRecorder:
             "character_id": bundle.character_id,
             "system_prompt": bundle.system_prompt,
             "messages": bundle.messages,
-            "layers": {
-                k: asdict(v) for k, v in bundle.layers.items()
-            },
+            "layers": {k: asdict(v) for k, v in bundle.layers.items()},
         }

@@ -6,7 +6,6 @@ Verifies SoulSpec v1 schema contract that all downstream subsystems depend on.
 """
 
 import pytest
-from heart.ss01_soul.registry import SoulRegistry
 
 
 @pytest.mark.contract
@@ -14,15 +13,20 @@ class TestSoulSpecLoaderReturnsV1:
     """SoulRegistry must expose v1 SoulSpec dicts with required sections."""
 
     REQUIRED_SECTIONS = [
-        "character_id", "spec_version",
+        "character_id",
+        "spec_version",
         "identity_anchor",
         "inertia_profile",
         "relational_template",
     ]
 
     IDENTITY_ANCHOR_FIELDS = [
-        "archetype", "core_wound", "core_desire",
-        "core_fear", "core_belief", "voice_dna",
+        "archetype",
+        "core_wound",
+        "core_desire",
+        "core_fear",
+        "core_belief",
+        "voice_dna",
         "anti_patterns",
     ]
 
