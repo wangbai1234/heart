@@ -9,8 +9,11 @@ Author: 心屿团队
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from typing import Any
+
 from ..ss04_relationship.models import RelationshipState
-from ..ss04_relationship.stage_engine import RelationshipStage, SignalBatch
+from ..ss04_relationship.stage_engine import RelationshipStage, Signal, SignalBatch
 
 # ============================================================
 # Trust Signal Weights (§3.9 + Appendix A)

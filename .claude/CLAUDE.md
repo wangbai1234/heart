@@ -177,6 +177,73 @@ docker build -f backend/Dockerfile -t heart/backend:test .
 
 ---
 
+## 🌿 分支与 PR 治理（硬性约束，违反必须立即停下报告）
+
+### PR 生命周期
+- **任何 PR open 超过 7 天必须二选一**：合并 或 关闭。不允许长期挂起。
+- **任何时刻，单人 open PR 数 ≤ 3**。超过时禁止开新 PR，必须先收敛旧 PR。
+- **PR 必须有明确 base**：默认 base = `main`，仅在显式 stacked PR 工作流时才允许 base ≠ main，且必须在 PR 描述里画依赖图。
+
+### 跨分支 fix 反模式
+- **禁止把同一个 fix 横向复制到 N 个功能分支**。
+- 正确做法：fix 先合 main，其他功能分支 `git rebase main` 自动拿到修复。
+- 如果发现自己正在创建第二个 `xxx-fix` 分支去修同样的事，**立即停下，改走 main hotfix 流程**。
+
+### 分支命名与清理
+- 命名规范：`feat/<topic>`、`fix/<topic>`、`docs/<topic>`、`chore/<topic>`。统一 `feat/`，禁止 `feature/` 与 `feat/` 混用。
+- **合并即删除**：PR merge 后立即删除 head 分支（本地 + 远程）。GitHub 设置勾选 "Automatically delete head branches"。
+- **每周一次** `git remote prune origin` 清理远端死链。
+
+### "事实主干" 反模式
+- 禁止把某 feature 分支变成"事实主干"（持续累积 10+ 提交、包含多个不相关功能、被当作开发基线）。
+- 一旦发现某分支已偏离原始 scope，必须**立即拆分**为多个聚焦 PR，或合并到 main 后从 main 开新分支。
+
+### 多远端
+- 单一权威远端 = `origin`（GitHub）。
+- Gitee 等镜像远端**只读 / 单向 push**，不允许在镜像端开发或产生独立提交。
+
+### 平行实现禁令
+- **禁止在不同分支上对同一子系统做平行实现**。SS04/SS07/Safety 之所以曾出现 3 套不收敛版本，根因是不同 session 未核查现状就开新分支重写。
+- 开始任何 SSxx 模块工作前，**必须先 `git ls-tree -r <候选基线分支> -- backend/heart/ssXX_*`** 看现有实现，禁止"凭印象觉得这是空的"。
+- 如发现需要重写已有实现，**PR 描述必须写明"为什么放弃既有版本"**，否则 reviewer 必须 reject。
+
+### Agent 行为铁律
+- 跨分支代码状态判断**必须基于 `git show` / `git ls-tree` 实际输出**，禁止基于 commit message / PR title 推断模块是否存在。
+- 违反此条产出的报告/方案默认作废。
+
+### 提交前自检（每次 push 前必须问自己）
+1. 这个 PR 7 天内能合并吗？不能就不要开。
+2. base 是 main 吗？不是的话有没有写依赖说明？
+3. 这个修复该走 main hotfix 而非挂到 feature 分支吗？
+4. 我现在 open 的 PR 是不是 ≥ 3 个了？
+5. 我有没有用 `git ls-tree` 验证过现有实现，而不是凭印象？
+
+---
+
+## 🧯 集成验证分档（替换原"红就停"硬规则）
+
+CI / lint / type-check 报错时按以下四档判定，不同档位不同处置：
+
+| 档 | 类型 | 处置 |
+|---|------|------|
+| **A** | 功能性错误（pytest 红、import 报错、运行时崩溃） | 立即停下，必须修复或回退。禁止 noqa / config 放宽。 |
+| **B** | 集成引入的**新增** lint / type 错误（baseline diff 证明 baseline 无） | 等同档 A，禁止静默。 |
+| **C** | 从源分支带入的**既有**债务（baseline diff 证明既有） | 不阻塞，走"债务登记仪式"（见下）。 |
+| **D** | 领域约定与 lint rule 冲突（数学符号 `L/N/K` 等） | 局部 `# noqa: <rule> — <领域理由>`，每处一行注释。 |
+
+### 债务登记仪式（档 C 专用，三步缺一不可）
+1. **`pyproject.toml` 用 `per-file-ignores` 登记**，配 issue 编号和 sunset date 注释。
+2. **开 tracking issue**：列出每条债务的文件 / 行号 / 修复建议 / sunset。
+3. **集成 PR body 加 `## Imported Tech Debt` 段落**，引用 issue。
+
+### 禁止
+- 全局放宽 ruff / mypy 规则换取单次集成通过（配置降级是单向门，per-file-ignore 是双向门——能改就选双向门）。
+- 无理由 `# noqa`（noqa 仅用于档 D）。
+- 把档 A/B 错误伪装成档 C 静默掉。
+- `per-file-ignores` 或 `[mypy-...]` ignore 不带 issue 链接 + sunset 注释 → **reviewer 必须 reject**。
+
+---
+
 ## ⚠️ 禁止事项
 
 - ❌ 直接在 main 分支提交（必须用 PR）
