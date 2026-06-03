@@ -1,5 +1,7 @@
 """Tests for Echo Chat endpoint."""
 
+from unittest import mock
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -237,16 +239,15 @@ class TestEchoChatEndpoint:
 
     def test_echo_chat_default_character(self, client, auth_token):
         """Test echo chat with default character."""
-        response = client.post(
-            "/api/chat/echo",
-            headers={"Authorization": f"Bearer {auth_token}"},
-            json={
-                "messages": [
-                    {"role": "user", "content": "Testing default"},
-                ],
-            },
-        )
+        with mock.patch("heart.api.routes.get_current_user", return_value=auth_token):
+            response = client.post(
+                "/api/chat/echo",
+                json={
+                    "messages": [{"role": "user", "content": "Testing default"}],
+                },
+                headers={"Authorization": f"Bearer {auth_token}"},
+            )
 
         assert response.status_code == 200
         data = response.json()
-        assert data["character_id"] == "default"
+        assert data["character_id"] == "rin"

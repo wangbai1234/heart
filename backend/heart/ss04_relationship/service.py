@@ -122,6 +122,27 @@ class RelationshipService:
         result = await self.db.execute(stmt)
         return result.scalar_one_or_none()
 
+    async def get_current_phase(self, user_id: UUID, character_id: str) -> dict[str, Any]:
+        """Get current relationship phase info as a dict for composer consumption.
+
+        Returns:
+            Dict with keys: phase, trust_level, attachment_style, behavioral_envelope
+        """
+        state = await self.get_state(user_id, character_id)
+        if state is None:
+            return {
+                "phase": "stranger",
+                "trust_level": 0.0,
+                "attachment_style": "",
+                "behavioral_envelope": {},
+            }
+        return {
+            "phase": state.current_stage,
+            "trust_level": state.trust_score,
+            "attachment_style": state.attachment_strength,
+            "behavioral_envelope": state.soul_modifiers or {},
+        }
+
     async def get_or_create_state(self, user_id: UUID, character_id: str) -> RelationshipState:
         """
         Get existing state or create new one.

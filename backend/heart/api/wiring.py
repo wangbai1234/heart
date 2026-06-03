@@ -133,14 +133,26 @@ def get_emotion_service():
         return None
 
 
-@lru_cache
-def get_relationship_service():
-    """Process singleton: RelationshipService (wraps StagePhaseEngine per character)."""
+async def get_relationship_service(
+    db_session: AsyncSession = None,
+) -> Any:
+    """Request-scoped: RelationshipService with a fresh AsyncSession.
+
+    Requires db_session for persisting relationship state.
+    If db_session is None, returns None.
+    """
+    if db_session is None:
+        return None
     try:
         registry = get_soul_registry()
+        soul_specs = {}
+        for char_id in registry.list_characters():
+            spec = registry.get_soul(char_id)
+            soul_specs[char_id] = spec.model_dump()
+
         from heart.ss04_relationship.service import RelationshipService
 
-        svc = RelationshipService(soul_registry=registry)
+        svc = RelationshipService(db_session=db_session, soul_specs=soul_specs)
         logger.info("wiring_relationship_service_initialized")
         return svc
     except Exception as e:
@@ -250,12 +262,13 @@ async def build_composer_service(
     model_router = get_model_router()
     replay_recorder = get_replay_recorder()
     emotion_service = get_emotion_service()
-    relationship_service = get_relationship_service()
     inner_state_service = get_inner_state_service()
 
     memory_service = None
+    relationship_service = None
     if db_session is not None:
         memory_service = await get_memory_service(db_session=db_session)
+        relationship_service = await get_relationship_service(db_session=db_session)
 
     from heart.ss05_composer.service import ComposerService
 

@@ -11,7 +11,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Dict, List, Literal, Optional, Union
+from typing import Any, Dict, List, Literal, Optional, Union
 from uuid import UUID
 
 from heart.ss02_memory.models import EpisodicMemory, FactNode, IdentityMemory
@@ -105,6 +105,9 @@ class MemoryRetrievalResult:
     # Performance
     retrieval_time_ms: float
     strategy_times: Dict[str, float] = field(default_factory=dict)
+
+    # Forgetting affect hints
+    recently_forgotten_hints: List[Any] = field(default_factory=list)
 
 
 # ============================================================

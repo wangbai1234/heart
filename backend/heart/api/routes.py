@@ -32,7 +32,7 @@ class ChatMessage(BaseModel):
 
 class ChatRequest(BaseModel):
     messages: list[ChatMessage]
-    character_id: str = "default"
+    character_id: str = "rin"
 
 
 class ChatResponse(BaseModel):

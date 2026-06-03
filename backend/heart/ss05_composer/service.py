@@ -561,7 +561,10 @@ class ComposerService:
                         }
                         for m in result.memories
                     ],
-                    recently_forgotten_hints=[h.hint_text for h in result.recently_forgotten_hints],
+                    recently_forgotten_hints=[
+                        h.hint_text if hasattr(h, "hint_text") else str(h)
+                        for h in getattr(result, "recently_forgotten_hints", [])
+                    ],
                     l4_included=result.l4_included,
                 ),
                 False,
@@ -584,7 +587,7 @@ class ComposerService:
             logger.warning("composer_emotion_dep_missing")
             return EmotionContextBlock(), True, "emotion_service_not_wired"
         try:
-            ecb = self._emotion_service.get_context_block(
+            ecb = await self._emotion_service.get_context_block(
                 user_id=ctx.user_id,
                 character_id=ctx.character_id,
             )
@@ -620,7 +623,7 @@ class ComposerService:
             logger.warning("composer_relationship_dep_missing")
             return RelationshipContextBlock(), True, "relationship_service_not_wired"
         try:
-            phase_info = self._relationship_service.get_current_phase(
+            phase_info = await self._relationship_service.get_current_phase(
                 user_id=ctx.user_id, character_id=ctx.character_id
             )
             return (
