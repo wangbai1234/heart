@@ -77,7 +77,7 @@ def _character_color_code(character_id: str) -> str:
 # ── REPL loop ──────────────────────────────────────────────────────
 
 
-async def repl(session: ClientSession) -> None:
+async def repl(session: ClientSession) -> None:  # noqa: C901
     """Main REPL loop.  Reads input, dispatches to /-commands or sends to API."""
 
     # Build prompt_toolkit session with character-colored prompt

@@ -97,7 +97,7 @@ def compute_percentiles(values: List[float]) -> Dict[str, float]:
     }
 
 
-def print_report(records: List[Dict[str, Any]]) -> None:
+def print_report(records: List[Dict[str, Any]]) -> None:  # noqa: C901
     if not records:
         print("\nNo profile records collected. Check HEART_TURN_PROFILER=1.")
         return

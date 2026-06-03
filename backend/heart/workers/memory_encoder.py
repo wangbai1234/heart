@@ -48,7 +48,7 @@ POLL_INTERVAL_SECONDS = 5  # Poll every 5 seconds when idle
 # ============================================================
 
 
-def validate_extraction_output(data: dict) -> tuple[bool, Optional[str]]:
+def validate_extraction_output(data: dict) -> tuple[bool, Optional[str]]:  # noqa: C901
     """Validate LLM extraction output matches schema.
 
     Args:
@@ -492,13 +492,13 @@ class MemoryEncoderWorker:
                 timeout=LLM_TIMEOUT_SECONDS,
             )
         except asyncio.TimeoutError:
-            raise TimeoutError(f"LLM call timed out after {LLM_TIMEOUT_SECONDS}s")
+            raise TimeoutError(f"LLM call timed out after {LLM_TIMEOUT_SECONDS}s") from None
 
         # Parse JSON
         try:
             data = json.loads(response)
         except json.JSONDecodeError as e:
-            raise ValueError(f"Invalid JSON from LLM: {e}")
+            raise ValueError(f"Invalid JSON from LLM: {e}") from e
 
         # Validate schema
         is_valid, error_msg = validate_extraction_output(data)

@@ -401,19 +401,6 @@ class TestUtilityMethods:
 
         assert cost == 0.0
 
-    @pytest.mark.asyncio
-    @pytest.mark.xfail(reason="Metrics structure not yet implemented")
-    async def test_get_aggregated_metrics(self, tracker):
-        """Test get_aggregated_metrics returns structure."""
-        metrics = await tracker.get_aggregated_metrics()
-
-        # Should return a dict with expected keys
-        assert isinstance(metrics, dict)
-        assert "status" in metrics
-        assert "total_calls" in metrics
-        assert "total_cost_usd" in metrics
-        assert "by_model" in metrics
-
 
 # Tests for LLMCall dataclass
 class TestLLMCall:

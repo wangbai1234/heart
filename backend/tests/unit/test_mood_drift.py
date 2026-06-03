@@ -151,9 +151,11 @@ class TestDriftConvergence:
         # Dorothy should move significantly toward positive recent average (0.6)
         assert new_mood["valence_baseline"] > initial_valence + 0.1
 
-    @pytest.mark.xfail(reason="Floating point precision issue in convergence test")
     def test_property_convergence_to_baseline(self, soul_rin):
         """Property test: repeated drift without input converges to Soul baseline."""
+        # Use a fixed daytime time to avoid late-night environmental modifier
+        fixed_time = datetime(2026, 1, 15, 12, 0, 0, tzinfo=timezone.utc)
+
         state = {
             "mood": {
                 "valence_baseline": 0.5,  # Start far from baseline
@@ -167,7 +169,7 @@ class TestDriftConvergence:
 
         # Simulate 100 hours of drift without new input
         for _ in range(100):
-            new_mood = drift_mood(state, soul_rin, hours_since_last=1.0)
+            new_mood = drift_mood(state, soul_rin, hours_since_last=1.0, current_local_time=fixed_time)
             state["mood"] = new_mood
 
         # Should converge toward Soul baseline (0.0, 0.3, 0.5)

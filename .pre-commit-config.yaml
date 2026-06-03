@@ -1,0 +1,27 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.4.4
+    hooks:
+      - id: ruff
+        args: [--fix]
+        files: ^backend/heart/
+      - id: ruff-format
+        files: ^backend/heart/
+
+  - repo: local
+    hooks:
+      - id: mypy-subset
+        name: mypy (core type checks)
+        entry: bash -c 'cd backend && python3.11 -m mypy heart/ --ignore-missing-imports --no-strict-optional'
+        language: system
+        files: ^backend/heart/.*\.py$
+        pass_filenames: false
+        always_run: false
+
+      - id: unit-tests
+        name: unit tests
+        entry: bash -c 'cd backend && python3.11 -m pytest tests/unit -x -q --no-header'
+        language: system
+        files: ^backend/
+        pass_filenames: false
+        always_run: false

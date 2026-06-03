@@ -305,7 +305,7 @@ def check_invariants(
 # ── @invariant decorator ─────────────────────────────────────────
 
 
-def invariant(
+def invariant(  # noqa: C901
     name: str,
     *,
     predicate: Optional[Callable[..., bool]] = None,

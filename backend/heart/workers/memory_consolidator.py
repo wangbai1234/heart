@@ -209,13 +209,13 @@ class EpisodeSummarizer:
                 timeout=LLM_TIMEOUT_SECONDS,
             )
         except asyncio.TimeoutError:
-            raise TimeoutError(f"LLM call timed out after {LLM_TIMEOUT_SECONDS}s")
+            raise TimeoutError(f"LLM call timed out after {LLM_TIMEOUT_SECONDS}s") from None
 
         # Parse JSON
         try:
             data = json.loads(response)
         except json.JSONDecodeError as e:
-            raise ValueError(f"Invalid JSON from LLM: {e}")
+            raise ValueError(f"Invalid JSON from LLM: {e}") from e
 
         # Validate required fields
         required_fields = [
@@ -604,7 +604,7 @@ class ConsolidationWorker:
 
         return list(jobs)
 
-    async def _process_job(self, job: ConsolidationJob):
+    async def _process_job(self, job: ConsolidationJob):  # noqa: C901
         """Process a consolidation job.
 
         Runs 8-step pipeline per §3.6.

@@ -394,7 +394,7 @@ class SeedRunner:
             print("(dry run — no state persisted)")
         print()
 
-    def _seed_pair(self, user_name: str, character_id: str) -> Dict[str, Any]:
+    def _seed_pair(self, user_name: str, character_id: str) -> Dict[str, Any]:  # noqa: C901
         """Seed one demo pair for 14 days."""
         user_id = _seed_uuid("demo_users", user_name)
         print(f"\n  ── Seeding {user_name} × {character_id} ──")

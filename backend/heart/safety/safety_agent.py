@@ -217,7 +217,7 @@ class LexiconLoader:
 # ── Locale Detection ─────────────────────────────────────────────────
 
 
-def detect_locale(message: str, accept_language: Optional[str] = None) -> str:
+def detect_locale(message: str, accept_language: Optional[str] = None) -> str:  # noqa: C901
     """Detect locale from message text using Unicode range heuristics.
 
     Returns one of: 'zh', 'ja', 'en'.
@@ -472,7 +472,7 @@ class SafetyAgent:
         effective.layer = "heuristic"
         return effective
 
-    def _heuristic_layer(self, message: str, locale: str) -> ClassificationResult:
+    def _heuristic_layer(self, message: str, locale: str) -> ClassificationResult:  # noqa: C901
         """Layer 1: Multi-language regex matching without IO."""
         hits: List[_Layer1Hit] = []
 

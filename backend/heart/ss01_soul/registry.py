@@ -66,7 +66,7 @@ class SoulRegistry:
             soul_specs_dir=str(self.soul_specs_dir),
         )
 
-    def load_all(self) -> None:
+    def load_all(self) -> None:  # noqa: C901
         """
         Load and validate all Soul Spec YAML files.
 

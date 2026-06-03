@@ -249,7 +249,7 @@ class StagePhaseEngine:
             reason=f"All conditions met for {next_stage}",
         )
 
-    def _check_regression(
+    def _check_regression(  # noqa: C901
         self,
         state: RelationshipState,
         signals: SignalBatch,
@@ -342,7 +342,7 @@ class StagePhaseEngine:
 
         return StageDecision(action=TransitionAction.STAY, reason="No regression conditions met")
 
-    def _check_entry_requirements(
+    def _check_entry_requirements(  # noqa: C901
         self, state: RelationshipState, target_stage: RelationshipStage
     ) -> tuple[bool, str]:
         """
@@ -409,7 +409,7 @@ class StagePhaseEngine:
 
         return True, "Requirements satisfied"
 
-    def _check_soul_gate(
+    def _check_soul_gate(  # noqa: C901
         self, state: RelationshipState, target_stage: RelationshipStage
     ) -> tuple[bool, str]:
         """

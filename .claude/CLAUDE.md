@@ -184,6 +184,7 @@ docker build -f backend/Dockerfile -t heart/backend:test .
 - ❌ 不运行测试就 push
 - ❌ 删除用户数据相关的表（逻辑删除）
 - ❌ 修改已部署的 soul_specs（必须版本化）
+- ❌ CI 配置变更 PR 混入业务变更（CI 修复必须独立 PR）
 
 ---
 

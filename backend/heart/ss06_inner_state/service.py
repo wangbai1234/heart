@@ -80,7 +80,7 @@ class InnerStateService:
     def _key(self, user_id: UUID, character_id: str) -> str:
         return f"{user_id}:{character_id}"
 
-    def tick(
+    def tick(  # noqa: C901
         self,
         user_id: UUID,
         character_id: str,

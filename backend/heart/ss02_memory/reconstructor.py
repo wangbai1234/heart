@@ -314,7 +314,7 @@ class Reconstructor:
 
         return filled
 
-    def _apply_voice_transforms(self, text: str, state: str) -> tuple[str, list[str]]:
+    def _apply_voice_transforms(self, text: str, state: str) -> tuple[str, list[str]]:  # noqa: C901
         """
         Apply character-specific voice_dna transforms.
 

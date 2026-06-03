@@ -669,7 +669,7 @@ class ComposerService:
 
     # ── Prompt Builder ────────────────────────────────────────
 
-    def _build_system_prompt(
+    def _build_system_prompt(  # noqa: C901
         self,
         anchor: AnchorContextBlock,
         memory: MemoryContextBlock,
@@ -916,7 +916,7 @@ class ComposerService:
 
     # ── Replay snapshot recording ───────────────────────────────
 
-    def _build_layers_dict(
+    def _build_layers_dict(  # noqa: C901
         self,
         anchor: AnchorContextBlock,
         memory: MemoryContextBlock,

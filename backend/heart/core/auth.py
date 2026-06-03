@@ -122,13 +122,13 @@ class AuthManager:
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Token has expired",
                 headers={"WWW-Authenticate": "Bearer"},
-            )
+            ) from None
         except (jwt.DecodeError, jwt.InvalidSignatureError, jwt.InvalidTokenError) as e:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail=f"Invalid token: {str(e)}",
                 headers={"WWW-Authenticate": "Bearer"},
-            )
+            ) from e
 
     def refresh_token(self, token: str) -> Token:
         """Refresh an existing token.

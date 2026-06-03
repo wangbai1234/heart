@@ -167,7 +167,7 @@ class DeepSeekV4ProProvider(LLMProvider):
                 model=request.model,
                 status_code=e.response.status_code,
                 retriable=e.response.status_code in [429, 500, 502, 503, 504],
-            )
+            ) from e
         except Exception as e:
             self.circuit_breaker.record_failure(self.provider_name, request.model, e)
             raise ProviderError(
@@ -175,7 +175,7 @@ class DeepSeekV4ProProvider(LLMProvider):
                 provider=self.provider_name,
                 model=request.model,
                 retriable=False,
-            )
+            ) from e
 
     async def stream(self, request: LLMRequest) -> AsyncIterator[StreamChunk]:
         """
@@ -253,7 +253,7 @@ class DeepSeekV4ProProvider(LLMProvider):
                 model=request.model,
                 status_code=e.response.status_code,
                 retriable=e.response.status_code in [429, 500, 502, 503, 504],
-            )
+            ) from e
         except Exception as e:
             self.circuit_breaker.record_failure(self.provider_name, request.model, e)
             raise ProviderError(
@@ -261,7 +261,7 @@ class DeepSeekV4ProProvider(LLMProvider):
                 provider=self.provider_name,
                 model=request.model,
                 retriable=False,
-            )
+            ) from e
 
     def estimate_cost(
         self,
