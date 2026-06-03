@@ -208,7 +208,7 @@ class DecayEngine:
         )
 
         # Compute raw importance
-        raw_importance = memory.initial_importance * time_factor * emotional_factor * recall_factor
+        raw_importance = memory.initial_importance * time_factor * emotional_factor * recall_factor  # type: ignore[union-attr]
 
         # Compute floor (recall-aware)
         emotional_floor = valence_abs * EMOTIONAL_FLOOR_WEIGHT
@@ -223,7 +223,7 @@ class DecayEngine:
         new_importance = self._clamp(new_importance, MIN_IMPORTANCE, MAX_IMPORTANCE)
 
         # Update memory
-        memory.importance_score = new_importance
+        memory.importance_score = new_importance  # type: ignore[union-attr]
         memory.state = self._compute_state(new_importance)
 
         logger.debug(
@@ -234,7 +234,7 @@ class DecayEngine:
             time_factor=round(time_factor, 3),
             emotional_factor=round(emotional_factor, 3),
             recall_factor=round(recall_factor, 3),
-            old_importance=round(memory.initial_importance, 3),
+            old_importance=round(memory.initial_importance, 3),  # type: ignore[union-attr]
             new_importance=round(new_importance, 3),
             state=memory.state,
         )

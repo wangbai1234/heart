@@ -51,6 +51,7 @@ async def register_and_login(client: httpx.AsyncClient) -> str:
     if resp.status_code == 200:
         return resp.json()["access_token"]
     resp.raise_for_status()
+    return ""  # unreachable, satisfies mypy
 
 
 async def run_demo_turn(

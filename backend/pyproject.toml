@@ -90,6 +90,8 @@ addopts = "-m 'not live and not requires_postgres and not e2e'"
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+
+[tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "B", "C90"]
 ignore = [
     "E501",    # line too long — handled by formatter
@@ -117,8 +119,6 @@ disable_error_code = [
     "index",
     "misc",
     "operator",
-    "union-attr",
-    "return",
 ]
 
 [tool.coverage.run]
