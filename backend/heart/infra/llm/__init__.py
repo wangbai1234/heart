@@ -1,26 +1,13 @@
-"""LLM 基础设施模块"""
+"""LLM infrastructure module — thin facade over infra/llm_providers/."""
 
-from .config import (
-    DeepSeekConfig,
-    LLMModels,
-    LLMProviderConfig,
-    ModelConfig,
-    ModelTier,
-)
-from .provider import DeepSeekProvider, LLMProvider
+from .config import DeepSeekConfig, LLMProviderConfig, ModelConfig, ModelTier
 from .router import ModelRouter, get_model_router, initialize_router, shutdown_router
 
 __all__ = [
-    # Config
-    "ModelConfig",
-    "ModelTier",
-    "LLMModels",
     "DeepSeekConfig",
     "LLMProviderConfig",
-    # Providers
-    "LLMProvider",
-    "DeepSeekProvider",
-    # Router
+    "ModelConfig",
+    "ModelTier",
     "ModelRouter",
     "get_model_router",
     "initialize_router",

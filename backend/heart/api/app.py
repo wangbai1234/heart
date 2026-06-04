@@ -1,11 +1,12 @@
 """FastAPI 应用主入口"""
 
+import os
+
 import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from heart.core.config import settings
-from heart.infra.llm import DeepSeekConfig, LLMProviderConfig, initialize_router, shutdown_router
 
 logger = structlog.get_logger()
 
@@ -34,14 +35,15 @@ def create_app() -> FastAPI:
         """应用启动时初始化"""
         logger.info("🚀 Heart AI Companion starting up...")
 
-        # 初始化 LLM 路由器
-        llm_config = LLMProviderConfig(
-            deepseek=DeepSeekConfig(
-                api_key=settings.deepseek_api_key,
-                base_url=settings.deepseek_base_url,
-            ),
-        )
-        await initialize_router(llm_config)
+        # Ensure env vars are set for llm_providers/registry.py
+        os.environ.setdefault("DEEPSEEK_API_KEY", settings.deepseek_api_key)
+        if settings.deepseek_base_url:
+            os.environ.setdefault("DEEPSEEK_BASE_URL", settings.deepseek_base_url)
+
+        # 初始化 LLM 路由器 (reads model names from env or uses defaults)
+        from heart.infra.llm import initialize_router
+
+        await initialize_router(config=None)
         logger.info("✅ LLM Router initialized")
 
     # 关闭事件
@@ -49,6 +51,8 @@ def create_app() -> FastAPI:
     async def shutdown_event():
         """应用关闭时清理"""
         logger.info("🛑 Heart AI Companion shutting down...")
+        from heart.infra.llm import shutdown_router
+
         await shutdown_router()
         logger.info("✅ Cleanup completed")
 
