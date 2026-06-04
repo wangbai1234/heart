@@ -336,7 +336,7 @@ async def _write_safety_event(
                 "INSERT INTO safety_events "
                 "(user_id, turn_id, severity, layer, reason, category, payload, created_at) "
                 "VALUES (:user_id, :turn_id, :severity, :layer, "
-                ":reason, :category, :payload::jsonb, NOW())"
+                ":reason, :category, CAST(:payload AS jsonb), NOW())"
             ),
             {
                 "user_id": str(user_id),
