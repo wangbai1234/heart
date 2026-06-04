@@ -80,10 +80,11 @@ LLM_PROVIDER=deepseek DEEPSEEK_API_KEY=sk-... pytest tests/e2e -m e2e -v  # real
 - **CI is minimal**: `scripts/ci.sh` is the only pipeline. Old Gitee Go workflows are archived.
 - **JWT secret**: `JWT_ALGORITHM=RS256` (in `.env`). Generate key with `openssl rand -hex 32`.
 
-## Project status snapshot (2026-06-03)
+## Project status snapshot (2026-06-04)
 
-- Phase 6 done, Phase 7 blocked by **Top 10 architecture audit findings** (41 total).
-- SS03-07 已合并 main（PR #17），governance 已合并（PR #16）。
-- Priority: fix critical blockers (#4 in `docs/PROJECT_STATUS.md`) before starting Phase 7.
-- 当前执行验证计划：`HEART_PROJECT_VERIFICATION_MASTER_PLAN.md`
-- Current active branch: `main`。
+- Phase 7 verification completed — all 7 phases passed.
+- SS03-07 merged to main (PR #17), governance merged (PR #16).
+- Safety wiring verified: real SafetyAgent + CarePathHandler + 14 templates + _routing.yaml.
+- Remaining blocker: #4 dual LLM provider tree.
+- Next: Phase 7 implementation (integration test pyramid + soul drift regression).
+- Current active branch: `main`.
