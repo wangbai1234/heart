@@ -85,15 +85,19 @@ def get_model_router():
         logger.warning("wiring_no_llm_api_key", hint="Set DEEPSEEK_API_KEY in .env")
         return None
     try:
-        from heart.infra.llm import DeepSeekConfig, LLMProviderConfig, ModelRouter
+        import os
 
-        llm_config = LLMProviderConfig(
-            deepseek=DeepSeekConfig(
-                api_key=settings.deepseek_api_key,
-                base_url=settings.deepseek_base_url,
-            ),
-        )
-        router = ModelRouter(llm_config)
+        from heart.infra.llm.router import ModelRouter, initialize_registry
+
+        # Ensure env var is set (settings reads from same source)
+        os.environ.setdefault("DEEPSEEK_API_KEY", settings.deepseek_api_key)
+        if settings.deepseek_base_url:
+            os.environ.setdefault("DEEPSEEK_BASE_URL", settings.deepseek_base_url)
+
+        registry = initialize_registry()
+        main_model = os.getenv("MAIN_LLM_MODEL", "deepseek-reasoner")
+        cheap_model = os.getenv("CHEAP_LLM_MODEL", "deepseek-chat")
+        router = ModelRouter(registry, main_model, cheap_model)
         logger.info("wiring_model_router_initialized")
         return router
     except Exception as e:
