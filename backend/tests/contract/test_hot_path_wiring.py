@@ -112,7 +112,7 @@ class TestHotPathAllServicesInvoked:
         )
 
         emotion_svc = MagicMock()
-        emotion_svc.get_context_block.return_value = {
+        emotion_svc.get_context_block = AsyncMock(return_value={
             "emotion_summary": "平静",
             "vad": {"valence": 0.0, "arousal": 0.3, "dominance": 0.5},
             "active_emotions": [],
@@ -120,15 +120,15 @@ class TestHotPathAllServicesInvoked:
             "energy_descriptor": "正常",
             "pending_repairs_summary": None,
             "expression_guidelines": None,
-        }
+        })
 
         relationship_svc = MagicMock()
-        relationship_svc.get_current_phase.return_value = {
+        relationship_svc.get_current_phase = AsyncMock(return_value={
             "phase": "stranger",
             "trust_level": 0.0,
             "attachment_style": "",
             "behavioral_envelope": {},
-        }
+        })
 
         inner_state_svc = MagicMock()
         inner_state_svc.get_context_block.return_value = {
@@ -216,7 +216,7 @@ class TestHotPathDegradation:
         )
 
         good_emotion = MagicMock()
-        good_emotion.get_context_block.return_value = {
+        good_emotion.get_context_block = AsyncMock(return_value={
             "emotion_summary": "平静",
             "vad": {"valence": 0.0, "arousal": 0.3, "dominance": 0.5},
             "active_emotions": [],
@@ -224,15 +224,15 @@ class TestHotPathDegradation:
             "energy_descriptor": "正常",
             "pending_repairs_summary": None,
             "expression_guidelines": None,
-        }
+        })
 
         good_relationship = MagicMock()
-        good_relationship.get_current_phase.return_value = {
+        good_relationship.get_current_phase = AsyncMock(return_value={
             "phase": "stranger",
             "trust_level": 0.0,
             "attachment_style": "",
             "behavioral_envelope": {},
-        }
+        })
 
         good_inner_state = MagicMock()
         good_inner_state.get_context_block.return_value = {
@@ -246,10 +246,10 @@ class TestHotPathDegradation:
         failing_memory.retrieve = AsyncMock(side_effect=RuntimeError("DB down"))
 
         failing_emotion = MagicMock()
-        failing_emotion.get_context_block.side_effect = RuntimeError("lexicon broken")
+        failing_emotion.get_context_block = AsyncMock(side_effect=RuntimeError("lexicon broken"))
 
         failing_relationship = MagicMock()
-        failing_relationship.get_current_phase.side_effect = RuntimeError("stage engine crash")
+        failing_relationship.get_current_phase = AsyncMock(side_effect=RuntimeError("stage engine crash"))
 
         failing_inner_state = MagicMock()
         failing_inner_state.get_context_block.side_effect = RuntimeError("state gone")
