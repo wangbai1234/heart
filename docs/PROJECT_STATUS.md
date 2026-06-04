@@ -56,7 +56,7 @@ Phase 8  Closed Beta               ⏳ 未开始
 | 1 | Wire 真 SafetyAgent 进 orchestrator（删 in-file fake） | **Critical** | 1d | — | ✅ 已完成 |
 | 2 | Wire `CarePathHandler`（删硬编码 `_CARE_RESPONSE`） | **Critical** | 0.5d | #1 | ✅ 已完成（CarePathHandler + 14 模板 + _routing.yaml） |
 | 3 | 修 2 个 failing tests + audit 15 deselected tests | **Critical** | 3h | — | ✅ 已完成（612 unit + 111 contract） |
-| 4 | 合并双 LLM provider tree (`infra/llm/` vs `infra/llm_providers/`) | **Critical** | 0.5d | — | ❌ **未解决——当前唯一 active blocker** |
+| 4 | 合并双 LLM provider tree (`infra/llm/` vs `infra/llm_providers/`) | **Critical** | 0.5d | — | ✅ 已完成（infra/llm/ 现为 llm_providers/ 的 facade） |
 | 5 | 统一 logging 到 structlog | High | 1h | — | ✅ 已完成 |
 | 6 | `EmotionService` 转 async | High | 2h | — | ✅ 已完成（get_context_block 已是 async） |
 | 7 | 冷路径 `asyncio.create_task` 失败追踪 + Prometheus | High | 1h | — | ⏳ 待验证 |
@@ -64,7 +64,7 @@ Phase 8  Closed Beta               ⏳ 未开始
 | 9 | 重命名 safety circuit breaker（`ss01_anchor` → `safety`） | High | 30min | — | ⏳ 待验证 |
 | 10 | 构建 governance-lint CI workflow | High | 1d | #1 | ✅ 已完成（PR #16） |
 
-**剩余工作**：#4（双 LLM tree 收敛）约 0.5d + #7/#9 待验证。
+**剩余工作**：#7/#9 待验证。Top 10 Critical 已全部完成。
 
 **已验证落地（2026-06-04）**：`/api/chat` 不再用 None 占位——`routes.py:144` 注入 `Depends(get_orchestrator)`，`wiring.py` 实接 MemoryService / EmotionService / SafetyAgent / ComposerService / Orchestrator。restore_project.md 中 R-HOT-01 / R-SAFE-01 / R-SS07-01（最小可用版）的前置条件已满足。
 
@@ -75,7 +75,7 @@ Phase 8  Closed Beta               ⏳ 未开始
 > 路线决策（2026-06-04 HUMAN 决策）：**先收 LLM tree → 前端栈对比 → R-FE-01 → Phase 10-11**。
 > Phase 7 集成测试金字塔 + Soul Drift 回归套件**延后**，与 Phase 9 联调期并行推进，避免阻塞前端可演示节点。
 
-1. **修 Top 10 剩余 Critical (#4)** — 双 LLM provider tree 收敛（`infra/llm/` vs `infra/llm_providers/`），0.5d
+1. ~~**修 Top 10 剩余 Critical (#4)**~~ — ✅ 已完成
 2. **R-FE-01 §3.1 前端技术栈决策** — 输出 `docs/design/frontend_stack_decision.md`，对比 React Native+Expo / Flutter / Next.js Web，**HUMAN 批准后方可进入实施**
 3. **R-FE-01 §3.2–3.6 前端 MVP 实施** — 照搬 `engineering_execution/PRACTICAL_MODEL_GUIDE_PHASE_7_PLUS.md` Phase 9 全部子任务
 4. **Phase 10 Closed Alpha** — Staging bring-up / Secrets pre-flight / Alpha onboarding / Cost cap / Drift 实时监控（Phase 9 cut criteria 全绿后启动）
@@ -96,7 +96,6 @@ Phase 8  Closed Beta               ⏳ 未开始
 
 | 风险 | 影响 | 缓解 |
 |------|------|------|
-| 双 LLM provider tree (#4) | 计费/路由不一致 | 内测前必须收敛 |
 | SS05/SS06 测试覆盖不足 | 回归风险 | 补充单元测试 |
 | repair_profile spec drift (#8) | Soul Spec 漂移 | 卡住 = 等 RFC，不强推 |
 | Observability 覆盖不足 | 内测可观测性 | 仅 turn_profiler，需补 Prometheus + log 聚合 |
