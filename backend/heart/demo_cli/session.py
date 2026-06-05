@@ -374,6 +374,7 @@ class ClientSession:
                         "user_id": str(self.user_id),
                         "character_id": self.character_id,
                         "phase": phase_num,
+                        "dev": self.dev_mode,
                     },
                     headers=self._headers(),
                 )
@@ -399,6 +400,7 @@ class ClientSession:
                         "user_id": str(self.user_id),
                         "character_id": self.character_id,
                         "hours": hours,
+                        "dev": self.dev_mode,
                     },
                     headers=self._headers(),
                 )
@@ -424,6 +426,7 @@ class ClientSession:
                         "user_id": str(self.user_id),
                         "character_id": self.character_id,
                         "active": active,
+                        "dev": self.dev_mode,
                     },
                     headers=self._headers(),
                 )
