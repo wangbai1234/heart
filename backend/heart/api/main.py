@@ -16,6 +16,8 @@ from starlette.responses import Response
 
 from .routes import router
 from .routes_proactive import router as proactive_router
+from .routes_state import dev_router, memory_router
+from .routes_state import router as state_router
 
 logger = structlog.get_logger()
 
@@ -142,6 +144,9 @@ def create_app() -> FastAPI:
     # Include API routes
     app.include_router(router)
     app.include_router(proactive_router)
+    app.include_router(state_router)
+    app.include_router(memory_router)
+    app.include_router(dev_router)
 
     # OpenTelemetry instrumentation
     FastAPIInstrumentor.instrument_app(app)
