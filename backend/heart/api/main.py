@@ -15,6 +15,7 @@ from sqlalchemy import text
 from starlette.responses import Response
 
 from .routes import router
+from .routes_proactive import router as proactive_router
 
 logger = structlog.get_logger()
 
@@ -140,6 +141,7 @@ def create_app() -> FastAPI:
 
     # Include API routes
     app.include_router(router)
+    app.include_router(proactive_router)
 
     # OpenTelemetry instrumentation
     FastAPIInstrumentor.instrument_app(app)
