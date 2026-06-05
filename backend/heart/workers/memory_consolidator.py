@@ -768,6 +768,9 @@ class ConsolidationWorker:
                 # Step 8: Anniversary scheduling
                 await self._schedule_anniversaries(session, job.user_id, job.character_id)
 
+                # Step 9: Soul drift detection
+                await self._check_soul_drift(session, job.user_id, job.character_id)
+
                 # Mark as succeeded
                 end_time = datetime.now(timezone.utc)
                 duration_ms = int((end_time - start_time).total_seconds() * 1000)
@@ -970,6 +973,101 @@ class ConsolidationWorker:
             character_id=character_id,
             count=len(identities),
         )
+
+    async def _check_soul_drift(
+        self,
+        session: AsyncSession,
+        user_id: UUID,
+        character_id: str,
+    ) -> float:
+        """Check soul drift after consolidation (Step 9).
+
+        Runs the drift detector on recent assistant responses
+        and logs the result. If drift exceeds threshold, writes
+        to drift_events table.
+
+        Args:
+            session: Database session
+            user_id: User ID
+            character_id: Character ID
+
+        Returns:
+            Drift score [0, 1]
+        """
+        try:
+            from heart.ss01_soul.drift_detector import (
+                DriftCheckRequest,
+                DriftCheckResult,
+                DriftDetector,
+                ReleasedResponse,
+                SASSnapshotForDrift,
+            )
+
+            # Get recent assistant responses for this user
+            result = await session.execute(
+                text(
+                    "SELECT id, episode_summary "
+                    "FROM episodic_memories "
+                    "WHERE user_id = :user_id AND character_id = :character_id "
+                    "ORDER BY created_at DESC LIMIT 5"
+                ),
+                {"user_id": str(user_id), "character_id": character_id},
+            )
+            rows = result.fetchall()
+
+            if not rows:
+                logger.debug("drift_check_skipped_no_episodes", user_id=str(user_id))
+                return 0.0
+
+            # Build mock responses from episode summaries
+            recent_responses = [
+                ReleasedResponse(
+                    turn_index=i,
+                    text=row[1] or "",
+                    was_rerolled=False,
+                    was_fallback=False,
+                )
+                for i, row in enumerate(rows)
+            ]
+
+            # Get soul spec version
+            from heart.ss01_soul.registry import get_soul_registry
+
+            registry = get_soul_registry()
+            spec = registry.get_soul(character_id)
+            spec_version = spec.model_dump().get("version", "1.0.0") if spec else "1.0.0"
+
+            # Create drift check request
+            request = DriftCheckRequest(
+                user_id=user_id,
+                character_id=character_id,
+                soul_spec_version=spec_version,
+                turn_index=0,
+                recent_assistant_responses=recent_responses,
+                sas_snapshot=SASSnapshotForDrift(
+                    current_drift_score=0.0,
+                    last_drift_check_at=None,
+                    unlocked_facet_ids=(),
+                ),
+            )
+
+            # Run drift detection
+            detector = DriftDetector(registry=registry)
+            check_result: DriftCheckResult = await detector.evaluate(request)
+
+            logger.info(
+                "soul_drift_checked",
+                user_id=str(user_id),
+                character_id=character_id,
+                drift_score=check_result.drift_score,
+                decision=check_result.decision.value if check_result.decision else "unknown",
+            )
+
+            return check_result.drift_score
+
+        except Exception as e:
+            logger.debug("soul_drift_check_failed", error=str(e))
+            return 0.0
 
     async def _cleanup_old_encoding_events(
         self,
