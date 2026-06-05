@@ -60,6 +60,7 @@ class Orchestrator:
     Wires together:
         - SafetyAgent (pre-filter with circuit breaker)
         - ComposerService (build + compose with circuit breaker)
+        - EmotionService (emotion state update per turn)
         - MemoryService + InnerStateService (fire-and-forget cold path)
         - SessionManager (session lifecycle + turn counting)
     """
@@ -71,12 +72,14 @@ class Orchestrator:
         session_manager: SessionManager,
         breakers: BreakerRegistry,
         safety_event_writer: Callable[..., Any],
+        emotion_service: Any = None,
     ) -> None:
         self._safety_agent = safety_agent
         self._composer_builder = composer_builder
         self._session_manager = session_manager
         self._breakers = breakers
         self._write_safety_event = safety_event_writer
+        self._emotion_service = emotion_service
 
     async def handle_turn(
         self,
@@ -112,14 +115,18 @@ class Orchestrator:
                     if severity == "PURPLE":
                         return await self._care_path(req, classification, db_session)
 
-            # ── Step 2: Composer build + compose ────────────────────
+            # ── Step 2: Emotion state update (before compose) ─────
+            with p.span("emotion"):
+                await self._update_emotion(req, session.session_id)
+
+            # ── Step 3: Composer build + compose ────────────────────
             with p.span("compose"):
                 response_text = await self._compose(req, db_session, session.session_id, p)
 
-            # ── Step 3: Fire-and-forget cold path ───────────────────
+            # ── Step 4: Fire-and-forget cold path ───────────────────
             self._fire_cold_path(req, p, response_text)
 
-            # ── Step 4: Record turn ─────────────────────────────────
+            # ── Step 5: Record turn ─────────────────────────────────
             await self._session_manager.record_turn(db_session, session)
 
             severity = None
@@ -224,6 +231,79 @@ class Orchestrator:
             path="care",
             safety_severity="PURPLE",
         )
+
+    # ── Private: Emotion ────────────────────────────────────────────
+
+    async def _update_emotion(
+        self,
+        req: TurnRequest,
+        session_id: UUID,
+    ) -> None:
+        """Update emotion state via EmotionService.process_turn.
+
+        This runs before compose so that the emotion context block
+        reflects the latest user message.
+        """
+        if self._emotion_service is None:
+            return
+
+        try:
+            # Get session info for time deltas
+            session_info = await self._session_manager.get_session_info(
+                req.user_id, req.character_id
+            )
+            days_since_last = 0.0
+            hours_since_last = 0.0
+            if session_info and session_info.get("last_turn_at"):
+                from datetime import datetime, timezone
+
+                last_turn = session_info["last_turn_at"]
+                if hasattr(last_turn, "replace"):
+                    last_turn = last_turn.replace(tzinfo=timezone.utc)
+                delta = datetime.now(timezone.utc) - last_turn
+                days_since_last = delta.total_seconds() / 86400
+                hours_since_last = delta.total_seconds() / 3600
+
+            # Get relationship phase (default to stranger)
+            relationship_phase = "stranger"
+            if session_info and session_info.get("current_stage"):
+                relationship_phase = session_info["current_stage"]
+
+            # Build context for emotion service
+            context = {
+                "days_since_last": days_since_last,
+                "hours_since_last": hours_since_last,
+                "relationship_phase": relationship_phase,
+                "user_emotion_vad": {"valence": 0, "arousal": 0.3, "dominance": 0.5},
+            }
+
+            # Get soul config for character
+            soul_config = {}
+            try:
+                from heart.api.wiring import get_soul_registry
+
+                registry = get_soul_registry()
+                spec = registry.get_soul(req.character_id)
+                if spec:
+                    soul_config = spec.model_dump()
+            except Exception:
+                pass
+
+            await self._emotion_service.process_turn(
+                user_id=req.user_id,
+                character_id=req.character_id,
+                user_message=req.user_message,
+                turn_id=req.trace_id,
+                context=context,
+                soul_config=soul_config,
+            )
+            logger.debug(
+                "emotion_updated",
+                user_id=str(req.user_id),
+                character_id=req.character_id,
+            )
+        except Exception:
+            logger.exception("emotion_update_failed")
 
     # ── Private: Composer ───────────────────────────────────────────
 
