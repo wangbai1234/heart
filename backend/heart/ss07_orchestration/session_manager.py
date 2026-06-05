@@ -172,6 +172,28 @@ class SessionManager:
             turn_count=0,
         )
 
+    async def get_session_info(
+        self,
+        user_id: UUID,
+        character_id: str,
+    ) -> dict | None:
+        """Get session info for emotion/relationship processing.
+
+        Returns:
+            Dict with last_turn_at, current_stage, turn_count, or None if no session.
+        """
+        cache_key = (str(user_id), character_id)
+        cached = self._cache.get(cache_key)
+        if cached is None:
+            return None
+
+        return {
+            "session_id": cached.session_id,
+            "last_turn_at": cached.last_activity_at,
+            "turn_count": cached.turn_count,
+            "current_stage": None,  # Will be populated from relationship state if available
+        }
+
     def invalidate_cache(self, user_id: UUID, character_id: str) -> None:
         """Remove a session from the in-process cache (e.g. after session reset)."""
         cache_key = (str(user_id), character_id)

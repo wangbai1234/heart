@@ -219,7 +219,8 @@ def get_orchestrator():
     """Process singleton: Orchestrator wired with all subsystem services.
 
     Injects SafetyAgent, composer builder, SessionManager, BreakerRegistry,
-    and safety event writer. Replaces the inline pipeline previously in routes.py.
+    safety event writer, and EmotionService. Replaces the inline pipeline
+    previously in routes.py.
     """
     from heart.ss07_orchestration.orchestrator import Orchestrator
 
@@ -229,6 +230,7 @@ def get_orchestrator():
         session_manager=get_session_manager(),
         breakers=get_breaker_registry(),
         safety_event_writer=_write_safety_event,
+        emotion_service=get_emotion_service(),
     )
 
 
