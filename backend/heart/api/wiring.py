@@ -229,8 +229,6 @@ def get_orchestrator():
         session_manager=get_session_manager(),
         breakers=get_breaker_registry(),
         safety_event_writer=_write_safety_event,
-        emotion_service=get_emotion_service(),
-        soul_registry=get_soul_registry(),
     )
 
 

@@ -16,12 +16,6 @@ emotion_vad_map:
   coldness: {v: -0.3, a: 0.1, d: 0.6}
   attachment: {v: 0.5, a: 0.3, d: 0.5}
   weariness: {v: -0.4, a: 0.1, d: 0.2}
-  tenderness: {v: 0.2, a: 0.3, d: 0.5}
-  worry: {v: -0.5, a: 0.5, d: 0.3}
-  relief: {v: 0.4, a: 0.2, d: 0.6}
-  jealousy: {v: -0.6, a: 0.6, d: 0.3}
-  embarrassment: {v: -0.2, a: 0.5, d: 0.3}
-  fluttered: {v: 0.5, a: 0.6, d: 0.4}
 
 decay_profiles:
   default:
@@ -68,30 +62,6 @@ decay_profiles:
     floor: 0.3
   weariness:
     decay_type: cyclic
-  tenderness:
-    decay_type: exponential
-    half_life_hours: 2.0
-    floor: 0.05
-  worry:
-    decay_type: exponential
-    half_life_hours: 6.0
-    floor: 0.1
-  relief:
-    decay_type: exponential
-    half_life_hours: 1.0
-    floor: 0.05
-  jealousy:
-    decay_type: exponential
-    half_life_hours: 3.0
-    floor: 0.1
-  embarrassment:
-    decay_type: exponential
-    half_life_hours: 1.0
-    floor: 0.05
-  fluttered:
-    decay_type: exponential
-    half_life_hours: 2.0
-    floor: 0.05
 
 apology_keywords:
   - 对不起
@@ -109,7 +79,6 @@ vulnerability_keywords:
   - 疲惫
   - 压力
   - 难受
-  - 难过
   - 撑不住
   - 失眠
   - 焦虑
