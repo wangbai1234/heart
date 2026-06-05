@@ -131,7 +131,17 @@ class Orchestrator:
                 response_text = await self._compose(req, db_session, session.session_id, p)
 
             # ── Step 5: Fire-and-forget cold path ───────────────────
-            self._fire_cold_path(req, p, response_text, db_session)
+            # Compute days_since_last from session for inner tick
+            days_since_last = 0.0
+            if session.last_activity_at:
+                from datetime import datetime, timezone
+
+                last = session.last_activity_at
+                if hasattr(last, "replace"):
+                    last = last.replace(tzinfo=timezone.utc)
+                delta = datetime.now(timezone.utc) - last
+                days_since_last = delta.total_seconds() / 86400
+            self._fire_cold_path(req, p, response_text, db_session, days_since_last)
 
             # ── Step 6: Record turn ─────────────────────────────────
             await self._session_manager.record_turn(db_session, session)
@@ -430,6 +440,7 @@ class Orchestrator:
         profiler: TurnProfiler,
         response_text: str,
         db_session: Any = None,
+        days_since_last: float = 0.0,
     ) -> None:
         """Fire-and-forget async tasks: memory encode + inner state tick.
 
@@ -450,6 +461,7 @@ class Orchestrator:
                     self._cold_path_inner_tick,
                     req.user_id,
                     req.character_id,
+                    days_since_last,
                 )
             )
         except Exception:
@@ -516,6 +528,7 @@ class Orchestrator:
         self,
         user_id: UUID,
         character_id: str,
+        days_since_last_interaction: float = 0.0,
     ) -> None:
         """Execute one inner-state tick for the user × character pair."""
         try:
@@ -525,7 +538,7 @@ class Orchestrator:
             svc.tick(
                 user_id=user_id,
                 character_id=character_id,
-                days_since_last_interaction=0.0,
+                days_since_last_interaction=days_since_last_interaction,
             )
         except Exception:
             logger.exception("inner_loop_tick_failed")
