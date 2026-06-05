@@ -131,7 +131,7 @@ class Orchestrator:
                 response_text = await self._compose(req, db_session, session.session_id, p)
 
             # ── Step 5: Fire-and-forget cold path ───────────────────
-            self._fire_cold_path(req, p, response_text)
+            self._fire_cold_path(req, p, response_text, db_session)
 
             # ── Step 6: Record turn ─────────────────────────────────
             await self._session_manager.record_turn(db_session, session)
@@ -424,14 +424,22 @@ class Orchestrator:
 
     # ── Private: Cold path ──────────────────────────────────────────
 
-    def _fire_cold_path(self, req: TurnRequest, profiler: TurnProfiler, response_text: str) -> None:
+    def _fire_cold_path(
+        self,
+        req: TurnRequest,
+        profiler: TurnProfiler,
+        response_text: str,
+        db_session: Any = None,
+    ) -> None:
         """Fire-and-forget async tasks: memory encode + inner state tick.
 
         Errors are logged but never propagate to the response.
         """
         try:
             asyncio.create_task(
-                self._cold_path_memory_encode(req.user_id, req.character_id, req.user_message)
+                self._cold_path_memory_encode(
+                    req.user_id, req.character_id, req.user_message, db_session
+                )
             )
         except Exception:
             logger.exception("cold_path_memory_launch_failed")
@@ -452,10 +460,21 @@ class Orchestrator:
         user_id: UUID,
         character_id: str,
         user_message: str,
+        db_session: Any = None,
     ) -> None:
-        """Encode the user's message into memory (L1 fast path)."""
+        """Encode the user's message into memory (L1 fast path + L3 queue).
+
+        Uses request-scoped db_session if available for persistence.
+        Falls back to in-memory-only if no db_session.
+        """
         try:
-            from heart.ss02_memory.service import Turn as MemoryTurn
+            from heart.ss02_memory.service import (
+                MemoryEncodingEvent,
+                MemoryService,
+            )
+            from heart.ss02_memory.service import (
+                Turn as MemoryTurn,
+            )
 
             mem_turn = MemoryTurn(
                 turn_index=0,
@@ -465,11 +484,31 @@ class Orchestrator:
                 character_id=character_id,
                 timestamp=datetime.now(timezone.utc),
             )
-            from heart.ss02_memory.service import MemoryService
 
-            # Memory encode is best-effort; no DB access if unavailable
-            svc = MemoryService(db_session=None)
-            await svc.encode_fast(mem_turn)
+            # Use provided db_session for persistence
+            svc = MemoryService(db_session=db_session)
+            signals = await svc.encode_fast(mem_turn)
+
+            # Queue LLM encoding for L3 fact extraction
+            if db_session is not None:
+                event = MemoryEncodingEvent(
+                    event_id=uuid4(),
+                    user_id=user_id,
+                    character_id=character_id,
+                    source_turn_id=uuid4(),
+                    source_user_text=user_message,
+                    fast_signals={
+                        "detected_keywords": signals.detected_keywords,
+                        "sentiment": signals.sentiment,
+                    },
+                    status="llm_pending",
+                )
+                await svc.queue_llm_encoding(event)
+                logger.debug(
+                    "memory_encoding_queued",
+                    user_id=str(user_id),
+                    character_id=character_id,
+                )
         except Exception:
             logger.exception("memory_encode_failed")
 
