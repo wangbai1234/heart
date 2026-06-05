@@ -338,6 +338,27 @@ class ClientSession:
         except Exception as e:
             return f"  错误: {e}"
 
+    async def forget_memory(self, memory_id: str) -> str:
+        """Soft-delete a memory by ID via API."""
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                resp = await client.post(
+                    f"{self.api_url}/api/memory/forget",
+                    params={
+                        "user_id": str(self.user_id),
+                        "memory_id": memory_id,
+                    },
+                    headers=self._headers(),
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    if data.get("status") == "ok":
+                        return f"  已软删除 memory {memory_id}"
+                    return f"  {data.get('message', '未知结果')}"
+                return f"  错误: {resp.status_code}"
+        except Exception as e:
+            return f"  错误: {e}"
+
     # ── Dev actions (real API) ─────────────────────────────────
 
     async def dev_jump_stage(self, stage: str) -> str:

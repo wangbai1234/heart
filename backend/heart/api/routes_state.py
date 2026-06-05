@@ -246,6 +246,36 @@ async def get_l4_identity(
     }
 
 
+@memory_router.post("/forget")
+async def forget_memory(
+    user_id: UUID = Query(..., description="User UUID"),
+    memory_id: str = Query(..., description="Memory ID to forget (soft delete)"),
+    db_session: AsyncSession = Depends(get_db),
+):
+    """Soft-delete a memory by setting do_not_recall=true (M-1: no physical deletion)."""
+    try:
+        result = await db_session.execute(
+            text(
+                "UPDATE episodic_memories SET do_not_recall = true "
+                "WHERE id = :memory_id AND user_id = :user_id"
+            ),
+            {"memory_id": memory_id, "user_id": str(user_id)},
+        )
+        await db_session.commit()
+
+        if result.rowcount > 0:  # type: ignore[attr-defined]
+            logger.info("memory_forgotten", memory_id=memory_id, user_id=str(user_id))
+            return {
+                "status": "ok",
+                "memory_id": memory_id,
+                "message": "已软删除 (do_not_recall=true)",
+            }
+        return {"status": "not_found", "memory_id": memory_id, "message": "未找到该记忆"}
+    except Exception as e:
+        logger.exception("forget_memory_failed")
+        return {"status": "error", "error": str(e)}
+
+
 dev_router = APIRouter(prefix="/api/dev", tags=["dev-tools"])
 
 

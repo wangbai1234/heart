@@ -155,6 +155,21 @@ def _inbox(session: ClientSession, _args: list[str]) -> CommandResult:
     return CommandResult(text="见异步实现。")
 
 
+async def _forget_impl(session: ClientSession, args: list[str]) -> CommandResult:
+    if not args:
+        return CommandResult(
+            text="用法: /forget <memory_id>\n  先用 /memory 查看可用的 memory id。"
+        )
+    memory_id = args[0]
+    text = await session.forget_memory(memory_id)
+    return CommandResult(text=text)
+
+
+@_reg("/forget", "<memory_id>  软删除指定记忆")
+def _forget(session: ClientSession, args: list[str]) -> CommandResult:
+    return CommandResult(text="见异步实现。")
+
+
 @_reg("/help", "显示所有可用命令")
 def _help(session: ClientSession, _args: list[str]) -> CommandResult:
     lines: list[str] = []
@@ -175,6 +190,7 @@ _ASYNC_COMMANDS: dict[str, Any] = {
     "/memory": _memory_impl,
     "/vault": _vault_impl,
     "/inbox": _inbox_impl,
+    "/forget": _forget_impl,
 }
 
 _STATE_SUBCOMMANDS: dict[str, Any] = {
