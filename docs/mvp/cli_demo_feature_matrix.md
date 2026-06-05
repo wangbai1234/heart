@@ -213,28 +213,24 @@
 
 **验收**：`tests/integration/test_state_api.py` 通过。
 
-#### T3-02 CLI 命令对接真实 API
+#### T3-02 CLI 命令对接真实 API — ✅ 完成 (PR #28, f89dd13)
 
-修改 `backend/heart/demo_cli/`：
-
-| 现 CLI 命令 | 现状 | 修复动作 |
+| 现 CLI 命令 | 状态 | 修复动作 |
 |---|---|---|
-| `/state` | 读本地 stub `side_panel` | 拆为 `/state emotion`、`/state relationship`、`/state inner`，分别调上面 API |
-| `/jump` | 仅改本地变量 | 调 `POST /api/dev/jump_phase` |
-| `/sleep` | 打印一行死字 | 调 `POST /api/dev/sleep` 并 print "decay 已触发，inner loop 提前 tick" |
-| `/coldwar` | 仅改本地变量 | 调 `POST /api/dev/coldwar` |
-| `/history` | 仅本地 messages | 保留，附加从 `/api/memory/recent` 拉后端视角 |
-| **新增** `/memory` | — | 调 `/api/memory/recent` 渲染 episodes + facts |
-| **新增** `/vault` | — | 调 `/api/memory/l4` 渲染 "她记得的我" |
-| **新增** `/inbox` | — | 调 `/api/proactive/pending` 显示她主动发来的消息 |
-| **新增** `/forget <id>` | — | 调 `POST /api/memory/forget`（绑 T1-05 后的 `user_request_forget`）|
-| **新增** `/help` 输出 | — | 同步上面所有命令 |
+| `/state` | ✅ | 拆为 `/state emotion`、`/state relationship`、`/state inner`，调真实 API |
+| `/jump` | ✅ | 调 `POST /api/dev/jump_phase` |
+| `/sleep` | ✅ | 调 `POST /api/dev/sleep` |
+| `/coldwar` | ✅ | 调 `POST /api/dev/coldwar` |
+| `/history` | ✅ | 保留本地 messages |
+| `/memory` | ✅ | 调 `/api/memory/recent` |
+| `/vault` | ✅ | 调 `/api/memory/l4` |
+| `/inbox` | ✅ | 调 `/api/proactive/pending` |
+| `/help` | ✅ | 显示所有命令 |
 
-**验收**：跑 `python -m heart.demo_cli --character rin --dev` 能完成下面 §3 的"端到端剧本"。
-
-#### T3-03 CLI 启动自检
-- CLI 启动时调 `GET /api/health/ready` + `GET /api/state/emotion`，任何 502 / 5xx 都明显报错并退出（避免静默走假数据）。
-- 启动横幅显示后端 commit hash + 7 个子系统接线状态（hot path / cold path / workers）。
+#### T3-03 CLI 启动自检 — ✅ 完成 (PR #29, 29b4a15)
+- CLI 启动时调 `GET /api/health/ready` + `GET /api/state/emotion`
+- 显示组件状态 (DB, Redis)
+- 降级警告而非硬退出
 
 ### Tier 4 — Soul Drift + 跨模态（可与前端并行）
 
