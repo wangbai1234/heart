@@ -68,6 +68,37 @@ class ClientSession:
         except OSError:
             return False
 
+    async def check_readiness(self) -> dict:
+        """Check /health/ready for full subsystem readiness.
+
+        Returns:
+            Dict with status and component details.
+        """
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                resp = await client.get(f"{self.api_url}/health/ready")
+                if resp.status_code >= 500:
+                    return {"status": "error", "error": f"HTTP {resp.status_code}"}
+                return resp.json()
+        except Exception as e:
+            return {"status": "error", "error": str(e)}
+
+    async def check_emotion_api(self) -> bool:
+        """Verify /api/state/emotion is accessible.
+
+        Returns:
+            True if emotion API responds successfully.
+        """
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                resp = await client.get(
+                    f"{self.api_url}/api/state/emotion",
+                    params={"user_id": str(self.user_id), "character_id": self.character_id},
+                )
+                return resp.status_code == 200
+        except Exception:
+            return False
+
     async def login(self) -> str:
         """POST /api/auth/login and store the returned token."""
         async with httpx.AsyncClient(timeout=5.0) as client:

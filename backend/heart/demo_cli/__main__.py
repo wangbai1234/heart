@@ -176,6 +176,29 @@ async def main() -> None:
         sys.exit(1)
     r.render_success(f"API 连接成功 ({session.api_url})")
 
+    # Readiness check (deeper)
+    readiness = await session.check_readiness()
+    if readiness.get("status") == "error":
+        r.render_warning(f"API 未就绪: {readiness.get('error', 'unknown')}")
+    else:
+        components = readiness.get("components", {})
+        db_ok = components.get("database") == "ok"
+        redis_ok = components.get("redis") == "ok"
+        if not db_ok or not redis_ok:
+            r.render_warning(
+                f"部分组件不可用: DB={'ok' if db_ok else 'unavailable'}, "
+                f"Redis={'ok' if redis_ok else 'unavailable'}"
+            )
+        else:
+            r.render_success("所有组件就绪 (DB + Redis)")
+
+    # Emotion API check (verifies hot path wiring)
+    emotion_ok = await session.check_emotion_api()
+    if not emotion_ok:
+        r.render_warning("Emotion API 不可用 — 情绪状态将使用默认值")
+    else:
+        r.render_success("Emotion API 已接线")
+
     # Login
     try:
         token = await session.login()
