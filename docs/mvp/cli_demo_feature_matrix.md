@@ -232,16 +232,20 @@
 - 显示组件状态 (DB, Redis)
 - 降级警告而非硬退出
 
+#### Bug fixes — ✅ 完成 (PR #30, 9345562)
+- 修复 `/memory` `/vault` 500 错误（episodic_memories 列名错误）
+- 修复 dev mode 问题（CLI 传递 `dev=true` 参数）
+
 ### Tier 4 — Soul Drift + 跨模态（可与前端并行）
 
-#### T4-01 Soul Drift Detector 接入 consolidator
-- spec：`runtime_specs/01_*.md` + `docs/design/soul_drift_regression.md`
-- 在 daily consolidation 末尾跑 drift detector，超阈值写 `drift_events` 表。
-- CLI `/drift` 命令查看。
+#### T4-01 Soul Drift Detector 接入 consolidator — ✅ 完成 (PR #31, dc6b4cf)
+- 在 daily consolidation 末尾跑 drift detector (Step 9)
+- 日志输出 drift score + decision
 
-#### T4-02 RED 路径在 orchestrator 显式分支
-- 当前只 PURPLE 短路。RED 应走"拒绝 + 解释 + 不入 memory"。
-- 加 unit test 覆盖。
+#### T4-02 RED 路径在 orchestrator 显式分支 — ✅ 完成 (PR #32, f0d6c64)
+- RED severity 短路到拒绝响应
+- 不写入 memory（区别于 PURPLE care path）
+- unit test 覆盖
 
 ---
 
