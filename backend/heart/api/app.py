@@ -46,11 +46,22 @@ def create_app() -> FastAPI:
         await initialize_router(config=None)
         logger.info("✅ LLM Router initialized")
 
+        # Start background workers if enabled
+        from heart.workers.runner import start_workers
+
+        await start_workers()
+
     # 关闭事件
     @app.on_event("shutdown")
     async def shutdown_event():
         """应用关闭时清理"""
         logger.info("🛑 Heart AI Companion shutting down...")
+
+        # Stop background workers
+        from heart.workers.runner import stop_workers
+
+        await stop_workers()
+
         from heart.infra.llm import shutdown_router
 
         await shutdown_router()
