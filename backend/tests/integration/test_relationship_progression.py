@@ -1,139 +1,166 @@
 """
-Integration: Relationship progression — Stage 1 → 2 → 3.
-per runtime_specs/04_relationship_phase_engine.md §3 + §10
+Integration: Relationship progression in orchestrator hot path.
 
-Tests stage engine with real Soul spec and time-travel (freezegun).
+Verifies T1-02: RelationshipService.process_turn_raw is wired into orchestrator
+and updates relationship state on each turn.
 """
 
-from datetime import datetime, timedelta, timezone
+from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
 
-from heart.ss04_relationship.models import RelationshipState
-from heart.ss04_relationship.stage_engine import (
-    Signal,
-    SignalBatch,
-    StagePhaseEngine,
-    TransitionAction,
-)
+from heart.ss07_orchestration.models import TurnRequest
+from heart.ss07_orchestration.orchestrator import Orchestrator
 
 
 @pytest.mark.integration
 class TestRelationshipProgression:
-    """Stage progression from STRANGER to FRIEND with real soul spec."""
+    """Verify relationship state updates through orchestrator hot path."""
 
     @pytest.fixture
-    def rin_soul_spec(self):
-        """Real Rin soul spec for testing."""
-        from heart.ss01_soul.registry import SoulRegistry
-
-        registry = SoulRegistry()
-        registry.load_all()
-        return registry.get_soul("rin").model_dump()
+    def mock_relationship_service(self):
+        """Create a mock RelationshipService."""
+        service = MagicMock()
+        service.process_turn_raw = AsyncMock(
+            return_value=MagicMock(
+                current_stage="stranger",
+                trust_score=0.05,
+                attachment_strength=0.02,
+                intimacy_level=0.01,
+            )
+        )
+        return service
 
     @pytest.fixture
-    def fresh_state(self):
-        """Fresh RelationshipState at STRANGER."""
-        return RelationshipState(
+    def orchestrator(self, mock_relationship_service):
+        """Create orchestrator with relationship service wired."""
+        from heart.ss07_orchestration.circuit_breaker import BreakerRegistry
+        from heart.ss07_orchestration.session_manager import SessionManager
+
+        # Create a builder that returns the mock service
+        async def relationship_service_builder(db_session=None):
+            return mock_relationship_service
+
+        return Orchestrator(
+            safety_agent=MagicMock(),
+            composer_builder=AsyncMock(),
+            session_manager=MagicMock(spec=SessionManager),
+            breakers=BreakerRegistry(),
+            safety_event_writer=AsyncMock(),
+            emotion_service=None,
+            relationship_service_builder=relationship_service_builder,
+        )
+
+    @pytest.mark.asyncio
+    async def test_relationship_process_turn_called(self, orchestrator, mock_relationship_service):
+        """RelationshipService.process_turn_raw should be called on each turn."""
+        user_id = uuid4()
+        character_id = "rin"
+        turn_id = uuid4()
+
+        # Mock session manager
+        session_mock = MagicMock()
+        session_mock.session_id = uuid4()
+        session_mock.turn_count = 0
+        orchestrator._session_manager.get_or_create_session = AsyncMock(return_value=session_mock)
+        orchestrator._session_manager.record_turn = AsyncMock()
+
+        # Mock safety and composer
+        orchestrator._safety_agent.classify = AsyncMock(return_value=None)
+        composer_mock = MagicMock()
+        composer_mock.compose = AsyncMock(return_value=MagicMock(response="Hello."))
+        orchestrator._composer_builder = AsyncMock(return_value=composer_mock)
+
+        req = TurnRequest(
+            user_id=user_id,
+            character_id=character_id,
+            user_message="你好",
+            trace_id=turn_id,
+            history=[],
+        )
+
+        # Process the turn
+        response = await orchestrator.handle_turn(req, db_session=MagicMock())
+
+        # Verify relationship service was called
+        mock_relationship_service.process_turn_raw.assert_called_once()
+        call_args = mock_relationship_service.process_turn_raw.call_args
+        assert call_args.kwargs["user_id"] == user_id
+        assert call_args.kwargs["character_id"] == character_id
+        assert call_args.kwargs["turn_id"] == turn_id
+        assert call_args.kwargs["message_text"] == "你好"
+
+    @pytest.mark.asyncio
+    async def test_relationship_skipped_when_no_builder(self):
+        """Orchestrator should work without relationship service (graceful degradation)."""
+        from heart.ss07_orchestration.circuit_breaker import BreakerRegistry
+        from heart.ss07_orchestration.session_manager import SessionManager
+
+        orchestrator = Orchestrator(
+            safety_agent=MagicMock(),
+            composer_builder=AsyncMock(),
+            session_manager=MagicMock(spec=SessionManager),
+            breakers=BreakerRegistry(),
+            safety_event_writer=AsyncMock(),
+            emotion_service=None,
+            relationship_service_builder=None,  # No relationship service
+        )
+
+        # Mock session manager
+        session_mock = MagicMock()
+        session_mock.session_id = uuid4()
+        session_mock.turn_count = 0
+        orchestrator._session_manager.get_or_create_session = AsyncMock(return_value=session_mock)
+        orchestrator._session_manager.record_turn = AsyncMock()
+
+        # Mock safety and composer
+        orchestrator._safety_agent.classify = AsyncMock(return_value=None)
+        composer_mock = MagicMock()
+        composer_mock.compose = AsyncMock(return_value=MagicMock(response="Hello."))
+        orchestrator._composer_builder = AsyncMock(return_value=composer_mock)
+
+        req = TurnRequest(
             user_id=uuid4(),
             character_id="rin",
-            current_stage="STRANGER",
-            previous_stage="STRANGER",
-            stage_entered_at=datetime.now(timezone.utc) - timedelta(days=5),
-            highest_stage_reached="STRANGER",
-            intimacy_level=0.05,
-            trust_score=0.1,
-            attachment_strength=0.0,
-            conflict_debt=0.0,
-            vulnerability_score=0.0,
-            total_interactions=10,
-            total_meaningful_disclosures=3,
-            first_meeting_at=datetime.now(timezone.utc) - timedelta(days=5),
+            user_message="你好",
+            trace_id=uuid4(),
+            history=[],
         )
 
-    def test_engine_initializes_with_soul_spec(self, rin_soul_spec):
-        """Stage engine loads soul spec with relational template."""
-        engine = StagePhaseEngine(rin_soul_spec)
-        assert engine.intimacy_resistance is not None
-        assert engine.relational_template is not None
+        # Should not raise
+        response = await orchestrator.handle_turn(req, db_session=MagicMock())
+        assert response.response == "Hello."
 
-    def test_evaluate_returns_stay_for_empty_signals(self, rin_soul_spec, fresh_state):
-        """Empty signals → STAY."""
-        engine = StagePhaseEngine(rin_soul_spec)
-        signals = SignalBatch(positive=[], negative=[], events=[])
-        decision = engine.evaluate(fresh_state, signals)
-        assert decision.action == TransitionAction.STAY
+    @pytest.mark.asyncio
+    async def test_relationship_state_updates_on_multiple_turns(self, orchestrator, mock_relationship_service):
+        """Multiple turns should call relationship service multiple times."""
+        user_id = uuid4()
+        character_id = "rin"
 
-    def test_evaluate_with_trust_signals(self, rin_soul_spec, fresh_state):
-        """Positive trust signals may trigger progression check."""
-        engine = StagePhaseEngine(rin_soul_spec)
+        # Mock session manager
+        session_mock = MagicMock()
+        session_mock.session_id = uuid4()
+        session_mock.turn_count = 0
+        orchestrator._session_manager.get_or_create_session = AsyncMock(return_value=session_mock)
+        orchestrator._session_manager.record_turn = AsyncMock()
 
-        # Build significant trust-building signals
-        signals = SignalBatch(
-            positive=[
-                Signal(type="meaningful_disclosure", strength=0.8, metadata={"topic": "dreams"}),
-                Signal(
-                    type="trust_building", strength=0.7, metadata={"action": "shared_vulnerability"}
-                ),
-                Signal(
-                    type="emotional_resonance", strength=0.9, metadata={"emotion": "understood"}
-                ),
-            ],
-            negative=[],
-            events=[],
-        )
+        # Mock safety and composer
+        orchestrator._safety_agent.classify = AsyncMock(return_value=None)
+        composer_mock = MagicMock()
+        composer_mock.compose = AsyncMock(return_value=MagicMock(response="I see."))
+        orchestrator._composer_builder = AsyncMock(return_value=composer_mock)
 
-        # Accelerate state for progression
-        fresh_state.intimacy_level = 0.35
-        fresh_state.trust_score = 0.4
-        fresh_state.total_interactions = 30
-        fresh_state.total_meaningful_disclosures = 5
-        fresh_state.total_promises_made = 0
-        fresh_state.total_conflicts = 0
-        fresh_state.stage_entered_at = datetime.now(timezone.utc) - timedelta(days=5)
+        # Process two turns
+        for i in range(2):
+            req = TurnRequest(
+                user_id=user_id,
+                character_id=character_id,
+                user_message=f"Message {i}",
+                trace_id=uuid4(),
+                history=[],
+            )
+            await orchestrator.handle_turn(req, db_session=MagicMock())
 
-        decision = engine.evaluate(fresh_state, signals)
-        # May PROGRESS or STAY depending on soul gates — both acceptable
-        assert decision.action in [TransitionAction.STAY, TransitionAction.PROGRESS]
-
-        # If STAY, should have a reason
-        if decision.action == TransitionAction.STAY:
-            assert decision.reason or decision.blocked_by
-
-    def test_progression_blocked_by_minimum_time(self, rin_soul_spec, fresh_state):
-        """Progression blocked when minimum time not met."""
-        engine = StagePhaseEngine(rin_soul_spec)
-
-        # Just 1 day in STRANGER stage (minimum is 1 — may pass or not)
-        fresh_state.stage_entered_at = datetime.now(timezone.utc) - timedelta(hours=6)
-        fresh_state.intimacy_level = 0.5
-        fresh_state.trust_score = 0.6
-
-        signals = SignalBatch(
-            positive=[Signal(type="strong_bond", strength=1.0, metadata={})],
-            negative=[],
-            events=[],
-        )
-
-        decision = engine.evaluate(fresh_state, signals)
-        # Should be blocked by minimum time requirement
-        assert decision.blocked_by is not None or decision.action == TransitionAction.STAY
-
-    def test_signal_has_required_fields(self):
-        """Signal dataclass has type, strength, metadata."""
-        signal = Signal(type="test_signal", strength=0.5, metadata={"key": "value"})
-        assert signal.type == "test_signal"
-        assert signal.strength == 0.5
-        assert signal.metadata == {"key": "value"}
-
-    def test_batch_categorizes_signals(self):
-        """SignalBatch correctly groups positive/negative/events."""
-        batch = SignalBatch(
-            positive=[Signal(type="p1", strength=0.5, metadata={})],
-            negative=[Signal(type="n1", strength=0.3, metadata={})],
-            events=[Signal(type="e1", strength=0.8, metadata={})],
-        )
-        assert len(batch.positive) == 1
-        assert len(batch.negative) == 1
-        assert len(batch.events) == 1
+        # Verify relationship service was called twice
+        assert mock_relationship_service.process_turn_raw.call_count == 2

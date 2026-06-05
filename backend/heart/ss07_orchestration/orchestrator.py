@@ -61,6 +61,7 @@ class Orchestrator:
         - SafetyAgent (pre-filter with circuit breaker)
         - ComposerService (build + compose with circuit breaker)
         - EmotionService (emotion state update per turn)
+        - RelationshipService (relationship state update per turn)
         - MemoryService + InnerStateService (fire-and-forget cold path)
         - SessionManager (session lifecycle + turn counting)
     """
@@ -73,6 +74,7 @@ class Orchestrator:
         breakers: BreakerRegistry,
         safety_event_writer: Callable[..., Any],
         emotion_service: Any = None,
+        relationship_service_builder: Callable[..., Any] = None,
     ) -> None:
         self._safety_agent = safety_agent
         self._composer_builder = composer_builder
@@ -80,6 +82,7 @@ class Orchestrator:
         self._breakers = breakers
         self._write_safety_event = safety_event_writer
         self._emotion_service = emotion_service
+        self._relationship_service_builder = relationship_service_builder
 
     async def handle_turn(
         self,
@@ -119,14 +122,18 @@ class Orchestrator:
             with p.span("emotion"):
                 await self._update_emotion(req, session.session_id)
 
-            # ── Step 3: Composer build + compose ────────────────────
+            # ── Step 3: Relationship state update (before compose) ──
+            with p.span("relationship"):
+                await self._update_relationship(req, db_session, session.session_id)
+
+            # ── Step 4: Composer build + compose ────────────────────
             with p.span("compose"):
                 response_text = await self._compose(req, db_session, session.session_id, p)
 
-            # ── Step 4: Fire-and-forget cold path ───────────────────
+            # ── Step 5: Fire-and-forget cold path ───────────────────
             self._fire_cold_path(req, p, response_text)
 
-            # ── Step 5: Record turn ─────────────────────────────────
+            # ── Step 6: Record turn ─────────────────────────────────
             await self._session_manager.record_turn(db_session, session)
 
             severity = None
@@ -304,6 +311,53 @@ class Orchestrator:
             )
         except Exception:
             logger.exception("emotion_update_failed")
+
+    # ── Private: Relationship ────────────────────────────────────────
+
+    async def _update_relationship(
+        self,
+        req: TurnRequest,
+        db_session: Any,
+        session_id: UUID,
+    ) -> None:
+        """Update relationship state via RelationshipService.process_turn_raw.
+
+        This runs before compose so that the relationship context block
+        reflects the latest user message.
+        """
+        if self._relationship_service_builder is None:
+            return
+
+        try:
+            # Build relationship service with request-scoped db_session
+            relationship_service = await self._relationship_service_builder(db_session=db_session)
+            if relationship_service is None:
+                return
+
+            # Build raw signals from user message
+            # For now, use a simplified signal based on message presence
+            raw_signals = [
+                {
+                    "type": "user_message",
+                    "strength": 0.5,
+                    "metadata": {"message_length": len(req.user_message)},
+                }
+            ]
+
+            await relationship_service.process_turn_raw(
+                user_id=req.user_id,
+                character_id=req.character_id,
+                raw_signals=raw_signals,
+                turn_id=req.trace_id,
+                message_text=req.user_message,
+            )
+            logger.debug(
+                "relationship_updated",
+                user_id=str(req.user_id),
+                character_id=req.character_id,
+            )
+        except Exception:
+            logger.exception("relationship_update_failed")
 
     # ── Private: Composer ───────────────────────────────────────────
 
