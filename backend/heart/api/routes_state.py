@@ -272,7 +272,7 @@ async def forget_memory(
             }
         return {"status": "not_found", "memory_id": memory_id, "message": "未找到该记忆"}
     except Exception as e:
-        logger.exception("forget_memory_failed")
+        logger.error("forget_memory_failed", error=str(e))
         return {"status": "error", "error": str(e)}
 
 
@@ -311,8 +311,11 @@ async def jump_phase(
     try:
         await db_session.execute(
             text(
-                "UPDATE relationship_states SET current_stage = :stage, updated_at = NOW() "
-                "WHERE user_id = :user_id AND character_id = :character_id"
+                "INSERT INTO relationship_states (user_id, character_id, current_stage, trust_score, "
+                "attachment_strength, intimacy_level, total_interactions, first_meeting_at, updated_at, "
+                "soul_modifiers) "
+                "VALUES (:user_id, :character_id, :stage, 0.0, 0.0, 0.0, 0, NOW(), NOW(), '{}'::jsonb) "
+                "ON CONFLICT (user_id, character_id) DO UPDATE SET current_stage = :stage, updated_at = NOW()"
             ),
             {"user_id": str(user_id), "character_id": character_id, "stage": target_stage},
         )
@@ -325,7 +328,7 @@ async def jump_phase(
             "phase_number": phase,
         }
     except Exception as e:
-        logger.exception("jump_phase_failed")
+        logger.error("jump_phase_failed", error=str(e))
         return {"error": str(e)}
 
 
@@ -346,12 +349,15 @@ async def dev_sleep(
 
     try:
         # Update last_activity_at to simulate time passing
+        from datetime import datetime, timezone
+
+        cutoff = datetime.now(timezone.utc) - __import__("datetime").timedelta(hours=hours)
         await db_session.execute(
             text(
-                "UPDATE sessions SET last_activity_at = last_activity_at - INTERVAL ':hours hours' "
+                "UPDATE sessions SET last_activity_at = :cutoff "
                 "WHERE user_id = :user_id AND character_id = :character_id"
             ),
-            {"user_id": str(user_id), "character_id": character_id, "hours": hours},
+            {"user_id": str(user_id), "character_id": character_id, "cutoff": cutoff},
         )
         await db_session.commit()
 
@@ -372,7 +378,7 @@ async def dev_sleep(
             "message": f"Time fast-forwarded {hours}h. Decay triggered, inner loop ticked.",
         }
     except Exception as e:
-        logger.exception("dev_sleep_failed")
+        logger.error("dev_sleep_failed", error=str(e))
         return {"error": str(e)}
 
 
@@ -392,23 +398,18 @@ async def dev_coldwar(
         return {"error": "Dev mode not enabled. Set HEART_DEV_MODE=true or pass dev=true"}
 
     try:
-        # Update relationship state
-        if active:
-            await db_session.execute(
-                text(
-                    "UPDATE relationship_states SET current_stage = 'cold_war', updated_at = NOW() "
-                    "WHERE user_id = :user_id AND character_id = :character_id"
-                ),
-                {"user_id": str(user_id), "character_id": character_id},
-            )
-        else:
-            await db_session.execute(
-                text(
-                    "UPDATE relationship_states SET current_stage = 'friend', updated_at = NOW() "
-                    "WHERE user_id = :user_id AND character_id = :character_id"
-                ),
-                {"user_id": str(user_id), "character_id": character_id},
-            )
+        # Update relationship state using UPSERT
+        target_stage = "cold_war" if active else "friend"
+        await db_session.execute(
+            text(
+                "INSERT INTO relationship_states (user_id, character_id, current_stage, trust_score, "
+                "attachment_strength, intimacy_level, total_interactions, first_meeting_at, updated_at, "
+                "soul_modifiers) "
+                "VALUES (:user_id, :character_id, :stage, 0.0, 0.0, 0.0, 0, NOW(), NOW(), '{}'::jsonb) "
+                "ON CONFLICT (user_id, character_id) DO UPDATE SET current_stage = :stage, updated_at = NOW()"
+            ),
+            {"user_id": str(user_id), "character_id": character_id, "stage": target_stage},
+        )
         await db_session.commit()
 
         return {
@@ -417,5 +418,5 @@ async def dev_coldwar(
             "cold_war_active": active,
         }
     except Exception as e:
-        logger.exception("dev_coldwar_failed")
+        logger.error("dev_coldwar_failed", error=str(e))
         return {"error": str(e)}

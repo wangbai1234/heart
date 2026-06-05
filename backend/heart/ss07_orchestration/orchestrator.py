@@ -540,8 +540,18 @@ class Orchestrator:
                 timestamp=datetime.now(timezone.utc),
             )
 
-            # Use provided db_session for persistence
-            svc = MemoryService(db_session=db_session)
+            # Use provided db_session for persistence, and Redis for L1 cache
+            redis_client = None
+            try:
+                import redis.asyncio as aioredis
+
+                from heart.core.config import settings
+
+                redis_client = aioredis.from_url(settings.redis_url or "redis://localhost:6379")
+            except Exception:
+                pass
+
+            svc = MemoryService(db_session=db_session, redis_client=redis_client)
             signals = await svc.encode_fast(mem_turn)
 
             # Queue LLM encoding for L3 fact extraction

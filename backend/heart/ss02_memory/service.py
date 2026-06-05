@@ -429,7 +429,7 @@ class MemoryService:
                 import json
 
                 key = f"l1:{turn.user_id}:{turn.character_id}:latest"
-                self._redis.setex(
+                await self._redis.setex(
                     key,
                     300,
                     json.dumps(

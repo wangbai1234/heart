@@ -250,7 +250,18 @@ async def get_memory_service(
     try:
         from heart.ss02_memory.service import MemoryService
 
-        svc = MemoryService(db_session=db_session)
+        # Get Redis client for L1 working memory
+        redis_client = None
+        try:
+            import redis.asyncio as aioredis
+
+            from heart.core.config import settings
+
+            redis_client = aioredis.from_url(settings.redis_url or "redis://localhost:6379")
+        except Exception:
+            pass
+
+        svc = MemoryService(db_session=db_session, redis_client=redis_client)
         return svc
     except Exception as e:
         logger.warning("wiring_memory_service_init_failed", error=str(e))

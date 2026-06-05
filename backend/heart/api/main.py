@@ -34,6 +34,38 @@ REQUEST_LATENCY = Histogram(
 )
 
 
+async def _startup():
+    """Application startup: init LLM router + start workers."""
+    import os
+
+    from heart.core.config import settings
+
+    os.environ.setdefault("DEEPSEEK_API_KEY", settings.deepseek_api_key or "")
+    if settings.deepseek_base_url:
+        os.environ.setdefault("DEEPSEEK_BASE_URL", settings.deepseek_base_url)
+
+    from heart.infra.llm import initialize_router
+
+    await initialize_router(config=None)
+    logger.info("llm_router_initialized")
+
+    from heart.workers.runner import start_workers
+
+    await start_workers()
+
+
+async def _shutdown():
+    """Application shutdown: stop workers + cleanup."""
+    from heart.workers.runner import stop_workers
+
+    await stop_workers()
+
+    from heart.infra.llm import shutdown_router
+
+    await shutdown_router()
+    logger.info("shutdown_complete")
+
+
 def create_app() -> FastAPI:
     """Create and configure FastAPI application."""
 
@@ -147,6 +179,10 @@ def create_app() -> FastAPI:
     app.include_router(state_router)
     app.include_router(memory_router)
     app.include_router(dev_router)
+
+    # Startup / Shutdown events
+    app.on_event("startup")(_startup)
+    app.on_event("shutdown")(_shutdown)
 
     # OpenTelemetry instrumentation
     FastAPIInstrumentor.instrument_app(app)
