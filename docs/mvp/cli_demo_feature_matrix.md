@@ -247,6 +247,11 @@
 - 不写入 memory（区别于 PURPLE care path）
 - unit test 覆盖
 
+#### /forget 命令 + API — ✅ 完成 (496eb06)
+- POST /api/memory/forget 端点（do_not_recall=true, M-1 合规）
+- CLI /forget <memory_id> 命令
+- session.forget_memory() 方法
+
 ---
 
 ## 3. CLI 端到端验证剧本（执行模型完成 Tier1+Tier3 后必须跑通）
