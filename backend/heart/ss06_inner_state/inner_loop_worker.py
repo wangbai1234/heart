@@ -163,6 +163,11 @@ class InnerLoopWorker:
                             delta = datetime.now(timezone.utc) - last_activity
                             days_since_last = delta.total_seconds() / 86400
 
+                        # Check for anniversary
+                        is_anniversary = await self._check_anniversary(
+                            user_id, character_id, session
+                        )
+
                         # Tick
                         msg = self.inner_state_service.tick(
                             user_id=user_id,
@@ -170,6 +175,7 @@ class InnerLoopWorker:
                             relationship_stage=relationship_stage,
                             intimacy=intimacy,
                             days_since_last_interaction=days_since_last,
+                            is_anniversary=is_anniversary,
                         )
 
                         if msg is not None:
@@ -178,8 +184,16 @@ class InnerLoopWorker:
                                 "proactive_message_generated",
                                 user_id=str(user_id),
                                 character_id=character_id,
+                                trigger_type=msg.trigger_type,
                                 content_preview=msg.content[:40],
                             )
+
+                        # Check for ritual triggers (morning/night)
+                        ritual_msg = await self._check_ritual_triggers(
+                            user_id, character_id, session
+                        )
+                        if ritual_msg is not None:
+                            _proactive_messages.append(ritual_msg)
 
                     except Exception:
                         logger.exception(
@@ -190,3 +204,115 @@ class InnerLoopWorker:
 
         except Exception:
             logger.exception("inner_loop_fetch_users_failed")
+
+    async def _check_anniversary(
+        self,
+        user_id: UUID,
+        character_id: str,
+        session: AsyncSession,
+    ) -> bool:
+        """Check if today is an anniversary for the user.
+
+        Looks for L4 identity memories with anniversary patterns
+        and checks if today matches.
+        """
+        try:
+            result = await session.execute(
+                text(
+                    "SELECT id, key, value, next_anniversary_at "
+                    "FROM identity_memories "
+                    "WHERE user_id = :user_id AND character_id = :character_id "
+                    "AND next_anniversary_at IS NOT NULL "
+                    "AND next_anniversary_at::date = CURRENT_DATE"
+                ),
+                {"user_id": str(user_id), "character_id": character_id},
+            )
+            rows = result.fetchall()
+
+            if rows:
+                logger.info(
+                    "anniversary_detected",
+                    user_id=str(user_id),
+                    character_id=character_id,
+                    count=len(rows),
+                )
+                return True
+
+        except Exception:
+            logger.debug("anniversary_check_failed")
+
+        return False
+
+    async def _check_ritual_triggers(
+        self,
+        user_id: UUID,
+        character_id: str,
+        session: AsyncSession,
+    ) -> Optional[ProactiveMessage]:
+        """Check for ritual triggers (morning/night greetings).
+
+        Returns a ProactiveMessage if a ritual should be triggered.
+        """
+        from datetime import datetime, timezone
+
+        now = datetime.now(timezone.utc)
+        hour = now.hour
+
+        # Morning ritual: 6-10 AM
+        if 6 <= hour <= 10:
+            ritual_type = "morning"
+            templates = {
+                "rin": "早安。",
+                "dorothy": "早安早安！新的一天开始啦！",
+            }
+        # Night ritual: 9 PM - 1 AM
+        elif 21 <= hour or hour <= 1:
+            ritual_type = "night"
+            templates = {
+                "rin": "晚安。明天见。",
+                "dorothy": "晚安晚安！做个好梦哦！",
+            }
+        else:
+            return None
+
+        # Check if already sent today
+        try:
+            result = await session.execute(
+                text(
+                    "SELECT COUNT(*) FROM proactive_messages "
+                    "WHERE user_id = :user_id AND character_id = :character_id "
+                    "AND trigger_type = :trigger_type "
+                    "AND created_at::date = CURRENT_DATE"
+                ),
+                {
+                    "user_id": str(user_id),
+                    "character_id": character_id,
+                    "trigger_type": f"ritual_{ritual_type}",
+                },
+            )
+            count = result.scalar()
+            if count and count > 0:
+                return None
+        except Exception:
+            # Table might not exist, proceed anyway
+            pass
+
+        # Generate ritual message
+        content = templates.get(character_id, templates.get("rin", "早安。"))
+
+        msg = ProactiveMessage(
+            user_id=user_id,
+            character_id=character_id,
+            content=content,
+            trigger_type=f"ritual_{ritual_type}",
+            created_at=now,
+        )
+
+        logger.info(
+            "ritual_triggered",
+            user_id=str(user_id),
+            character_id=character_id,
+            ritual_type=ritual_type,
+        )
+
+        return msg
