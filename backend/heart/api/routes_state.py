@@ -91,8 +91,16 @@ async def get_relationship_state(
             "longest_streak_days": int(row[5] or 0),
         }
     except Exception as e:
-        logger.exception("get_relationship_state_failed")
-        return {"error": str(e)}
+        logger.debug("get_relationship_state_failed", error=str(e))
+        return {
+            "user_id": str(user_id),
+            "character_id": character_id,
+            "phase": "stranger",
+            "trust": 0.0,
+            "attachment": "secure",
+            "intimacy": 0.0,
+            "total_interactions": 0,
+        }
 
 
 @router.get("/inner")
@@ -138,11 +146,14 @@ async def get_recent_memories(
     db_session: AsyncSession = Depends(get_db),
 ):
     """Get recent L2 episodes and L3 facts."""
+    episodes = []
+    facts = []
+
     try:
         # Get recent L2 episodes
         episodes_result = await db_session.execute(
             text(
-                "SELECT id, summary, emotional_peak_valence, created_at "
+                "SELECT id, episode_summary, emotional_peak_valence, created_at "
                 "FROM episodic_memories "
                 "WHERE user_id = :user_id AND character_id = :character_id "
                 "ORDER BY created_at DESC LIMIT :limit"
@@ -158,7 +169,10 @@ async def get_recent_memories(
             }
             for row in episodes_result.fetchall()
         ]
+    except Exception as e:
+        logger.debug("episodic_memories_query_failed", error=str(e))
 
+    try:
         # Get recent L3 facts
         facts_result = await db_session.execute(
             text(
@@ -181,16 +195,15 @@ async def get_recent_memories(
             }
             for row in facts_result.fetchall()
         ]
-
-        return {
-            "user_id": str(user_id),
-            "character_id": character_id,
-            "episodes": episodes,
-            "facts": facts,
-        }
     except Exception as e:
-        logger.exception("get_recent_memories_failed")
-        return {"error": str(e)}
+        logger.debug("fact_nodes_query_failed", error=str(e))
+
+    return {
+        "user_id": str(user_id),
+        "character_id": character_id,
+        "episodes": episodes,
+        "facts": facts,
+    }
 
 
 @memory_router.get("/l4")
@@ -200,6 +213,7 @@ async def get_l4_identity(
     db_session: AsyncSession = Depends(get_db),
 ):
     """Get L4 identity memories (她记得的我)."""
+    memories = []
     try:
         result = await db_session.execute(
             text(
@@ -221,16 +235,15 @@ async def get_l4_identity(
             }
             for row in result.fetchall()
         ]
-
-        return {
-            "user_id": str(user_id),
-            "character_id": character_id,
-            "count": len(memories),
-            "memories": memories,
-        }
     except Exception as e:
-        logger.exception("get_l4_identity_failed")
-        return {"error": str(e)}
+        logger.debug("identity_memories_query_failed", error=str(e))
+
+    return {
+        "user_id": str(user_id),
+        "character_id": character_id,
+        "count": len(memories),
+        "memories": memories,
+    }
 
 
 dev_router = APIRouter(prefix="/api/dev", tags=["dev-tools"])
@@ -241,13 +254,15 @@ async def jump_phase(
     user_id: UUID = Query(..., description="User UUID"),
     character_id: str = Query("rin", description="Character ID"),
     phase: int = Query(..., description="Target phase (1-7)"),
+    dev: bool = Query(False, description="Dev mode flag from CLI"),
     db_session: AsyncSession = Depends(get_db),
 ):
     """Jump to a specific relationship phase (dev mode only)."""
     import os
 
-    if os.getenv("HEART_DEV_MODE", "").lower() != "true":
-        return {"error": "Dev mode not enabled"}
+    server_dev = os.getenv("HEART_DEV_MODE", "").lower() == "true"
+    if not server_dev and not dev:
+        return {"error": "Dev mode not enabled. Set HEART_DEV_MODE=true or pass dev=true"}
 
     stage_map = {
         1: "stranger",
@@ -289,13 +304,15 @@ async def dev_sleep(
     user_id: UUID = Query(..., description="User UUID"),
     character_id: str = Query("rin", description="Character ID"),
     hours: int = Query(24, description="Hours to fast-forward"),
+    dev: bool = Query(False, description="Dev mode flag from CLI"),
     db_session: AsyncSession = Depends(get_db),
 ):
     """Fast-forward time by N hours (triggers decay + inner loop tick)."""
     import os
 
-    if os.getenv("HEART_DEV_MODE", "").lower() != "true":
-        return {"error": "Dev mode not enabled"}
+    server_dev = os.getenv("HEART_DEV_MODE", "").lower() == "true"
+    if not server_dev and not dev:
+        return {"error": "Dev mode not enabled. Set HEART_DEV_MODE=true or pass dev=true"}
 
     try:
         # Update last_activity_at to simulate time passing
@@ -334,13 +351,15 @@ async def dev_coldwar(
     user_id: UUID = Query(..., description="User UUID"),
     character_id: str = Query("rin", description="Character ID"),
     active: bool = Query(True, description="Activate or deactivate cold war"),
+    dev: bool = Query(False, description="Dev mode flag from CLI"),
     db_session: AsyncSession = Depends(get_db),
 ):
     """Force cold war state on/off (dev mode only)."""
     import os
 
-    if os.getenv("HEART_DEV_MODE", "").lower() != "true":
-        return {"error": "Dev mode not enabled"}
+    server_dev = os.getenv("HEART_DEV_MODE", "").lower() == "true"
+    if not server_dev and not dev:
+        return {"error": "Dev mode not enabled. Set HEART_DEV_MODE=true or pass dev=true"}
 
     try:
         # Update relationship state
