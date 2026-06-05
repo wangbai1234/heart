@@ -71,12 +71,16 @@ class Orchestrator:
         session_manager: SessionManager,
         breakers: BreakerRegistry,
         safety_event_writer: Callable[..., Any],
+        emotion_service: Any = None,
+        soul_registry: Any = None,
     ) -> None:
         self._safety_agent = safety_agent
         self._composer_builder = composer_builder
         self._session_manager = session_manager
         self._breakers = breakers
         self._write_safety_event = safety_event_writer
+        self._emotion_service = emotion_service
+        self._soul_registry = soul_registry
 
     async def handle_turn(
         self,
@@ -112,14 +116,18 @@ class Orchestrator:
                     if severity == "PURPLE":
                         return await self._care_path(req, classification, db_session)
 
-            # ── Step 2: Composer build + compose ────────────────────
+            # ── Step 2: Emotion process_turn (before compose so composer reads fresh state) ───
+            with p.span("emotion"):
+                await self._process_emotion(req, session)
+
+            # ── Step 3: Composer build + compose ────────────────────
             with p.span("compose"):
                 response_text = await self._compose(req, db_session, session.session_id, p)
 
-            # ── Step 3: Fire-and-forget cold path ───────────────────
+            # ── Step 4: Fire-and-forget cold path ───────────────────
             self._fire_cold_path(req, p, response_text)
 
-            # ── Step 4: Record turn ─────────────────────────────────
+            # ── Step 5: Record turn ─────────────────────────────────
             await self._session_manager.record_turn(db_session, session)
 
             severity = None
@@ -287,6 +295,48 @@ class Orchestrator:
                 user_id=str(req.user_id),
             )
             return self._fallback_message(req.character_id)
+
+    # ── Private: Emotion ─────────────────────────────────────────────
+
+    async def _process_emotion(self, req: TurnRequest, session: Any) -> None:
+        """Run emotion process_turn for this turn (best-effort).
+
+        Updates in-memory emotion state so the composer reads fresh VAD values.
+        Errors are logged but never propagate to the response.
+        """
+        if self._emotion_service is None:
+            return
+
+        try:
+            now = datetime.now(timezone.utc)
+            last_at = session.last_activity_at or now
+            delta = now - last_at
+            hours_since_last = delta.total_seconds() / 3600
+            days_since_last = delta.total_seconds() / 86400
+
+            soul_config = None
+            if self._soul_registry is not None:
+                try:
+                    soul_spec = self._soul_registry.get_soul(req.character_id)
+                    soul_config = soul_spec.model_dump()
+                except (KeyError, Exception):
+                    logger.warning("emotion_soul_config_not_found", character_id=req.character_id)
+
+            await self._emotion_service.process_turn(
+                user_id=req.user_id,
+                character_id=req.character_id,
+                user_message=req.user_message,
+                turn_id=req.trace_id,
+                context={
+                    "days_since_last": days_since_last,
+                    "hours_since_last": hours_since_last,
+                    "relationship_phase": "stranger",
+                    "user_emotion_vad": {"valence": 0.0, "arousal": 0.3, "dominance": 0.5},
+                },
+                soul_config=soul_config or {},
+            )
+        except Exception:
+            logger.exception("emotion_process_turn_failed")
 
     # ── Private: Cold path ──────────────────────────────────────────
 
