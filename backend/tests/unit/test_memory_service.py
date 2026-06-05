@@ -261,9 +261,9 @@ class TestPromoteToL4:
     """Tests for promote_to_l4() L3 → L4 promotion."""
 
     @pytest.mark.asyncio
-    async def test_promote_to_l4_still_raises_not_implemented(self, service):
-        """promote_to_l4() still raises NotImplementedError (needs consolidation pipeline)."""
-        with pytest.raises(NotImplementedError):
+    async def test_promote_to_l4_requires_db_session(self, service):
+        """promote_to_l4() requires db_session."""
+        with pytest.raises(RuntimeError, match="requires db_session"):
             await service.promote_to_l4(fact_id=uuid4(), reason="test")
 
 

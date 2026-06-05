@@ -33,6 +33,7 @@ import heart.infra.invariant_predicates  # noqa: F401, E402 isort:skip
 from .models import (
     ConsolidationJob,
     EpisodicMemory,
+    FactNode,
     IdentityMemory,
     MemoryEncodingEvent,
 )
@@ -664,9 +665,102 @@ class MemoryService:
 
         Spec: §5.4 L4 Identity Memory, §7.2 写入者 RULE-W-M-4
         """
-        raise NotImplementedError("promote_to_l4() - to be implemented in Phase 2")
+        if self._db is None:
+            raise RuntimeError("promote_to_l4 requires db_session")
+
+        # Fetch the L3 fact
+        from sqlalchemy import select
+
+        stmt = select(FactNode).where(FactNode.id == fact_id)
+        result = await self._db.execute(stmt)
+        fact = result.scalar_one_or_none()
+
+        if fact is None:
+            raise ValueError(f"Fact {fact_id} not found")
+
+        # Validate promotion conditions
+        if fact.importance < 0.85:
+            raise ValueError(f"Fact importance {fact.importance} < 0.85 threshold for L4 promotion")
+
+        # Check if already promoted
+        existing_stmt = select(IdentityMemory).where(
+            IdentityMemory.promoted_from_fact_id == fact_id
+        )
+        result = await self._db.execute(existing_stmt)
+        existing = result.scalar_one_or_none()
+
+        if existing is not None:
+            logger.info("fact_already_promoted", fact_id=str(fact_id), l4_id=str(existing.id))
+            return existing
+
+        # Derive category from predicate
+        category = self._derive_l4_category(fact.predicate)
+
+        # Create L4 Identity Memory
+        identity = IdentityMemory(
+            id=uuid4(),
+            user_id=fact.user_id,
+            character_id=fact.character_id,
+            category=category,
+            key=fact.predicate,
+            value=fact.object,
+            disclosed_at=datetime.now(timezone.utc),
+            disclosure_context=fact.raw_evidence,
+            source_turn_ids=fact.source_turn_ids or [],
+            sacred_reason=reason,
+            significance_score=fact.importance,
+            promotion_trigger=reason,
+            promoted_from_fact_id=fact.id,
+            reconstruction_hints={
+                "original_literal": fact.literal_text,
+                "confidence": fact.confidence,
+                "emotional_charge": fact.emotional_charge,
+            },
+            created_at=datetime.now(timezone.utc),
+        )
+
+        self._db.add(identity)
+        await self._db.flush()
+
+        logger.info(
+            "fact_promoted_to_l4",
+            fact_id=str(fact_id),
+            identity_id=str(identity.id),
+            reason=reason,
+            key=identity.key,
+            value=identity.value,
+        )
+
+        return identity
 
     # ─────────── Internal Helpers ───────────
+
+    def _derive_l4_category(self, predicate: str) -> str:
+        """Derive L4 category from fact predicate.
+
+        Maps predicates to IdentityMemory categories per §5.4.
+        """
+        category_map = {
+            "妈妈": "family",
+            "爸爸": "family",
+            "家人": "family",
+            "工作": "occupation",
+            "职业": "occupation",
+            "生日": "personal",
+            "名字": "identity",
+            "喜欢": "preference",
+            "讨厌": "preference",
+            "爱好": "interest",
+            "宠物": "pet",
+            "住": "location",
+            "家在": "location",
+        }
+
+        for keyword, category in category_map.items():
+            if keyword in predicate:
+                return category
+
+        return "user_identity"
 
     def _enforce_user_isolation(
         self,
