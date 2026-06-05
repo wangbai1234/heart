@@ -68,6 +68,30 @@ async def start_workers() -> None:
     except Exception:
         logger.exception("memory_consolidator_worker_start_failed")
 
+    # Start inner loop worker (proactive messages)
+    if os.getenv("HEART_INNER_LOOP_ENABLED", "false").lower() == "true":
+        try:
+            from heart.ss06_inner_state.inner_loop_worker import InnerLoopWorker
+            from heart.ss06_inner_state.service import InnerStateService
+
+            factory = _get_session_factory()
+            inner_svc = InnerStateService()
+            inner_loop = InnerLoopWorker(
+                db_session_factory=factory,
+                inner_state_service=inner_svc,
+            )
+            stop_event = asyncio.Event()
+            _worker_stop_events.append(stop_event)
+
+            task = asyncio.create_task(
+                _run_until_stopped(inner_loop.start, stop_event),
+                name="inner_loop_worker",
+            )
+            _worker_tasks.append(task)
+            logger.info("inner_loop_worker_started")
+        except Exception:
+            logger.exception("inner_loop_worker_start_failed")
+
     logger.info("workers_started", count=len(_worker_tasks))
 
 
