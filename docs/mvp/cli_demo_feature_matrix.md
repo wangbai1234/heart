@@ -197,22 +197,21 @@
 
 ### Tier 3 — 让 demo CLI 能完整验证
 
-#### T3-01 后端暴露 state-inspect API
-新增以下只读端点（CLI 用）：
+#### T3-01 后端暴露 state-inspect API — ✅ 完成 (PR #27, 4b72c25)
 
-| Endpoint | 内容 | 用途 |
+| Endpoint | 内容 | 状态 |
 |---|---|---|
-| `GET /api/state/emotion?character_id=` | EmotionContextBlock | `/state emotion` |
-| `GET /api/state/relationship?character_id=` | RelationshipState（phase/trust/attachment/intimacy/cold_war）| `/state relationship` |
-| `GET /api/state/inner?character_id=` | InnerState | `/state inner` |
-| `GET /api/memory/recent?character_id=&limit=10` | 最近 L2 episodes + 检索到的 L3 facts | `/memory` |
-| `GET /api/memory/l4?character_id=` | "她记得的我" | `/vault` |
-| `GET /api/proactive/pending?character_id=` | 待发主动消息 | `/inbox` |
-| `POST /api/dev/jump_phase` | 跳阶段（仅 HEART_DEV_MODE） | `/jump` |
-| `POST /api/dev/sleep` | 模拟时间快进 N 小时（触发 decay + inner loop） | `/sleep` |
-| `POST /api/dev/coldwar` | 强制 cold war on/off | `/coldwar` |
+| `GET /api/state/emotion?character_id=` | EmotionContextBlock | ✅ |
+| `GET /api/state/relationship?character_id=` | RelationshipState | ✅ |
+| `GET /api/state/inner?character_id=` | InnerState | ✅ |
+| `GET /api/memory/recent?character_id=&limit=10` | L2 episodes + L3 facts | ✅ |
+| `GET /api/memory/l4?character_id=` | "她记得的我" | ✅ |
+| `GET /api/proactive/pending?character_id=` | 待发主动消息 | ✅ (T2-02) |
+| `POST /api/dev/jump_phase` | 跳阶段 | ✅ |
+| `POST /api/dev/sleep` | 模拟时间快进 | ✅ |
+| `POST /api/dev/coldwar` | 强制 cold war | ✅ |
 
-**验收**：每条 endpoint 都有 `tests/integration/test_state_api.py` 单测。
+**验收**：`tests/integration/test_state_api.py` 通过。
 
 #### T3-02 CLI 命令对接真实 API
 
