@@ -31,7 +31,7 @@ class TurnResponse:
     response: str
     character_id: str
     trace_id: UUID
-    path: Literal["normal", "care", "fallback"]
+    path: Literal["normal", "care", "reject", "fallback"]
     safety_severity: Optional[str] = None  # GREEN / YELLOW / ... / PURPLE
 
 

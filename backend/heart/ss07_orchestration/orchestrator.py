@@ -117,6 +117,8 @@ class Orchestrator:
                     )
                     if severity == "PURPLE":
                         return await self._care_path(req, classification, db_session)
+                    elif severity == "RED":
+                        return await self._reject_path(req, classification, db_session)
 
             # ── Step 2: Emotion state update (before compose) ─────
             with p.span("emotion"):
@@ -247,6 +249,47 @@ class Orchestrator:
             trace_id=req.trace_id,
             path="care",
             safety_severity="PURPLE",
+        )
+
+    async def _reject_path(
+        self,
+        req: TurnRequest,
+        classification: Any,
+        db_session: Any,
+    ) -> TurnResponse:
+        """Handle RED severity — short-circuit to rejection response.
+
+        RED means high-risk content that should be rejected outright.
+        Unlike PURPLE (care), RED does not write to memory.
+        """
+        reject_response = (
+            "I'm not able to help with that request. "
+            "If you're in crisis, please contact emergency services or a mental health professional."
+        )
+
+        logger.warning(
+            "turn_rejected_by_safety",
+            user_id=str(req.user_id),
+            character_id=req.character_id,
+            reason=classification.reason,
+            severity=classification.severity.value,
+            layer=getattr(classification, "layer", "heuristic"),
+        )
+
+        # Write safety audit event
+        await self._write_safety_event(
+            db_session=db_session,
+            user_id=req.user_id,
+            turn_id=req.trace_id,
+            classification=classification,
+        )
+
+        return TurnResponse(
+            response=reject_response,
+            character_id=req.character_id,
+            trace_id=req.trace_id,
+            path="reject",
+            safety_severity="RED",
         )
 
     # ── Private: Emotion ────────────────────────────────────────────
