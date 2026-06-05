@@ -179,24 +179,21 @@
 
 ### Tier 2 — 实现 L4 + Inner Loop 让"长期陪伴 / 主动消息"能演示
 
-#### T2-01 实现 `MemoryService.promote_to_l4`
+#### T2-01 实现 `MemoryService.promote_to_l4` — ✅ 完成 (PR #24, 43cf164)
 - **位置**：`backend/heart/ss02_memory/service.py:640`
-- **现状**：`NotImplementedError`。
-- **任务**：按 spec §4.2 实现：L3 fact 满足"重要性 ≥ 阈值 + 重复出现 ≥ N 次"→ 升级到 L4 IdentityMemory 表。
-- **验收**：`tests/unit/test_promote_to_l4.py` 通过；consolidator 调用后断言 L4 表有数据。
+- **现状**：✅ 已实现。validate importance >= 0.85 + 创建 IdentityMemory。
+- **验收**：`tests/unit/test_promote_to_l4.py` 通过。
 
-#### T2-02 接入 Inner Loop scheduler
-- **位置**：`backend/heart/ss06_inner_state/scheduler.py` + `api/app.py`
-- **任务**：
-  1. lifespan 启动 `InnerLoop` 长循环，每 1 小时（演示可 `HEART_INNER_LOOP_INTERVAL_S=10` 加速）。
-  2. 循环里调 `InitiativeDecider.decide` → 满足条件 → 调 `ProactiveMessageGenerator.generate` → 写入 `proactive_messages` 表。
-  3. 新增 `GET /api/proactive/pending?user_id=` 让 CLI 能拉。
-- **验收**：set interval=2s，等 5s 后断言 `/api/proactive/pending` 返回 ≥ 1 条。
+#### T2-02 接入 Inner Loop scheduler — ✅ 完成 (PR #25, 7c7a6a6)
+- **位置**：`backend/heart/ss06_inner_state/inner_loop_worker.py` + `api/routes_proactive.py`
+- **现状**：✅ InnerLoopWorker 已创建，GET /api/proactive/pending 已添加。
+- **验收**：`tests/integration/test_inner_loop_worker.py` 通过。
+- **开关**：`HEART_INNER_LOOP_ENABLED=true` + `HEART_INNER_LOOP_INTERVAL_S=10` 加速。
 
-#### T2-03 实现纪念日 + Ritual 触发
-- **位置**：`anniversary_tracker.py` + `ritual_manager.py`
-- **任务**：在 Inner Loop 里调用，命中 → emit proactive message（type=anniversary / ritual）。
-- **验收**：mock "首次对话 7 天前" → 等 inner loop tick → 断言 proactive_messages 有 anniversary 一条。
+#### T2-03 实现纪念日 + Ritual 触发 — ✅ 完成 (PR #26, 9444689)
+- **位置**：`inner_loop_worker.py:_check_anniversary` + `_check_ritual_triggers`
+- **现状**：✅ 从 L4 identity_memories 检测纪念日，早/晚 ritual 触发已实现。
+- **验收**：`tests/integration/test_anniversary_ritual.py` 通过。
 
 ### Tier 3 — 让 demo CLI 能完整验证
 
