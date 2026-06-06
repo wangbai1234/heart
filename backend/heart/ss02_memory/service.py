@@ -249,8 +249,8 @@ class MemoryService:
 
                 orchestrator = RetrievalOrchestrator(self._db)
                 return await orchestrator.retrieve(query_context, top_k)  # type: ignore[arg-type,return-value]
-            except Exception:
-                logger.exception("retrieve_failed", user_id=str(user_id))
+            except Exception as e:
+                logger.error("retrieve_failed", error=str(e), user_id=str(user_id))
 
         # Fallback: return empty result
         return MemoryRetrievalResult(
@@ -301,8 +301,8 @@ class MemoryService:
                     stmt = stmt.where(IdentityMemory.category == category)
                 result = await self._db.execute(stmt)
                 return list(result.scalars().all())
-            except Exception:
-                logger.exception("get_l4_failed", user_id=str(user_id))
+            except Exception as e:
+                logger.error("get_l4_failed", error=str(e), user_id=str(user_id))
         return []
 
     async def get_recent_episodes(
@@ -353,8 +353,11 @@ class MemoryService:
                 )
                 result = await self._db.execute(stmt)
                 return list(result.scalars().all())
-            except Exception:
-                logger.exception("get_recent_episodes_failed")
+            except Exception as e:
+                logger.error(
+                    "get_recent_episodes_failed",
+                    error=str(e),
+                )
         return []
 
     async def get_anniversaries(
@@ -393,8 +396,11 @@ class MemoryService:
                 )
                 result = await self._db.execute(stmt)
                 return list(result.scalars().all())
-            except Exception:
-                logger.exception("get_anniversaries_failed")
+            except Exception as e:
+                logger.error(
+                    "get_anniversaries_failed",
+                    error=str(e),
+                )
         return []
 
     # ─────────── Write API ───────────
@@ -439,8 +445,11 @@ class MemoryService:
                         }
                     ),
                 )
-            except Exception:
-                logger.exception("l1_cache_failed")
+            except Exception as e:
+                logger.error(
+                    "l1_cache_failed",
+                    error=str(e),
+                )
         return signals
 
     async def queue_llm_encoding(self, event: MemoryEncodingEvent) -> None:
@@ -503,8 +512,11 @@ class MemoryService:
                 await self._db.execute(stmt)
                 await self._db.flush()
                 logger.debug("reinforced", count=len(memory_ids))
-            except Exception:
-                logger.exception("reinforce_failed")
+            except Exception as e:
+                logger.error(
+                    "reinforce_failed",
+                    error=str(e),
+                )
 
     async def user_request_forget(
         self,
@@ -539,8 +551,11 @@ class MemoryService:
                 await self._db.flush()
                 if result.rowcount > 0:
                     logger.info("memory_forgotten", memory_id=str(memory_id))
-            except Exception:
-                logger.exception("forget_failed")
+            except Exception as e:
+                logger.error(
+                    "forget_failed",
+                    error=str(e),
+                )
 
     # ─────────── Lifecycle ───────────
 
@@ -584,8 +599,11 @@ class MemoryService:
                     self._decay_engine = DecayEngine()
                 count = await self._decay_engine.apply_decay_batch(self._db, user_id, character_id)
                 return count
-            except Exception:
-                logger.exception("decay_batch_failed")
+            except Exception as e:
+                logger.error(
+                    "decay_batch_failed",
+                    error=str(e),
+                )
         return 0
 
     async def run_consolidation(
@@ -628,8 +646,11 @@ class MemoryService:
                 if self._decay_engine is None:
                     self._decay_engine = DecayEngine()
                 await self._decay_engine.apply_decay_batch(self._db, user_id, character_id)
-            except Exception:
-                logger.exception("consolidation_decay_failed")
+            except Exception as e:
+                logger.error(
+                    "consolidation_decay_failed",
+                    error=str(e),
+                )
         return ConsolidationJob(
             user_id=user_id,
             character_id=character_id,

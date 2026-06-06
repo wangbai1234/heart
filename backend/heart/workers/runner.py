@@ -47,8 +47,8 @@ async def start_workers() -> None:
         )
         _worker_tasks.append(task)
         logger.info("memory_encoder_worker_started")
-    except Exception:
-        logger.exception("memory_encoder_worker_start_failed")
+    except Exception as e:
+        logger.error("memory_encoder_worker_start_failed", error=str(e))
 
     # Start consolidator worker (daily at 03:00 or configurable interval)
     try:
@@ -65,8 +65,8 @@ async def start_workers() -> None:
             "memory_consolidator_worker_started",
             interval_seconds=consolidation_interval,
         )
-    except Exception:
-        logger.exception("memory_consolidator_worker_start_failed")
+    except Exception as e:
+        logger.error("memory_consolidator_worker_start_failed", error=str(e))
 
     # Start inner loop worker (proactive messages)
     if os.getenv("HEART_INNER_LOOP_ENABLED", "false").lower() == "true":
@@ -89,8 +89,8 @@ async def start_workers() -> None:
             )
             _worker_tasks.append(task)
             logger.info("inner_loop_worker_started")
-        except Exception:
-            logger.exception("inner_loop_worker_start_failed")
+        except Exception as e:
+            logger.error("inner_loop_worker_start_failed", error=str(e))
 
     logger.info("workers_started", count=len(_worker_tasks))
 
@@ -117,14 +117,14 @@ async def stop_workers() -> None:
 async def _run_until_stopped(coroutine_fn, stop_event: asyncio.Event) -> None:
     """Run a coroutine function until stop_event is set."""
     task = asyncio.current_task()
+    task_name = task.get_name() if task else "unknown"
     try:
         await coroutine_fn()
     except asyncio.CancelledError:
         pass
-    except Exception:
-        logger.exception(
-            "worker_unexpected_error", task_name=task.get_name() if task else "unknown"
-        )
+    except Exception as e:
+        # Use logger.error instead of logger.exception to avoid rich traceback bug
+        logger.error("worker_unexpected_error", task_name=task_name, error=str(e))
 
 
 async def _run_consolidator_loop(interval_s: int, stop_event: asyncio.Event) -> None:
@@ -143,5 +143,5 @@ async def _run_consolidator_loop(interval_s: int, stop_event: asyncio.Event) -> 
         await consolidator.start()
     except asyncio.CancelledError:
         await consolidator.stop()
-    except Exception:
-        logger.exception("consolidator_unexpected_error")
+    except Exception as e:
+        logger.error("consolidator_unexpected_error", error=str(e))

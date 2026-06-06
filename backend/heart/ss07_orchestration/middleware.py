@@ -81,6 +81,6 @@ async def orchestrate_with_invariants(
                 )
         except Exception:
             # Invariant checking must never break the turn in production
-            logger.exception("orchestrator_invariant_check_failed", turn_id=trace_id)
+            logger.error("orchestrator_invariant_check_failed", turn_id=trace_id)
 
     return result

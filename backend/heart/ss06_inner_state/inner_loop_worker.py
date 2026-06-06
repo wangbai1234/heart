@@ -90,8 +90,8 @@ class InnerLoopWorker:
         while not self._should_stop:
             try:
                 await self._tick_all_active_users()
-            except Exception:
-                logger.exception("inner_loop_tick_failed")
+            except Exception as e:
+                logger.error("inner_loop_tick_failed", error=str(e))
 
             # Wait for next cycle
             try:
@@ -195,15 +195,16 @@ class InnerLoopWorker:
                         if ritual_msg is not None:
                             _proactive_messages.append(ritual_msg)
 
-                    except Exception:
-                        logger.exception(
+                    except Exception as e:
+                        logger.error(
                             "inner_loop_user_tick_failed",
                             user_id=str(user_id),
                             character_id=character_id,
+                            error=str(e),
                         )
 
-        except Exception:
-            logger.exception("inner_loop_fetch_users_failed")
+        except Exception as e:
+            logger.error("inner_loop_fetch_users_failed", error=str(e))
 
     async def _check_anniversary(
         self,

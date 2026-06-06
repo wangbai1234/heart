@@ -349,7 +349,7 @@ class LayerAggregator:
                 timeout_ms=timeout * 1000,
             )
         except Exception:
-            logger.exception("layer_fetch_failed", layer=layer_name)
+            logger.error("layer_fetch_failed", layer=layer_name)
 
         # Try cached fallback
         cached = self._cache_get(layer_name)

@@ -374,4 +374,4 @@ async def _write_safety_event(
             severity=severity,
         )
     except Exception:
-        logger.exception("safety_event_write_failed")
+        logger.error("safety_event_write_failed")

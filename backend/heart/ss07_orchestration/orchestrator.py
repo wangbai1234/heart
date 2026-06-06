@@ -362,8 +362,11 @@ class Orchestrator:
                 user_id=str(req.user_id),
                 character_id=req.character_id,
             )
-        except Exception:
-            logger.exception("emotion_update_failed")
+        except Exception as e:
+            logger.error(
+                "emotion_update_failed",
+                error=str(e),
+            )
 
     # ── Private: Relationship ────────────────────────────────────────
 
@@ -409,8 +412,11 @@ class Orchestrator:
                 user_id=str(req.user_id),
                 character_id=req.character_id,
             )
-        except Exception:
-            logger.exception("relationship_update_failed")
+        except Exception as e:
+            logger.error(
+                "relationship_update_failed",
+                error=str(e),
+            )
 
     # ── Private: Composer ───────────────────────────────────────────
 
@@ -495,8 +501,11 @@ class Orchestrator:
                     req.user_id, req.character_id, req.user_message, db_session
                 )
             )
-        except Exception:
-            logger.exception("cold_path_memory_launch_failed")
+        except Exception as e:
+            logger.error(
+                "cold_path_memory_launch_failed",
+                error=str(e),
+            )
 
         try:
             asyncio.create_task(
@@ -507,8 +516,11 @@ class Orchestrator:
                     days_since_last,
                 )
             )
-        except Exception:
-            logger.exception("cold_path_inner_launch_failed")
+        except Exception as e:
+            logger.error(
+                "cold_path_inner_launch_failed",
+                error=str(e),
+            )
 
     async def _cold_path_memory_encode(
         self,
@@ -574,8 +586,11 @@ class Orchestrator:
                     user_id=str(user_id),
                     character_id=character_id,
                 )
-        except Exception:
-            logger.exception("memory_encode_failed")
+        except Exception as e:
+            logger.error(
+                "memory_encode_failed",
+                error=str(e),
+            )
 
     def _cold_path_inner_tick(
         self,
@@ -593,8 +608,11 @@ class Orchestrator:
                 character_id=character_id,
                 days_since_last_interaction=days_since_last_interaction,
             )
-        except Exception:
-            logger.exception("inner_loop_tick_failed")
+        except Exception as e:
+            logger.error(
+                "inner_loop_tick_failed",
+                error=str(e),
+            )
 
     # ── Private: Helpers ─────────────────────────────────────────────
 

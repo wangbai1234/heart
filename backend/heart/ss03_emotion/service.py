@@ -285,8 +285,11 @@ class EmotionService:
                     ),
                     ex=3600,
                 )
-            except Exception:
-                logger.exception("emotion_redis_cache_failed")
+            except Exception as e:
+                logger.error(
+                    "emotion_redis_cache_failed",
+                    error=str(e),
+                )
 
         return new_state
 

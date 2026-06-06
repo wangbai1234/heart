@@ -570,9 +570,12 @@ class ComposerService:
                 False,
                 None,
             )
-        except Exception:
+        except Exception as e:
             COMPOSER_SUBSYSTEM_DEGRADED.labels(subsystem="memory", reason="exception").inc()
-            logger.exception("composer_memory_block_failed")
+            logger.error(
+                "composer_memory_block_failed",
+                error=str(e),
+            )
             return MemoryContextBlock(), True, "exception"
 
     async def _build_emotion_block(
@@ -606,9 +609,12 @@ class ComposerService:
                 False,
                 None,
             )
-        except Exception:
+        except Exception as e:
             COMPOSER_SUBSYSTEM_DEGRADED.labels(subsystem="emotion", reason="exception").inc()
-            logger.exception("composer_emotion_block_failed")
+            logger.error(
+                "composer_emotion_block_failed",
+                error=str(e),
+            )
             return EmotionContextBlock(), True, "exception"
 
     async def _build_relationship_block(
@@ -636,9 +642,12 @@ class ComposerService:
                 False,
                 None,
             )
-        except Exception:
+        except Exception as e:
             COMPOSER_SUBSYSTEM_DEGRADED.labels(subsystem="relationship", reason="exception").inc()
-            logger.exception("composer_relationship_block_failed")
+            logger.error(
+                "composer_relationship_block_failed",
+                error=str(e),
+            )
             return RelationshipContextBlock(), True, "exception"
 
     async def _build_inner_state_block(
@@ -665,9 +674,12 @@ class ComposerService:
                 False,
                 None,
             )
-        except Exception:
+        except Exception as e:
             COMPOSER_SUBSYSTEM_DEGRADED.labels(subsystem="inner_state", reason="exception").inc()
-            logger.exception("composer_inner_state_block_failed")
+            logger.error(
+                "composer_inner_state_block_failed",
+                error=str(e),
+            )
             return InnerStateContextBlock(), True, "exception"
 
     # ── Prompt Builder ────────────────────────────────────────

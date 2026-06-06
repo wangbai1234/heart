@@ -92,7 +92,7 @@ class SessionManager:
             session.turn_count += 1
             session.last_activity_at = datetime.now(timezone.utc)
         except Exception:
-            logger.exception("session_record_turn_failed", session_id=str(session.session_id))
+            logger.error("session_record_turn_failed", session_id=str(session.session_id))
 
     # ── Private ─────────────────────────────────────────────────────
 
@@ -119,7 +119,7 @@ class SessionManager:
             )
             row = result.fetchone()
         except Exception:
-            logger.exception("session_db_lookup_failed")
+            logger.error("session_db_lookup_failed")
             row = None
 
         if row is not None:
@@ -152,7 +152,7 @@ class SessionManager:
             )
             await db_session.commit()
         except Exception:
-            logger.exception("session_create_failed")
+            logger.error("session_create_failed")
             # Fallback: return an ephemeral in-memory session
             return Session(
                 session_id=session_id,
