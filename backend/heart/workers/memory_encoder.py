@@ -220,7 +220,7 @@ async def write_facts_to_l3(
             # Fact exists - reinforce it (阶段 3 logic, simplified here)
             existing_fact.confirmation_count += 1
             existing_fact.confidence = max(existing_fact.confidence, fact["confidence"])
-            existing_fact.last_confirmed_at = datetime.now(timezone.utc)
+            existing_fact.last_confirmed_at = datetime.now(timezone.utc).replace(tzinfo=None)
 
             # Add this turn to source_turn_ids
             if event.source_turn_id not in existing_fact.source_turn_ids:
@@ -253,8 +253,8 @@ async def write_facts_to_l3(
                 importance=extraction["importance_estimate"],
                 is_identity_level=fact.get("sacred_signal", False) or extraction["contains_sacred"],
                 state="active",
-                created_at=datetime.now(timezone.utc),
-                updated_at=datetime.now(timezone.utc),
+                created_at=datetime.now(timezone.utc).replace(tzinfo=None),
+                updated_at=datetime.now(timezone.utc).replace(tzinfo=None),
             )
 
             session.add(fact_node)
@@ -397,7 +397,7 @@ class MemoryEncoderWorker:
                 return
 
             # Mark as started
-            current_event.llm_started_at = datetime.now(timezone.utc)
+            current_event.llm_started_at = datetime.now(timezone.utc).replace(tzinfo=None)
             await session.commit()
 
             try:
@@ -410,7 +410,7 @@ class MemoryEncoderWorker:
                 # Update event as successful
                 current_event.status = "llm_done"
                 current_event.llm_extraction = extraction
-                current_event.llm_completed_at = datetime.now(timezone.utc)
+                current_event.llm_completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
 
                 await session.commit()
 
@@ -426,7 +426,7 @@ class MemoryEncoderWorker:
 
                 if current_event.retry_count >= MAX_RETRIES:
                     current_event.status = "failed"
-                    current_event.failed_at = datetime.now(timezone.utc)
+                    current_event.failed_at = datetime.now(timezone.utc).replace(tzinfo=None)
                     current_event.failure_reason = str(e)
 
                     logger.error(
