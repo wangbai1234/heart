@@ -153,7 +153,7 @@ async def get_recent_memories(
         # Get recent L2 episodes
         episodes_result = await db_session.execute(
             text(
-                "SELECT id, episode_summary, emotional_peak_valence, created_at "
+                "SELECT id, episode_summary, emotional_peak, created_at "
                 "FROM episodic_memories "
                 "WHERE user_id = :user_id AND character_id = :character_id "
                 "ORDER BY created_at DESC LIMIT :limit"
@@ -164,7 +164,9 @@ async def get_recent_memories(
             {
                 "id": str(row[0]),
                 "summary": row[1],
-                "emotional_peak": float(row[2] or 0.0),
+                "emotional_peak": row[2]
+                if isinstance(row[2], dict)
+                else {"valence": float(row[2] or 0.0)},
                 "created_at": row[3].isoformat() if row[3] else None,
             }
             for row in episodes_result.fetchall()
