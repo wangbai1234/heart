@@ -31,7 +31,7 @@ from ..ss04_relationship.models import RelationshipState
 
 
 class RelationshipStage(str, Enum):
-    """7 core relationship stages (§3.1)."""
+    """7 core relationship stages (§3.1) + special states."""
 
     STRANGER = "STRANGER"
     ACQUAINTANCE = "ACQUAINTANCE"
@@ -40,6 +40,7 @@ class RelationshipStage(str, Enum):
     ROMANTIC_INTEREST = "ROMANTIC_INTEREST"
     LOVER = "LOVER"
     BONDED = "BONDED"
+    COLD_WAR = "cold_war"
 
 
 STAGE_ORDER = {
@@ -50,6 +51,7 @@ STAGE_ORDER = {
     RelationshipStage.ROMANTIC_INTEREST: 4,
     RelationshipStage.LOVER: 5,
     RelationshipStage.BONDED: 6,
+    RelationshipStage.COLD_WAR: -1,  # Special state, not in progression
 }
 
 

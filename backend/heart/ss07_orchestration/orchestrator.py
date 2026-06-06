@@ -529,7 +529,7 @@ class Orchestrator:
         user_message: str,
         db_session: Any = None,
     ) -> None:
-        """Encode the user's message into memory (L1 fast path + L3 queue).
+        """Encode the user's message into memory (L1 fast path + L2 episode + L3 queue).
 
         Creates its own database session to avoid using the closed request-scoped session.
         """
@@ -590,7 +590,38 @@ class Orchestrator:
                     },
                     status="llm_pending",
                 )
-                await svc.queue_llm_encoding(event)
+                cold_db_session.add(event)
+
+                # Create L2 episode directly from user message (bypass consolidation)
+                from heart.ss02_memory.models import EpisodicMemory
+
+                now = datetime.now(timezone.utc).replace(tzinfo=None)
+                episode = EpisodicMemory(
+                    id=uuid4(),
+                    user_id=user_id,
+                    character_id=character_id,
+                    episode_summary=user_message[:200],
+                    episode_raw_turn_ids=[],
+                    episode_start_at=now,
+                    episode_end_at=now,
+                    emotional_peak={
+                        "valence": signals.sentiment,
+                        "arousal": 0.5,
+                        "label": "user_message",
+                    },
+                    emotional_end={"valence": signals.sentiment, "arousal": 0.5},
+                    emotional_significance=max(0.3, abs(signals.sentiment)),
+                    importance_score=max(0.3, abs(signals.sentiment)),
+                    initial_importance=max(0.3, abs(signals.sentiment)),
+                    decay_immunity=max(0.3, abs(signals.sentiment)),
+                    state="vivid",
+                    recall_count=0,
+                    created_at=now,
+                    updated_at=now,
+                )
+                cold_db_session.add(episode)
+
+                await cold_db_session.commit()
                 logger.debug(
                     "memory_encoding_queued",
                     user_id=str(user_id),

@@ -28,6 +28,7 @@ POSITIVE_TRUST_WEIGHTS = {
     "memory_recall_confirmed": 0.02,
     "repair_completed": 0.05,
     "user_remembers_detail": 0.02,
+    "user_message": 0.02,
 }
 
 NEGATIVE_TRUST_WEIGHTS = {
