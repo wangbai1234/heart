@@ -531,8 +531,7 @@ class Orchestrator:
     ) -> None:
         """Encode the user's message into memory (L1 fast path + L3 queue).
 
-        Uses request-scoped db_session if available for persistence.
-        Falls back to in-memory-only if no db_session.
+        Creates its own database session to avoid using the closed request-scoped session.
         """
         try:
             from heart.ss02_memory.service import (
@@ -552,7 +551,18 @@ class Orchestrator:
                 timestamp=datetime.now(timezone.utc),
             )
 
-            # Use provided db_session for persistence, and Redis for L1 cache
+            # Create a new database session for the cold path
+            # (the request-scoped session may be closed by the time this runs)
+            cold_db_session = None
+            try:
+                from heart.api.wiring import _get_session_factory
+
+                factory = _get_session_factory()
+                cold_db_session = factory()
+            except Exception:
+                pass
+
+            # Get Redis client for L1 cache
             redis_client = None
             try:
                 import redis.asyncio as aioredis
@@ -563,11 +573,11 @@ class Orchestrator:
             except Exception:
                 pass
 
-            svc = MemoryService(db_session=db_session, redis_client=redis_client)
+            svc = MemoryService(db_session=cold_db_session, redis_client=redis_client)
             signals = await svc.encode_fast(mem_turn)
 
             # Queue LLM encoding for L3 fact extraction
-            if db_session is not None:
+            if cold_db_session is not None:
                 event = MemoryEncodingEvent(
                     event_id=uuid4(),
                     user_id=user_id,
@@ -586,6 +596,16 @@ class Orchestrator:
                     user_id=str(user_id),
                     character_id=character_id,
                 )
+
+            # Close the cold path session
+            if cold_db_session is not None:
+                await cold_db_session.close()
+
+            logger.debug(
+                "cold_path_memory_encoded",
+                user_id=str(user_id),
+                character_id=character_id,
+            )
         except Exception as e:
             logger.error(
                 "memory_encode_failed",

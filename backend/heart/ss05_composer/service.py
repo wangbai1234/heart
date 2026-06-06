@@ -768,6 +768,17 @@ class ComposerService:
         ):
             parts.append(f"与用户的关系阶段：{relationship.relationship_phase}")
 
+            # Cold war special behavior
+            if relationship.relationship_phase == "cold_war":
+                parts.append(
+                    "\n【冷战模式】你正在和用户冷战。表现规则：\n"
+                    "- 语气冷淡、简短，不要主动示好\n"
+                    "- 回复要克制，不要表现出热情\n"
+                    "- 可以用省略号、简短的词回应\n"
+                    "- 不要主动提起冷战原因，但内心其实很在意\n"
+                    "- 如果用户主动示好，可以稍微软化，但不要立刻原谅"
+                )
+
         # Layer 6: Memory Context
         if memory.retrieved_memories:
             mem_lines = []
