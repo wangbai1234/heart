@@ -169,6 +169,7 @@ class SignalAggregator:
                 "compliment_received",
                 "daily_check_in_completed",
                 "first_iloveyou",
+                "user_message",
             }:
                 positive.append(sig)
             else:
