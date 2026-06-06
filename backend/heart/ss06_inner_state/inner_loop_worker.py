@@ -120,19 +120,21 @@ class InnerLoopWorker:
                 )
                 rows = result.fetchall()
 
-                logger.info("inner_loop_ticking", user_count=len(rows))
+            logger.info("inner_loop_ticking", user_count=len(rows))
 
-                for row in rows:
-                    user_id = row[0]
-                    character_id = row[1]
+            # Process each user with a fresh session to avoid transaction errors
+            for row in rows:
+                user_id = row[0]
+                character_id = row[1]
 
-                    try:
+                try:
+                    async with self.db_session_factory() as user_session:
                         # Get relationship info for better tick context
                         relationship_stage = "STRANGER"
                         intimacy = 0.0
 
                         # Get relationship state if available
-                        rel_result = await session.execute(
+                        rel_result = await user_session.execute(
                             text(
                                 "SELECT current_stage, intimacy_level "
                                 "FROM relationship_states "
@@ -146,7 +148,7 @@ class InnerLoopWorker:
                             intimacy = float(rel_row[1] or 0.0)
 
                         # Calculate days since last interaction
-                        session_result = await session.execute(
+                        session_result = await user_session.execute(
                             text(
                                 "SELECT last_activity_at "
                                 "FROM sessions "
@@ -165,43 +167,54 @@ class InnerLoopWorker:
 
                         # Check for anniversary
                         is_anniversary = await self._check_anniversary(
-                            user_id, character_id, session
+                            user_id, character_id, user_session
                         )
 
-                        # Tick
-                        msg = self.inner_state_service.tick(
-                            user_id=user_id,
-                            character_id=character_id,
-                            relationship_stage=relationship_stage,
-                            intimacy=intimacy,
-                            days_since_last_interaction=days_since_last,
-                            is_anniversary=is_anniversary,
-                        )
+                except Exception as e:
+                    logger.error(
+                        "inner_loop_user_query_failed",
+                        user_id=str(user_id),
+                        character_id=character_id,
+                        error=str(e),
+                    )
+                    continue
 
-                        if msg is not None:
-                            _proactive_messages.append(msg)
-                            logger.info(
-                                "proactive_message_generated",
-                                user_id=str(user_id),
-                                character_id=character_id,
-                                trigger_type=msg.trigger_type,
-                                content_preview=msg.content[:40],
-                            )
+                # Tick (outside session to avoid holding connection)
+                try:
+                    msg = self.inner_state_service.tick(
+                        user_id=user_id,
+                        character_id=character_id,
+                        relationship_stage=relationship_stage,
+                        intimacy=intimacy,
+                        days_since_last_interaction=days_since_last,
+                        is_anniversary=is_anniversary,
+                    )
 
-                        # Check for ritual triggers (morning/night)
-                        ritual_msg = await self._check_ritual_triggers(
-                            user_id, character_id, session
-                        )
-                        if ritual_msg is not None:
-                            _proactive_messages.append(ritual_msg)
-
-                    except Exception as e:
-                        logger.error(
-                            "inner_loop_user_tick_failed",
+                    if msg is not None:
+                        _proactive_messages.append(msg)
+                        logger.info(
+                            "proactive_message_generated",
                             user_id=str(user_id),
                             character_id=character_id,
-                            error=str(e),
+                            trigger_type=msg.trigger_type,
+                            content_preview=msg.content[:40],
                         )
+
+                    # Check for ritual triggers (morning/night)
+                    async with self.db_session_factory() as ritual_session:
+                        ritual_msg = await self._check_ritual_triggers(
+                            user_id, character_id, ritual_session
+                        )
+                    if ritual_msg is not None:
+                        _proactive_messages.append(ritual_msg)
+
+                except Exception as e:
+                    logger.error(
+                        "inner_loop_user_tick_failed",
+                        user_id=str(user_id),
+                        character_id=character_id,
+                        error=str(e),
+                    )
 
         except Exception as e:
             logger.error("inner_loop_fetch_users_failed", error=str(e))
