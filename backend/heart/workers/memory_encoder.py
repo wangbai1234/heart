@@ -328,14 +328,12 @@ class MemoryEncoderWorker:
                             "event_processing_failed",
                             event_id=str(event.event_id),
                             error=str(e),
-                            exc_info=True,
                         )
 
             except Exception as e:
                 logger.error(
                     "worker_loop_error",
                     error=str(e),
-                    exc_info=True,
                 )
                 await asyncio.sleep(POLL_INTERVAL_SECONDS)
 
