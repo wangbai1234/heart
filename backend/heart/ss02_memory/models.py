@@ -382,17 +382,17 @@ class MemoryEncodingEvent(Base):
 
     # Lifecycle
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
+        DateTime(timezone=False),
         nullable=False,
-        default=lambda: datetime.now(timezone.utc),
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None),
     )
     llm_started_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
+        DateTime(timezone=False), nullable=True
     )
     llm_completed_at: Mapped[Optional[datetime]] = mapped_column(
-        DateTime(timezone=True), nullable=True
+        DateTime(timezone=False), nullable=True
     )
-    failed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    failed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=False), nullable=True)
     failure_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     __table_args__ = (

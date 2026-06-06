@@ -16,6 +16,9 @@ emotion_vad_map:
   coldness: {v: -0.3, a: 0.1, d: 0.6}
   attachment: {v: 0.5, a: 0.3, d: 0.5}
   weariness: {v: -0.4, a: 0.1, d: 0.2}
+  relief: {v: 0.3, a: -0.2, d: 0.3}
+  tenderness: {v: 0.4, a: 0.2, d: 0.3}
+  worry: {v: -0.4, a: 0.5, d: 0.2}
 
 decay_profiles:
   default:
@@ -62,6 +65,18 @@ decay_profiles:
     floor: 0.3
   weariness:
     decay_type: cyclic
+  relief:
+    decay_type: exponential
+    half_life_hours: 2.0
+    floor: 0.05
+  tenderness:
+    decay_type: exponential
+    half_life_hours: 4.0
+    floor: 0.05
+  worry:
+    decay_type: exponential
+    half_life_hours: 3.0
+    floor: 0.05
 
 apology_keywords:
   - 对不起
