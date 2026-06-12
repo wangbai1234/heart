@@ -19,7 +19,7 @@ from __future__ import annotations
 import asyncio
 import os
 from datetime import datetime, timezone
-from typing import Any, Callable
+from typing import Any, AsyncGenerator, Callable, Optional
 from uuid import UUID, uuid4
 
 import structlog
@@ -29,6 +29,7 @@ from heart.ss05_composer.service import CompositionContext
 from heart.ss07_orchestration.circuit_breaker import BreakerRegistry
 from heart.ss07_orchestration.models import TurnRequest, TurnResponse
 from heart.ss07_orchestration.session_manager import SessionManager
+from heart.ss08_voice.sentence_splitter import SentenceSplitter
 
 logger = structlog.get_logger(__name__)
 
@@ -163,6 +164,177 @@ class Orchestrator:
             path="normal",
             safety_severity=severity,
         )
+
+    async def _get_vad_and_intimacy(
+        self, req: TurnRequest, db_session: Any
+    ) -> tuple[dict[str, float] | None, float]:
+        """Get VAD and intimacy for sentence events."""
+        vad = None
+        intimacy = 0.0
+
+        if self._emotion_service:
+            try:
+                ctx_block = await self._emotion_service.get_context_block(
+                    req.user_id, req.character_id
+                )
+                vad = ctx_block.get("vad")
+            except Exception:
+                pass
+
+        if self._relationship_service_builder:
+            try:
+                rel_svc = await self._relationship_service_builder(db_session=db_session)
+                if rel_svc:
+                    rel_state = await rel_svc.get_current_state(req.user_id, req.character_id)
+                    intimacy = rel_state.get("intimacy_level", 0.0) if rel_state else 0.0
+            except Exception:
+                pass
+
+        return vad, intimacy
+
+    async def process_turn_stream(
+        self,
+        req: TurnRequest,
+        db_session: Any,
+        cancel_token: Optional[asyncio.Event] = None,
+    ) -> AsyncGenerator[dict, None]:
+        """Streaming variant of handle_turn.
+
+        Yields dicts with:
+            - {"type": "text_delta", "delta": str}
+            - {"type": "sentence", "text": str, "vad": dict, "intimacy": float}
+            - {"type": "turn_end", "full_text": str}
+        """
+        # Session management
+        session = await self._session_manager.get_or_create_session(
+            db_session, req.user_id, req.character_id
+        )
+
+        # Safety pre-filter (same as handle_turn)
+        classification = await self._safety_pre(req, db_session)
+        if classification is not None:
+            severity = (
+                classification.severity.value
+                if hasattr(classification.severity, "value")
+                else str(classification.severity)
+            )
+            if severity == "PURPLE":
+                care_resp = await self._care_path(req, classification, db_session)
+                yield {"type": "text_delta", "delta": care_resp.response}
+                yield {"type": "turn_end", "full_text": care_resp.response}
+                return
+            elif severity == "RED":
+                reject_resp = await self._reject_path(req, classification, db_session)
+                yield {"type": "text_delta", "delta": reject_resp.response}
+                yield {"type": "turn_end", "full_text": reject_resp.response}
+                return
+
+        # Emotion + Relationship updates
+        await self._update_emotion(req, session.session_id)
+        await self._update_relationship(req, db_session, session.session_id)
+
+        # Get VAD and intimacy for sentence events
+        vad, intimacy = await self._get_vad_and_intimacy(req, db_session)
+
+        # Build composer
+        composer = None
+        try:
+            composer = await self._composer_builder(db_session=db_session)
+        except Exception as exc:
+            logger.error("composer_build_failed_stream", error=str(exc))
+            fallback = self._fallback_message(req.character_id)
+            yield {"type": "text_delta", "delta": fallback}
+            yield {"type": "turn_end", "full_text": fallback}
+            return
+
+        if composer is None:
+            fallback = self._fallback_message(req.character_id)
+            yield {"type": "text_delta", "delta": fallback}
+            yield {"type": "turn_end", "full_text": fallback}
+            return
+
+        # Stream compose
+        full_text = ""
+        async for event in self._stream_compose(
+            req, composer, session.session_id, vad, intimacy, cancel_token
+        ):
+            if event["type"] == "text_delta":
+                full_text += event["delta"]
+            yield event
+
+        # Fire cold path
+        days_since_last = 0.0
+        if session.last_activity_at:
+            from datetime import datetime, timezone
+
+            last = session.last_activity_at
+            if hasattr(last, "replace"):
+                last = last.replace(tzinfo=timezone.utc)
+            delta = datetime.now(timezone.utc) - last
+            days_since_last = delta.total_seconds() / 86400
+        self._fire_cold_path(req, TurnProfiler(), full_text, db_session, days_since_last)
+
+        # Record turn
+        await self._session_manager.record_turn(db_session, session)
+
+        yield {"type": "turn_end", "full_text": full_text}
+
+    async def _stream_compose(
+        self,
+        req: TurnRequest,
+        composer: Any,
+        session_id: UUID,
+        vad: dict[str, float] | None,
+        intimacy: float,
+        cancel_token: Optional[asyncio.Event] = None,
+    ) -> AsyncGenerator[dict, None]:
+        """Stream compose and yield events."""
+        from heart.ss05_composer.service import CompositionContext
+
+        ctx = CompositionContext(
+            user_id=req.user_id,
+            character_id=req.character_id,
+            turn_id=req.trace_id,
+            session_id=session_id,
+            max_tokens=2000,
+        )
+
+        splitter = SentenceSplitter()
+
+        try:
+            async for chunk in composer.compose_stream(
+                ctx=ctx,
+                user_message=req.user_message,
+                conversation_history=req.history,
+                temperature=0.7,
+            ):
+                # Check cancel token
+                if cancel_token and cancel_token.is_set():
+                    logger.info("turn_stream_cancelled", turn_id=str(req.trace_id))
+                    break
+
+                yield {"type": "text_delta", "delta": chunk}
+
+                # Split sentences
+                for sentence in splitter.feed(chunk):
+                    yield {
+                        "type": "sentence",
+                        "text": sentence,
+                        "vad": vad,
+                        "intimacy": intimacy,
+                    }
+        except Exception as exc:
+            logger.error("compose_stream_failed", error=str(exc))
+
+        # Flush remaining
+        tail = splitter.flush()
+        if tail:
+            yield {
+                "type": "sentence",
+                "text": tail,
+                "vad": vad,
+                "intimacy": intimacy,
+            }
 
     # ── Private: Safety ─────────────────────────────────────────────
 
