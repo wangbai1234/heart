@@ -1,4 +1,4 @@
-"""WebSocket chat route — per runtime_specs/08_voice.md VP3+VP4."""
+"""WebSocket chat route — per runtime_specs/08_voice.md VP3+VP4+VP5."""
 
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ def _parse_user_id(user_id: Optional[str]) -> uuid.UUID:
         return uuid.UUID("00000000-0000-0000-0000-000000000001")
 
 
-def _create_stream_session(voice_service: Any, ws: WebSocket) -> Any:
+def _create_stream_session(voice_service: Any, ws: WebSocket, cache: Any = None) -> Any:
     """Create a StreamSession if voice service is available."""
     if not voice_service:
         return None
@@ -45,8 +45,60 @@ def _create_stream_session(voice_service: Any, ws: WebSocket) -> Any:
             }
         )
 
-    session = StreamSession(voice_service, send_audio)
+    session = StreamSession(voice_service, send_audio, cache=cache)
     return session
+
+
+async def _send_text_delta(ws: WebSocket, turn_id: str, delta: str) -> None:
+    """Send text delta event."""
+    await ws.send_json({"type": "text_delta", "turn_id": turn_id, "delta": delta})
+
+
+async def _send_sentence(ws: WebSocket, turn_id: str, event: dict) -> None:
+    """Send sentence event."""
+    await ws.send_json(
+        {
+            "type": "sentence",
+            "turn_id": turn_id,
+            "text": event["text"],
+            "vad": event.get("vad"),
+            "intimacy": event.get("intimacy", 0.0),
+        }
+    )
+
+
+async def _send_turn_end(ws: WebSocket, turn_id: str) -> None:
+    """Send turn end event."""
+    await ws.send_json({"type": "turn_end", "turn_id": turn_id})
+
+
+async def _handle_event(
+    ws: WebSocket,
+    event: dict,
+    stream_session: Any,
+    turn_id: str,
+    character_id: str,
+) -> bool:
+    """Handle a single stream event. Returns True if turn ended."""
+    event_type = event.get("type")
+    if event_type == "text_delta":
+        await _send_text_delta(ws, turn_id, event["delta"])
+    elif event_type == "sentence":
+        await _send_sentence(ws, turn_id, event)
+        if stream_session:
+            await stream_session.submit(
+                turn_id=turn_id,
+                sentence=event["text"],
+                vad=event.get("vad"),
+                intimacy=event.get("intimacy", 0.0),
+                character_id=character_id,
+            )
+    elif event_type == "turn_end":
+        if stream_session:
+            await stream_session.finish()
+        await _send_turn_end(ws, turn_id)
+        return True
+    return False
 
 
 async def _process_stream_events(
@@ -56,57 +108,30 @@ async def _process_stream_events(
     stream_session: Any,
     turn_id: str,
     character_id: str,
+    active_turns: dict[str, Any],
 ) -> None:
     """Process stream events from orchestrator."""
+    if stream_session:
+        active_turns[turn_id] = stream_session
+
     try:
         async for event in orch.process_turn_stream(req, db_session=None):
-            event_type = event.get("type")
-            if event_type == "text_delta":
-                await ws.send_json(
-                    {
-                        "type": "text_delta",
-                        "turn_id": turn_id,
-                        "delta": event["delta"],
-                    }
-                )
-            elif event_type == "sentence":
-                await ws.send_json(
-                    {
-                        "type": "sentence",
-                        "turn_id": turn_id,
-                        "text": event["text"],
-                        "vad": event.get("vad"),
-                        "intimacy": event.get("intimacy", 0.0),
-                    }
-                )
-                # Submit to TTS stream session
-                if stream_session:
-                    await stream_session.submit(
-                        turn_id=turn_id,
-                        sentence=event["text"],
-                        vad=event.get("vad"),
-                        intimacy=event.get("intimacy", 0.0),
-                        character_id=character_id,
-                    )
-            elif event_type == "turn_end":
-                # Finish stream session before sending turn_end
-                if stream_session:
-                    await stream_session.finish()
-                    stream_session = None
-                await ws.send_json(
-                    {
-                        "type": "turn_end",
-                        "turn_id": turn_id,
-                    }
-                )
+            if stream_session and stream_session.is_cancelled:
+                break
+            if await _handle_event(ws, event, stream_session, turn_id, character_id):
+                break
     except Exception as e:
         logger.error("chat_ws_stream_error", error=str(e))
         if stream_session:
             stream_session.cancel()
         await ws.send_json({"type": "error", "msg": str(e)})
+    finally:
+        active_turns.pop(turn_id, None)
 
 
-async def _handle_chat_message(ws: WebSocket, msg: dict[str, Any]) -> None:
+async def _handle_chat_message(
+    ws: WebSocket, msg: dict[str, Any], active_turns: dict[str, Any], cache: Any = None
+) -> None:
     """Handle a single chat message."""
     turn_id = msg.get("turn_id") or str(uuid.uuid4())
     user_text = msg.get("text", "")
@@ -117,38 +142,29 @@ async def _handle_chat_message(ws: WebSocket, msg: dict[str, Any]) -> None:
         await ws.send_json({"type": "error", "msg": "Missing text"})
         return
 
-    # Parse user_id
     user_uuid = _parse_user_id(user_id)
-
-    # Get orchestrator
     orch = get_orchestrator()
     if orch is None:
         await ws.send_json({"type": "error", "msg": "Orchestrator not available"})
         return
 
-    # Get voice service for TTS
     voice_service = get_voice_service()
-
-    # Create stream session if voice service available
-    stream_session = _create_stream_session(voice_service, ws)
+    stream_session = _create_stream_session(voice_service, ws, cache=cache)
     if stream_session:
         await stream_session.start()
 
-    # Build turn request
     from heart.ss07_orchestration.models import TurnRequest
 
     req = TurnRequest(
         user_id=user_uuid,
         character_id=character_id,
         user_message=user_text,
-        history=[],  # WebSocket doesn't have history context
+        history=[],
         trace_id=uuid.UUID(turn_id),
     )
 
     await ws.send_json({"type": "turn_start", "turn_id": turn_id})
-
-    # Process stream events
-    await _process_stream_events(ws, orch, req, stream_session, turn_id, character_id)
+    await _process_stream_events(ws, orch, req, stream_session, turn_id, character_id, active_turns)
 
 
 async def _handle_interrupt(ws: WebSocket, msg: dict[str, Any], active_turns: dict) -> None:
@@ -176,6 +192,24 @@ async def _handle_resume(msg: dict[str, Any], active_turns: dict) -> None:
         session.resume()
 
 
+async def _handle_message(
+    ws: WebSocket,
+    msg: dict[str, Any],
+    active_turns: dict[str, Any],
+    cache: Any,
+) -> None:
+    """Handle a single WebSocket message."""
+    msg_type = msg.get("type")
+    if msg_type == "chat":
+        await _handle_chat_message(ws, msg, active_turns, cache)
+    elif msg_type == "interrupt":
+        await _handle_interrupt(ws, msg, active_turns)
+    elif msg_type == "backpressure":
+        await _handle_backpressure(msg, active_turns)
+    elif msg_type == "resume":
+        await _handle_resume(msg, active_turns)
+
+
 @router.websocket("/api/chat/ws")
 async def chat_ws(ws: WebSocket):
     """WebSocket chat endpoint.
@@ -196,9 +230,11 @@ async def chat_ws(ws: WebSocket):
             {"type": "interrupted", "turn_id": "..."}
     """
     await ws.accept()
-
-    # Track active turns for interrupt support
     active_turns: dict[str, Any] = {}
+
+    from heart.ss08_voice.voice_cache import VoiceCache
+
+    cache = VoiceCache()
 
     try:
         while True:
@@ -208,22 +244,16 @@ async def chat_ws(ws: WebSocket):
             except json.JSONDecodeError:
                 await ws.send_json({"type": "error", "msg": "Invalid JSON"})
                 continue
-
-            msg_type = msg.get("type")
-
-            if msg_type == "chat":
-                await _handle_chat_message(ws, msg)
-            elif msg_type == "interrupt":
-                await _handle_interrupt(ws, msg, active_turns)
-            elif msg_type == "backpressure":
-                await _handle_backpressure(msg, active_turns)
-            elif msg_type == "resume":
-                await _handle_resume(msg, active_turns)
+            await _handle_message(ws, msg, active_turns, cache)
 
     except WebSocketDisconnect:
         logger.info("chat_ws_disconnect")
+        for session in active_turns.values():
+            session.cancel()
     except Exception as e:
         logger.error("chat_ws_error", error=str(e))
+        for session in active_turns.values():
+            session.cancel()
         try:
             await ws.send_json({"type": "error", "msg": str(e)})
         except Exception:
