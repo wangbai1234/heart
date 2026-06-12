@@ -154,7 +154,7 @@ class TrustTracker:
         Returns:
             New trust score in [0, 1]
         """
-        trust = state.trust_score
+        trust = state.trust_score or 0.0
         delta = 0.0
 
         # 1. Apply positive signals

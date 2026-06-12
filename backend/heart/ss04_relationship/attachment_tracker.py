@@ -111,7 +111,7 @@ class AttachmentTracker:
         Returns:
             New attachment strength in [0, 1]
         """
-        attachment = state.attachment_strength
+        attachment = state.attachment_strength or 0.0
 
         # 1. Time-based accumulation (very slow, §3.9)
         if days_continuous_interaction > 0:

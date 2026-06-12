@@ -182,10 +182,34 @@ class RelationshipService:
                 "conflict_recovery_curve": "logistic",
                 "intimacy_ceiling_modifier": 1.0,
             },
+            # SQLAlchemy mapped_column(default=...) applies at INSERT time, not at
+            # Python object construction — initialize all numeric fields explicitly so
+            # process_turn() can operate on them before the first flush.
+            trust_score=0.0,
+            attachment_strength=0.0,
+            intimacy_level=0.0,
+            conflict_debt=0.0,
+            vulnerability_score=0.0,
+            total_interactions=0,
+            total_meaningful_disclosures=0,
+            total_promises_made=0,
+            total_promises_kept=0,
+            total_conflicts=0,
+            total_repairs=0,
+            total_successful_repairs=0,
+            longest_absence_days=0,
+            longest_continuous_streak_days=0,
+            active_special_states=[],
+            stage_metadata={},
+            rituals={},
+            recent_progression_events=[],
+            recent_regression_events=[],
+            recent_conflicts=[],
+            recent_repairs=[],
+            version=1,
         )
 
         self.db.add(state)
-        await self.db.flush()
 
         logger.info(f"Created new relationship state for user={user_id}, character={character_id}")
         return state
@@ -469,7 +493,7 @@ class RelationshipService:
         }
 
         # Disclosure factor
-        disclosure = min(1.0, state.total_meaningful_disclosures / 20.0)
+        disclosure = min(1.0, (state.total_meaningful_disclosures or 0) / 20.0)
 
         # Ritual strength (simplified)
         ritual_data = (state.rituals or {}).get("daily_check_in", {})
@@ -477,7 +501,7 @@ class RelationshipService:
         ritual_strength = min(1.0, streak / 30.0)
 
         # Engagement (simplified - based on interaction count)
-        engagement = min(1.0, state.total_interactions / 100.0)
+        engagement = min(1.0, (state.total_interactions or 0) / 100.0)
 
         # Compute weighted sum
         intimacy = (
@@ -489,7 +513,7 @@ class RelationshipService:
         )
 
         # Apply single-turn change limit (§3.9)
-        delta = intimacy - state.intimacy_level
+        delta = intimacy - (state.intimacy_level or 0.0)
         if abs(delta) > 0.10:
             delta = 0.10 if delta > 0 else -0.10
             intimacy = state.intimacy_level + delta
