@@ -91,6 +91,11 @@ class Settings(BaseSettings):
     stripe_api_key: str = ""
     stripe_webhook_secret: str = ""
 
+    # MiniMax TTS
+    minimax_api_key: str | None = None
+    minimax_group_id: str | None = None
+    minimax_base_url: str = "https://api.minimax.io/v1"
+
     @model_validator(mode="after")
     def validate_jwt_secret(self) -> "Settings":
         """Fail-fast if JWT secret is weak (all environments)."""
