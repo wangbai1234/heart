@@ -15,9 +15,11 @@ from sqlalchemy import text
 from starlette.responses import Response
 
 from .routes import router
+from .routes_chat_ws import router as chat_ws_router
 from .routes_proactive import router as proactive_router
 from .routes_state import dev_router, memory_router
 from .routes_state import router as state_router
+from .routes_voice import router as voice_router
 
 logger = structlog.get_logger()
 
@@ -179,6 +181,8 @@ def create_app() -> FastAPI:
     app.include_router(state_router)
     app.include_router(memory_router)
     app.include_router(dev_router)
+    app.include_router(voice_router)
+    app.include_router(chat_ws_router)
 
     # Startup / Shutdown events
     app.on_event("startup")(_startup)

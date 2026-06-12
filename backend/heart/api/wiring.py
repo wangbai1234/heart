@@ -54,6 +54,10 @@ async def get_db() -> AsyncSession:
     async with factory() as session:
         try:
             yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
         finally:
             await session.close()
 
@@ -192,6 +196,29 @@ def get_safety_agent():
         return agent
     except Exception as e:
         logger.warning("wiring_safety_agent_init_failed", error=str(e))
+        return None
+
+
+@lru_cache
+def get_voice_service():
+    """Process singleton: VoiceService (TTS provider). Returns None if no API key."""
+    if not settings.minimax_api_key:
+        logger.warning("wiring_no_minimax_api_key", hint="Set MINIMAX_API_KEY in .env")
+        return None
+    try:
+        from heart.ss08_voice.minimax_provider import MiniMaxProvider
+        from heart.ss08_voice.service import VoiceService
+
+        provider = MiniMaxProvider(
+            api_key=settings.minimax_api_key,
+            group_id=settings.minimax_group_id or "",
+            base_url=settings.minimax_base_url,
+        )
+        svc = VoiceService(provider)
+        logger.info("wiring_voice_service_initialized")
+        return svc
+    except Exception as e:
+        logger.warning("wiring_voice_service_init_failed", error=str(e))
         return None
 
 
