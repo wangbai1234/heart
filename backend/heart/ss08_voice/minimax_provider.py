@@ -1,7 +1,7 @@
 """MiniMax TTS Provider — per runtime_specs/08_voice.md"""
 
 import uuid
-from typing import AsyncGenerator
+from typing import Any, AsyncGenerator
 
 import httpx
 import structlog
@@ -12,6 +12,50 @@ from heart.ss08_voice.types import AudioChunk, TTSRequest, TTSResult
 logger = structlog.get_logger(__name__)
 
 _VALID_EMOTIONS = {"happy", "sad", "angry", "fearful", "disgusted", "surprised", "neutral"}
+
+
+class CancellableStream:
+    """Wraps an httpx async stream with a cancel() method."""
+
+    def __init__(self, response_cm: Any, fmt: str = "mp3") -> None:
+        self._response_cm = response_cm
+        self._response: Any = None
+        self._cancelled = False
+        self._fmt = fmt
+
+    async def cancel(self) -> None:
+        self._cancelled = True
+        if self._response is not None:
+            try:
+                await self._response.aclose()
+            except Exception:
+                pass
+
+    async def __aiter__(self) -> AsyncGenerator[AudioChunk, None]:  # type: ignore[override]
+        async with self._response_cm as response:
+            self._response = response
+            response.raise_for_status()
+            seq = 0
+            async for line in response.aiter_lines():
+                if self._cancelled:
+                    return
+                if not line.startswith("data:"):
+                    continue
+                data_str = line[5:].strip()
+                if data_str == "[DONE]":
+                    break
+                try:
+                    import json
+
+                    data = json.loads(data_str)
+                    if "data" in data and "audio" in data["data"]:
+                        audio_hex = data["data"]["audio"]
+                        audio_bytes = bytes.fromhex(audio_hex)
+                        yield AudioChunk(seq=seq, data=audio_bytes, format=self._fmt, is_last=False)
+                        seq += 1
+                except Exception:
+                    continue
+            yield AudioChunk(seq=seq, data=b"", format=self._fmt, is_last=True)
 
 
 class MiniMaxProvider:
@@ -85,63 +129,23 @@ class MiniMaxProvider:
             request_id=str(uuid.uuid4()),
         )
 
-    def stream_synthesize(self, req: TTSRequest) -> AsyncGenerator[AudioChunk, None]:
-        """Synthesize speech from text (streaming)."""
-        return self._stream_impl(req)
-
-    async def _stream_impl(self, req: TTSRequest) -> AsyncGenerator[AudioChunk, None]:
+    def stream_synthesize(self, req: TTSRequest) -> CancellableStream:
+        """Synthesize speech from text (streaming). Returns a CancellableStream."""
         body = self._build_body(req, stream=True)
-
-        seq = 0
-        try:
-            async with self._client.stream(
-                "POST",
-                f"{self._base_url}/t2a_v2",
-                json=body,
-                headers={
-                    "Authorization": f"Bearer {self._api_key}",
-                    "Content-Type": "application/json",
-                },
-                timeout=30.0,
-            ) as response:
-                response.raise_for_status()
-
-                async for line in response.aiter_lines():
-                    if not line.startswith("data:"):
-                        continue
-
-                    data_str = line[5:].strip()
-                    if data_str == "[DONE]":
-                        break
-
-                    try:
-                        import json
-
-                        data = json.loads(data_str)
-
-                        if "data" in data and "audio" in data["data"]:
-                            audio_hex = data["data"]["audio"]
-                            audio_bytes = bytes.fromhex(audio_hex)
-                            yield AudioChunk(
-                                seq=seq, data=audio_bytes, format=req.format, is_last=False
-                            )
-                            seq += 1
-                    except Exception as e:
-                        logger.warning("stream_parse_error", error=str(e))
-                        continue
-
-        except httpx.HTTPStatusError as e:
-            raise TTSProviderError(
-                f"MiniMax stream error: {e.response.status_code}",
-                status_code=e.response.status_code,
-            ) from e
-        except httpx.RequestError as e:
-            raise TTSProviderError(f"MiniMax stream request failed: {str(e)}") from e
-
-        yield AudioChunk(seq=seq, data=b"", format=req.format, is_last=True)
+        response_cm = self._client.stream(
+            "POST",
+            f"{self._base_url}/t2a_v2",
+            json=body,
+            headers={
+                "Authorization": f"Bearer {self._api_key}",
+                "Content-Type": "application/json",
+            },
+            timeout=30.0,
+        )
+        return CancellableStream(response_cm, fmt=req.format)
 
     def estimate_cost_cents(self, text: str) -> float:
-        """Estimate cost in cents for synthesizing the given text."""
+        """Estimate cost in cents for synthesizing text."""
         return len(text) * 0.01 / 1000
 
     @property

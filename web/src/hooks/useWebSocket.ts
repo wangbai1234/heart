@@ -95,6 +95,8 @@ export function useWebSocket() {
           break
         case 'audio_chunk':
           if (msg.data_b64 && playerRef.current) {
+            const currentTurnId = useChatStore.getState().currentTurnId
+            if (msg.turn_id !== currentTurnId) return
             const key = `${msg.turn_id}:${msg.sentence_seq ?? 0}:${msg.seq}`
             if (seenChunks.current.has(key)) return
             seenChunks.current.add(key)

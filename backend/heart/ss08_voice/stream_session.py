@@ -39,7 +39,7 @@ class StreamSession:
         self._global_seq = 0
         self._cancelled = False
         self._paused = False
-        self._current_response: Optional[Any] = None
+        self._current_stream: Any = None
         self._submitted: dict[str, set[str]] = {}  # turn_id -> set of sentence hashes
         self._sentence_seq: dict[str, int] = {}  # turn_id -> monotonic sentence seq
         self._finished: set[str] = set()  # turn_ids that have been finished
@@ -51,12 +51,12 @@ class StreamSession:
             self._submitted.pop(turn_id, None)
             self._sentence_seq.pop(turn_id, None)
             self._finished.discard(turn_id)
-        if self._current_response is not None:
+        if self._current_stream is not None:
             try:
-                self._current_response.aclose()
+                asyncio.ensure_future(self._current_stream.cancel())
             except Exception:
                 pass
-            self._current_response = None
+            self._current_stream = None
         try:
             self._queue.put_nowait(None)
         except Exception:
@@ -143,7 +143,7 @@ class StreamSession:
     async def _stream_tts(self, req: Any, turn_id: str, sseq: int) -> list[bytes]:
         audio_chunks = []
         stream = self._voice.provider.stream_synthesize(req)
-        self._current_response = getattr(stream, "_response", None)
+        self._current_stream = stream
 
         async for chunk in stream:
             if self._cancelled:
@@ -160,7 +160,7 @@ class StreamSession:
                 )
                 self._global_seq += 1
 
-        self._current_response = None
+        self._current_stream = None
         return audio_chunks
 
     async def _cache_audio(self, req: Any, text: str, audio_chunks: list[bytes]) -> None:
@@ -202,7 +202,7 @@ class StreamSession:
             await self._cache_audio(req, text, audio_chunks)
 
         except Exception as e:
-            self._current_response = None
+            self._current_stream = None
             if not self._cancelled:
                 logger.error("tts_stream_failed", error=str(e), text=text[:30] if text else "")
 

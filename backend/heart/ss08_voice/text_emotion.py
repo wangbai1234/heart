@@ -59,6 +59,23 @@ _HAPPY_KEYWORDS = (
     "haha",
     "yay",
     "wow",
+    "很好",
+    "不错",
+    "挺好",
+    "挺不错",
+    "有趣",
+    "好玩儿",
+    "舒服",
+    "放松",
+    "好耶",
+    "太好了",
+    "可以呀",
+    "期待",
+    "想你",
+    "想念",
+    "超级",
+    "绝了",
+    "妙",
 )
 _SAD_KEYWORDS = (
     "好累",
@@ -79,6 +96,18 @@ _SAD_KEYWORDS = (
     "唉",
     "哎",
     "叹气",
+    "有点累",
+    "疲惫",
+    "疲倦",
+    "好烦",
+    "无聊",
+    "郁闷",
+    "委屈",
+    "心酸",
+    "低落",
+    "沮丧",
+    "不开心",
+    "不太好",
 )
 _ANGRY_KEYWORDS = (
     "讨厌",
@@ -112,17 +141,16 @@ _SURPRISED_KEYWORDS = (
     "天哪",
     "我去",
 )
-_TENDER_KEYWORDS = (
-    # 不是 MiniMax enum 里的，但映射为 "sad"（柔软低沉）效果近似
+_WARM_KEYWORDS = (
     "晚安",
     "保重",
-    "记得",
-    "陪着你",
-    "在这里",
     "别怕",
     "没事的",
+    "陪着你",
+    "在这里",
     "嗯",
 )
+_TENDER_KEYWORDS = ("记得",)
 
 _ELLIPSIS_RE = re.compile(r"…{1,}|\.{3,}|。{2,}")
 _REPEATED_PUNCT_RE = re.compile(r"([！!？?])\1{1,}")
@@ -194,7 +222,8 @@ def _infer_raw(text: str) -> InferredDelivery:
 
     if _ELLIPSIS_RE.search(text) or _contains_any(text, _TENDER_KEYWORDS):
         return InferredDelivery("sad", -0.10, -1, 0.6)
-
+    if _contains_any(text, _WARM_KEYWORDS):
+        return InferredDelivery("neutral", -0.03, 0, 0.5)
     return InferredDelivery("neutral", 0.0, 0, 0.0)
 
 
