@@ -28,6 +28,7 @@ function b64ToArrayBuffer(b64: string): ArrayBuffer {
 export function useWebSocket() {
   const wsRef = useRef<WebSocket | null>(null)
   const connectRef = useRef<(() => void) | null>(null)
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const playerRef = useRef<AudioPlayer | null>(null)
   // Holds a player whose turn has ended but whose audio is still draining.
   // Stopped (audio cut) when the next turn starts via ensurePlayer().
@@ -58,8 +59,16 @@ export function useWebSocket() {
   }, [])
 
   const connect = useCallback(() => {
+    if (reconnectTimerRef.current) {
+      clearTimeout(reconnectTimerRef.current)
+      reconnectTimerRef.current = null
+    }
     if (wsRef.current && (wsRef.current.readyState === WebSocket.OPEN
                        || wsRef.current.readyState === WebSocket.CONNECTING)) return
+    if (wsRef.current) {
+      wsRef.current.close()
+      wsRef.current = null
+    }
 
     const ws = new WebSocket(WS_URL)
     wsRef.current = ws
@@ -142,7 +151,11 @@ export function useWebSocket() {
 
     ws.onclose = () => {
       console.log('[ws] disconnected, reconnecting in 2s...')
-      setTimeout(() => connectRef.current?.(), 2000)
+      if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current)
+      reconnectTimerRef.current = setTimeout(() => {
+        reconnectTimerRef.current = null
+        connectRef.current?.()
+      }, 2000)
     }
 
     ws.onerror = (err) => {
@@ -191,6 +204,10 @@ export function useWebSocket() {
   useEffect(() => {
     connect()
     return () => {
+      if (reconnectTimerRef.current) {
+        clearTimeout(reconnectTimerRef.current)
+        reconnectTimerRef.current = null
+      }
       wsRef.current?.close()
       wsRef.current = null
       if (drainingPlayerRef.current) {
