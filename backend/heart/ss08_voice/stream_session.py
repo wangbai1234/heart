@@ -150,6 +150,9 @@ class StreamSession:
                 return audio_chunks
             if chunk.data:
                 audio_chunks.append(chunk.data)
+            # Always send the chunk (even empty) if it's the last one,
+            # so the frontend receives the is_last=True signal.
+            if chunk.data or chunk.is_last:
                 await self._send(turn_id, sseq, self._global_seq, chunk.data, chunk.is_last)
                 self._global_seq += 1
 
