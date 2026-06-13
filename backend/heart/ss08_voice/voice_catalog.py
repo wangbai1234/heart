@@ -3,9 +3,14 @@
 from typing import Dict
 
 # Character → variant → voice_id mapping
+# Using new-generation "Chinese (Mandarin)_xxx" voices for natural-sounding TTS
 VOICE_CATALOG: Dict[str, Dict[str, str]] = {
-    "rin": {"default": "danya_xuejie"},  # 淡雅学姐 — 清冷疏离、成熟内敛、带淡淡忧郁
-    "dorothy": {"default": "qiaopi_mengmei"},  # 俏皮萌妹 — 甜美活泼、带点狡黠和小恶魔气质
+    "rin": {
+        "default": "Chinese (Mandarin)_Gentle_Senior",  # 温柔学姐，新一代真人感
+    },
+    "dorothy": {
+        "default": "Chinese (Mandarin)_Crisp_Girl",  # 清脆少女，新一代真人感
+    },
 }
 
 

@@ -162,20 +162,37 @@ def _from_punctuation(text: str) -> Optional[InferredDelivery]:
 
 
 def infer_emotion_from_text(text: str) -> InferredDelivery:
-    """Infer delivery emotion. Priority: keywords > punctuation > soft cues."""
+    """Infer delivery emotion. Priority: keywords > punctuation > soft cues.
+
+    Short sentences (< 4 chars) get confidence capped at 0.4 and
+    speed/pitch deltas halved, to prevent a single "嗯。" from
+    pulling the entire turn基调 to sad.
+    """
     if not text:
         return InferredDelivery("neutral", 0.0, 0, 0.0)
     t = text.strip()
+    raw = _infer_raw(t)
+    if len(t) < 4 and raw.confidence > 0.4:
+        return InferredDelivery(
+            raw.emotion,
+            raw.speed_delta * 0.5,
+            raw.pitch_delta // 2 if raw.pitch_delta else 0,
+            0.4,
+        )
+    return raw
 
-    kw = _from_keywords(t)
+
+def _infer_raw(text: str) -> InferredDelivery:
+    """Raw inference without short-sentence attenuation."""
+    kw = _from_keywords(text)
     if kw is not None:
         return kw
 
-    punct = _from_punctuation(t)
+    punct = _from_punctuation(text)
     if punct is not None:
         return punct
 
-    if _ELLIPSIS_RE.search(t) or _contains_any(t, _TENDER_KEYWORDS):
+    if _ELLIPSIS_RE.search(text) or _contains_any(text, _TENDER_KEYWORDS):
         return InferredDelivery("sad", -0.10, -1, 0.6)
 
     return InferredDelivery("neutral", 0.0, 0, 0.0)

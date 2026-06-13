@@ -900,6 +900,17 @@ class ComposerService:
         __import__("re").compile(r"（[^（）]{2,80}）"),
         __import__("re").compile(r"\([^()]{2,80}\)"),
         __import__("re").compile(r"(?<![A-Za-z0-9])\*[^*\n]{2,40}\*(?![A-Za-z0-9])"),
+        # Square brackets: [轻声] 【轻描淡写地说】 「括号对话」
+        __import__("re").compile(r"\[[^\[\]]{2,60}\]"),
+        __import__("re").compile(r"【[^【】]{2,60}】"),
+        __import__("re").compile(r"「[^「」]{2,60}」"),
+        # Markdown underline italics: _action_
+        __import__("re").compile(r"(?<![A-Za-z0-9])_[^_\n]{2,40}_(?![A-Za-z0-9])"),
+        # Emoji (any Unicode emoji block)
+        __import__("re").compile(
+            r"[\U0001F300-\U0001F9FF\U0001FA00-\U0001FAFF"
+            r"\U00002600-\U000027BF\U0000FE00-\U0000FE0F]+"
+        ),
     )
 
     @staticmethod
@@ -985,6 +996,14 @@ class ComposerService:
         rewritten = self._apply_replace_list(
             rewritten, self._INTERNAL_FIELD_NAMES, "internal_field", hits, min_len=1
         )
+
+        # 1. Punctuation completion: ensure response ends with a sentence-ending mark.
+        #    TTS reads the text as-is; a trailing word without punctuation sounds abrupt.
+        sentence_enders = set("。！？.!?…")
+        rewritten_stripped = rewritten.rstrip()
+        if rewritten_stripped and rewritten_stripped[-1] not in sentence_enders:
+            rewritten = rewritten_stripped + "。"
+            hits.append("punctuation_completed")
 
         if hits:
             logger.warning(

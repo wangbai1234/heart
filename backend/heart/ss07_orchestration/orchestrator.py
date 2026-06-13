@@ -279,7 +279,7 @@ class Orchestrator:
 
         yield {"type": "turn_end", "full_text": full_text}
 
-    async def _stream_compose(
+    async def _stream_compose(  # noqa: C901 — domain: streaming batched-TTS state machine; inherent async-generator complexity
         self,
         req: TurnRequest,
         composer: Any,
@@ -288,8 +288,19 @@ class Orchestrator:
         intimacy: float,
         cancel_token: Optional[asyncio.Event] = None,
     ) -> AsyncGenerator[dict, None]:
-        """Stream compose and yield events."""
-        from heart.ss05_composer.service import CompositionContext
+        """Stream compose and yield events.
+
+        Turn-Locked Emotion: the first sentence's emotion becomes the turn's
+        locked基调. All subsequent sentences inherit it; only speed/pitch
+        get micro-adjusted from per-sentence text_emotion (30% weight).
+
+        Batched TTS: The first sentence is submitted to TTS immediately for
+        low first-audio latency. All remaining sentences are buffered and
+        combined into a single TTS request at stream end, eliminating
+        mid-turn prosody-envelope resets (the physical cause of inter-sentence
+        emotion jumps when two separate TTS requests are stitched together).
+        """
+        from heart.ss05_composer.service import ComposerService, CompositionContext
 
         ctx = CompositionContext(
             user_id=req.user_id,
@@ -300,6 +311,26 @@ class Orchestrator:
         )
 
         splitter = SentenceSplitter()
+        turn_emotion_meta: dict | None = None
+        # Buffer for sentences after the first — submitted as one combined TTS call.
+        sentence_buffer: list[str] = []
+        first_sentence_done = False
+
+        def _make_sentence_event(text: str) -> dict:
+            return {
+                "type": "sentence",
+                "text": text,
+                "vad": vad,
+                "intimacy": intimacy,
+                "locked_emotion": turn_emotion_meta["emotion"],
+                "locked_speed_base": turn_emotion_meta["speed_base"],
+                "locked_pitch_base": turn_emotion_meta["pitch_base"],
+            }
+
+        def _clean(text: str) -> str:
+            """Strip narration patterns before TTS submission."""
+            cleaned, _ = ComposerService._strip_narration(text)
+            return cleaned.strip()
 
         try:
             async for chunk in composer.compose_stream(
@@ -308,33 +339,81 @@ class Orchestrator:
                 conversation_history=req.history,
                 temperature=0.7,
             ):
-                # Check cancel token
                 if cancel_token and cancel_token.is_set():
                     logger.info("turn_stream_cancelled", turn_id=str(req.trace_id))
                     break
 
                 yield {"type": "text_delta", "delta": chunk}
 
-                # Split sentences
                 for sentence in splitter.feed(chunk):
-                    yield {
-                        "type": "sentence",
-                        "text": sentence,
-                        "vad": vad,
-                        "intimacy": intimacy,
-                    }
+                    cleaned = _clean(sentence)
+                    if not cleaned:
+                        continue
+                    if turn_emotion_meta is None:
+                        turn_emotion_meta = self._decide_turn_emotion(cleaned, vad)
+                    logger.info(
+                        "compose_sentence",
+                        turn_id=str(req.trace_id),
+                        text=cleaned[:30],
+                        locked_emo=turn_emotion_meta["emotion"],
+                        batched=first_sentence_done,
+                    )
+                    if not first_sentence_done:
+                        # First sentence: yield immediately for low latency.
+                        first_sentence_done = True
+                        yield _make_sentence_event(cleaned)
+                    else:
+                        # Buffer remaining sentences; they'll be combined into one TTS call.
+                        sentence_buffer.append(cleaned)
         except Exception as exc:
             logger.error("compose_stream_failed", error=str(exc))
 
-        # Flush remaining
         tail = splitter.flush()
         if tail:
-            yield {
-                "type": "sentence",
-                "text": tail,
-                "vad": vad,
-                "intimacy": intimacy,
+            tail_clean = _clean(tail)
+            if tail_clean:
+                if turn_emotion_meta is None:
+                    turn_emotion_meta = self._decide_turn_emotion(tail_clean, vad)
+                if not first_sentence_done:
+                    first_sentence_done = True
+                    yield _make_sentence_event(tail_clean)
+                else:
+                    sentence_buffer.append(tail_clean)
+
+        # Emit buffered sentences as ONE combined TTS request to avoid prosody resets.
+        if sentence_buffer and turn_emotion_meta is not None:
+            combined = "".join(sentence_buffer)
+            logger.info(
+                "compose_sentence_batched",
+                turn_id=str(req.trace_id),
+                sentence_count=len(sentence_buffer),
+                text=combined[:40],
+                locked_emo=turn_emotion_meta["emotion"],
+            )
+            yield _make_sentence_event(combined)
+
+    @staticmethod
+    def _decide_turn_emotion(first_text: str, vad: dict | None) -> dict:
+        """Decide turn-level emotion from the first sentence."""
+        from heart.ss08_voice.text_emotion import infer_emotion_from_text
+        from heart.ss08_voice.voice_director import VoiceDirector
+
+        inferred = infer_emotion_from_text(first_text)
+        if inferred.confidence >= 0.7:
+            return {
+                "emotion": inferred.emotion,
+                "speed_base": 1.0 + inferred.speed_delta,
+                "pitch_base": inferred.pitch_delta,
             }
+        hit = VoiceDirector._from_vad(
+            (vad or {}).get("valence", 0.0),
+            (vad or {}).get("arousal", 0.3),
+            (vad or {}).get("dominance", 0.5),
+        )
+        if hit:
+            emo, sp_d, pi_d = hit
+            return {"emotion": emo, "speed_base": 1.0 + sp_d, "pitch_base": pi_d}
+        return {"emotion": "neutral", "speed_base": 1.0, "pitch_base": 0}
 
     # ── Private: Safety ─────────────────────────────────────────────
 
