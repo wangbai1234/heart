@@ -151,13 +151,6 @@ class StreamSession:
             if chunk.data:
                 audio_chunks.append(chunk.data)
                 await self._send(turn_id, sseq, self._global_seq, chunk.data, chunk.is_last)
-                logger.debug(
-                    "audio_send",
-                    turn_id=turn_id,
-                    sentence_seq=sseq,
-                    seq=self._global_seq,
-                    is_last=chunk.is_last,
-                )
                 self._global_seq += 1
 
         self._current_stream = None
