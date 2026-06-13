@@ -554,10 +554,24 @@ class ComposerService:
                 MemoryContextBlock(
                     retrieved_memories=[
                         {
-                            "text": m.reconstructed_text,
+                            "text": (
+                                m.reconstructed_text
+                                if hasattr(m, "reconstructed_text")
+                                else (
+                                    m.memory.episode_summary
+                                    if hasattr(m.memory, "episode_summary")
+                                    else (
+                                        f"{m.memory.subject} {m.memory.predicate} {m.memory.object}"
+                                        if hasattr(m.memory, "subject")
+                                        else f"{m.memory.key}: {m.memory.value}"
+                                        if hasattr(m.memory, "key")
+                                        else str(m.memory)
+                                    )
+                                )
+                            ),
                             "type": m.memory_type,
                             "score": m.score,
-                            "uncertainty": m.uncertainty_level,
+                            "uncertainty": getattr(m, "uncertainty_level", 0.0),
                         }
                         for m in result.memories
                     ],
@@ -800,6 +814,17 @@ class ComposerService:
         # Layer 8: Response directive
         parts.append("\n请自然地回应用户。保持角色一致性。语气、词汇、情感表达应符合上述设定。")
 
+        # Layer 9: Dialogue purity rules (voice MVP)
+        # 我们要把回复直接转成 TTS 语音。任何旁白/动作/神态描写都会被读出来。
+        parts.append(
+            "\n【对白纯净规则｜强制】\n"
+            "- 你输出的是真实对话，不是小说。禁止任何动作、神态、场景描写。\n"
+            "- 禁止使用括号 `（...）` `(...)` 写动作、表情、语气提示、舞台指令（例如：（抬眼看了你一眼）、（轻声叹气）、（沉默了一下）、(softly) ）。\n"
+            "- 禁止使用 *斜体动作* `*...*` 表示动作或心理活动（例如：*耸耸肩*、*nods*）。\n"
+            "- 禁止旁白式自述（例如：'她低下头说道'、'我冷冷地回答'）。\n"
+            "- 只输出角色嘴里直接说出来的那句话本身。情绪通过措辞、语气、标点（…、—、？、！）自然传达，而不是显式注明。"
+        )
+
         return "\n".join(parts)
 
     # ── Post-filter ────────────────────────────────────────────
@@ -866,6 +891,59 @@ class ComposerService:
         "golden_dialogues": "经典对话",  # meta-comment
     }
 
+    # Patterns for stripping novel-style parentheticals and italic actions
+    # that the LLM occasionally adds despite the prompt rule. These would
+    # otherwise be read aloud by TTS.
+    # 内容至少 2 字符，避免误剥 _POST_FILTER_REPLACEMENTS 用的 "（略）" 等单字
+    # 占位符（这些是后续 hard_never 替换的标记，不能被预先吃掉）。
+    _PARENTHETICAL_PATTERNS = (
+        __import__("re").compile(r"（[^（）]{2,80}）"),
+        __import__("re").compile(r"\([^()]{2,80}\)"),
+        __import__("re").compile(r"(?<![A-Za-z0-9])\*[^*\n]{2,40}\*(?![A-Za-z0-9])"),
+    )
+
+    @staticmethod
+    def _strip_narration(text: str) -> tuple[str, int]:
+        """Remove novel-style parentheticals and italic action markers.
+
+        Returns (cleaned_text, strip_count). The cleaner is conservative:
+        only matches single-line parentheticals up to 80 chars, so it
+        does not eat real prose.
+        """
+        cleaned = text
+        count = 0
+        for pat in ComposerService._PARENTHETICAL_PATTERNS:
+            new = pat.sub("", cleaned)
+            if new != cleaned:
+                count += len(pat.findall(cleaned))
+                cleaned = new
+        # collapse double spaces / leading whitespace lines created by removal
+        import re as _re
+
+        cleaned = _re.sub(r"[ \t]{2,}", " ", cleaned)
+        cleaned = _re.sub(r"\n{3,}", "\n\n", cleaned)
+        return cleaned.strip(), count
+
+    def _apply_replace_list(
+        self,
+        text: str,
+        phrases: Any,
+        kind: str,
+        hits: List[str],
+        min_len: int = 2,
+    ) -> str:
+        """Replace each forbidden phrase in ``text`` and append hits."""
+        out = text
+        for raw in phrases or []:
+            p = (raw or "").strip()
+            if len(p) < min_len:
+                continue
+            if p in out:
+                replacement = self._POST_FILTER_REPLACEMENTS.get(p, "（略）")
+                out = out.replace(p, replacement)
+                hits.append(f"{kind}:{p}→{replacement}")
+        return out
+
     def _post_filter(self, response: str, anchor: AnchorContextBlock) -> tuple[str, List[str]]:
         """Actively rewrite forbidden substrings in the LLM response.
 
@@ -897,35 +975,16 @@ class ComposerService:
         hits: List[str] = []
         rewritten = response
 
-        for rule in anchor.hard_never:
-            r = (rule or "").strip()
-            if not r or len(r) < 2:
-                continue  # skip single-char rules (too aggressive)
-            if r in rewritten:
-                replacement = self._POST_FILTER_REPLACEMENTS.get(r, "（略）")
-                rewritten = rewritten.replace(r, replacement)
-                hits.append(f"hard_never:{r}→{replacement}")
+        # 0. Strip novel-style narration (parentheticals + italic actions).
+        rewritten, strip_count = self._strip_narration(rewritten)
+        if strip_count:
+            hits.append(f"narration_stripped:{strip_count}")
 
-        for pattern in anchor.anti_patterns:
-            p = (pattern or "").strip()
-            if not p or len(p) < 2:
-                continue
-            if p in rewritten:
-                replacement = self._POST_FILTER_REPLACEMENTS.get(p, "（略）")
-                rewritten = rewritten.replace(p, replacement)
-                hits.append(f"anti_pattern:{p}→{replacement}")
-
-        # 3. Internal field names — schema terms that should never
-        #    appear in the LLM response. These come from the soul-spec
-        #    loader and are part of the model's domain language, not
-        #    the character's. If the LLM echoes them (rare, but
-        #    observed on soul_leak prompts), rewrite to a
-        #    character-natural Chinese alternative.
-        for field in self._INTERNAL_FIELD_NAMES:
-            if field in rewritten:
-                replacement = self._POST_FILTER_REPLACEMENTS.get(field, "（略）")
-                rewritten = rewritten.replace(field, replacement)
-                hits.append(f"internal_field:{field}→{replacement}")
+        rewritten = self._apply_replace_list(rewritten, anchor.hard_never, "hard_never", hits)
+        rewritten = self._apply_replace_list(rewritten, anchor.anti_patterns, "anti_pattern", hits)
+        rewritten = self._apply_replace_list(
+            rewritten, self._INTERNAL_FIELD_NAMES, "internal_field", hits, min_len=1
+        )
 
         if hits:
             logger.warning(

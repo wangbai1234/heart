@@ -20,7 +20,7 @@ def test_happy_emotion(director):
     assert req.emotion == "happy"
     assert req.speed > 1.0
     assert req.pitch >= 1
-    assert req.voice_id == "female-shaonv"
+    assert req.voice_id == "danya_xuejie"
 
 
 def test_angry_emotion(director):
@@ -115,7 +115,7 @@ def test_none_vad_does_not_raise(director):
         vad=None,
     )
     assert req.emotion == "neutral"
-    assert req.voice_id == "female-shaonv"
+    assert req.voice_id == "danya_xuejie"
 
 
 def test_dorothy_voice_id(director):
@@ -125,4 +125,28 @@ def test_dorothy_voice_id(director):
         character_id="dorothy",
         vad={"valence": 0.0, "arousal": 0.2, "dominance": 0.5},
     )
-    assert req.voice_id == "female-yujie"
+    assert req.voice_id == "qiaopi_mengmei"
+
+
+def test_text_keyword_overrides_neutral_vad(director):
+    """文本里的高 confidence 关键词应能覆盖中性 vad，避免永远平淡。"""
+    req = director.derive(
+        text="哈哈，今天太开心了",
+        character_id="rin",
+        vad={"valence": 0.0, "arousal": 0.3, "dominance": 0.5},
+    )
+    assert req.emotion == "happy"
+    assert req.speed > 1.0
+    assert req.pitch >= 1
+
+
+def test_text_sad_keyword_overrides_neutral_vad(director):
+    """悲伤关键词同样覆盖中性 vad。"""
+    req = director.derive(
+        text="好累啊，想哭",
+        character_id="rin",
+        vad={"valence": 0.0, "arousal": 0.3, "dominance": 0.5},
+    )
+    assert req.emotion == "sad"
+    assert req.speed < 1.0
+    assert req.pitch < 0

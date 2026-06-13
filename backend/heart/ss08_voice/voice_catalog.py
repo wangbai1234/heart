@@ -4,8 +4,8 @@ from typing import Dict
 
 # Character → variant → voice_id mapping
 VOICE_CATALOG: Dict[str, Dict[str, str]] = {
-    "rin": {"default": "female-shaonv"},  # MiniMax built-in voice ID
-    "dorothy": {"default": "female-yujie"},
+    "rin": {"default": "danya_xuejie"},  # 淡雅学姐 — 清冷疏离、成熟内敛、带淡淡忧郁
+    "dorothy": {"default": "qiaopi_mengmei"},  # 俏皮萌妹 — 甜美活泼、带点狡黠和小恶魔气质
 }
 
 

@@ -8,13 +8,13 @@ from heart.ss08_voice.voice_catalog import VOICE_CATALOG, get_voice_id, register
 def test_get_voice_id_rin():
     """Test getting voice ID for rin."""
     voice_id = get_voice_id("rin")
-    assert voice_id == "female-shaonv"
+    assert voice_id == "danya_xuejie"
 
 
 def test_get_voice_id_dorothy():
     """Test getting voice ID for dorothy."""
     voice_id = get_voice_id("dorothy")
-    assert voice_id == "female-yujie"
+    assert voice_id == "qiaopi_mengmei"
 
 
 def test_get_voice_id_unknown_raises():
