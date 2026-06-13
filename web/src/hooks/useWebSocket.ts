@@ -46,11 +46,13 @@ export function useWebSocket() {
   const ensurePlayer = useCallback(async (): Promise<AudioPlayer> => {
     // Stop any draining player from the previous turn (its audio is cut on new turn start).
     if (drainingPlayerRef.current) {
+      console.log('[ws] ensurePlayer: stopping draining player')
       try { drainingPlayerRef.current.stop() } catch { /* ignore */ }
       drainingPlayerRef.current = null
     }
     if (playerRef.current && playerRef.current.isAlive()) return playerRef.current
     if (playerRef.current) { try { playerRef.current.stop() } catch { /* ignore */ } }
+    console.log('[ws] ensurePlayer: creating new player')
     const p = createAudioPlayer()
     await p.init()
     p.onBufferedMs(() => {})
@@ -81,6 +83,7 @@ export function useWebSocket() {
       const msg: WsMessage = JSON.parse(ev.data)
       switch (msg.type) {
         case 'turn_start':
+          console.log('[ws] turn_start received, turn_id:', msg.turn_id)
           seenChunks.current.clear()
           setCurrentTurnId(msg.turn_id ?? null)
           addMessage({
@@ -105,17 +108,25 @@ export function useWebSocket() {
         case 'audio_chunk':
           if (msg.data_b64 && playerRef.current) {
             const currentTurnId = useChatStore.getState().currentTurnId
-            if (msg.turn_id !== currentTurnId) return
+            if (msg.turn_id !== currentTurnId) {
+              console.log('[ws] audio_chunk rejected: turn_id mismatch', msg.turn_id, '!==', currentTurnId)
+              return
+            }
             const key = `${msg.turn_id}:${msg.sentence_seq ?? 0}:${msg.seq}`
-            if (seenChunks.current.has(key)) return
+            if (seenChunks.current.has(key)) {
+              console.log('[ws] audio_chunk rejected: duplicate', key)
+              return
+            }
             seenChunks.current.add(key)
             const buf = b64ToArrayBuffer(msg.data_b64)
+            console.log('[ws] audio_chunk enqueued', key, 'size:', buf.byteLength, 'queue chunks:', seenChunks.current.size)
             playerRef.current.enqueue(buf)
           }
           break
         case 'turn_end':
           // Move player to draining state so buffered audio plays out naturally.
           // ensurePlayer() on the next turn_start will stop it before starting fresh.
+          console.log('[ws] turn_end received, player alive:', playerRef.current?.isAlive())
           if (playerRef.current) {
             drainingPlayerRef.current = playerRef.current
             playerRef.current = null
@@ -125,6 +136,7 @@ export function useWebSocket() {
           setCurrentTurnId(null)
           break
         case 'interrupted':
+          console.log('[ws] interrupted received')
           if (drainingPlayerRef.current) {
             try { drainingPlayerRef.current.stop() } catch { /* ignore */ }
             drainingPlayerRef.current = null
