@@ -1,6 +1,8 @@
 """TTS Provider protocol — per runtime_specs/08_voice.md"""
 
-from typing import AsyncIterator, Protocol
+from __future__ import annotations
+
+from typing import Any, Protocol
 
 from heart.ss08_voice.types import AudioChunk, TTSRequest, TTSResult
 
@@ -12,8 +14,8 @@ class TTSProvider(Protocol):
         """Synthesize speech from text (non-streaming)."""
         ...
 
-    async def stream_synthesize(self, req: TTSRequest) -> AsyncIterator[AudioChunk]:
-        """Synthesize speech from text (streaming)."""
+    def stream_synthesize(self, req: TTSRequest) -> Any:
+        """Synthesize speech from text (streaming). Returns a cancellable async iterable."""
         ...
 
     def estimate_cost_cents(self, text: str) -> float:

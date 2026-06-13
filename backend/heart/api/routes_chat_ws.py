@@ -32,12 +32,18 @@ def _create_stream_session(voice_service: Any, ws: WebSocket, cache: Any = None)
 
     from heart.ss08_voice.stream_session import StreamSession
 
-    async def send_audio(t_id: str, seq: int, audio_bytes: bytes, is_last: bool) -> None:
+    async def send_audio(
+        t_id: str, sentence_seq: int, seq: int, audio_bytes: bytes, is_last: bool
+    ) -> None:
         """Send audio chunk to WebSocket."""
+        logger.debug(
+            "audio_send", turn_id=t_id, sentence_seq=sentence_seq, seq=seq, is_last=is_last
+        )
         await ws.send_json(
             {
                 "type": "audio_chunk",
                 "turn_id": t_id,
+                "sentence_seq": sentence_seq,
                 "seq": seq,
                 "format": "mp3",
                 "data_b64": base64.b64encode(audio_bytes).decode() if audio_bytes else "",
@@ -92,10 +98,13 @@ async def _handle_event(
                 vad=event.get("vad"),
                 intimacy=event.get("intimacy", 0.0),
                 character_id=character_id,
+                locked_emotion=event.get("locked_emotion"),
+                locked_speed_base=event.get("locked_speed_base"),
+                locked_pitch_base=event.get("locked_pitch_base"),
             )
     elif event_type == "turn_end":
         if stream_session:
-            await stream_session.finish()
+            await stream_session.finish(turn_id=turn_id)
         await _send_turn_end(ws, turn_id)
         return True
     return False
@@ -123,7 +132,7 @@ async def _process_stream_events(
     except Exception as e:
         logger.error("chat_ws_stream_error", error=str(e))
         if stream_session:
-            stream_session.cancel()
+            stream_session.cancel(turn_id=turn_id)
         await ws.send_json({"type": "error", "msg": str(e)})
     finally:
         active_turns.pop(turn_id, None)
@@ -172,7 +181,7 @@ async def _handle_interrupt(ws: WebSocket, msg: dict[str, Any], active_turns: di
     turn_id = msg.get("turn_id")
     if turn_id and turn_id in active_turns:
         session = active_turns[turn_id]
-        session.cancel()
+        session.cancel(turn_id=turn_id)
         await ws.send_json({"type": "interrupted", "turn_id": turn_id})
 
 
@@ -225,7 +234,7 @@ async def chat_ws(ws: WebSocket):
             {"type": "turn_start", "turn_id": "..."}
             {"type": "text_delta", "turn_id": "...", "delta": "..."}
             {"type": "sentence", "turn_id": "...", "text": "...", "vad": {...}, "intimacy": 0.0}
-            {"type": "audio_chunk", "turn_id": "...", "seq": N, "format": "mp3", "data_b64": "...", "is_last": bool}
+            {"type": "audio_chunk", "turn_id": "...", "sentence_seq": N, "seq": M, "format": "mp3", "data_b64": "...", "is_last": bool}
             {"type": "turn_end", "turn_id": "..."}
             {"type": "interrupted", "turn_id": "..."}
     """
@@ -248,12 +257,12 @@ async def chat_ws(ws: WebSocket):
 
     except WebSocketDisconnect:
         logger.info("chat_ws_disconnect")
-        for session in active_turns.values():
-            session.cancel()
+        for turn_id, session in active_turns.items():
+            session.cancel(turn_id=turn_id)
     except Exception as e:
         logger.error("chat_ws_error", error=str(e))
-        for session in active_turns.values():
-            session.cancel()
+        for turn_id, session in active_turns.items():
+            session.cancel(turn_id=turn_id)
         try:
             await ws.send_json({"type": "error", "msg": str(e)})
         except Exception:

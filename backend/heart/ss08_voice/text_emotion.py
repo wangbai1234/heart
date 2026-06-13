@@ -1,0 +1,231 @@
+"""Per-sentence emotion inference from text content.
+
+VoiceDirector 之前只用 SS03 角色级 VAD 推断 TTS 情绪。问题是 VAD 在
+turn 之间变化很小，且默认值落在 (0, 0.3, 0.5) 上，导致 voice_director
+始终命中 neutral 规则——所有句子都被读得很平。
+
+这个模块从句子文本本身推断"该用什么情绪说这句话"，作为 voice_director
+的首选信号。规则极简（关键词 + 标点 + 重复符），跑在 hot path 上，
+不调 LLM。
+
+Returns:
+    InferredDelivery(emotion, speed_delta, pitch_delta, confidence)
+    confidence 在 [0, 1]，0 表示没把握（fallback 到 vad）。
+"""
+
+from __future__ import annotations
+
+import re
+from dataclasses import dataclass
+from typing import Optional
+
+# Valid MiniMax emotion enum
+_VALID_EMOTIONS = {
+    "happy",
+    "sad",
+    "angry",
+    "fearful",
+    "disgusted",
+    "surprised",
+    "neutral",
+}
+
+
+@dataclass(frozen=True)
+class InferredDelivery:
+    emotion: str
+    speed_delta: float
+    pitch_delta: int
+    confidence: float  # 0..1
+
+
+# 关键词到情绪的映射（精挑细选，避免歧义）
+_HAPPY_KEYWORDS = (
+    "哈哈",
+    "嘻嘻",
+    "嘿嘿",
+    "哇",
+    "太棒",
+    "好开心",
+    "开心",
+    "高兴",
+    "棒极",
+    "真好",
+    "喜欢你",
+    "爱你",
+    "幸福",
+    "好玩",
+    "有意思",
+    "haha",
+    "yay",
+    "wow",
+    "很好",
+    "不错",
+    "挺好",
+    "挺不错",
+    "有趣",
+    "好玩儿",
+    "舒服",
+    "放松",
+    "好耶",
+    "太好了",
+    "可以呀",
+    "期待",
+    "想你",
+    "想念",
+    "超级",
+    "绝了",
+    "妙",
+)
+_SAD_KEYWORDS = (
+    "好累",
+    "累了",
+    "难过",
+    "伤心",
+    "想哭",
+    "哭了",
+    "孤独",
+    "寂寞",
+    "失望",
+    "心疼",
+    "可惜",
+    "遗憾",
+    "舍不得",
+    "对不起",
+    "抱歉",
+    "唉",
+    "哎",
+    "叹气",
+    "有点累",
+    "疲惫",
+    "疲倦",
+    "好烦",
+    "无聊",
+    "郁闷",
+    "委屈",
+    "心酸",
+    "低落",
+    "沮丧",
+    "不开心",
+    "不太好",
+)
+_ANGRY_KEYWORDS = (
+    "讨厌",
+    "烦",
+    "气死",
+    "生气",
+    "受够",
+    "别说了",
+    "闭嘴",
+    "够了",
+    "凭什么",
+    "为什么要",
+    "不行",
+)
+_FEARFUL_KEYWORDS = (
+    "害怕",
+    "怕",
+    "担心",
+    "紧张",
+    "不安",
+    "慌",
+    "吓",
+)
+_SURPRISED_KEYWORDS = (
+    "真的吗",
+    "真的？",
+    "什么？",
+    "竟然",
+    "居然",
+    "没想到",
+    "天哪",
+    "我去",
+)
+_WARM_KEYWORDS = (
+    "晚安",
+    "保重",
+    "别怕",
+    "没事的",
+    "陪着你",
+    "在这里",
+    "嗯",
+)
+_TENDER_KEYWORDS = ("记得",)
+
+_ELLIPSIS_RE = re.compile(r"…{1,}|\.{3,}|。{2,}")
+_REPEATED_PUNCT_RE = re.compile(r"([！!？?])\1{1,}")
+
+
+def _contains_any(text: str, words: tuple[str, ...]) -> bool:
+    return any(w in text for w in words)
+
+
+# Keyword → (emotion, speed_delta, pitch_delta, confidence)
+_KEYWORD_RULES: tuple[tuple[tuple[str, ...], str, float, int, float], ...] = (
+    (_HAPPY_KEYWORDS, "happy", +0.08, +2, 0.9),
+    (_ANGRY_KEYWORDS, "angry", +0.10, +2, 0.9),
+    (_SAD_KEYWORDS, "sad", -0.15, -2, 0.9),
+    (_FEARFUL_KEYWORDS, "fearful", +0.10, +2, 0.85),
+    (_SURPRISED_KEYWORDS, "surprised", +0.05, +3, 0.85),
+)
+
+
+def _from_keywords(text: str) -> Optional[InferredDelivery]:
+    for words, emo, sp, pi, conf in _KEYWORD_RULES:
+        if _contains_any(text, words):
+            return InferredDelivery(emo, sp, pi, conf)
+    return None
+
+
+def _from_punctuation(text: str) -> Optional[InferredDelivery]:
+    if _REPEATED_PUNCT_RE.search(text):
+        if any(p in text for p in ("？", "?")):
+            return InferredDelivery("surprised", +0.05, +2, 0.7)
+        return InferredDelivery("happy", +0.05, +1, 0.6)
+    if text.endswith(("！", "!")):
+        return InferredDelivery("happy", +0.03, +1, 0.55)
+    if text.endswith(("？", "?")):
+        return InferredDelivery("surprised", 0.0, +1, 0.5)
+    return None
+
+
+def infer_emotion_from_text(text: str) -> InferredDelivery:
+    """Infer delivery emotion. Priority: keywords > punctuation > soft cues.
+
+    Short sentences (< 4 chars) get confidence capped at 0.4 and
+    speed/pitch deltas halved, to prevent a single "嗯。" from
+    pulling the entire turn基调 to sad.
+    """
+    if not text:
+        return InferredDelivery("neutral", 0.0, 0, 0.0)
+    t = text.strip()
+    raw = _infer_raw(t)
+    if len(t) < 4 and raw.confidence > 0.4:
+        return InferredDelivery(
+            raw.emotion,
+            raw.speed_delta * 0.5,
+            raw.pitch_delta // 2 if raw.pitch_delta else 0,
+            0.4,
+        )
+    return raw
+
+
+def _infer_raw(text: str) -> InferredDelivery:
+    """Raw inference without short-sentence attenuation."""
+    kw = _from_keywords(text)
+    if kw is not None:
+        return kw
+
+    punct = _from_punctuation(text)
+    if punct is not None:
+        return punct
+
+    if _ELLIPSIS_RE.search(text) or _contains_any(text, _TENDER_KEYWORDS):
+        return InferredDelivery("sad", -0.10, -1, 0.6)
+    if _contains_any(text, _WARM_KEYWORDS):
+        return InferredDelivery("neutral", -0.03, 0, 0.5)
+    return InferredDelivery("neutral", 0.0, 0, 0.0)
+
+
+def is_valid_emotion(emotion: Optional[str]) -> bool:
+    return emotion in _VALID_EMOTIONS

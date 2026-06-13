@@ -3,9 +3,14 @@
 from typing import Dict
 
 # Character → variant → voice_id mapping
+# Using new-generation "Chinese (Mandarin)_xxx" voices for natural-sounding TTS
 VOICE_CATALOG: Dict[str, Dict[str, str]] = {
-    "rin": {"default": "female-shaonv"},  # MiniMax built-in voice ID
-    "dorothy": {"default": "female-yujie"},
+    "rin": {
+        "default": "Chinese (Mandarin)_Gentle_Senior",  # 温柔学姐，新一代真人感
+    },
+    "dorothy": {
+        "default": "Chinese (Mandarin)_Crisp_Girl",  # 清脆少女，新一代真人感
+    },
 }
 
 

@@ -8,13 +8,13 @@ from heart.ss08_voice.voice_catalog import VOICE_CATALOG, get_voice_id, register
 def test_get_voice_id_rin():
     """Test getting voice ID for rin."""
     voice_id = get_voice_id("rin")
-    assert voice_id == "female-shaonv"
+    assert voice_id == "Chinese (Mandarin)_Gentle_Senior"
 
 
 def test_get_voice_id_dorothy():
     """Test getting voice ID for dorothy."""
     voice_id = get_voice_id("dorothy")
-    assert voice_id == "female-yujie"
+    assert voice_id == "Chinese (Mandarin)_Crisp_Girl"
 
 
 def test_get_voice_id_unknown_raises():
@@ -25,12 +25,7 @@ def test_get_voice_id_unknown_raises():
 
 def test_register_voice():
     """Test dynamic voice registration."""
-    # Register a new voice
     register_voice("rin", "cloned_v1", "cloned-voice-abc")
-
-    # Verify it was registered
     voice_id = get_voice_id("rin", "cloned_v1")
     assert voice_id == "cloned-voice-abc"
-
-    # Clean up
     del VOICE_CATALOG["rin"]["cloned_v1"]
