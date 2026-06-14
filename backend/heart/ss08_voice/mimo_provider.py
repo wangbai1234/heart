@@ -4,13 +4,12 @@ MiMo voicedesign uses natural-language voice descriptions in the user message
 to shape the assistant audio output.  The assistant message carries emotion tags
 + text that the model speaks.
 
-Because voicedesign streaming degrades to compatible mode (single full response),
-MiMoCancellableStream manually chunks the returned audio to reduce frontend
-buffering pressure (8 KB ≈ 170 ms @ 24 kHz PCM16).
+Audio data from MiMo is Base64-encoded (not hex).
 """
 
 from __future__ import annotations
 
+import base64
 import json
 import uuid
 from typing import Any, AsyncGenerator
@@ -187,9 +186,9 @@ def _extract_inner_data_audio(data: dict) -> bytes | None:
 
 def _decode_audio_data(raw: str | bytes) -> bytes:
     if isinstance(raw, str):
-        return bytes.fromhex(raw)
+        return base64.b64decode(raw)
     if isinstance(raw, bytes):
-        return raw
+        return base64.b64decode(raw)
     return b""
 
 
@@ -275,9 +274,7 @@ class MiMoProvider:
             request_id=str(uuid.uuid4()),
         )
 
-    def stream_synthesize(
-        self, req: TTSRequest, character_id: str = "rin"
-    ) -> MiMoCancellableStream:
+    async def stream_synthesize(self, req: TTSRequest, character_id: str = "rin") -> Any:
         """Synthesize speech from text (streaming).
 
         Returns a MiMoCancellableStream that chunks the full response.

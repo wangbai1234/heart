@@ -110,30 +110,50 @@ class StreamSession:
         self._global_seq += 1
 
     async def _stream_tts(self, req: Any, turn_id: str, character_id: str) -> list[bytes]:
-        """Stream TTS synthesis and return collected audio chunks."""
+        """Stream TTS synthesis and return collected audio chunks.
+
+        Attempts primary provider first.  If it fails (e.g. MiMo 401),
+        retries with fallback if available.
+        """
         audio_chunks = []
         provider = self._voice.provider
+        fallback = self._voice.fallback_provider
 
+        stream = None
         try:
             if provider.name == "mimo":
                 stream = await provider.stream_synthesize(req, character_id)  # type: ignore[call-arg]
             else:
                 stream = await provider.stream_synthesize(req)
+
+            self._current_response = getattr(stream, "_response", None)
+            audio_chunks = await self._consume_stream(stream, turn_id)
+
         except Exception as primary_err:
-            fallback = self._voice.fallback_provider
+            stream = None
+            self._current_response = None
             if fallback and fallback.name != provider.name:
                 logger.warning(
                     "tts_stream_provider_failed",
                     provider=provider.name,
                     error=str(primary_err),
                 )
-                provider = fallback
-                stream = await provider.stream_synthesize(req)
+                try:
+                    fb_stream = await fallback.stream_synthesize(req)
+                    self._current_response = getattr(fb_stream, "_response", None)
+                    audio_chunks = await self._consume_stream(fb_stream, turn_id)
+                except Exception as fb_err:
+                    logger.error("tts_fallback_failed", error=str(fb_err))
+                    raise primary_err from fb_err
             else:
                 raise
 
-        self._current_response = getattr(stream, "_response", None)
+        self._current_response = None
+        return audio_chunks
 
+    async def _consume_stream(self, stream: Any, turn_id: str) -> list[bytes]:
+        """Consume an async chunk iterator and send audio to WebSocket."""
+        audio_chunks: list[bytes] = []
         async for chunk in stream:
             if self._cancelled:
                 return audio_chunks
@@ -148,8 +168,6 @@ class StreamSession:
                     chunk_fmt,
                 )
                 self._global_seq += 1
-
-        self._current_response = None
         return audio_chunks
 
     async def _cache_audio(self, req: Any, text: str, audio_chunks: list[bytes]) -> None:

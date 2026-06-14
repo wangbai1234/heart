@@ -129,7 +129,7 @@ async def test_synthesize_success(provider, sample_request):
         "choices": [
             {
                 "message": {
-                    "audio": {"data": "48656c6c6f"},  # "Hello" in hex
+                    "audio": {"data": "SGVsbG8="},  # "Hello" in base64
                 },
             },
         ],
@@ -178,7 +178,7 @@ async def test_synthesize_missing_audio(provider, sample_request):
 def test_extract_audio_from_choices_message():
     data = {
         "choices": [
-            {"message": {"audio": {"data": "48656c6c6f"}}}
+            {"message": {"audio": {"data": "SGVsbG8="}}}
         ]
     }
     assert _extract_audio_from_chunk(data) == b"Hello"
@@ -187,19 +187,19 @@ def test_extract_audio_from_choices_message():
 def test_extract_audio_from_choices_delta():
     data = {
         "choices": [
-            {"delta": {"audio": {"data": "574f524c44"}}}
+            {"delta": {"audio": {"data": "V09STEQ="}}}
         ]
     }
     assert _extract_audio_from_chunk(data) == b"WORLD"
 
 
 def test_extract_audio_from_flat_data():
-    data = {"data": {"audio": "594159"}}
+    data = {"data": {"audio": "WUFZ"}}
     assert _extract_audio_from_chunk(data) == b"YAY"
 
 
 def test_extract_audio_from_audio_obj():
-    data = {"audio": {"data": "414243"}}
+    data = {"audio": {"data": "QUJD"}}
     assert _extract_audio_from_chunk(data) == b"ABC"
 
 
@@ -208,12 +208,12 @@ def test_extract_audio_empty():
 
 
 def test_parse_mimo_response_single_json():
-    raw = b'{"choices":[{"message":{"audio":{"data":"48656c6c6f"}}}]}'
+    raw = b'{"choices":[{"message":{"audio":{"data":"SGVsbG8="}}}]}'
     assert _parse_mimo_response(raw) == b"Hello"
 
 
 def test_parse_mimo_response_sse_style():
-    raw = b'data: {"choices":[{"message":{"audio":{"data":"594159"}}}]}\n\ndata: [DONE]'
+    raw = b'data: {"choices":[{"message":{"audio":{"data":"WUFZ"}}}]}\n\ndata: [DONE]'
     assert _parse_mimo_response(raw) == b"YAY"
 
 
@@ -231,13 +231,14 @@ def test_parse_mimo_response_unparseable():
 @pytest.mark.asyncio
 async def test_stream_chunks_audio():
     """Test that MiMoCancellableStream chunks audio into 8KB pieces."""
+    import base64
     import json
 
-    # Create 20KB of audio (fake hex)
+    # Create 20KB of audio (fake data)
     audio_bytes = b"\x00\x01" * 10240  # 20KB
-    audio_hex = audio_bytes.hex()
+    audio_b64 = base64.b64encode(audio_bytes).decode()
     response_data = json.dumps(
-        {"choices": [{"message": {"audio": {"data": audio_hex}}}]}
+        {"choices": [{"message": {"audio": {"data": audio_b64}}}]}
     ).encode()
 
     mock_stream_ctx = MagicMock()
@@ -283,11 +284,11 @@ async def test_stream_empty_response():
 @pytest.mark.asyncio
 async def test_stream_cancel():
     """Test that cancelling stops iteration."""
-    audio_hex = b"\x00\x01" * 50_000  # Larger than one chunk
-    import json
+    audio_bytes = b"\x00\x01" * 50_000  # Larger than one chunk
+    import base64, json
 
     response_data = json.dumps(
-        {"choices": [{"message": {"audio": {"data": audio_hex.hex()}}}]}
+        {"choices": [{"message": {"audio": {"data": base64.b64encode(audio_bytes).decode()}}}]}
     ).encode()
 
     mock_stream_ctx = MagicMock()
