@@ -96,6 +96,12 @@ class Settings(BaseSettings):
     minimax_group_id: str | None = None
     minimax_base_url: str = "https://api.minimax.io/v1"
 
+    # MiMo TTS (voicedesign v2.5)
+    mimo_api_key: str | None = None
+    mimo_base_url: str = "https://api.xiaomimimo.com/v1"
+    voice_provider: str = "mimo"  # "mimo" | "minimax"
+    voice_fallback_enabled: bool = True
+
     @model_validator(mode="after")
     def validate_jwt_secret(self) -> "Settings":
         """Fail-fast if JWT secret is weak (all environments)."""

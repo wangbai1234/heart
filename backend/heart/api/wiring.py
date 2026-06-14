@@ -201,21 +201,77 @@ def get_safety_agent():
 
 @lru_cache
 def get_voice_service():
-    """Process singleton: VoiceService (TTS provider). Returns None if no API key."""
-    if not settings.minimax_api_key:
-        logger.warning("wiring_no_minimax_api_key", hint="Set MINIMAX_API_KEY in .env")
+    """Process singleton: VoiceService with primary provider + fallback.
+
+    Supports two TTS providers:
+    - MiMo (mimo-v2.5-tts-voicedesign): text-based voice customization
+    - MiniMax (speech-2.6-hd): preset voices
+
+    The active provider is selected via VOICE_PROVIDER env var ("mimo"|"minimax").
+    If fallback is enabled (VOICE_FALLBACK_ENABLED=true), MiniMax acts as
+    fallback when the primary provider fails.
+    """
+    primary_provider = None
+    fallback_provider = None
+
+    # Primary provider
+    if settings.voice_provider == "mimo" and settings.mimo_api_key:
+        try:
+            from heart.ss08_voice.mimo_provider import MiMoProvider
+
+            primary_provider = MiMoProvider(
+                api_key=settings.mimo_api_key,
+                base_url=settings.mimo_base_url,
+            )
+            logger.info("wiring_mimo_provider_initialized")
+        except Exception as e:
+            logger.warning("wiring_mimo_provider_init_failed", error=str(e))
+            primary_provider = None
+
+    if not primary_provider and settings.voice_provider == "minimax" and settings.minimax_api_key:
+        try:
+            from heart.ss08_voice.minimax_provider import MiniMaxProvider
+
+            primary_provider = MiniMaxProvider(
+                api_key=settings.minimax_api_key,
+                group_id=settings.minimax_group_id or "",
+                base_url=settings.minimax_base_url,
+            )
+            logger.info("wiring_minimax_primary_initialized")
+        except Exception as e:
+            logger.warning("wiring_minimax_provider_init_failed", error=str(e))
+            primary_provider = None
+
+    # Fallback provider (MiniMax)
+    if settings.voice_fallback_enabled and settings.minimax_api_key:
+        try:
+            from heart.ss08_voice.minimax_provider import MiniMaxProvider
+
+            fallback_provider = MiniMaxProvider(
+                api_key=settings.minimax_api_key,
+                group_id=settings.minimax_group_id or "",
+                base_url=settings.minimax_base_url,
+            )
+            logger.info("wiring_minimax_fallback_initialized")
+        except Exception as e:
+            logger.warning("wiring_minimax_fallback_init_failed", error=str(e))
+            fallback_provider = None
+
+    if not primary_provider:
+        logger.warning(
+            "wiring_no_voice_provider", hint="Set MIMO_API_KEY or MINIMAX_API_KEY in .env"
+        )
         return None
+
     try:
-        from heart.ss08_voice.minimax_provider import MiniMaxProvider
         from heart.ss08_voice.service import VoiceService
 
-        provider = MiniMaxProvider(
-            api_key=settings.minimax_api_key,
-            group_id=settings.minimax_group_id or "",
-            base_url=settings.minimax_base_url,
+        svc = VoiceService(primary_provider, fallback=fallback_provider)
+        logger.info(
+            "wiring_voice_service_initialized",
+            primary=primary_provider.name,
+            fallback=fallback_provider.name if fallback_provider else None,
         )
-        svc = VoiceService(provider)
-        logger.info("wiring_voice_service_initialized")
         return svc
     except Exception as e:
         logger.warning("wiring_voice_service_init_failed", error=str(e))
