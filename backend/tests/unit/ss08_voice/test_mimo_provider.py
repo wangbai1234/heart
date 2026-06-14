@@ -230,12 +230,12 @@ def test_parse_mimo_response_unparseable():
 
 @pytest.mark.asyncio
 async def test_stream_chunks_audio():
-    """Test that MiMoCancellableStream chunks audio into 8KB pieces."""
+    """Test that MiMoCancellableStream chunks audio into ~48KB pieces."""
     import base64
     import json
 
-    # Create 20KB of audio (fake data)
-    audio_bytes = b"\x00\x01" * 10240  # 20KB
+    # Create 100KB of audio (fake data) — enough for multiple 48KB chunks
+    audio_bytes = b"\x00\x01" * 51200  # 100KB
     audio_b64 = base64.b64encode(audio_bytes).decode()
     response_data = json.dumps(
         {"choices": [{"message": {"audio": {"data": audio_b64}}}]}
