@@ -123,9 +123,9 @@ export function useWebSocket() {
             if (msg.format === 'pcm16') {
               buf = wrapPCM16AsWAV(buf)
             }
-            // Pre-buffer: wait for 2 chunks before creating player and starting playback.
-            // This avoids starting playback on the first chunk and stalling if the second is slow.
-            const preBufferCount = 2
+            // Pre-buffer: wait for 1 chunk before creating player and starting playback.
+            // Reduced from 2 to 1 after lowering chunk size from 48KB to 8KB (1s → 170ms).
+            const preBufferCount = 1
             if (!playerRef.current || !playerRef.current.isAlive()) {
               if (seenChunks.current.size < preBufferCount && !msg.is_last) {
                 // Accumulate in a temp buffer instead of playing immediately

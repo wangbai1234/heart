@@ -58,7 +58,7 @@ _EMOTION_TAGS: dict[str, str] = {
     "neutral": "",
 }
 
-_CHUNK_SIZE = 48000  # ~1 second @ 24 kHz PCM16 — larger chunks reduce decode frequency
+_CHUNK_SIZE = 8192  # ~170ms @ 24 kHz PCM16 — per plan, 8KB balances latency and decode overhead
 
 
 class MiMoCancellableStream:
