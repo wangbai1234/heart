@@ -15,10 +15,19 @@ logger = structlog.get_logger(__name__)
 
 
 class VoiceService:
-    """Service for synthesizing speech with character-specific voices."""
+    """Service for synthesizing speech with character-specific voices.
 
-    def __init__(self, provider: TTSProvider, director: Optional[VoiceDirector] = None):
+    Supports dual-provider architecture: primary TTS + optional fallback.
+    """
+
+    def __init__(
+        self,
+        provider: TTSProvider,
+        fallback: Optional[TTSProvider] = None,
+        director: Optional[VoiceDirector] = None,
+    ):
         self._provider = provider
+        self._fallback = fallback
         self._director = director or VoiceDirector()
 
     @property
@@ -30,6 +39,36 @@ class VoiceService:
     def provider(self) -> TTSProvider:
         """Expose provider for external use (e.g., StreamSession)."""
         return self._provider
+
+    @property
+    def fallback_provider(self) -> Optional[TTSProvider]:
+        """Expose fallback provider (e.g., for StreamSession)."""
+        return self._fallback
+
+    async def _synthesize_with_provider(
+        self, provider: TTSProvider, req: TTSRequest, character_id: str = "rin"
+    ) -> TTSResult:
+        """Dispatch synthesis to a provider, handling character_id for MiMo."""
+        if provider.name == "mimo":
+            return await provider.synthesize(req, character_id)  # type: ignore[call-arg]
+        return await provider.synthesize(req)
+
+    async def synthesize_with_fallback(
+        self, req: TTSRequest, character_id: str = "rin"
+    ) -> TTSResult:
+        """Synthesize with primary provider, falling back on failure."""
+        try:
+            return await self._synthesize_with_provider(self._provider, req, character_id)
+        except Exception as e:
+            logger.warning(
+                "primary_tts_failed",
+                provider=self._provider.name,
+                error=str(e),
+            )
+            if self._fallback:
+                logger.info("tts_fallback_to", provider=self._fallback.name)
+                return await self._synthesize_with_provider(self._fallback, req, character_id)
+            raise
 
     async def synthesize_for_character(
         self,
@@ -47,14 +86,13 @@ class VoiceService:
             **overrides: Additional TTSRequest parameters (speed, pitch, etc.).
         """
         voice_id = get_voice_id(character_id)
-        return await self._provider.synthesize(
-            TTSRequest(
-                text=text,
-                voice_id=voice_id,
-                emotion=emotion,
-                **overrides,
-            )
+        req = TTSRequest(
+            text=text,
+            voice_id=voice_id,
+            emotion=emotion,
+            **overrides,
         )
+        return await self.synthesize_with_fallback(req, character_id)
 
     async def synthesize_with_state(
         self,
@@ -74,4 +112,4 @@ class VoiceService:
             active_emotions: List of active emotion names.
         """
         req = self._director.derive(text, character_id, vad, intimacy, active_emotions)
-        return await self._provider.synthesize(req)
+        return await self.synthesize_with_fallback(req, character_id)

@@ -2,14 +2,34 @@
 
 from __future__ import annotations
 
+import re
 from typing import Dict, List, Optional
 
 from heart.ss08_voice.types import TTSRequest
 from heart.ss08_voice.voice_catalog import get_voice_id
 
+# Temporary emotion keywords for text-based heuristic (until EmotionService integration)
+_EMOTION_KEYWORDS = {
+    "happy": r"(哈哈|开心|高兴|太好了|棒|喜欢|爱|😊|😄|😁|🎉)",
+    "sad": r"(难过|伤心|失望|遗憾|可惜|😢|😭|💔)",
+    "angry": r"(生气|愤怒|讨厌|烦|混蛋|😠|😡|💢)",
+    "surprised": r"(哇|天啊|不会吧|真的吗|惊讶|😮|😲|😱)",
+}
+
 
 class VoiceDirector:
     """Maps emotion/relationship state to TTSRequest parameters."""
+
+    def _detect_text_emotion(self, text: str) -> Optional[str]:
+        """Detect emotion from text keywords (temporary heuristic).
+
+        TODO: Replace with proper EmotionService.process_turn() integration.
+        This is a fallback when VAD is default/neutral.
+        """
+        for emotion, pattern in _EMOTION_KEYWORDS.items():
+            if re.search(pattern, text):
+                return emotion
+        return None
 
     EMOTION_MAP_RULES = [
         # (predicate, emotion, speed_delta, pitch_delta)
@@ -53,6 +73,22 @@ class VoiceDirector:
             if pred(v, a, d):
                 emotion, speed_delta, pitch_delta = emo, sp_d, pi_d
                 break
+
+        # Fallback: text-based emotion detection when VAD is default/neutral
+        # (until EmotionService.process_turn() integration)
+        if emotion == "neutral" and abs(v) < 0.1 and abs(a - 0.3) < 0.1:
+            text_emotion = self._detect_text_emotion(text)
+            if text_emotion:
+                # Apply emotion-specific deltas
+                emotion_deltas = {
+                    "happy": (+0.05, +1),
+                    "sad": (-0.15, -2),
+                    "angry": (+0.10, +2),
+                    "surprised": (+0.08, +2),
+                }
+                if text_emotion in emotion_deltas:
+                    emotion = text_emotion
+                    speed_delta, pitch_delta = emotion_deltas[text_emotion]
 
         # Intimacy adjustments: higher intimacy → slower, lower pitch
         intimacy_speed_mod = -0.05 * max(0.0, min(1.0, intimacy))
