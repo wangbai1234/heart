@@ -104,15 +104,34 @@ class StreamSession:
         cache_key = VoiceCache.cache_key(req.voice_id, req.emotion, req.speed, req.pitch, text)
         return await self._cache.get(cache_key)
 
-    async def _send_cached_audio(self, turn_id: str, audio: bytes) -> None:
+    async def _send_cached_audio(self, turn_id: str, audio: bytes, fmt: str = "mp3") -> None:
         """Send cached audio as single chunk."""
-        await self._send(turn_id, self._global_seq, audio, True)
+        await self._send(turn_id, self._global_seq, audio, True, fmt)
         self._global_seq += 1
 
-    async def _stream_tts(self, req: Any, turn_id: str) -> list[bytes]:
+    async def _stream_tts(self, req: Any, turn_id: str, character_id: str) -> list[bytes]:
         """Stream TTS synthesis and return collected audio chunks."""
         audio_chunks = []
-        stream = await self._voice.provider.stream_synthesize(req)
+        provider = self._voice.provider
+
+        try:
+            if provider.name == "mimo":
+                stream = await provider.stream_synthesize(req, character_id)  # type: ignore[call-arg]
+            else:
+                stream = await provider.stream_synthesize(req)
+        except Exception as primary_err:
+            fallback = self._voice.fallback_provider
+            if fallback and fallback.name != provider.name:
+                logger.warning(
+                    "tts_stream_provider_failed",
+                    provider=provider.name,
+                    error=str(primary_err),
+                )
+                provider = fallback
+                stream = await provider.stream_synthesize(req)
+            else:
+                raise
+
         self._current_response = getattr(stream, "_response", None)
 
         async for chunk in stream:
@@ -120,11 +139,13 @@ class StreamSession:
                 return audio_chunks
             if chunk.data:
                 audio_chunks.append(chunk.data)
+                chunk_fmt = getattr(chunk, "format", "mp3")
                 await self._send(
                     turn_id,
                     self._global_seq,
                     chunk.data,
                     chunk.is_last,
+                    chunk_fmt,
                 )
                 self._global_seq += 1
 
@@ -157,7 +178,7 @@ class StreamSession:
                 return
 
             # Stream TTS
-            audio_chunks = await self._stream_tts(req, turn_id)
+            audio_chunks = await self._stream_tts(req, turn_id, character_id)
 
             # Cache result
             await self._cache_audio(req, text, audio_chunks)
