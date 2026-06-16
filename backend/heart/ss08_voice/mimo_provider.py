@@ -1,8 +1,8 @@
-"""MiMo TTS Provider — MiMo voicedesign v2.5 with text-based voice customization.
+"""MiMo TTS Provider — MiMo voiceclone v2.5 with director mode control.
 
-MiMo voicedesign uses natural-language voice descriptions in the user message
-to shape the assistant audio output.  The assistant message carries emotion tags
-+ text that the model speaks.
+MiMo voiceclone uses audio sample-based voice cloning with director mode
+for three-dimensional character/scene/direction control. The model generates
+audio that matches the reference voice while following the director's instructions.
 
 Audio data from MiMo is Base64-encoded (not hex).
 """
@@ -24,20 +24,6 @@ logger = structlog.get_logger(__name__)
 
 _VALID_EMOTIONS = {"happy", "sad", "angry", "fearful", "disgusted", "surprised", "neutral"}
 
-_VOICE_DESCRIPTIONS: dict[str, str] = {
-    "rin": (
-        "一位25岁左右的温柔女性，音色柔和知性，略带成熟女性的磁性。"
-        "语速偏慢（0.9倍速），咬字清晰，情绪温柔体贴，像学姐在耐心解答问题。"
-        "音质温暖优雅，共鸣位置靠前，避免过于甜腻。"
-    ),
-    "dorothy": (
-        "一位15岁左右的活泼少女，音色明亮清脆，充满元气和活力。"
-        "语速正常（1.0倍速），略带少女的跳跃感和灵动感。"
-        "情绪基调元气活力，像朋友在分享趣事，音质轻盈不沉闷，共鸣位置靠上，"
-        "带有青春少女的天真感。"
-    ),
-}
-
 _EMOTION_DIRECTIVES: dict[str, str] = {
     "happy": "用欢快明亮的语气",
     "sad": "用低沉温柔的语气",
@@ -58,58 +44,143 @@ _EMOTION_TAGS: dict[str, str] = {
     "neutral": "",
 }
 
-_CHUNK_SIZE = 8192  # ~170ms @ 24 kHz PCM16 — per plan, 8KB balances latency and decode overhead
+# 导演模式角色档案
+_DIRECTOR_PROFILES: dict[str, dict[str, str]] = {
+    "rin": {
+        "character": (
+            "【角色】神无月凛（Rin），外表25岁左右的女性，前雷神。"
+            "声线像是深夜电台的低语，带着一丝疲惫的磁性，不刻意压低但天然偏沉。"
+            "说话节奏偏慢，句与句之间常有自然的停顿和呼吸，像是在斟酌用词。"
+            "偶尔的温柔是不经意流露的，不是刻意表演。"
+            "习惯用省略和留白代替直接表达，话说到七分就会收住。"
+        ),
+        "scene_default": (
+            "深夜，房间里只有一盏暖色台灯。"
+            "凛半倚在窗边，视线偶尔落在对面的人身上。"
+            "氛围安静而温和，她的防备比平时放松了一些，愿意多说几句。"
+        ),
+        "direction_default": (
+            "像是在和一个逐渐信任的人低声交谈，不是在朗读文本。"
+            "句与句之间留出自然的呼吸间隔，不要每句都无缝衔接。"
+            "语速不均匀——想到什么会稍快，犹豫时会拖慢。"
+            "句尾自然下沉但不刻意，保持说话而非念稿的感觉。"
+            "允许轻微的叹息和鼻息作为情绪过渡。"
+        ),
+    },
+    "dorothy": {
+        "character": (
+            "【角色】桃桃（Dorothy），外表十七八岁的活泼少女。"
+            "声音明亮清脆，像是阳光穿过玻璃弹珠的感觉。"
+            "语速天然偏快，语调起伏很大，高兴时会飙高音，认真时又会突然放慢。"
+            "说话带着跳跃感和天然的甜味，喜欢在句尾加'呀''啦''哦'等语气词。"
+            "偶尔会发出'诶嘿嘿'之类的小声笑，是发自内心的那种。"
+        ),
+        "scene_default": (
+            "下午三点的咖啡厅，阳光从落地窗洒进来。"
+            "桃桃坐在对面，双脚在椅子下晃来晃去，"
+            "正兴致勃勃地和你聊天，时不时凑近一点说悄悄话。"
+        ),
+        "direction_default": (
+            "像和最好的朋友分享一件刚发现的趣事。"
+            "语速自然偏快但不赶，兴奋的地方会加速，想卖关子时会故意拖慢。"
+            "语调起伏要大，但是真实的情绪起伏，不是在演小品。"
+            "允许偶尔的小笑声和吸气声穿插在话语间。"
+            "甜但不腻，活泼但不吵——是真实少女的能量，不是配音演员的表演。"
+        ),
+    },
+}
+
+# 情绪场景补充 — 用复合情绪描述，避免单维度标签
+_EMOTION_SCENE_HINTS: dict[str, str] = {
+    "happy": "带着一丝不好意思的愉悦，像是被人说中了心事后嘴角压不住的笑意。",
+    "sad": "话到嘴边又咽回去了一半，不是在哭，而是声音不自觉地轻了几分。",
+    "angry": "不是暴怒，而是一种克制的、冷下来的果断，每个字都带着分量。",
+    "fearful": "呼吸变浅了，说话时像是在确认什么，带着不确定和紧张。",
+    "disgusted": "语气里多了一层距离感，像是本能地想把某些东西推远。",
+    "surprised": "话语间有一个微小的停顿，像是大脑还没处理完刚才的信息。",
+    "neutral": "",
+}
+
+# 情绪表演指导补充 — 用导演笔记风格，不用技术参数
+_EMOTION_DIRECTION_HINTS: dict[str, str] = {
+    "happy": (
+        "嘴角是带笑的，偶尔有忍不住的轻笑从鼻腔溢出。"
+        "节奏可以稍微轻快，但不要变成播音腔的'欢快语气'。"
+    ),
+    "sad": (
+        "像是在努力维持平静，但声音会不自觉地变轻、变慢。"
+        "不要刻意压低声音演悲伤，让情绪自然渗透在语气里。"
+    ),
+    "angry": ("不是喊，是每个字都咬得更清楚、更有力。句与句之间的停顿变短，像是有话要说完。"),
+    "fearful": ("呼吸变得不太稳，语速会不自觉加快又突然慢下来。声音里有一丝收紧的感觉。"),
+    "disgusted": (
+        "语气里带着本能的抗拒，像是闻到了不喜欢的味道。不需要夸张表现，一点点冷淡就够了。"
+    ),
+    "surprised": ("会有一个短暂的吸气，然后话语跟上来。前半句快、后半句慢，像是边说边消化信息。"),
+    "neutral": "",
+}
+
+# 情绪→音频标签前缀（插入 assistant content 开头）
+_AUDIO_TAG_MAP: dict[str, list[str]] = {
+    "happy": ["[轻笑]"],
+    "sad": ["[叹气]"],
+    "angry": ["[深呼吸]"],
+    "fearful": ["[屏息]"],
+    "surprised": ["[吸气]"],
+    "disgusted": [],
+    "neutral": [],
+}
+
+# 情绪→呼吸标签（用于 _inject_breathing_tags 在文本中间插入）
+_BREATHING_TAGS: dict[str, str] = {
+    "happy": "[吸气]",
+    "sad": "[叹气]",
+    "angry": "[深呼吸]",
+    "fearful": "[屏息]",
+    "disgusted": "[深呼吸]",
+    "surprised": "[吸气]",
+    "neutral": "[吸气]",
+}
+
+# 通用反模式指导 — 追加到每个【指导】末尾
+_ANTI_PATTERN_FOOTER = (
+    "【重要】这不是朗诵或播报。这是一个真实的人在和熟人说话。"
+    "允许不完美：轻微的停顿、换气、语速变化都是自然的。"
+    "禁止：播音腔、客服腔、新闻腔、每句话都一样的节奏、过度夸张的情绪表演。"
+)
 
 
-class MiMoCancellableStream:
-    """Wraps an httpx async stream with cancel() for MiMo voicedesign.
+def _inject_breathing_tags(text: str, emotion: str) -> str:
+    """Insert 1-2 breathing tags at natural punctuation breaks in text.
 
-    voicedesign returns a single full response (not true streaming), so we
-    chunk the complete audio post-facto.
+    Finds Chinese punctuation marks (，。) and inserts an emotion-appropriate
+    breathing tag at the positions closest to 40% and 70% of text length.
+    Skips short texts (< 20 chars) and caps at 2 injections.
     """
+    if len(text) < 20:
+        return text
 
-    def __init__(self, response_cm: Any, character_id: str, fmt: str = "pcm16") -> None:
-        self._response_cm = response_cm
-        self._response: Any = None
-        self._cancelled = False
-        self._fmt = fmt
-        self._character_id = character_id
+    tag = _BREATHING_TAGS.get(emotion, "[吸气]")
+    punctuation = {"，", "。", "；", "、"}
 
-    async def cancel(self) -> None:
-        self._cancelled = True
-        if self._response is not None:
-            try:
-                await self._response.aclose()
-            except Exception:
-                pass
+    breakpoints = [i for i, ch in enumerate(text) if ch in punctuation]
+    if not breakpoints:
+        return text
 
-    async def __aiter__(self) -> AsyncGenerator[AudioChunk, None]:  # type: ignore[override]
-        async with self._response_cm as response:
-            self._response = response
-            response.raise_for_status()
+    text_len = len(text)
+    targets = [int(text_len * 0.4), int(text_len * 0.7)]
+    chosen: list[int] = []
 
-            full_data = await response.aread()
-            if self._cancelled:
-                return
+    for target in targets:
+        best = min(breakpoints, key=lambda pos: abs(pos - target))
+        if best not in chosen:
+            chosen.append(best)
 
-            audio_bytes = _parse_mimo_response(full_data)
-            if not audio_bytes:
-                logger.warning("mimo_empty_audio", character=self._character_id)
-                yield AudioChunk(seq=0, data=b"", format=self._fmt, is_last=True)
-                return
+    for pos in sorted(chosen, reverse=True):
+        insert_at = pos + 1
+        text = text[:insert_at] + tag + text[insert_at:]
 
-            seq = 0
-            total = len(audio_bytes)
-            for i in range(0, total, _CHUNK_SIZE):
-                if self._cancelled:
-                    return
-                chunk_data = audio_bytes[i : i + _CHUNK_SIZE]
-                is_last = i + _CHUNK_SIZE >= total
-                yield AudioChunk(seq=seq, data=chunk_data, format=self._fmt, is_last=is_last)
-                seq += 1
-
-            if seq == 0:
-                yield AudioChunk(seq=0, data=audio_bytes, format=self._fmt, is_last=True)
+    return text
 
 
 def _parse_mimo_response(raw: bytes) -> bytes:
@@ -193,54 +264,71 @@ def _decode_audio_data(raw: str | bytes) -> bytes:
 
 
 class MiMoProvider:
-    """MiMo TTS Provider (mimo-v2.5-tts-voicedesign).
+    """MiMo TTS Provider (mimo-v2.5-tts-voiceclone).
 
-    Uses natural-language voice descriptions to create character-specific
-    voices.  Accepts a character_id to select the matching voice description.
+    Uses audio sample-based voice cloning with director mode for
+    three-dimensional character/scene/direction control.
     """
 
-    def __init__(self, api_key: str, base_url: str = "https://api.xiaomimimo.com/v1"):
+    def __init__(
+        self,
+        api_key: str,
+        base_url: str = "https://api.xiaomimimo.com/v1",
+        reference_audio_b64: str = "",
+        model: str = "mimo-v2.5-tts-voiceclone",
+    ):
         self._api_key = api_key
         self._base_url = base_url.rstrip("/")
-        self._client = httpx.AsyncClient(timeout=60.0)
+        self._client = httpx.AsyncClient(timeout=120.0)
+        self._reference_audio_b64 = reference_audio_b64
+        self._model = model
 
-    def _build_body(self, req: TTSRequest, character_id: str, stream: bool = False) -> dict:
+    def _build_body(self, req: TTSRequest, character_id: str) -> dict:
+        """构建 voiceclone 请求体，使用导演模式三维度控制。"""
         emotion = req.emotion if req.emotion in _VALID_EMOTIONS else "neutral"
 
-        voice_desc = _VOICE_DESCRIPTIONS.get(character_id, _VOICE_DESCRIPTIONS["rin"])
-        emotion_directive = _EMOTION_DIRECTIVES.get(emotion, "用自然平和的语气")
-        user_content = f"{voice_desc} {emotion_directive}"
+        # 获取角色档案
+        profile = _DIRECTOR_PROFILES.get(character_id, _DIRECTOR_PROFILES["rin"])
+        character_desc = profile["character"]
+        scene_default = profile["scene_default"]
+        direction_default = profile["direction_default"]
 
+        # 获取情绪补充
+        emotion_scene = _EMOTION_SCENE_HINTS.get(emotion, "")
+        emotion_direction = _EMOTION_DIRECTION_HINTS.get(emotion, "")
+
+        # 构建 user message（导演模式三维度 + 通用反模式指导）
+        scene = f"{scene_default} {emotion_scene}".strip()
+        direction = f"{direction_default} {emotion_direction} {_ANTI_PATTERN_FOOTER}".strip()
+        user_content = f"{character_desc}【场景】{scene}【指导】{direction}"
+
+        # 构建 assistant message（音频标签前缀 + 情绪标签 + 呼吸标签注入的文本）
+        audio_tags = _AUDIO_TAG_MAP.get(emotion, [])
+        audio_tag_prefix = "".join(audio_tags)
         emotion_tag = _EMOTION_TAGS.get(emotion, "")
-        assistant_content = f"{emotion_tag}{req.text}" if emotion_tag else req.text
+        tagged_text = _inject_breathing_tags(req.text, emotion)
+        assistant_content = f"{audio_tag_prefix}{emotion_tag}{tagged_text}"
 
+        # 构建 audio config
         audio_config: dict[str, Any] = {
-            "format": "pcm16",
-            "optimize_text_preview": False,
+            "format": "wav",
+            "voice": self._reference_audio_b64,
         }
-        if req.speed != 1.0:
-            audio_config["speed"] = req.speed
-        if req.pitch != 0:
-            audio_config["pitch"] = req.pitch
-        if req.volume != 1.0:
-            audio_config["volume"] = req.volume
 
         body: dict[str, Any] = {
-            "model": "mimo-v2.5-tts-voicedesign",
+            "model": self._model,
             "messages": [
                 {"role": "user", "content": user_content},
                 {"role": "assistant", "content": assistant_content},
             ],
             "audio": audio_config,
         }
-        if stream:
-            body["stream"] = True
 
         return body
 
     async def synthesize(self, req: TTSRequest, character_id: str = "rin") -> TTSResult:
         """Synthesize speech from text (non-streaming)."""
-        body = self._build_body(req, character_id, stream=False)
+        body = self._build_body(req, character_id)
 
         try:
             response = await self._client.post(
@@ -265,11 +353,12 @@ class MiMoProvider:
         if not audio_bytes:
             raise TTSProviderError(f"MiMo response missing audio data: {str(data)[:200]}")
 
+        # WAV 24kHz 16bit → duration_ms = len(audio_bytes) * 1000 // (24000 * 2)
         duration_ms = max(1, len(audio_bytes) * 1000 // (24000 * 2)) if audio_bytes else 0
 
         return TTSResult(
             audio=audio_bytes,
-            format="pcm16",
+            format="wav",
             duration_ms=duration_ms,
             request_id=str(uuid.uuid4()),
         )
@@ -277,25 +366,14 @@ class MiMoProvider:
     async def stream_synthesize(self, req: TTSRequest, character_id: str = "rin") -> Any:
         """Synthesize speech from text (streaming).
 
-        Returns a MiMoCancellableStream that chunks the full response.
+        Raises NotImplementedError as voiceclone does not support true streaming.
         """
-        body = self._build_body(req, character_id, stream=True)
-        response_cm = self._client.stream(
-            "POST",
-            f"{self._base_url}/chat/completions",
-            json=body,
-            headers={
-                "api-key": self._api_key,
-                "Content-Type": "application/json",
-            },
-            timeout=60.0,
-        )
-        return MiMoCancellableStream(response_cm, character_id, fmt="pcm16")
+        raise NotImplementedError("voiceclone 不支持真流式")
 
     def estimate_cost_cents(self, text: str) -> float:
         """Estimate cost in cents for synthesizing text via MiMo.
 
-        MiMo voicedesign pricing is per-character; approximate at
+        MiMo voiceclone pricing is per-character; approximate at
         ~0.015 CNY/char → ~0.2 US cents per char.
         """
         return len(text) * 0.02
