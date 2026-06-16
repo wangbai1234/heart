@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import base64
+from dataclasses import replace
 from typing import Dict, List, Optional
 
 import structlog
@@ -56,19 +58,29 @@ class VoiceService:
     async def synthesize_with_fallback(
         self, req: TTSRequest, character_id: str = "rin"
     ) -> TTSResult:
-        """Synthesize with primary provider, falling back on failure."""
+        """Synthesize with primary provider, falling back on failure.
+
+        When primary is voiceclone (mimo), fallback to a non-cloning provider
+        is suppressed — a different voice engine would cause jarring voice
+        changes mid-conversation. Instead, the error propagates so the caller
+        can skip the sentence gracefully.
+        """
         try:
-            return await self._synthesize_with_provider(self._provider, req, character_id)
+            result = await self._synthesize_with_provider(self._provider, req, character_id)
         except Exception as e:
             logger.warning(
                 "primary_tts_failed",
                 provider=self._provider.name,
                 error=str(e),
             )
-            if self._fallback:
+            if self._fallback and self._provider.name != "mimo":
                 logger.info("tts_fallback_to", provider=self._fallback.name)
-                return await self._synthesize_with_provider(self._fallback, req, character_id)
-            raise
+                result = await self._synthesize_with_provider(self._fallback, req, character_id)
+            else:
+                raise
+
+        # 附加 audio_b64 字段供 WebSocket 直接发送给前端
+        return replace(result, audio_b64=base64.b64encode(result.audio).decode())  # type: ignore[call-arg]
 
     async def synthesize_for_character(
         self,

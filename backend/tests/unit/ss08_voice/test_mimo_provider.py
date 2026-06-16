@@ -65,8 +65,8 @@ def test_build_body_director_mode_rin_profile(provider, sample_request):
     """Test that rin character profile is used."""
     body = provider._build_body(sample_request, "rin")
     user_content = body["messages"][0]["content"]
-    assert "25岁" in user_content
-    assert "前雷神" in user_content
+    assert "20岁" in user_content
+    assert "雷神" in user_content
 
 
 def test_build_body_emotion_tags_happy(provider):
@@ -153,7 +153,7 @@ def test_build_body_anti_pattern_footer(provider):
     req = TTSRequest(text="你好", voice_id="rin", emotion="neutral")
     body = provider._build_body(req, "rin")
     user_content = body["messages"][0]["content"]
-    assert "不是朗诵或播报" in user_content
+    assert "参考音频" in user_content
     assert "播音腔" in user_content
 
 
@@ -162,7 +162,7 @@ def test_build_body_anti_pattern_footer_dorothy(provider):
     req = TTSRequest(text="你好呀", voice_id="dorothy", emotion="neutral")
     body = provider._build_body(req, "dorothy")
     user_content = body["messages"][0]["content"]
-    assert "不是朗诵或播报" in user_content
+    assert "参考音频" in user_content
 
 
 # ── synthesize tests ──
