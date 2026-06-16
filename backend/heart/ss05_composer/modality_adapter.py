@@ -205,6 +205,8 @@ def _build_modality_header(modality: Modality) -> str:
             "[MODE: VOICE-SCRIPT]\n"
             "You are speaking aloud. Your output must be speakable by a TTS engine.\n"
             "Do NOT use markdown, lists, code blocks, tables, or links.\n"
+            "Do NOT use parenthetical action/stage directions like （微笑）or（叹气）.\n"
+            "Output ONLY spoken dialogue — no narration, no action descriptions.\n"
             "Use natural speech rhythms. Keep responses short (1-2 sentences).\n"
             "Use pauses (…) and intonation (rising? falling.) as appropriate."
         ),
