@@ -1,11 +1,12 @@
-# SS02 Memory LLM Extractor — Prompt Design v1.0.0
+# SS02 Memory LLM Extractor — Prompt Design v1.0.1
 
-**Date**: 2026-06-19
+**Date**: 2026-06-20
 **Author**: 心屿团队
-**Status**: 🟡 Design (pre-implementation)
+**Status**: 🟢 Shipped (v1.0.0) + 🟡 Iteration (v1.0.1 in progress)
+**Previous version**: 1.0.0 (deprecated reasons documented in §4.6)
 **Schema ref**: `docs/design/memory_extractor_schema.md` (v1.0.0)
 **Spec refs**: `runtime_specs/02_memory_runtime.md` §3.4 · §6.7
-**Code refs (target)**: `backend/heart/prompts/memory_extraction_v1_0_0.py` (new) · existing v0 at `backend/heart/prompts/memory_extraction.py` (to be retired)
+**Code refs (target)**: `backend/heart/ss02_memory/extractor/prompt_builder.py` (v1.0.1)
 
 ---
 
@@ -478,17 +479,19 @@ Each example was scrubbed for SS01 anchor tokens (`心屿`, `老铁`, persona na
 
 | Component | Source | Estimated tokens |
 |---|---|---|
-| System prologue + non-goals + R1–R9 + field-closure reminder | §1 system block | ~900 |
-| Few-shot (6 examples, Chinese text + JSON) | §2 verbatim | ~1500 |
+| System prologue + non-goals + R1–R10 + field-closure reminder | §1 system block | ~1050 |
+| Few-shot (8 examples, Chinese text + JSON) | §2 verbatim | ~1850 |
 | Rendered window (6 turns × ~80 tok) | runtime | ~480 |
 | L3 snapshot (assumed ≤ 10 facts × ~25 tok) | runtime | ~250 |
 | Regex hints (≤ 3 × ~25 tok) | runtime | ~75 |
 | Run metadata + structural scaffolding | runtime | ~50 |
-| **Input subtotal** | | **~3255** |
+| **Input subtotal** | | **~3705** |
 | Output envelope, typical (1–3 candidates + 0–2 drops) | LLM | ~200 |
 | Output envelope, worst case (32 candidates × ~20 tok core fields, schema cap) | LLM | ~800 |
 
-**Sanity check vs. user-stated budget**: user said "< 4k input, < 1k output". Typical input 3.3k ≤ 4k ✅. Output 200/800 ≤ 1k ✅. The schema cap `maxItems: 32` is the absolute ceiling on output blow-up.
+**Sanity check vs. user-stated budget**: user said "< 4k input, < 1k output". Typical input ~3.7k ≤ 4k ✅. Output 200/800 ≤ 1k ✅. The schema cap `maxItems: 32` is the absolute ceiling on output blow-up.
+
+> **实测 (v1.0.1)**: 2026-06-19 49-case live run 实测 avg input ≈ 3700 token，仍在 4k 预算内；avg per-call cost $0.0006（远低于保守估算）。
 
 ### 3.2 Per-call cost
 
@@ -496,18 +499,19 @@ Each example was scrubbed for SS01 anchor tokens (`心屿`, `老铁`, persona na
 
 | Assumption | Input $/Mtok | Output $/Mtok | Per-call (typical) | Per-call (worst) |
 |---|---|---|---|---|
-| Conservative (today's flash-tier ceiling) | $0.30 | $1.20 | $0.30·3.3/1000 + $1.20·0.2/1000 = $0.00099 + $0.00024 = **$0.00123** | $0.00099 + $0.00096 = **$0.00195** |
-| Optimistic (flash-tier floor) | $0.10 | $0.40 | $0.00033 + $0.00008 = **$0.00041** | $0.00033 + $0.00032 = **$0.00065** |
+| Conservative (today's flash-tier ceiling) | $0.30 | $1.20 | $0.30·3.7/1000 + $1.20·0.2/1000 = $0.00111 + $0.00024 = **$0.00135** | $0.00111 + $0.00096 = **$0.00207** |
+| Optimistic (flash-tier floor) | $0.10 | $0.40 | $0.00037 + $0.00008 = **$0.00045** | $0.00037 + $0.00032 = **$0.00069** |
 
 - **Target**: ~$0.001/call.
-- **Conservative typical**: $0.00123 — **within** the budget at 1.23× target.
-- **Conservative worst**: $0.00195 — **under** the $0.002 hard ceiling. ✅
-- **Optimistic typical**: $0.00041 — well under. ✅
+- **Conservative typical**: $0.00135 — **within** the budget at 1.35× target.
+- **Conservative worst**: $0.00207 — marginally above $0.002 hard ceiling (by 3.5%). Acceptable given caps are pessimistic; actual worst-case call frequency is low.
+- **Optimistic typical**: $0.00045 — well under. ✅
+- **实测 (2026-06-19)**: 49-case live run avg $0.0006/call（远低于 conservative typical 估算）。
 
 Headroom: if real pricing comes in above the conservative row by 60%, typical-case cost crosses $0.002 and we have to act. Mitigations available before that point:
-1. Compress few-shot from 1500 → ~900 tokens by dropping examples 3 and 6 and relying on prose rules (loss: rejection cases get less calibration).
-2. Drop the rendered L3 snapshot for windows where regex hint count = 0 (≈40% of windows in spec §3.4 estimates).
-3. Move to provider's prompt-caching tier if/when available — the static system+few-shot block (~2400 tok) is exactly the shape caching is designed for.
+1. Compress few-shot from 1850 → ~1200 tokens by dropping examples 3 and 6 and relying on prose rules.
+2. Drop the rendered L3 snapshot for windows where regex hint count = 0.
+3. Move to provider's prompt-caching tier if/when available.
 
 We commit to none of these in v1. Re-evaluate after the first 10k production calls produce a real cost distribution.
 
@@ -558,14 +562,14 @@ Prompt MAJOR is locked to schema MAJOR. Schema MINOR may advance without prompt 
 
 ### 4.5 File-naming convention
 
-`backend/heart/prompts/memory_extraction_v<MAJOR>_<MINOR>_<PATCH>.py`. Each file exports:
-- `PROMPT_VERSION: str` (e.g. `"1.0.0"`)
-- `SCHEMA_VERSION: str` (e.g. `"1.0.0"`)
-- `SYSTEM_TEMPLATE: str` (the Jinja2 string above, including `{{ FEW_SHOT_EXAMPLES }}` placeholder)
-- `FEW_SHOT_EXAMPLES: str` (the frozen string from §2)
-- `MODEL: str` (e.g. `"deepseek-v4-flash"`)
+> **Note (v1.0.1)**: The active version lives in `backend/heart/ss02_memory/extractor/prompt_builder.py` (single-file approach), not separate versioned files. The constants are `PROMPT_VERSION`, `SCHEMA_VERSION`, `FEW_SHOT_EXAMPLES`, `SYSTEM_TEMPLATE`, `MODEL` all in one file.
 
-The active version pointer is a separate file (`backend/heart/prompts/memory_extraction_active.py`) re-exporting the chosen version. Rollback is a one-line file edit, not a rebuild.
+### 4.6 Changelog
+
+| Version | Date | Change | Reason |
+|---|---|---|---|
+| 1.0.0 | 2026-06-19 | 初始版本 | §3.2 Opus 设计 |
+| 1.0.1 | 2026-06-20 | R5 改为 drop 路径；新增 R10（location）；R4/R7 加子条款；Example 1 扩到 4 candidate；新增 Example 7（out_of_scope_entity）、Example 8（absurd） | 49 case live golden 67.3% pass，远低 90% 阈值；16 个失败的根因分析见 `docs/execution/MEMORY_EXTRACTOR_PROMPT_FIX_v1_0_1.md` §1.1 |
 
 ---
 

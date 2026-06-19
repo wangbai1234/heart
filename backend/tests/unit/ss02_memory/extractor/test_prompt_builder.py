@@ -154,7 +154,7 @@ class TestPromptBuilderMetadata:
     def test_prompt_version_and_schema_version(
         self, builder
     ):
-        assert PROMPT_VERSION == "1.0.0"
+        assert PROMPT_VERSION == "1.0.1"
         assert SCHEMA_VERSION == "1.0.0"
 
     def test_custom_versions(
