@@ -437,3 +437,11 @@ Before this schema can be shipped as `v1.0.0` (not `v0.x`):
 - [ ] At `reasoning` quality level: ≥ 95% of candidates' `reasoning` strings contain at least one of their declared `source_turns` ids.
 - [ ] `dropped_signals` is non-empty on at least 60% of windows that contain regex hits (otherwise the regex-retirement evidence path is broken).
 - [ ] Resolver doc (separate) consumes this schema and writes its own state machine; Resolver doc lands before this schema bumps off `v1.0.0`.
+
+---
+
+## Approval
+
+| Date | Reviewer | Role | Version reviewed | Notes |
+|---|---|---|---|---|
+| 2026-06-20 | HUMAN | Project Lead | 1.0.0 | approved as-is |

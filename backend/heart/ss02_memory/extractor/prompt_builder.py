@@ -2,7 +2,7 @@
 SS02 Memory LLM Extractor — Prompt Builder (Jinja2 renderer)
 
 Renders the extraction prompt per §2.2 of the prompt design doc.
-prompt_version locked to "1.0.1" — bump requires HUMAN approval.
+prompt_version locked to "1.0.2" — bump requires HUMAN approval.
 
 Author: 心屿团队
 """
@@ -19,11 +19,11 @@ from .types import Hint, L3FactSnapshot, TurnInput
 
 logger = structlog.get_logger()
 
-PROMPT_VERSION = "1.0.1"
+PROMPT_VERSION = "1.0.2"
 SCHEMA_VERSION = "1.0.0"
 MODEL = "deepseek-chat"
 
-# ── Few-shot examples (frozen with prompt_version 1.0.1) ──────
+# ── Few-shot examples (frozen with prompt_version 1.0.2) ──────
 
 FEW_SHOT_EXAMPLES = """
 ### Example 1 — Fragmentation + Coreference + 实体类型 (4 attributes shared entity_ref)
@@ -382,7 +382,7 @@ Run metadata:
 # ── Jinja2 System Template ────────────────────────────────────
 
 SYSTEM_TEMPLATE = """{# ====================================================================
-   memory_extraction_v1_0_1.py — Jinja2 template
+   memory_extraction_v1_0_2.py — Jinja2 template
    ==================================================================== #}
 {# -------------------- SYSTEM (everything above ### Run input) -------- #}
 你是一个**事实提取器**，不是对话代理。
@@ -514,6 +514,34 @@ schema 的 `if/then` 规则强制 `kind=negation ⇒ operation ∈ {soft_delete,
 正例（确实是 `location_residence`）：
 - 「我住在北京」「我家在杭州」「我在北京住了 5 年」「我搬到上海了」
 
+### R11 — 实体首次以专名出现时，必出 name candidate
+
+实体（人 / 宠物 / 朋友 / 家人 / 同事）首次在 window 中以**专名**（中文名、英文名、外号、宠物名）出现时：
+
+- 即使该 turn 同时披露了关系/职业/属性，专名本身就是独立的 `attribute="name"` candidate
+- `entity_ref` 使用专名本身（如 `"小李"` / `"妙妙"`）
+- `source_turns` 仅含专名出现的 turn
+
+例：
+- 「小李是我同事」→ 2 candidate: `(colleague, name, "小李")` + `(colleague, relation, "同事")`
+- 「我老公叫李明」→ 2 candidate: `(family, name, "李明", entity_ref="husband")` + `(family, relation, "老公", entity_ref="husband")`
+- 「我妈叫张红」→ 同上模式
+
+不适用情况：
+- 代词 / 称谓（"他/她/我妈"）— 这些不是专名
+- 头衔（"老板"/"医生"）独立出现 — 这是 occupation 不是 name
+
+### R12 — "不擅长 / 不喜欢" → dislike，**不是** negation
+
+R7 的 negation 只处理"撤回已声明事实"。下列**态度表达**走 `attribute="dislike"`, `kind="disclosure"`, `operation="create"`：
+
+- 「我不擅长 X」「X 不太行」→ `(self, dislike, "X")`
+- 「我不喜欢 X」「X 我无感」「不感冒」→ `(self, dislike, "X")`
+- 「讨厌 X」「受不了 X」→ `(self, dislike, "X")`
+- 但「我没有 X」「我不养 X 了」→ R7 negation（撤回先前的 hobby/pet/...）
+
+判断口诀：句子是**态度表达**（"我对 X 的感受"）还是**事实撤回**（"我之前说的 X 不对了"）？前者 → dislike disclosure，后者 → R7 negation。
+
 ## 字段闭包提醒（schema 已强制，列在这里防 hallucinate）
 - `entity_type ∈ {self, pet, family, friend, colleague, location, possession, preference, event, other}`
 - `attribute ∈ {name, nickname, age, color, breed, occupation, relation, location_residence, location_origin, hobby, dislike, health_condition, birthday, anniversary, other}`
@@ -582,7 +610,7 @@ class PromptBuilder:
     is the rendered Run input block.
 
     Attributes:
-        prompt_version: Locked to "1.0.1" — bump requires HUMAN approval.
+        prompt_version: Locked to "1.0.2" — bump requires HUMAN approval.
         schema_version: Locked to "1.0.0" — must match schema doc MAJOR.MINOR.
     """
 

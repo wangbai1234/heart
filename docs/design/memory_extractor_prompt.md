@@ -1,4 +1,4 @@
-# SS02 Memory LLM Extractor — Prompt Design v1.0.1
+# SS02 Memory LLM Extractor — Prompt Design v1.0.2
 
 **Date**: 2026-06-20
 **Author**: 心屿团队
@@ -570,6 +570,7 @@ Prompt MAJOR is locked to schema MAJOR. Schema MINOR may advance without prompt 
 |---|---|---|---|
 | 1.0.0 | 2026-06-19 | 初始版本 | §3.2 Opus 设计 |
 | 1.0.1 | 2026-06-20 | R5 改为 drop 路径；新增 R10（location）；R4/R7 加子条款；Example 1 扩到 4 candidate；新增 Example 7（out_of_scope_entity）、Example 8（absurd） | 49 case live golden 67.3% pass，远低 90% 阈值；16 个失败的根因分析见 `docs/execution/MEMORY_EXTRACTOR_PROMPT_FIX_v1_0_1.md` §1.1 |
+| 1.0.2 | 2026-06-20 | 新增 R11（实体首次专名 → 必出 name candidate）+ R12（不擅长/不喜欢 → dislike ≠ negation） | 收尾 strict scoring 下 coref-004 + adv-006 两个确定性失败；见 `docs/execution/MEMORY_EXTRACTOR_REFACTOR_AUDIT_AND_v1_0_2_PLAN.md` §2 |
 
 ---
 
@@ -717,3 +718,11 @@ Recorded so the implementer doesn't re-derive them:
 2. **System message size limits**: `deepseek-v4-flash`'s context is large enough for ~3.3k input, but confirm no hidden per-message cap before shipping.
 3. **`tool_choice=required` vs `tool_choice=specific tool`**: this prompt only makes sense with the latter; the former allows the model to pick a non-existent tool name in some providers.
 4. **Where the v0 prompt retires**: `backend/heart/prompts/memory_extraction.py` must not be imported by any new code path. A separate `chore:` PR after v1 ships should delete it.
+
+---
+
+## Approval
+
+| Date | Reviewer | Role | Version reviewed | Notes |
+|---|---|---|---|---|
+| 2026-06-20 | HUMAN | Project Lead | 1.0.2 | approved as-is |
