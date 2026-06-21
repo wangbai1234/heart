@@ -38,17 +38,34 @@ class Token(BaseModel):
 class AuthManager:
     """Manages JWT token generation and verification."""
 
-    def __init__(self, secret_key: str, algorithm: str = "HS256", expire_minutes: int = 43200):
+    def __init__(
+        self,
+        secret_key: str = "",
+        algorithm: str = "HS256",
+        private_key: str = "",
+        public_key: str = "",
+        expire_minutes: int = 43200,
+    ):
         """Initialize auth manager.
 
         Args:
-            secret_key: Secret key for signing tokens
-            algorithm: JWT algorithm (default: HS256)
+            secret_key: Secret key for HS256 signing
+            algorithm: JWT algorithm (HS256 or RS256)
+            private_key: PEM private key for RS256 signing
+            public_key: PEM public key for RS256 verification
             expire_minutes: Token expiration time in minutes (default: 30 days)
         """
-        self.secret_key = secret_key
         self.algorithm = algorithm
         self.expire_minutes = expire_minutes
+
+        if algorithm == "RS256":
+            if not private_key or not public_key:
+                raise ValueError("RS256 requires jwt_private_key and jwt_public_key")
+            self._sign_key = private_key
+            self._verify_key = public_key
+        else:
+            self._sign_key = secret_key
+            self._verify_key = secret_key
 
     def create_access_token(self, user_id: str, email: Optional[str] = None) -> Token:
         """Create a JWT access token.
@@ -71,7 +88,7 @@ class AuthManager:
 
         encoded_jwt = jwt.encode(
             payload,
-            self.secret_key,
+            self._sign_key,
             algorithm=self.algorithm,
         )
 
@@ -96,7 +113,7 @@ class AuthManager:
         try:
             payload = jwt.decode(
                 token,
-                self.secret_key,
+                self._verify_key,
                 algorithms=[self.algorithm],
             )
             user_id: str = payload.get("sub")
@@ -150,5 +167,7 @@ class AuthManager:
 auth_manager = AuthManager(
     secret_key=settings.jwt_secret_key,
     algorithm=settings.jwt_algorithm,
+    private_key=settings.jwt_private_key,
+    public_key=settings.jwt_public_key,
     expire_minutes=settings.access_token_expire_minutes,
 )

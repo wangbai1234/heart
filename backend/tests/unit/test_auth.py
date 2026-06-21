@@ -84,7 +84,7 @@ class TestAuthManager:
         }
         invalid_token = jwt.encode(
             payload,
-            auth_manager_instance.secret_key,
+            auth_manager_instance._sign_key,
             algorithm=auth_manager_instance.algorithm,
         )
 
@@ -127,7 +127,7 @@ class TestAuthManager:
         # Decode without verification to inspect payload
         payload = jwt.decode(
             token.access_token,
-            auth_manager_instance.secret_key,
+            auth_manager_instance._sign_key,
             algorithms=[auth_manager_instance.algorithm],
         )
 
