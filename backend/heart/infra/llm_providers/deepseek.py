@@ -80,7 +80,7 @@ class DeepSeekV4FlashProvider(LLMProvider):
         """Get or create async HTTP client."""
         if self._client is None:
             self._client = httpx.AsyncClient(
-                base_url=self.base_url,
+                base_url=self.base_url or "",
                 headers={
                     "Authorization": f"Bearer {self.api_key}",
                     "Content-Type": "application/json",

@@ -157,7 +157,7 @@ class ResonanceTracker:
 
         # 2. Find trigger definition
         trigger_def = next(
-            (t for t in soul.identity_anchor.resonance_triggers if t.cue == trigger_cue),
+            (t for t in (soul.identity_anchor.resonance_triggers or []) if t.cue == trigger_cue),
             None,
         )
         if not trigger_def:
