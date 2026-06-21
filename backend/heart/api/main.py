@@ -5,6 +5,7 @@ FastAPI application entry point with health endpoints and middleware.
 """
 
 import time
+from contextlib import asynccontextmanager
 
 import structlog
 from fastapi import FastAPI
@@ -68,6 +69,14 @@ async def _shutdown():
     logger.info("shutdown_complete")
 
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """FastAPI lifespan context manager (replaces deprecated on_event)."""
+    await _startup()
+    yield
+    await _shutdown()
+
+
 def create_app() -> FastAPI:
     """Create and configure FastAPI application."""
 
@@ -78,12 +87,20 @@ def create_app() -> FastAPI:
         docs_url="/api/docs",
         redoc_url="/api/redoc",
         openapi_url="/api/openapi.json",
+        lifespan=lifespan,
     )
 
-    # CORS middleware
+    # CORS middleware — configurable via CORS_ALLOWED_ORIGINS env var
+    from heart.core.config import settings
+
+    cors_origins = [
+        o.strip()
+        for o in getattr(settings, "cors_allowed_origins", "").split(",")
+        if o.strip()
+    ] or ["http://localhost:3000"]
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],  # Configure based on environment
+        allow_origins=cors_origins,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -183,10 +200,6 @@ def create_app() -> FastAPI:
     app.include_router(dev_router)
     app.include_router(voice_router)
     app.include_router(chat_ws_router)
-
-    # Startup / Shutdown events
-    app.on_event("startup")(_startup)
-    app.on_event("shutdown")(_shutdown)
 
     # OpenTelemetry instrumentation
     FastAPIInstrumentor.instrument_app(app)
