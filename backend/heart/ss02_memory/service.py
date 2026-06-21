@@ -405,21 +405,27 @@ class MemoryService:
 
     # ─────────── Write API ───────────
 
+    @invariant("inv-m-11.fast-path-no-l2-l3-l4")
     async def encode_fast(self, turn: Turn) -> FastSignals:
         """Fast encoding (< 50ms, no LLM) (§10.3 Write API).
 
         Real-time heuristic encoding:
-        - Keyword detection
+        - Keyword detection (via RegexHintsProvider)
         - Sentiment analysis (lexicon-based)
-        - Identity signal extraction (regex)
+
+        **INV-M-11**: Fast path writes ONLY L1 (Working Memory).
+        Any L2 / L3 / L4 write must go through the slow-path
+        Extractor → Resolver → Writer → Promoter pipeline.
 
         Updates L1 Working Memory (Redis).
+        Enqueues regex hints for async LLM extraction (llm/dual mode).
 
         Args:
             turn: Current conversation turn
 
         Returns:
             FastSignals with detected signals
+            (candidate_identity_signals is always empty — deprecated)
 
         Spec: §7.2 写入者, §7.3 调用顺序 (T+10ms)
         """
@@ -429,7 +435,7 @@ class MemoryService:
             self._fast_encoder = FastEncoder()
         signals = self._fast_encoder.encode(turn)
 
-        # Cache in L1 (Redis) if available
+        # Cache in L1 (Redis) if available — INV-M-11: ONLY L1 write here
         if self._redis is not None:
             try:
                 import json
@@ -450,7 +456,68 @@ class MemoryService:
                     "l1_cache_failed",
                     error=str(e),
                 )
+
+        # Enqueue regex hints for slow-path LLM extraction
+        hints = getattr(self._fast_encoder, "last_hints", [])
+        if hints:
+            await self._enqueue_extraction(
+                turn,
+                {
+                    "hints": [
+                        {
+                            "raw_phrase": h.raw_phrase,
+                            "suspected_attribute": h.suspected_attribute,
+                            "span": list(h.span),
+                        }
+                        for h in hints
+                    ]
+                },
+            )
+
+        # INV-M-11 runtime assertion: fast path must NOT write L2/L3/L4
+        # (enforced structurally — this method only touches Redis L1
+        #  and the extraction queue; no DB writes to episodic/fact/identity tables)
+
         return signals
+
+    async def _enqueue_extraction(
+        self,
+        turn: "Turn",
+        hints: Optional[dict] = None,
+    ) -> None:
+        """Enqueue turn for slow-path LLM extraction.
+
+        Called inside encode_fast() AFTER L1 write.
+        Only enqueues when mode is 'llm' or 'dual' (INV-M-11 compliant).
+
+        Args:
+            turn: Current conversation turn
+            hints: Optional regex hints as auxiliary signals
+        """
+        from heart.ss02_memory.mode import is_llm_enabled
+
+        if not is_llm_enabled():
+            return
+
+        if self._db is None:
+            logger.warning("extraction_enqueue_no_db")
+            return
+
+        try:
+            from heart.ss02_memory.models import MemoryExtractionQueue
+
+            item = MemoryExtractionQueue(
+                id=uuid4(),
+                session_id=uuid4(),  # Phase A: placeholder session_id
+                turn_id=turn.turn_index,
+                hints_json=hints,
+                status="pending",
+            )
+            self._db.add(item)
+            await self._db.flush()
+            logger.debug("extraction_enqueued", turn_id=turn.turn_index)
+        except Exception as e:
+            logger.error("extraction_enqueue_failed", error=str(e))
 
     async def queue_llm_encoding(self, event: MemoryEncodingEvent) -> None:
         """Queue async LLM encoding (§10.3 Write API).

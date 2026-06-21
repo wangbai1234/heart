@@ -430,6 +430,7 @@ class LLMExtractor:
 
         # Sanitize dropped_signals.reason — map unknown enum values to "other"
         from .types import DroppedReason
+
         _valid_reasons = {r.value for r in DroppedReason}
         if "dropped_signals" in parsed:
             for ds in parsed["dropped_signals"]:

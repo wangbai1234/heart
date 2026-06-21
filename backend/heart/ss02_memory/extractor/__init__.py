@@ -10,6 +10,7 @@ Author: 心屿团队
 from .cost_guard import CostCapExceeded, CostGuard
 from .llm_extractor import LLMExtractor
 from .prompt_builder import PromptBuilder
+from .resolver import DecisionType, Resolver, ResolverDecision
 from .types import (
     DroppedSignal,
     ExtractionCandidate,
@@ -20,12 +21,18 @@ from .types import (
     QueueItem,
     TurnInput,
 )
+from .writer import Writer, WriterError
 
 __all__ = [
     "LLMExtractor",
     "PromptBuilder",
     "CostGuard",
     "CostCapExceeded",
+    "Resolver",
+    "ResolverDecision",
+    "DecisionType",
+    "Writer",
+    "WriterError",
     "ExtractionCandidate",
     "ExtractionEnvelope",
     "ExtractorRunResult",
