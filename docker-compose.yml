@@ -64,6 +64,24 @@ services:
 
   # ── Observability ──
 
+  # Encoder Worker — L2/L3 vector encoding
+  encoder-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: heart-encoder-worker
+    command: ["python", "-m", "heart.workers.entrypoint", "encoder"]
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - heart-network
+
   # Prometheus — scrapes heart-api /metrics
   prometheus:
     image: prom/prometheus:latest
