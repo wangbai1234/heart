@@ -91,6 +91,9 @@ class Settings(BaseSettings):
     memory_promoter_demotion_window_days: int = 14
     memory_promoter_demotion_min_count: int = 2
 
+    # CORS
+    cors_allowed_origins: str = ""
+
     # Profiling
     heart_turn_profiler: str = "0"
 
