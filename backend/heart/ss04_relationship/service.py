@@ -294,7 +294,43 @@ class RelationshipService:
             state.longest_absence_days = int(days_since_last)
 
         # 3. Update special states (§3.5 step 4)
-        # TODO: Implement DRIFTING, COLD_WAR, REUNION state updates
+        from heart.ss04_relationship.special_states import (
+            SpecialState,
+            advance_reunion_turn,
+            evaluate_special_state,
+        )
+
+        new_special = evaluate_special_state(
+            current_states=state.active_special_states,
+            signals=signals,
+            days_since_last=days_since_last,
+            emotion_state=None,  # Not available in process_turn; use process_turn_raw for emotion-aware evaluation
+        )
+        if new_special is not None:
+            # Transition to new state
+            if new_special == SpecialState.NONE:
+                # Exit special state
+                state.active_special_states = [
+                    s for s in state.active_special_states if s.get("state") == "none"
+                ]
+                if not state.active_special_states:
+                    state.active_special_states = [{"state": "none", "entered_at": now.isoformat()}]
+            else:
+                # Enter new special state
+                state.active_special_states = [{
+                    "state": new_special.value,
+                    "entered_at": now.isoformat(),
+                    "turns_in_state": 0,
+                }]
+                logger.info(
+                    "special_state_transition",
+                    user_id=str(user_id),
+                    character_id=character_id,
+                    new_state=new_special.value,
+                )
+        elif any(s.get("state") == SpecialState.REUNION.value for s in state.active_special_states):
+            # Advance reunion turn counter
+            state.active_special_states = advance_reunion_turn(state.active_special_states)
 
         # 4. Evaluate stage transition (§3.5 step 5)
         stage_engine = self._get_stage_engine(character_id)
