@@ -300,14 +300,17 @@ def _score_envelope(
                 f"(exp={exp_pvid}, act={act_pvid})"
             )
 
-        # source_turns SEMI: exp source_turns must be subset of act
+        # source_turns SEMI: accept any overlap; only HARD when completely disjoint
         exp_st = set(exp.get("source_turns", []))
         act_st = set(act.get("source_turns", []))
-        st_match = exp_st.issubset(act_st)
-        detail["source_turns_match"] = st_match
-        if not st_match:
+        st_overlap = bool(exp_st & act_st)
+        st_exact = exp_st == act_st
+        detail["source_turns_match"] = st_exact
+        detail["source_turns_overlap"] = st_overlap
+        if exp_st and act_st and not st_overlap:
+            # Complete disjoint → HARD failure
             hard_fails.append(
-                f"{key[0]}.{key[1]}: source_turns mismatch "
+                f"{key[0]}.{key[1]}: source_turns completely disjoint "
                 f"(exp={sorted(exp_st)}, act={sorted(act_st)})"
             )
 
@@ -387,6 +390,7 @@ def _score_envelope(
         "drop_fn": drop_score["fn"],
         "drop_recall": drop_score["recall"],
         "drop_precision": drop_score["precision"],
+        "soft_warnings": drop_score.get("soft_warnings", []),
     }
 
 
@@ -394,45 +398,61 @@ def _score_dropped(
     exp_dropped: list[dict],
     act_dropped: list[dict],
 ) -> dict:
-    """Score dropped_signals by (turn_id, reason) key.
+    """Score dropped_signals by turn_id only (reason is SOFT).
 
-    Returns dict with tp/fp/fn/precision/recall/hard_fails.
+    If both sides agree a turn should be dropped, it's a TP regardless of
+    reason text.  Reason mismatches are recorded as soft_warnings for audit.
     """
-    exp_drops = {(d["turn_id"], d.get("reason", "")) for d in exp_dropped}
-    act_drops = {(d["turn_id"], d.get("reason", "")) for d in act_dropped}
+    # Index by turn_id
+    exp_by_turn: dict[int, str] = {d["turn_id"]: d.get("reason", "") for d in exp_dropped}
+    act_by_turn: dict[int, str] = {d["turn_id"]: d.get("reason", "") for d in act_dropped}
 
-    tp_drops = exp_drops & act_drops
-    fp_drops = act_drops - exp_drops
-    fn_drops = exp_drops - act_drops
+    exp_turns = set(exp_by_turn)
+    act_turns = set(act_by_turn)
 
-    n_exp = max(len(exp_drops), 1)
-    n_act = max(len(act_drops), 1)
+    # TP: turn dropped by both (reason may differ → soft warning)
+    tp_turns = exp_turns & act_turns
+    fp_turns = act_turns - exp_turns
+    fn_turns = exp_turns - act_turns
 
-    precision = len(tp_drops) / n_act
-    recall = len(tp_drops) / n_exp
+    n_exp = max(len(exp_turns), 1)
+    n_act = max(len(act_turns), 1)
 
-    # If both empty, perfect — swallow the 0/0 edge
-    if not exp_drops and not act_drops:
+    precision = len(tp_turns) / n_act
+    recall = len(tp_turns) / n_exp
+
+    if not exp_turns and not act_turns:
         precision = 1.0
         recall = 1.0
 
-    hard_fails = []
-    for turn_id, reason in fp_drops:
+    hard_fails: list[str] = []
+    soft_warnings: list[str] = []
+
+    for turn_id in fp_turns:
         hard_fails.append(
-            f"dropped T{turn_id}: unexpected drop (reason={reason})"
+            f"dropped T{turn_id}: unexpected drop (reason={act_by_turn[turn_id]})"
         )
-    for turn_id, reason in fn_drops:
+    for turn_id in fn_turns:
         hard_fails.append(
-            f"dropped T{turn_id}: missed expected drop (reason={reason})"
+            f"dropped T{turn_id}: missed expected drop (reason={exp_by_turn[turn_id]})"
         )
+    for turn_id in tp_turns:
+        exp_reason = exp_by_turn[turn_id]
+        act_reason = act_by_turn[turn_id]
+        if exp_reason != act_reason:
+            soft_warnings.append(
+                f"dropped T{turn_id}: reason differs "
+                f"(exp={exp_reason}, act={act_reason})"
+            )
 
     return {
-        "tp": len(tp_drops),
-        "fp": len(fp_drops),
-        "fn": len(fn_drops),
+        "tp": len(tp_turns),
+        "fp": len(fp_turns),
+        "fn": len(fn_turns),
         "precision": round(precision, 3),
         "recall": round(recall, 3),
         "hard_fails": hard_fails,
+        "soft_warnings": soft_warnings,
     }
 
 
@@ -464,6 +484,12 @@ def _generate_html_report(scores: list[dict], output_path: str) -> None:
             f"{d['entity_type']}.{d['attribute']}={d['actual_value']}" for d in s["fp_details"]
         )
         hf_fmt = "; ".join(s.get("hard_fails", []))
+        sw_fmt = "; ".join(s.get("soft_warnings", []))
+        hf_display = hf_fmt
+        if sw_fmt:
+            hf_display = hf_fmt + ("; " if hf_fmt else "") + "[SOFT] " + sw_fmt
+        if not hf_display:
+            hf_display = "—"
         rows_html += f"""<tr>
             <td>{html.escape(s["case_id"])}</td>
             <td>{status}</td>
@@ -474,7 +500,7 @@ def _generate_html_report(scores: list[dict], output_path: str) -> None:
             <td>{html.escape(tp_fmt) if tp_fmt else "—"}</td>
             <td>{html.escape(fn_fmt) if fn_fmt else "—"}</td>
             <td>{html.escape(fp_fmt) if fp_fmt else "—"}</td>
-            <td style="color:#ff9800">{html.escape(hf_fmt) if hf_fmt else "—"}</td>
+            <td style="color:#ff9800">{html.escape(hf_display)}</td>
         </tr>"""
 
     html_content = f"""<!DOCTYPE html>

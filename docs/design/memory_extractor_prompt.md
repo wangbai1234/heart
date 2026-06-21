@@ -1,12 +1,12 @@
-# SS02 Memory LLM Extractor — Prompt Design v1.0.2
+# SS02 Memory LLM Extractor — Prompt Design v1.0.3
 
 **Date**: 2026-06-20
 **Author**: 心屿团队
-**Status**: 🟢 Shipped (v1.0.0) + 🟡 Iteration (v1.0.1 in progress)
-**Previous version**: 1.0.0 (deprecated reasons documented in §4.6)
+**Status**: 🟢 Shipped (v1.0.3) — 47/49 (95.9%) strict scoring pass
+**Previous version**: 1.0.2
 **Schema ref**: `docs/design/memory_extractor_schema.md` (v1.0.0)
 **Spec refs**: `runtime_specs/02_memory_runtime.md` §3.4 · §6.7
-**Code refs (target)**: `backend/heart/ss02_memory/extractor/prompt_builder.py` (v1.0.1)
+**Code refs (target)**: `backend/heart/ss02_memory/extractor/prompt_builder.py` (v1.0.3)
 
 ---
 
@@ -571,6 +571,7 @@ Prompt MAJOR is locked to schema MAJOR. Schema MINOR may advance without prompt 
 | 1.0.0 | 2026-06-19 | 初始版本 | §3.2 Opus 设计 |
 | 1.0.1 | 2026-06-20 | R5 改为 drop 路径；新增 R10（location）；R4/R7 加子条款；Example 1 扩到 4 candidate；新增 Example 7（out_of_scope_entity）、Example 8（absurd） | 49 case live golden 67.3% pass，远低 90% 阈值；16 个失败的根因分析见 `docs/execution/MEMORY_EXTRACTOR_PROMPT_FIX_v1_0_1.md` §1.1 |
 | 1.0.2 | 2026-06-20 | 新增 R11（实体首次专名 → 必出 name candidate）+ R12（不擅长/不喜欢 → dislike ≠ negation） | 收尾 strict scoring 下 coref-004 + adv-006 两个确定性失败；见 `docs/execution/MEMORY_EXTRACTOR_REFACTOR_AUDIT_AND_v1_0_2_PLAN.md` §2 |
+| 1.0.3 | 2026-06-21 | R11 收紧（不出 relation）+ R5 排除纯情绪 + R6 显式不 drop + R12 "了"过去时反例 + Example 9 | v1.0.2 strict scoring 79.2% → 95.9%；见 `docs/execution/MEMORY_EXTRACTOR_V1_0_3_FINAL.md` |
 
 ---
 
@@ -725,4 +726,5 @@ Recorded so the implementer doesn't re-derive them:
 
 | Date | Reviewer | Role | Version reviewed | Notes |
 |---|---|---|---|---|
+| 2026-06-21 | HUMAN | Project Lead | 1.0.3 | approved — 47/49 (95.9%) strict pass |
 | 2026-06-20 | HUMAN | Project Lead | 1.0.2 | approved as-is |

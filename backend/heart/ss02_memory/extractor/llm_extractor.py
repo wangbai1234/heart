@@ -428,6 +428,20 @@ class LLMExtractor:
         # Parse JSON from response (handle tool-call wrapper if present)
         parsed = self._parse_llm_response(content)
 
+        # Sanitize dropped_signals.reason — map unknown enum values to "other"
+        from .types import DroppedReason
+        _valid_reasons = {r.value for r in DroppedReason}
+        if "dropped_signals" in parsed:
+            for ds in parsed["dropped_signals"]:
+                if isinstance(ds, dict) and "reason" in ds:
+                    if ds["reason"] not in _valid_reasons:
+                        logger.warning(
+                            "sanitizing_dropped_reason",
+                            original=ds["reason"],
+                            fallback="other",
+                        )
+                        ds["reason"] = "other"
+
         # Validate and convert to ExtractionEnvelope
         envelope = ExtractionEnvelope(**parsed)
 
@@ -475,15 +489,11 @@ class LLMExtractor:
         expected_turn_ids = sorted(t.turn_id for t in item.window)
         actual_turn_ids = sorted(envelope.window.turn_ids)
         if expected_turn_ids != actual_turn_ids:
-            return (
-                f"Window turn_ids mismatch: expected {expected_turn_ids}, " f"got {actual_turn_ids}"
-            )
+            return f"Window turn_ids mismatch: expected {expected_turn_ids}, got {actual_turn_ids}"
 
         # Check window.size matches
         if envelope.window.size != len(item.window):
-            return (
-                f"Window size mismatch: expected {len(item.window)}, " f"got {envelope.window.size}"
-            )
+            return f"Window size mismatch: expected {len(item.window)}, got {envelope.window.size}"
 
         # Check metadata echo
         if str(envelope.extractor_run_id) != str(item.extractor_run_id):
