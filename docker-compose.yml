@@ -64,15 +64,19 @@ services:
 
   # ── Observability ──
 
-  # Encoder Worker — L2/L3 vector encoding
+  # Encoder Worker — L2/L3 vector encoding (runs as FastAPI app with workers enabled)
   encoder-worker:
     build:
       context: ./backend
       dockerfile: Dockerfile
     container_name: heart-encoder-worker
-    command: ["python", "-m", "heart.workers.entrypoint", "encoder"]
+    command: ["uvicorn", "heart.api.main:app", "--host", "0.0.0.0", "--port", "8080"]
     env_file:
       - .env
+    environment:
+      - HEART_WORKERS_ENABLED=true
+    ports:
+      - "8080:8080"
     depends_on:
       postgres:
         condition: service_healthy
