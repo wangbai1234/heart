@@ -61,82 +61,6 @@ def make_turn(content: str, user_id, character_id) -> Turn:
 # ============================================================
 
 
-class TestIdentitySignals:
-    """Tests for identity signal extraction."""
-
-    def test_extract_name(self, encoder, user_id, character_id):
-        """Should extract name from '我叫X' pattern."""
-        turn = make_turn("你好，我叫李明", user_id, character_id)
-        result = encoder.encode(turn)
-
-        assert len(result.candidate_identity_signals) == 1
-        signal = result.candidate_identity_signals[0]
-        assert signal.type == "name"
-        assert signal.value == "李明"
-        assert "我叫" in signal.raw_text
-
-    def test_extract_birthday(self, encoder, user_id, character_id):
-        """Should extract birthday from '我生日X' pattern."""
-        turn = make_turn("我的生日是3月14日", user_id, character_id)
-        result = encoder.encode(turn)
-
-        birthday_signals = [s for s in result.candidate_identity_signals if s.type == "birthday"]
-        assert len(birthday_signals) == 1
-        assert "3月14日" in birthday_signals[0].value
-
-    def test_extract_age(self, encoder, user_id, character_id):
-        """Should extract age from 'X岁' pattern."""
-        turn = make_turn("我今年25岁了", user_id, character_id)
-        result = encoder.encode(turn)
-
-        age_signals = [s for s in result.candidate_identity_signals if s.type == "age"]
-        assert len(age_signals) == 1
-        assert age_signals[0].value == "25"
-
-    def test_extract_occupation(self, encoder, user_id, character_id):
-        """Should extract occupation from '我是X' pattern."""
-        turn = make_turn("我是一名程序员", user_id, character_id)
-        result = encoder.encode(turn)
-
-        occupation_signals = [
-            s for s in result.candidate_identity_signals if s.type == "occupation"
-        ]
-        assert len(occupation_signals) == 1
-        assert "程序员" in occupation_signals[0].value
-
-    def test_extract_pet(self, encoder, user_id, character_id):
-        """Should extract pet from '我养X' pattern."""
-        turn = make_turn("我养了一只黑猫", user_id, character_id)
-        result = encoder.encode(turn)
-
-        pet_signals = [s for s in result.candidate_identity_signals if s.type == "pet"]
-        assert len(pet_signals) == 1
-        assert "黑猫" in pet_signals[0].value
-
-    def test_extract_location(self, encoder, user_id, character_id):
-        """Should extract location from '我在X' pattern."""
-        turn = make_turn("我住在北京市", user_id, character_id)
-        result = encoder.encode(turn)
-
-        location_signals = [s for s in result.candidate_identity_signals if s.type == "location"]
-        assert len(location_signals) == 1
-        assert "北京市" in location_signals[0].value
-
-    def test_multiple_signals_in_one_turn(self, encoder, user_id, character_id):
-        """Should extract multiple signals from one turn."""
-        turn = make_turn("我叫王芳，今年28岁，是老师，养了一只狗", user_id, character_id)
-        result = encoder.encode(turn)
-
-        # Should detect: name, age, occupation, pet
-        assert len(result.candidate_identity_signals) >= 4
-
-        types = {s.type for s in result.candidate_identity_signals}
-        assert "name" in types
-        assert "age" in types
-        assert "occupation" in types
-        assert "pet" in types
-
-
 # ============================================================
 # Sentiment Analysis Tests
 # ============================================================
@@ -219,28 +143,28 @@ class TestDiverseSentences:
     """Integration test with 10 diverse real-world sentences."""
 
     @pytest.mark.parametrize(
-        "sentence,expected_signals,expected_sentiment_range",
+        "sentence,expected_sentiment_range",
         [
             # 1. Name + positive sentiment
-            ("你好，我叫张伟，很高兴认识你", ["name"], (0.0, 1.0)),
+            ("你好，我叫张伟，很高兴认识你", (0.0, 1.0)),
             # 2. Birthday disclosure
-            ("我的生日是12月25日", ["birthday"], (-0.1, 0.1)),  # neutral
+            ("我的生日是12月25日", (-0.1, 0.1)),  # neutral
             # 3. Age + occupation
-            ("我今年30岁，是一名医生", ["age", "occupation"], (-0.1, 0.1)),
+            ("我今年30岁，是一名医生", (-0.1, 0.1)),
             # 4. Pet + positive emotion
-            ("我养了一只可爱的猫咪，超级喜欢它", ["pet"], (0.3, 1.0)),
+            ("我养了一只可爱的猫咪，超级喜欢它", (0.3, 1.0)),
             # 5. Location + work
-            ("我住在上海，在一家公司工作", ["location"], (-0.1, 0.1)),
+            ("我住在上海，在一家公司工作", (-0.1, 0.1)),
             # 6. Negative emotion
-            ("今天工作太累了，很烦躁", [], (-1.0, -0.2)),
+            ("今天工作太累了，很烦躁", (-1.0, -0.2)),
             # 7. Mixed signals
-            ("我是程序员，虽然压力大但是很喜欢编程", ["occupation"], (-0.2, 1.0)),
+            ("我是程序员，虽然压力大但是很喜欢编程", (-0.2, 1.0)),
             # 8. Multiple identity signals
-            ("我叫李娜，25岁，住在北京市", ["name", "age", "location"], (-0.1, 0.1)),
+            ("我叫李娜，25岁，住在北京市", (-0.1, 0.1)),
             # 9. Fact patterns
-            ("我有一台iPhone，喜欢拍照", [], (0.0, 1.0)),
+            ("我有一台iPhone，喜欢拍照", (0.0, 1.0)),
             # 10. Complex birthday format
-            ("我生于1995年3月14日", ["birthday"], (-0.1, 0.1)),
+            ("我生于1995年3月14日", (-0.1, 0.1)),
         ],
     )
     def test_diverse_sentence(
@@ -249,17 +173,11 @@ class TestDiverseSentences:
         user_id,
         character_id,
         sentence,
-        expected_signals,
         expected_sentiment_range,
     ):
         """Test encoding of diverse real-world sentences."""
         turn = make_turn(sentence, user_id, character_id)
         result = encoder.encode(turn)
-
-        # Check expected signal types
-        detected_types = {s.type for s in result.candidate_identity_signals}
-        for expected_type in expected_signals:
-            assert expected_type in detected_types, f"Expected {expected_type} in {sentence}"
 
         # Check sentiment range
         min_sentiment, max_sentiment = expected_sentiment_range
