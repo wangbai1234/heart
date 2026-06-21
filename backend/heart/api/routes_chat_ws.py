@@ -32,14 +32,16 @@ def _create_stream_session(voice_service: Any, ws: WebSocket, cache: Any = None)
 
     from heart.ss08_voice.stream_session import StreamSession
 
-    async def send_audio(t_id: str, seq: int, audio_bytes: bytes, is_last: bool) -> None:
+    async def send_audio(
+        t_id: str, seq: int, audio_bytes: bytes, is_last: bool, fmt: str = "mp3"
+    ) -> None:
         """Send audio chunk to WebSocket."""
         await ws.send_json(
             {
                 "type": "audio_chunk",
                 "turn_id": t_id,
                 "seq": seq,
-                "format": "mp3",
+                "format": fmt,
                 "data_b64": base64.b64encode(audio_bytes).decode() if audio_bytes else "",
                 "is_last": is_last,
             }
