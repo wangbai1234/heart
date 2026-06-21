@@ -168,7 +168,7 @@ class DriftLLMClient:
         Returns:
             LLMDriftResult (timeout_occurred=True on timeout/error)
         """
-        from heart.infra.llm.router import get_model_router
+        from heart.infra.llm_providers import get_model_router
 
         system_prompt = self._get_system_prompt(soul)
         user_message = _format_responses(responses)

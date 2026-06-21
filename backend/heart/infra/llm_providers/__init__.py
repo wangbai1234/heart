@@ -13,16 +13,37 @@ from heart.infra.llm_providers.base import (
     LLMProvider,
     LLMRequest,
     LLMResponse,
+    MessageRole,
     StreamChunk,
 )
-from heart.infra.llm_providers.registry import ProviderRegistry, get_provider
+from heart.infra.llm_providers.registry import (
+    ProviderRegistry,
+    get_provider,
+    get_registry,
+    initialize_registry,
+)
+from heart.infra.llm_providers.router import ModelRouter
 
 __all__ = [
+    "CostEstimate",
     "LLMProvider",
     "LLMRequest",
     "LLMResponse",
-    "StreamChunk",
-    "CostEstimate",
+    "MessageRole",
+    "ModelRouter",
     "ProviderRegistry",
+    "StreamChunk",
     "get_provider",
+    "get_registry",
+    "initialize_registry",
 ]
+
+
+async def get_model_router() -> ModelRouter:
+    """Get ModelRouter from global registry. Raises RuntimeError if not initialized."""
+    registry = get_registry()
+    import os
+
+    main_model = os.getenv("MAIN_LLM_MODEL", "deepseek-reasoner")
+    cheap_model = os.getenv("CHEAP_LLM_MODEL", "deepseek-chat")
+    return ModelRouter(registry, main_model, cheap_model)

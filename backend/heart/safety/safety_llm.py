@@ -210,7 +210,7 @@ class SafetyLLMClassifier:
         Returns:
             LLM raw response text, or None on timeout/error.
         """
-        from heart.infra.llm.router import get_model_router
+        from heart.infra.llm_providers import get_model_router
 
         try:
             router = await get_model_router()
