@@ -20,7 +20,16 @@ from .forgetting_affect import (
     InjectionMode,
     MemoryStateDistribution,
 )
-from .models import EpisodicMemory, FactNode, IdentityMemory, MemoryEncodingEvent
+from .models import (
+    EpisodicMemory,
+    FactNode,
+    IdentityMemory,
+    MemoryAuditLog,
+    MemoryEncodingEvent,
+    MemoryExtractionDLQ,
+    MemoryExtractionQueue,
+    MemoryL3FactShadowRegex,
+)
 from .reconstructor import Reconstructor, ReconstructResult
 from .retriever import (
     EmotionalRetriever,
@@ -40,6 +49,10 @@ __all__ = [
     "FactNode",
     "IdentityMemory",
     "MemoryEncodingEvent",
+    "MemoryExtractionQueue",
+    "MemoryExtractionDLQ",
+    "MemoryAuditLog",
+    "MemoryL3FactShadowRegex",
     # Decay Engine
     "DecayEngine",
     "reinforce_memory",
