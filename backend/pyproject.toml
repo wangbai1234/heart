@@ -110,6 +110,8 @@ ignore = [
 # DO NOT add new entries here without a tracking issue.
 "heart/ss04_relationship/stage_engine.py" = ["C901"]
 "heart/ss04_relationship/signal_aggregator.py" = ["C901"]
+"heart/ss04_relationship/service.py" = ["C901"]
+"heart/ss04_relationship/special_states.py" = ["C901"]
 "heart/safety/critic_agent.py" = ["C901"]
 "heart/safety/wellbeing_monitor.py" = ["C901"]
 

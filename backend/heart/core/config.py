@@ -71,6 +71,29 @@ class Settings(BaseSettings):
     critic_sampling_rate: float = 0.3
     enable_wellbeing_monitor: bool = True
 
+    # Memory Extractor Mode (Phase D — regex sunset)
+    # Deprecated: "regex", "dual" — will be removed in 60 days (Phase D §5.3)
+    memory_extractor_mode: str = (
+        "llm"  # "llm" (default) | "regex" (deprecated) | "dual" (deprecated)
+    )
+    memory_extractor_llm_model: str = "deepseek-chat"
+    memory_extractor_batch_turns: int = 6
+    memory_extractor_idle_secs: int = 30
+    memory_extractor_cost_cap_usd: float = 0.05
+    memory_promoter_interval_secs: int = 300
+    memory_promoter_min_mentions: int = 3
+    memory_promoter_min_confidence: float = 0.8
+    memory_promoter_min_age_days: int = 1
+    memory_promoter_min_cross_sessions: int = 2
+    memory_promoter_contradiction_clear_days: int = 7
+    memory_promoter_batch_size: int = 200
+    memory_promoter_l4_cap: int = 50
+    memory_promoter_demotion_window_days: int = 14
+    memory_promoter_demotion_min_count: int = 2
+
+    # CORS
+    cors_allowed_origins: str = ""
+
     # Profiling
     heart_turn_profiler: str = "0"
 
@@ -96,9 +119,11 @@ class Settings(BaseSettings):
     minimax_group_id: str | None = None
     minimax_base_url: str = "https://api.minimax.io/v1"
 
-    # MiMo TTS (voicedesign v2.5)
+    # MiMo TTS (voiceclone v2.5)
     mimo_api_key: str | None = None
     mimo_base_url: str = "https://api.xiaomimimo.com/v1"
+    mimo_reference_audio_path: str = "assets/reference_voices/rin.wav"
+    mimo_model: str = "mimo-v2.5-tts-voiceclone"
     voice_provider: str = "mimo"  # "mimo" | "minimax"
     voice_fallback_enabled: bool = True
 

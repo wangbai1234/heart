@@ -245,10 +245,55 @@ class MemoryService:
         # Connect to RetrievalOrchestrator when DB is available
         if self._db is not None:
             try:
+                from heart.ss02_memory.retriever.base import ScoredMemory
                 from heart.ss02_memory.retriever.orchestrator import RetrievalOrchestrator
 
                 orchestrator = RetrievalOrchestrator(self._db)
-                return await orchestrator.retrieve(query_context, top_k)  # type: ignore[arg-type,return-value]
+                retriever_result = await orchestrator.retrieve(query_context, top_k)
+
+                # Convert retriever-layer ScoredMemory → service-layer RetrievedMemory
+                reconstructor = self._get_reconstructor(character_id)
+                retrieved: list[RetrievedMemory] = []
+                for sm in retriever_result.memories:
+                    try:
+                        reconstructed = reconstructor.reconstruct(sm)
+                        voice_dna_applied = list(reconstructor.voice_dna) if hasattr(reconstructor, "voice_dna") else []
+                    except Exception as e:
+                        logger.warning("reconstruct_failed_fallback", memory_id=str(sm.memory_id), error=str(e))
+                        reconstructed = _fallback_text(sm.memory)
+                        voice_dna_applied = []
+
+                    state = getattr(sm.memory, "state", "vivid") or "vivid"
+                    retrieved.append(RetrievedMemory(
+                        memory_id=sm.memory_id,
+                        memory_type=sm.memory_type,
+                        state=state,
+                        reconstructed_text=reconstructed,
+                        raw_content=_fallback_text(sm.memory),
+                        score=sm.score,
+                        score_breakdown=sm.score_breakdown,
+                        uncertainty_level=_state_to_uncertainty(state),
+                        voice_dna_applied=voice_dna_applied,
+                        source_evidence=_fallback_text(sm.memory),
+                    ))
+
+                # Convert forgetting hints
+                forgetting_hints: list[ForgettingHint] = []
+                for h in retriever_result.recently_forgotten_hints:
+                    hint_text = getattr(h, "hint_text", None) or getattr(h, "text", None) or str(h)
+                    related_to = getattr(h, "related_to", "") or ""
+                    forgetting_hints.append(ForgettingHint(hint_text=hint_text, related_to=related_to))
+
+                return MemoryRetrievalResult(
+                    query_id=uuid4(),
+                    retrieved_at=datetime.now(timezone.utc),
+                    memories=retrieved,
+                    recently_forgotten_hints=forgetting_hints,
+                    total_candidates=retriever_result.total_candidates,
+                    retrieval_strategies_used=retriever_result.strategies_used,
+                    retrieval_latency_ms=int(retriever_result.retrieval_time_ms),
+                    l4_included=bool(retriever_result.l4_included),
+                )
             except Exception as e:
                 logger.error("retrieve_failed", error=str(e), user_id=str(user_id))
 
@@ -263,6 +308,28 @@ class MemoryService:
             retrieval_latency_ms=0,
             l4_included=False,
         )
+
+    def _get_reconstructor(self, character_id: str):
+        """Lazily initialize and cache a Reconstructor for the given character."""
+        if not hasattr(self, "_reconstructor_cache"):
+            self._reconstructor_cache: dict = {}
+        if character_id not in self._reconstructor_cache:
+            from pathlib import Path
+
+            import yaml
+
+            from heart.ss02_memory.reconstructor import Reconstructor
+
+            specs_dir = Path(__file__).parent.parent.parent.parent / "soul_specs"
+            spec_file = specs_dir / character_id / "v1.0.0.yaml"
+            if spec_file.exists():
+                with open(spec_file) as f:
+                    soul_spec = yaml.safe_load(f)
+                self._reconstructor_cache[character_id] = Reconstructor(character_id, soul_spec)
+            else:
+                logger.warning("reconstructor_spec_not_found", character_id=character_id)
+                self._reconstructor_cache[character_id] = None
+        return self._reconstructor_cache[character_id]
 
     async def get_l4(
         self,
@@ -405,21 +472,27 @@ class MemoryService:
 
     # ─────────── Write API ───────────
 
+    @invariant("inv-m-11.fast-path-no-l2-l3-l4")
     async def encode_fast(self, turn: Turn) -> FastSignals:
         """Fast encoding (< 50ms, no LLM) (§10.3 Write API).
 
         Real-time heuristic encoding:
-        - Keyword detection
+        - Keyword detection (via RegexHintsProvider)
         - Sentiment analysis (lexicon-based)
-        - Identity signal extraction (regex)
+
+        **INV-M-11**: Fast path writes ONLY L1 (Working Memory).
+        Any L2 / L3 / L4 write must go through the slow-path
+        Extractor → Resolver → Writer → Promoter pipeline.
 
         Updates L1 Working Memory (Redis).
+        Enqueues regex hints for async LLM extraction (llm/dual mode).
 
         Args:
             turn: Current conversation turn
 
         Returns:
             FastSignals with detected signals
+            (candidate_identity_signals is always empty — deprecated)
 
         Spec: §7.2 写入者, §7.3 调用顺序 (T+10ms)
         """
@@ -429,7 +502,7 @@ class MemoryService:
             self._fast_encoder = FastEncoder()
         signals = self._fast_encoder.encode(turn)
 
-        # Cache in L1 (Redis) if available
+        # Cache in L1 (Redis) if available — INV-M-11: ONLY L1 write here
         if self._redis is not None:
             try:
                 import json
@@ -450,7 +523,68 @@ class MemoryService:
                     "l1_cache_failed",
                     error=str(e),
                 )
+
+        # Enqueue regex hints for slow-path LLM extraction
+        hints = getattr(self._fast_encoder, "last_hints", [])
+        if hints:
+            await self._enqueue_extraction(
+                turn,
+                {
+                    "hints": [
+                        {
+                            "raw_phrase": h.raw_phrase,
+                            "suspected_attribute": h.suspected_attribute,
+                            "span": list(h.span),
+                        }
+                        for h in hints
+                    ]
+                },
+            )
+
+        # INV-M-11 runtime assertion: fast path must NOT write L2/L3/L4
+        # (enforced structurally — this method only touches Redis L1
+        #  and the extraction queue; no DB writes to episodic/fact/identity tables)
+
         return signals
+
+    async def _enqueue_extraction(
+        self,
+        turn: "Turn",
+        hints: Optional[dict] = None,
+    ) -> None:
+        """Enqueue turn for slow-path LLM extraction.
+
+        Called inside encode_fast() AFTER L1 write.
+        Only enqueues when mode is 'llm' or 'dual' (INV-M-11 compliant).
+
+        Args:
+            turn: Current conversation turn
+            hints: Optional regex hints as auxiliary signals
+        """
+        from heart.ss02_memory.mode import is_llm_enabled
+
+        if not is_llm_enabled():
+            return
+
+        if self._db is None:
+            logger.warning("extraction_enqueue_no_db")
+            return
+
+        try:
+            from heart.ss02_memory.models import MemoryExtractionQueue
+
+            item = MemoryExtractionQueue(
+                id=uuid4(),
+                session_id=uuid4(),  # Phase A: placeholder session_id
+                turn_id=turn.turn_index,
+                hints_json=hints,
+                status="pending",
+            )
+            self._db.add(item)
+            await self._db.flush()
+            logger.debug("extraction_enqueued", turn_id=turn.turn_index)
+        except Exception as e:
+            logger.error("extraction_enqueue_failed", error=str(e))
 
     async def queue_llm_encoding(self, event: MemoryEncodingEvent) -> None:
         """Queue async LLM encoding (§10.3 Write API).
@@ -837,3 +971,23 @@ class MemoryService:
             )
             return self.MAX_TOP_K
         return max(1, top_k)
+
+
+def _fallback_text(memory) -> str:
+    """Best-effort raw text when Reconstructor fails."""
+    for attr in ("episode_summary", "summary", "literal_text", "raw_evidence", "identity_text", "key", "value"):
+        v = getattr(memory, attr, None)
+        if v:
+            return str(v)
+    return str(memory)
+
+
+def _state_to_uncertainty(state: str) -> float:
+    """Convert memory state to uncertainty level [0, 1]."""
+    return {
+        "vivid": 0.0,
+        "fading": 0.3,
+        "faint": 0.6,
+        "dormant": 0.8,
+        "archived": 0.95,
+    }.get(state, 0.5)

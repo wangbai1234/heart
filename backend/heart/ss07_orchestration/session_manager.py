@@ -77,22 +77,19 @@ class SessionManager:
             db_session: Active DB session.
             session: The session to update (mutated in-place).
         """
-        try:
-            await db_session.execute(
-                __import__("sqlalchemy").text(
-                    "UPDATE sessions "
-                    "SET turn_count = turn_count + 1, last_activity_at = NOW() "
-                    "WHERE id = :session_id"
-                ),
-                {"session_id": str(session.session_id)},
-            )
-            await db_session.commit()
+        await db_session.execute(
+            __import__("sqlalchemy").text(
+                "UPDATE sessions "
+                "SET turn_count = turn_count + 1, last_activity_at = NOW() "
+                "WHERE id = :session_id"
+            ),
+            {"session_id": str(session.session_id)},
+        )
+        await db_session.commit()
 
-            # Mutate in-place to keep cache in sync
-            session.turn_count += 1
-            session.last_activity_at = datetime.now(timezone.utc)
-        except Exception:
-            logger.error("session_record_turn_failed", session_id=str(session.session_id))
+        # Mutate in-place to keep cache in sync
+        session.turn_count += 1
+        session.last_activity_at = datetime.now(timezone.utc)
 
     # ── Private ─────────────────────────────────────────────────────
 

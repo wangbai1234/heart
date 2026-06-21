@@ -23,41 +23,43 @@ BASE = "e814230ade46"
 REV_001 = "001_add_memory_tables"
 REV_002 = "002_add_emotion_rel"
 REV_003 = "003_ss04_threshold_tuning_v1_1"
+REV_004 = "004_replay_snapshots"
+REV_005 = "005_safety_events"
+REV_006 = "006_sessions"
+REV_007 = "007_memory_extractor_audit"
+REV_008 = "008_memory_extraction_dlq"
+REV_009 = "009_memory_l4_extras"
+REV_010 = "010_memory_regex_shadow"
 
-ALL_REVISIONS = [BASE, REV_001, REV_002, REV_003]
+ALL_REVISIONS = [BASE, REV_001, REV_002, REV_003, REV_004, REV_005, REV_006, REV_007, REV_008, REV_009, REV_010]
 
-# Tables expected per migration (excluding alembic_version)
+# Tables expected per migration (excluding alembic_version and partition children)
+_TABLES_001 = {
+    "episodic_memories", "fact_nodes", "identity_memories",
+    "memory_encoding_events", "consolidation_jobs",
+}
+_TABLES_002 = _TABLES_001 | {"emotion_states", "emotion_events", "relationship_states", "relationship_events"}
+_TABLES_003 = _TABLES_002  # ALTER only, no new tables
+_TABLES_004 = _TABLES_003 | {"replay_snapshots"}
+_TABLES_005 = _TABLES_004 | {"safety_events"}
+_TABLES_006 = _TABLES_005 | {"sessions"}
+_TABLES_007 = _TABLES_006 | {"memory_extraction_queue", "memory_audit_log"}
+_TABLES_008 = _TABLES_007 | {"memory_extraction_dlq"}
+_TABLES_009 = _TABLES_008  # ALTER only (add columns to fact_nodes + identity_memories)
+_TABLES_010 = _TABLES_009 | {"memory_l3_facts_shadow_regex"}
+
 TABLES_BY_REV = {
     BASE: set(),
-    REV_001: {
-        "episodic_memories",
-        "fact_nodes",
-        "identity_memories",
-        "memory_encoding_events",
-        "consolidation_jobs",
-    },
-    REV_002: {
-        "episodic_memories",
-        "fact_nodes",
-        "identity_memories",
-        "memory_encoding_events",
-        "consolidation_jobs",
-        "emotion_states",
-        "emotion_events",
-        "relationship_states",
-        "relationship_events",
-    },
-    REV_003: {
-        "episodic_memories",
-        "fact_nodes",
-        "identity_memories",
-        "memory_encoding_events",
-        "consolidation_jobs",
-        "emotion_states",
-        "emotion_events",
-        "relationship_states",
-        "relationship_events",
-    },
+    REV_001: _TABLES_001,
+    REV_002: _TABLES_002,
+    REV_003: _TABLES_003,
+    REV_004: _TABLES_004,
+    REV_005: _TABLES_005,
+    REV_006: _TABLES_006,
+    REV_007: _TABLES_007,
+    REV_008: _TABLES_008,
+    REV_009: _TABLES_009,
+    REV_010: _TABLES_010,
 }
 
 # Known parent tables that have partitions
@@ -231,7 +233,7 @@ async def test_full_chain_roundtrip(postgres_container, alembic_cfg, migrations_
     _run_upgrade(alembic_cfg, "head")
     schema_up1 = await _get_table_schema(db_url)
     tables_up1 = await _get_table_names(db_url)
-    assert tables_up1 == TABLES_BY_REV[REV_003], f"Tables after 1st upgrade: {tables_up1}"
+    assert tables_up1 == TABLES_BY_REV[REV_010], f"Tables after 1st upgrade: {tables_up1}"
 
     # ── Phase 2: downgrade to base, verify empty ──
     _run_downgrade(alembic_cfg, "base")
@@ -244,7 +246,7 @@ async def test_full_chain_roundtrip(postgres_container, alembic_cfg, migrations_
     _run_upgrade(alembic_cfg, "head")
     schema_up2 = await _get_table_schema(db_url)
     tables_up2 = await _get_table_names(db_url)
-    assert tables_up2 == TABLES_BY_REV[REV_003], f"Tables after 2nd upgrade: {tables_up2}"
+    assert tables_up2 == TABLES_BY_REV[REV_010], f"Tables after 2nd upgrade: {tables_up2}"
     await _assert_schema_identical(schema_up1, schema_up2, "Full chain roundtrip")
 
     # ── Phase 4: downgrade to base, verify empty ──
@@ -383,7 +385,7 @@ async def test_alembic_stamp_head_matches_current(postgres_container, alembic_cf
 
     assert len(rows) == 1, f"Expected 1 row in alembic_version, got {len(rows)}"
     stamped_rev = rows[0][0]
-    assert stamped_rev == REV_003, f"Stamped revision {stamped_rev} does not match head {REV_003}"
+    assert stamped_rev == REV_010, f"Stamped revision {stamped_rev} does not match head {REV_010}"
 
     # Verify stamp didn't actually create any tables
     tables_after = await _get_table_names(db_url)
@@ -406,7 +408,7 @@ async def test_alembic_head_is_consistently_reachable(
     await _clean_database(db_url)
 
     # Test that each revision can be upgraded to from base
-    for rev in [REV_001, REV_002, REV_003]:
+    for rev in [REV_001, REV_002, REV_003, REV_004, REV_005, REV_006, REV_007, REV_008, REV_009, REV_010]:
         # Start from base
         engine = create_async_engine(db_url)
         async with engine.begin() as conn:
@@ -445,29 +447,26 @@ async def test_migration_chain_has_no_gaps(postgres_container, alembic_cfg, migr
         assert rev_id in revisions, f"Revision {rev_id} not found in migration chain"
 
     # Verify down_revision chain
-    rev_001 = revisions[REV_001]
-    assert rev_001.down_revision is not None, f"{REV_001} should have down_revision"
-    assert BASE in (
-        rev_001.down_revision
-        if isinstance(rev_001.down_revision, tuple)
-        else (rev_001.down_revision,)
-    ), f"{REV_001} down_revision {rev_001.down_revision} != {BASE}"
-
-    rev_002 = revisions[REV_002]
-    assert REV_001 in (
-        rev_002.down_revision
-        if isinstance(rev_002.down_revision, tuple)
-        else (rev_002.down_revision,)
-    ), f"{REV_002} down_revision {rev_002.down_revision} != {REV_001}"
-
-    rev_003 = revisions[REV_003]
-    assert REV_002 in (
-        rev_003.down_revision
-        if isinstance(rev_003.down_revision, tuple)
-        else (rev_003.down_revision,)
-    ), f"{REV_003} down_revision {rev_003.down_revision} != {REV_002}"
+    chain = [
+        (REV_001, BASE),
+        (REV_002, REV_001),
+        (REV_003, REV_002),
+        (REV_004, REV_003),
+        (REV_005, REV_004),
+        (REV_006, REV_005),
+        (REV_007, REV_006),
+        (REV_008, REV_007),
+        (REV_009, REV_008),
+        (REV_010, REV_009),
+    ]
+    for rev_id, expected_parent in chain:
+        rev = revisions[rev_id]
+        parents = rev.down_revision if isinstance(rev.down_revision, tuple) else (rev.down_revision,)
+        assert expected_parent in parents, (
+            f"{rev_id} down_revision {rev.down_revision} != {expected_parent}"
+        )
 
     # Verify no duplicate heads (exactly one head)
     heads = sd.get_heads()
     assert len(heads) == 1, f"Expected exactly 1 head, got {len(heads)}: {heads}"
-    assert heads[0] == REV_003, f"Head is {heads[0]}, expected {REV_003}"
+    assert heads[0] == REV_010, f"Head is {heads[0]}, expected {REV_010}"

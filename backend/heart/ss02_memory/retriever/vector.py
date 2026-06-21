@@ -104,6 +104,8 @@ class VectorRetriever(RetrievalStrategy):
         Uses pgvector <=> operator (cosine distance).
         Lower distance = higher similarity.
         """
+        if query_context.query_embedding is None:
+            return []
         embedding_str = f"[{','.join(map(str, query_context.query_embedding))}]"
 
         # pgvector cosine distance: <=>
@@ -165,6 +167,8 @@ class VectorRetriever(RetrievalStrategy):
 
         Uses semantic_vector field.
         """
+        if query_context.query_embedding is None:
+            return []
         embedding_str = f"[{','.join(map(str, query_context.query_embedding))}]"
 
         from sqlalchemy import text

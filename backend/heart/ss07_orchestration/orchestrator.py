@@ -133,7 +133,10 @@ class Orchestrator:
             with p.span("compose"):
                 response_text = await self._compose(req, db_session, session.session_id, p)
 
-            # ── Step 5: Fire-and-forget cold path ───────────────────
+            # ── Step 5: Record turn (before cold path to ensure commit) ──
+            await self._session_manager.record_turn(db_session, session)
+
+            # ── Step 6: Fire-and-forget cold path ───────────────────
             # Compute days_since_last from session for inner tick
             days_since_last = 0.0
             if session.last_activity_at:
@@ -144,10 +147,7 @@ class Orchestrator:
                     last = last.replace(tzinfo=timezone.utc)
                 delta = datetime.now(timezone.utc) - last
                 days_since_last = delta.total_seconds() / 86400
-            self._fire_cold_path(req, p, response_text, db_session, days_since_last)
-
-            # ── Step 6: Record turn ─────────────────────────────────
-            await self._session_manager.record_turn(db_session, session)
+            self._fire_cold_path(req, p, response_text, days_since_last)
 
             severity = None
             if classification is not None:
@@ -272,10 +272,11 @@ class Orchestrator:
                 last = last.replace(tzinfo=timezone.utc)
             delta = datetime.now(timezone.utc) - last
             days_since_last = delta.total_seconds() / 86400
-        self._fire_cold_path(req, TurnProfiler(), full_text, db_session, days_since_last)
-
-        # Record turn
+        # Record turn FIRST (before cold path)
         await self._session_manager.record_turn(db_session, session)
+
+        # Fire cold path (fire-and-forget, uses own session internally)
+        self._fire_cold_path(req, TurnProfiler(), full_text, days_since_last)
 
         yield {"type": "turn_end", "full_text": full_text}
 
@@ -660,17 +661,17 @@ class Orchestrator:
         req: TurnRequest,
         profiler: TurnProfiler,
         response_text: str,
-        db_session: Any = None,
         days_since_last: float = 0.0,
     ) -> None:
         """Fire-and-forget async tasks: memory encode + inner state tick.
 
         Errors are logged but never propagate to the response.
+        Cold path creates its own DB session internally.
         """
         try:
             asyncio.create_task(
                 self._cold_path_memory_encode(
-                    req.user_id, req.character_id, req.user_message, db_session
+                    req.user_id, req.character_id, req.user_message
                 )
             )
         except Exception as e:
@@ -699,7 +700,6 @@ class Orchestrator:
         user_id: UUID,
         character_id: str,
         user_message: str,
-        db_session: Any = None,
     ) -> None:
         """Encode the user's message into memory (L1 fast path + L2 episode + L3 queue).
 
