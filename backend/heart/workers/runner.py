@@ -94,6 +94,19 @@ async def start_workers() -> None:
 
     logger.info("workers_started", count=len(_worker_tasks))
 
+    # Start replay snapshots cleanup (daily)
+    try:
+        stop_event = asyncio.Event()
+        _worker_stop_events.append(stop_event)
+        task = asyncio.create_task(
+            _run_replay_cleanup_loop(stop_event),
+            name="replay_snapshots_cleanup",
+        )
+        _worker_tasks.append(task)
+        logger.info("replay_snapshots_cleanup_started")
+    except Exception as e:
+        logger.error("replay_snapshots_cleanup_start_failed", error=str(e))
+
 
 async def stop_workers() -> None:
     """Stop all background workers gracefully."""
@@ -145,3 +158,40 @@ async def _run_consolidator_loop(interval_s: int, stop_event: asyncio.Event) -> 
         await consolidator.stop()
     except Exception as e:
         logger.error("consolidator_unexpected_error", error=str(e))
+
+
+async def _run_replay_cleanup_loop(stop_event: asyncio.Event) -> None:
+    """Delete replay_snapshots older than 7 days. Runs once per day."""
+    import os
+
+    from sqlalchemy import text
+
+    from heart.api.wiring import _get_session_factory
+
+    interval_s = int(os.getenv("HEART_REPLAY_CLEANUP_INTERVAL_S", "86400"))
+    retention_days = int(os.getenv("HEART_REPLAY_RETENTION_DAYS", "7"))
+
+    factory = _get_session_factory()
+    logger.info("replay_cleanup_started", retention_days=retention_days, interval_s=interval_s)
+
+    while not stop_event.is_set():
+        try:
+            async with factory() as session:
+                result = await session.execute(
+                    text("DELETE FROM replay_snapshots WHERE created_at < NOW() - INTERVAL ':days days'"),
+                    {"days": retention_days},
+                )
+                deleted = result.rowcount
+                await session.commit()
+                if deleted > 0:
+                    logger.info("replay_snapshots_cleaned", deleted=deleted, retention_days=retention_days)
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            logger.error("replay_cleanup_failed", error=str(e))
+
+        try:
+            await asyncio.wait_for(stop_event.wait(), timeout=interval_s)
+            break  # stop_event was set
+        except asyncio.TimeoutError:
+            continue  # timeout reached, run cleanup again
