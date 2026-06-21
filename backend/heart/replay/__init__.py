@@ -5,11 +5,8 @@ from datetime import datetime
 
 from sqlalchemy import Boolean, Column, DateTime, Integer, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
-from sqlalchemy.orm import DeclarativeBase
 
-
-class Base(DeclarativeBase):
-    pass
+from heart.core.base import Base
 
 
 class ReplaySnapshot(Base):

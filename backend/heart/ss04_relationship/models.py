@@ -32,14 +32,9 @@ from sqlalchemy import (
     Integer,
 )
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column
 
-
-class Base(DeclarativeBase):
-    """Base class for all models."""
-
-    pass
-
+from heart.core.base import Base
 
 # ============================================================
 # RelationshipState (current state per user × character)

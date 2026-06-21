@@ -40,14 +40,9 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column
 
-
-class Base(DeclarativeBase):
-    """Base class for all models."""
-
-    pass
-
+from heart.core.base import Base
 
 # ============================================================
 # L2: Episodic Memory
