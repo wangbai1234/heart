@@ -31,7 +31,7 @@ import structlog
 from sqlalchemy import and_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from heart.infra.llm.router import get_model_router
+from heart.infra.llm_providers import get_model_router
 from heart.prompts.episode_summary import EPISODE_SUMMARY_PROMPT
 from heart.ss02_memory.decay_engine import DecayEngine
 from heart.ss02_memory.models import (

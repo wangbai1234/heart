@@ -409,7 +409,7 @@ class CriticAgent:
         Returns:
             LLM 原始响应文本，或 None（超时/错误）
         """
-        from heart.infra.llm.router import get_model_router
+        from heart.infra.llm_providers import get_model_router
 
         try:
             router = await get_model_router()

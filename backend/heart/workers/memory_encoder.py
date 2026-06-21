@@ -26,7 +26,7 @@ import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from heart.infra.llm.router import get_model_router
+from heart.infra.llm_providers import get_model_router
 from heart.prompts.memory_extraction import MEMORY_EXTRACTION_PROMPT
 from heart.ss02_memory.models import FactNode, MemoryEncodingEvent
 

@@ -19,7 +19,7 @@ from uuid import uuid4
 import structlog
 
 from heart.core.config import settings
-from heart.infra.llm.router import ModelRouter
+from heart.infra.llm_providers import ModelRouter
 
 from .cost_guard import CostCapExceeded, CostGuard
 from .prompt_builder import MODEL, PROMPT_VERSION, SCHEMA_VERSION, PromptBuilder

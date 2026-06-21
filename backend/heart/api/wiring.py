@@ -91,7 +91,7 @@ def get_model_router():
     try:
         import os
 
-        from heart.infra.llm.router import ModelRouter, initialize_registry
+        from heart.infra.llm_providers import ModelRouter, initialize_registry
 
         # Ensure env var is set (settings reads from same source)
         os.environ.setdefault("DEEPSEEK_API_KEY", settings.deepseek_api_key)
