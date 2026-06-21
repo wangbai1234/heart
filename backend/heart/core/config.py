@@ -104,6 +104,8 @@ class Settings(BaseSettings):
     # Security
     jwt_secret_key: str = "your-secret-key-here"
     jwt_algorithm: str = "HS256"
+    jwt_private_key: str = ""  # PEM private key for RS256
+    jwt_public_key: str = ""   # PEM public key for RS256
     access_token_expire_minutes: int = 43200
 
     # Push Notifications (V1)
