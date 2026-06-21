@@ -38,7 +38,7 @@ def _load_lexicon_sentiment(lexicon_path: Optional[str] = None) -> dict:
     if lexicon_path is None:
         project_root = Path(__file__).parent.parent.parent.parent.parent
         lexicon_path = project_root / "config" / "encoder_lexicon.yaml"
-    with open(lexicon_path, encoding="utf-8") as f:
+    with open(str(lexicon_path), encoding="utf-8") as f:
         return yaml.safe_load(f)
 
 

@@ -179,7 +179,7 @@ class FacetUnlocker:
         newly_unlocked = []
         events = []
 
-        for facet_def in soul.identity_anchor.hidden_facets:
+        for facet_def in (soul.identity_anchor.hidden_facets or []):
             facet_id = facet_def.id
 
             # Skip if already unlocked (idempotent)
@@ -317,7 +317,7 @@ def build_facet_trigger_state(
     """
     # Find facet definition
     facet_def = next(
-        (f for f in soul.identity_anchor.hidden_facets if f.id == facet_id),
+        (f for f in (soul.identity_anchor.hidden_facets or []) if f.id == facet_id),
         None,
     )
     if not facet_def:
