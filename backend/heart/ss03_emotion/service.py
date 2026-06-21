@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 from uuid import UUID
 
 import structlog
@@ -257,12 +257,42 @@ class EmotionService:
         key = (str(user_id), character_id)
         self._state_cache[key] = new_state
 
-        # Async DB persistence is deferred — process_turn is sync.
-        # When called from an async context (e.g., Orchestrator), the caller
-        # can await _persist_async() after process_turn() returns.
-        # For now, state is durable in _state_cache + optionally Redis.
+        # Persist EmotionEvent to DB (append-only audit log)
         if self._db is not None:
-            logger.debug("emotion_db_persist_deferred", user_id=str(user_id))
+            try:
+                from uuid import uuid4
+
+                from heart.ss03_emotion.models import EmotionEvent
+
+                event = EmotionEvent(
+                    event_id=uuid4(),
+                    user_id=user_id,
+                    character_id=character_id,
+                    event_type="turn_processed",
+                    payload={
+                        "triggers": [t.get("trigger_type") for t in detected_triggers],
+                        "primary_emotion": new_state.get("primary_emotion"),
+                        "active_emotions": [
+                            e.get("emotion") for e in new_state.get("active_stack", [])
+                        ],
+                    },
+                    turn_index=None,
+                    source_turn_id=turn_id,
+                    vad_before={
+                        "valence": current_state.get("vad_valence", 0),
+                        "arousal": current_state.get("vad_arousal", 0),
+                        "dominance": current_state.get("vad_dominance", 0),
+                    },
+                    vad_after={
+                        "valence": new_state["vad_valence"],
+                        "arousal": new_state["vad_arousal"],
+                        "dominance": new_state["vad_dominance"],
+                    },
+                )
+                self._db.add(event)
+                await self._db.flush()
+            except Exception as e:
+                logger.error("emotion_event_persist_failed", error=str(e), user_id=str(user_id))
 
         # Cache in Redis if available (sync call, no await needed for set)
         if self._redis is not None:
@@ -522,7 +552,7 @@ class EmotionService:
         else:
             return "状态不错"
 
-    def _generate_repairs_summary(self, pending_repairs: List[Dict[str, Any]]) -> str:
+    def _generate_repairs_summary(self, pending_repairs: List[Dict[str, Any]]) -> Optional[str]:
         """Generate pending repairs summary text."""
         if not pending_repairs:
             return None
