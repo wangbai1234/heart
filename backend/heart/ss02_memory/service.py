@@ -245,10 +245,55 @@ class MemoryService:
         # Connect to RetrievalOrchestrator when DB is available
         if self._db is not None:
             try:
+                from heart.ss02_memory.retriever.base import ScoredMemory
                 from heart.ss02_memory.retriever.orchestrator import RetrievalOrchestrator
 
                 orchestrator = RetrievalOrchestrator(self._db)
-                return await orchestrator.retrieve(query_context, top_k)  # type: ignore[arg-type,return-value]
+                retriever_result = await orchestrator.retrieve(query_context, top_k)
+
+                # Convert retriever-layer ScoredMemory → service-layer RetrievedMemory
+                reconstructor = self._get_reconstructor(character_id)
+                retrieved: list[RetrievedMemory] = []
+                for sm in retriever_result.memories:
+                    try:
+                        reconstructed = reconstructor.reconstruct(sm)
+                        voice_dna_applied = list(reconstructor.voice_dna) if hasattr(reconstructor, "voice_dna") else []
+                    except Exception as e:
+                        logger.warning("reconstruct_failed_fallback", memory_id=str(sm.memory_id), error=str(e))
+                        reconstructed = _fallback_text(sm.memory)
+                        voice_dna_applied = []
+
+                    state = getattr(sm.memory, "state", "vivid") or "vivid"
+                    retrieved.append(RetrievedMemory(
+                        memory_id=sm.memory_id,
+                        memory_type=sm.memory_type,
+                        state=state,
+                        reconstructed_text=reconstructed,
+                        raw_content=_fallback_text(sm.memory),
+                        score=sm.score,
+                        score_breakdown=sm.score_breakdown,
+                        uncertainty_level=_state_to_uncertainty(state),
+                        voice_dna_applied=voice_dna_applied,
+                        source_evidence=_fallback_text(sm.memory),
+                    ))
+
+                # Convert forgetting hints
+                forgetting_hints: list[ForgettingHint] = []
+                for h in retriever_result.recently_forgotten_hints:
+                    hint_text = getattr(h, "hint_text", None) or getattr(h, "text", None) or str(h)
+                    related_to = getattr(h, "related_to", "") or ""
+                    forgetting_hints.append(ForgettingHint(hint_text=hint_text, related_to=related_to))
+
+                return MemoryRetrievalResult(
+                    query_id=uuid4(),
+                    retrieved_at=datetime.now(timezone.utc),
+                    memories=retrieved,
+                    recently_forgotten_hints=forgetting_hints,
+                    total_candidates=retriever_result.total_candidates,
+                    retrieval_strategies_used=retriever_result.strategies_used,
+                    retrieval_latency_ms=int(retriever_result.retrieval_time_ms),
+                    l4_included=bool(retriever_result.l4_included),
+                )
             except Exception as e:
                 logger.error("retrieve_failed", error=str(e), user_id=str(user_id))
 
@@ -263,6 +308,28 @@ class MemoryService:
             retrieval_latency_ms=0,
             l4_included=False,
         )
+
+    def _get_reconstructor(self, character_id: str):
+        """Lazily initialize and cache a Reconstructor for the given character."""
+        if not hasattr(self, "_reconstructor_cache"):
+            self._reconstructor_cache: dict = {}
+        if character_id not in self._reconstructor_cache:
+            from pathlib import Path
+
+            import yaml
+
+            from heart.ss02_memory.reconstructor import Reconstructor
+
+            specs_dir = Path(__file__).parent.parent.parent.parent / "soul_specs"
+            spec_file = specs_dir / character_id / "v1.0.0.yaml"
+            if spec_file.exists():
+                with open(spec_file) as f:
+                    soul_spec = yaml.safe_load(f)
+                self._reconstructor_cache[character_id] = Reconstructor(character_id, soul_spec)
+            else:
+                logger.warning("reconstructor_spec_not_found", character_id=character_id)
+                self._reconstructor_cache[character_id] = None
+        return self._reconstructor_cache[character_id]
 
     async def get_l4(
         self,
@@ -904,3 +971,23 @@ class MemoryService:
             )
             return self.MAX_TOP_K
         return max(1, top_k)
+
+
+def _fallback_text(memory) -> str:
+    """Best-effort raw text when Reconstructor fails."""
+    for attr in ("episode_summary", "summary", "literal_text", "raw_evidence", "identity_text", "key", "value"):
+        v = getattr(memory, attr, None)
+        if v:
+            return str(v)
+    return str(memory)
+
+
+def _state_to_uncertainty(state: str) -> float:
+    """Convert memory state to uncertainty level [0, 1]."""
+    return {
+        "vivid": 0.0,
+        "fading": 0.3,
+        "faint": 0.6,
+        "dormant": 0.8,
+        "archived": 0.95,
+    }.get(state, 0.5)
