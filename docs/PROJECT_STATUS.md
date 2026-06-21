@@ -6,7 +6,7 @@
 
 **最后更新**：2026-06-21
 **当前 Phase**：🟡 SS02 prompt v1.0.3 完结 (47/49 95.9%) / 交付未完结 — 核心实现文件未追踪 + 分支已是事实主干
-**当前分支**：`feat/mimo-tts-provider`（事实主干，待拆为 feat/ss02-llm-extractor-v1.0.3）
+**当前分支**：`feat/ss02-llm-extractor-v1.0.3`（PR #42, base=main）
 
 ---
 
@@ -58,7 +58,7 @@ Phase 8  Closed Beta               ⏳ 未开始
 | 2 | feat/mimo-tts-provider 已沦为"事实主干"（12 commits 跨 SS02+voice+MiMo） | **🔴 P0** | P0-2 | ⏳ 拆为 feat/ss02-llm-extractor-v1.0.3 |
 | 3 | PR #41 open 7 天硬性上限已到 | **🔴 P0** | P0-3 | ⏳ close + 重开 MiMo-only |
 | 4 | PR #39 / #40 超 7 天 + 单人 PR 达上限 3 | 🟠 P1 | P1-1 | ⏳ 关或合 |
-| 5 | v1.1.0 backlog 未开 issue | 🟡 P2 | P1-2 | frag-004/mixd-002/adv-005 |
+| 5 | v1.1.0 backlog 未开 issue | 🟡 P2 | P1-2 | ✅ #44 (frag-004/mixd-002/adv-005) |
 
 **✅ SS02 Memory LLM Extractor 重构完结 @ 2026-06-21**。v1.0.3 prompt 手术刀修复（R11/R5/R6/R12 + Example 9）将 strict scoring pass rate 从 79.2% 推至 95.9%。残余 3 case 入 v1.1.0 backlog。所有 infra（scoring / INV / approval / dual-mode rationale）已完成。Prompt 版本锁定 1.0.3，code 在 `feat/mimo-tts-provider`。
 
@@ -82,14 +82,12 @@ Phase 8  Closed Beta               ⏳ 未开始
 
 ## 5. 下一步
 
-1. 🤖 **P0-1 untracked 文件 audit + add**（24h）→ git add 关键 SS02 实现文件
-2. 🤖 **P0-2 拆分支 feat/ss02-llm-extractor-v1.0.3**（24h）→ cherry-pick 5 commits + add commit → PR
-3. 🤖 **P0-3 PR #41 收敛**（24h）→ close + 重开 MiMo-only PR
-4. 🤖 **P1-1 收敛 PR #39 / #40** → 关或合
-5. 🤖 **P1-2 v1.1.0 backlog issue** → GitHub issue + link PROJECT_STATUS
+1. ~~🤖 P0-1 untracked 文件 audit + add~~ ✅
+2. ~~🤖 P0-2 拆分支 feat/ss02-llm-extractor-v1.0.3~~ ✅ PR #42 open
+3. ~~🤖 P0-3 PR #41 收敛~~ ✅ closed，重开为 PR #43 (MiMo only)
+4. ~~🤖 P1-1 收敛 PR #39/#40~~ ✅ closed
+5. ~~🤖 P1-2 v1.1.0 backlog issue~~ ✅ #44
 6. 👤 **HUMAN 决策** — 前端技术栈（RN+Expo / Flutter / Next.js）
-
-详见 `docs/execution/SS02_ACCEPTANCE_AND_NEXT_STEPS_2026-06-21.md`
 
 ## 6. 当前风险
 
@@ -141,6 +139,7 @@ bash scripts/ci.sh integration-tests   # opt-in，需本地 postgres + redis + A
 - **每个 Phase 切换必须重写本文件 §2/§4/§5**。
 - **新增 blocker 必须进 §3，不进 GitHub Issues 不算数**（除非 issues 工作流后续被启用）。
 - 这份文件不能超过 200 行；超了说明需要把细节移到 `docs/design/` 或 `docs/audit/`。
-- **🟡 SS02 prompt 完结 @ 2026-06-21** — v1.0.3, commit 878cc57 (47/49)。**交付完结待 untracked SS02 实现文件入 main**。
-- **v1.1.0 backlog**: frag-004 / mixd-002 / adv-005（GitHub issue 待开）
+- **PR open**: #42 (SS02 v1.0.3) + #43 (MiMo TTS clean)
+- **✅ P0 全清** — 未追踪文件已入 git，分支已拆，PR #41 已收敛
+- **v1.1.0 backlog**: #44 (frag-004 / mixd-002 / adv-005)
 - 验收文档: `docs/execution/SS02_ACCEPTANCE_AND_NEXT_STEPS_2026-06-21.md`
