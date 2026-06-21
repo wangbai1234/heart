@@ -5,14 +5,15 @@
 > 这份文件是当前真理。其它历史文件可以参考，但当与本文件冲突时，**以本文件为准**。
 
 **最后更新**：2026-06-21
-**当前 Phase**：🟡 SS02 prompt v1.0.3 完结 (47/49 95.9%) / 交付未完结 — 核心实现文件未追踪 + 分支已是事实主干
+**当前 Phase**：✅ SS02 LLM Extractor 重构交付完结 — v1.0.3 live golden 47/49 (95.9%)
 **当前分支**：`feat/ss02-llm-extractor-v1.0.3`（PR #42, base=main）
 
 ---
 
 ## 1. 一句话 TL;DR
 
-> 🟡 SS02 功能完结（prompt v1.0.3, 47/49 95.9% strict），交付未完结：核心实现文件未追踪 + 分支已是事实主干。下一步：拆分支 + add 未追踪文件 → SS02 独立 PR → 前端栈决策。
+> ✅ SS02 Memory LLM Extractor 重构交付完结。v1.0.3 达到 47/49 (95.9%) strict pass，PR #42 已开。P0 全清：migration 009 hotfix PR #45、分支拆解完成、PR 合规 2 open。<br>
+> 剩余：P1-A consolidator test / P1-B E2E race / P2-B encoder loop 已登记 issue #46/#47/#48。下一步：👤 HUMAN 前端栈决策 → Phase 9 Frontend MVP。
 
 ---
 
@@ -51,16 +52,17 @@ Phase 8  Closed Beta               ⏳ 未开始
 
 来源：`docs/execution/MEMORY_EXTRACTOR_REFACTOR_AUDIT_AND_v1_0_2_PLAN.md`（审计 + 修复方案）
 
-| # | 阻塞项 | 严重度 | 所属 | 状态 |
-|---|--------|--------|------|------|
-| - | v1.0.3 prompt ✅ committed (878cc57) | Complete | — | ✅ 47/49 (95.9%) |
-| 1 | **SS02 实现文件未 git track**（regex_shadow/resolver/writer/promoter/golden_loader/hints/extractor_diff_report） | **🔴 P0** | P0-1 | ⏳ |
-| 2 | feat/mimo-tts-provider 已沦为"事实主干"（12 commits 跨 SS02+voice+MiMo） | **🔴 P0** | P0-2 | ⏳ 拆为 feat/ss02-llm-extractor-v1.0.3 |
-| 3 | PR #41 open 7 天硬性上限已到 | **🔴 P0** | P0-3 | ⏳ close + 重开 MiMo-only |
-| 4 | PR #39 / #40 超 7 天 + 单人 PR 达上限 3 | 🟠 P1 | P1-1 | ⏳ 关或合 |
-| 5 | v1.1.0 backlog 未开 issue | 🟡 P2 | P1-2 | ✅ #44 (frag-004/mixd-002/adv-005) |
+| # | 阻塞项 | 严重度 | Issue/PR | 状态 |
+|---|--------|--------|----------|------|
+| - | v1.0.3 prompt + strict scoring | Complete | PR #42 | ✅ 47/49 (95.9%) |
+| - | migration 009 typo fix | Hotfix | PR #45 | ✅ alembic upgrade head 全绿 |
+| - | MiMo TTS provider | — | PR #43 | ✅ open |
+| 1 | consolidator test 顶层 import 阻塞 unit collection | 🟡 P2 | #46 | ⏳ pre-existing |
+| 2 | E2E /api/chat returns before session commit | 🟡 P2 | #47 | ⏳ 不阻塞前端 |
+| 3 | encoder-worker restart loop | 🟠 P1 | #48 | ⏳ 阻塞 Closed Beta |
+| 4 | v1.1.0 backlog (frag-004/mixd-002/adv-005) | 🟡 P2 | #44 | ⏳ prompt 迭代 |
 
-**✅ SS02 Memory LLM Extractor 重构完结 @ 2026-06-21**。v1.0.3 prompt 手术刀修复（R11/R5/R6/R12 + Example 9）将 strict scoring pass rate 从 79.2% 推至 95.9%。残余 3 case 入 v1.1.0 backlog。所有 infra（scoring / INV / approval / dual-mode rationale）已完成。Prompt 版本锁定 1.0.3，code 在 `feat/mimo-tts-provider`。
+**✅ SS02 Memory LLM Extractor 重构交付完结 @ 2026-06-21**。PR #42 等 review + merge。P0 全清（untracked files 入 git / 分支拆解 / PR 合规 / migration hotfix）。
 
 ---
 
@@ -82,20 +84,25 @@ Phase 8  Closed Beta               ⏳ 未开始
 
 ## 5. 下一步
 
-1. ~~🤖 P0-1 untracked 文件 audit + add~~ ✅
-2. ~~🤖 P0-2 拆分支 feat/ss02-llm-extractor-v1.0.3~~ ✅ PR #42 open
-3. ~~🤖 P0-3 PR #41 收敛~~ ✅ closed，重开为 PR #43 (MiMo only)
-4. ~~🤖 P1-1 收敛 PR #39/#40~~ ✅ closed
-5. ~~🤖 P1-2 v1.1.0 backlog issue~~ ✅ #44
-6. 👤 **HUMAN 决策** — 前端技术栈（RN+Expo / Flutter / Next.js）
+1. ~~P0-1 untracked 文件 audit + add~~ ✅
+2. ~~P0-2 拆分支 feat/ss02-llm-extractor-v1.0.3~~ ✅ PR #42 open
+3. ~~P0-3 PR #41 收敛~~ ✅ closed → PR #43 MiMo clean
+4. ~~P1-1 收敛 PR #39/#40~~ ✅ closed
+5. ~~P1-2 v1.1.0 backlog issue~~ ✅ #44
+6. ~~P0-A migration 009 hotfix~~ ✅ PR #45
+7. ~~P1-A/B + P2-B issue 登记~~ ✅ #46/#47/#48
+8. 👤 **HUMAN 决策** — 前端技术栈（RN+Expo / Flutter / Next.js）
+9. ⏳ 等 PR #42 (SS02) + #43 (MiMo) + #45 (migration) merge → 前端启动
+
+详见 `docs/execution/POST_SS02_NEXT_STEPS_2026-06-21.md`
 
 ## 6. 当前风险
 
 | 风险 | 影响 | 缓解 |
 |------|------|------|
-| **事实主干分支** | 任何 SS02 改动现在从 mimo 分支出，入 main 会夹带 12 commits | P0-2 拆分 feat/ss02-llm-extractor-v1.0.3 |
-| **PR #41 7 天上限** | 硬性条款，必须 24h 内收敛 | P0-3 close + 重开 MiMo-only |
-| **未追踪 SS02 文件** | main 跑 `from heart.ss02_memory.extractor.resolver import Resolver` 会 ImportError | P0-1 git add + commit |
+| **encoder-worker restart loop** | Closed Beta 时 L2/L3 pipeline 不通 | #48 登记，Phase 10 前置条件 |
+| **E2E session write race** | E2E 不稳定，误报 | #47 登记，commit-then-respond 修 |
+| consolidator test collection 阻塞 | unit run 有 15 个 error | #46 登记，lazy import |
 | SS05/SS06 测试覆盖不足 | 回归风险 | 并行债务 |
 
 ---
@@ -139,7 +146,8 @@ bash scripts/ci.sh integration-tests   # opt-in，需本地 postgres + redis + A
 - **每个 Phase 切换必须重写本文件 §2/§4/§5**。
 - **新增 blocker 必须进 §3，不进 GitHub Issues 不算数**（除非 issues 工作流后续被启用）。
 - 这份文件不能超过 200 行；超了说明需要把细节移到 `docs/design/` 或 `docs/audit/`。
-- **PR open**: #42 (SS02 v1.0.3) + #43 (MiMo TTS clean)
-- **✅ P0 全清** — 未追踪文件已入 git，分支已拆，PR #41 已收敛
-- **v1.1.0 backlog**: #44 (frag-004 / mixd-002 / adv-005)
-- 验收文档: `docs/execution/SS02_ACCEPTANCE_AND_NEXT_STEPS_2026-06-21.md`
+- **✅ SS02 Memory LLM Extractor 重构交付完结 @ 2026-06-21** — PR #42 (v1.0.3, 47/49 95.9%)
+- **PR open**: #42 (SS02) + #43 (MiMo TTS) + #45 (migration hotfix)
+- **Issues**: #44 (v1.1.0) / #46 (consolidator) / #47 (E2E) / #48 (encoder)
+- **P0 全清** — untracked files 入 git / 分支拆解 / PR 合规 / migration hotfix
+- 验收文档: `docs/execution/SS02_ACCEPTANCE_AND_NEXT_STEPS_2026-06-21.md` + `POST_SS02_NEXT_STEPS_2026-06-21.md`
