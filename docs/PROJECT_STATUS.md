@@ -4,15 +4,15 @@
 >
 > 这份文件是当前真理。其它历史文件可以参考，但当与本文件冲突时，**以本文件为准**。
 
-**最后更新**：2026-06-05
-**当前 Phase**：Phase 7 验证完成 + CLI Demo 功能验证矩阵 Tier 1–4 全部完成 → 准备进入 Phase 8 Closed Beta
-**当前分支**：`main`（SS03-07 已集成，governance 已合并，热路径接线已落地，CLI Demo 全功能）
+**最后更新**：2026-06-21
+**当前 Phase**：🟡 SS02 prompt v1.0.3 完结 (47/49 95.9%) / 交付未完结 — 核心实现文件未追踪 + 分支已是事实主干
+**当前分支**：`feat/mimo-tts-provider`（事实主干，待拆为 feat/ss02-llm-extractor-v1.0.3）
 
 ---
 
 ## 1. 一句话 TL;DR
 
-> SS01–SS07 七大子系统代码完成并集成到 main，7 Phase 验证全部通过；`/api/chat` 热路径已通过 Orchestrator 真实穿过 SS02/SS03/SS05/SS07 + Safety（`backend/heart/api/wiring.py` 验证）。**当前唯一 active blocker：双 LLM provider tree 收敛**。下一步：收敛 LLM tree → 前端技术栈 HUMAN 决策 → 执行 Phase 9 (Frontend MVP) → Phase 10 (Closed Alpha) → Phase 11 (Beta)。
+> 🟡 SS02 功能完结（prompt v1.0.3, 47/49 95.9% strict），交付未完结：核心实现文件未追踪 + 分支已是事实主干。下一步：拆分支 + add 未追踪文件 → SS02 独立 PR → 前端栈决策。
 
 ---
 
@@ -23,7 +23,7 @@
 | 模块 | 名称 | 代码 | Spec | 状态 |
 |-----|------|------|------|------|
 | SS01 | Soul / Identity Anchor | ✅ | `runtime_specs/01_*.md` | 在 main |
-| SS02 | Memory (L1-L4) | ✅ | `runtime_specs/02_*.md` | 在 main |
+| SS02 | Memory (L1-L4) | ✅ | `runtime_specs/02_*.md` | LLM Extractor refactor 验收完成，v1.0.1 prompt 95.9% pass |
 | SS03 | Emotion (VAD) | ✅ | `runtime_specs/03_*.md` | 在 main（PR #17 集成） |
 | SS04 | Relationship Phase Engine | ✅ | `runtime_specs/04_*.md` | 在 main（PR #17 集成） |
 | SS05 | Composer (多层人设组合) | ✅ | `runtime_specs/05_*.md` | 在 main（PR #17 集成） |
@@ -49,56 +49,56 @@ Phase 8  Closed Beta               ⏳ 未开始
 
 ## 3. 当前 Blocker（必须先做）
 
-来源：`docs/audit/2026-05-23_architecture_audit.md`（Top 10 of 41 findings）
+来源：`docs/execution/MEMORY_EXTRACTOR_REFACTOR_AUDIT_AND_v1_0_2_PLAN.md`（审计 + 修复方案）
 
-| # | 阻塞项 | 严重度 | 工时 | 依赖 | 状态 |
-|---|--------|--------|------|------|------|
-| 1 | Wire 真 SafetyAgent 进 orchestrator（删 in-file fake） | **Critical** | 1d | — | ✅ 已完成 |
-| 2 | Wire `CarePathHandler`（删硬编码 `_CARE_RESPONSE`） | **Critical** | 0.5d | #1 | ✅ 已完成（CarePathHandler + 14 模板 + _routing.yaml） |
-| 3 | 修 2 个 failing tests + audit 15 deselected tests | **Critical** | 3h | — | ✅ 已完成（612 unit + 111 contract） |
-| 4 | 合并双 LLM provider tree (`infra/llm/` vs `infra/llm_providers/`) | **Critical** | 0.5d | — | ✅ 已完成（infra/llm/ 现为 llm_providers/ 的 facade） |
-| 5 | 统一 logging 到 structlog | High | 1h | — | ✅ 已完成 |
-| 6 | `EmotionService` 转 async | High | 2h | — | ✅ 已完成（get_context_block 已是 async） |
-| 7 | 冷路径 `asyncio.create_task` 失败追踪 + Prometheus | High | 1h | — | ⏳ 待验证 |
-| 8 | repair_profile spec drift 决策 | High | 待 RFC | HUMAN 决策 | ⏳ 等 RFC |
-| 9 | 重命名 safety circuit breaker（`ss01_anchor` → `safety`） | High | 30min | — | ⏳ 待验证 |
-| 10 | 构建 governance-lint CI workflow | High | 1d | #1 | ✅ 已完成（PR #16） |
+| # | 阻塞项 | 严重度 | 所属 | 状态 |
+|---|--------|--------|------|------|
+| - | v1.0.3 prompt ✅ committed (878cc57) | Complete | — | ✅ 47/49 (95.9%) |
+| 1 | **SS02 实现文件未 git track**（regex_shadow/resolver/writer/promoter/golden_loader/hints/extractor_diff_report） | **🔴 P0** | P0-1 | ⏳ |
+| 2 | feat/mimo-tts-provider 已沦为"事实主干"（12 commits 跨 SS02+voice+MiMo） | **🔴 P0** | P0-2 | ⏳ 拆为 feat/ss02-llm-extractor-v1.0.3 |
+| 3 | PR #41 open 7 天硬性上限已到 | **🔴 P0** | P0-3 | ⏳ close + 重开 MiMo-only |
+| 4 | PR #39 / #40 超 7 天 + 单人 PR 达上限 3 | 🟠 P1 | P1-1 | ⏳ 关或合 |
+| 5 | v1.1.0 backlog 未开 issue | 🟡 P2 | P1-2 | frag-004/mixd-002/adv-005 |
 
-**剩余工作**：#7/#9 待验证。Top 10 Critical 已全部完成。
-
-**已验证落地（2026-06-04）**：`/api/chat` 不再用 None 占位——`routes.py:144` 注入 `Depends(get_orchestrator)`，`wiring.py` 实接 MemoryService / EmotionService / SafetyAgent / ComposerService / Orchestrator。restore_project.md 中 R-HOT-01 / R-SAFE-01 / R-SS07-01（最小可用版）的前置条件已满足。
+**✅ SS02 Memory LLM Extractor 重构完结 @ 2026-06-21**。v1.0.3 prompt 手术刀修复（R11/R5/R6/R12 + Example 9）将 strict scoring pass rate 从 79.2% 推至 95.9%。残余 3 case 入 v1.1.0 backlog。所有 infra（scoring / INV / approval / dual-mode rationale）已完成。Prompt 版本锁定 1.0.3，code 在 `feat/mimo-tts-provider`。
 
 ---
 
 ## 4. 当前开发重点（按优先级）
 
-> 路线决策（2026-06-04 HUMAN 决策）：**先收 LLM tree → 前端栈对比 → R-FE-01 → Phase 10-11**。
-> Phase 7 集成测试金字塔 + Soul Drift 回归套件**延后**，与 Phase 9 联调期并行推进，避免阻塞前端可演示节点。
+> SS02 Memory Extractor 重构全部 PR 完成。下一步：合 main → 前端栈决策。
 
-1. ~~**修 Top 10 剩余 Critical (#4)**~~ — ✅ 已完成
-2. **R-FE-01 §3.1 前端技术栈决策** — 输出 `docs/design/frontend_stack_decision.md`，对比 React Native+Expo / Flutter / Next.js Web，**HUMAN 批准后方可进入实施**
-3. **R-FE-01 §3.2–3.6 前端 MVP 实施** — 照搬 `engineering_execution/PRACTICAL_MODEL_GUIDE_PHASE_7_PLUS.md` Phase 9 全部子任务
-4. **Phase 10 Closed Alpha** — Staging bring-up / Secrets pre-flight / Alpha onboarding / Cost cap / Drift 实时监控（Phase 9 cut criteria 全绿后启动）
-5. **Phase 11 Beta** — Multi-region K8s / Auto-scaling / Beta cohort / PURPLE live drill（Phase 10 cut criteria 全绿后启动）
-6. **并行债务**：集成测试金字塔、Soul Drift 回归、SS05/SS06 单测补齐
+1. **合 main** — 当前 `feat/mimo-tts-provider` 分支合入 main，PR + merge。
+2. **前端技术栈决策** — 输出 `docs/design/frontend_stack_decision.md`，HUMAN 拍板。
+3. **Phase 9 Frontend MVP** — 按选定栈实施 Chat UI / Auth / Push。
+4. **Phase 10 Closed Beta** — Staging bring-up / Alpha onboarding / Drift 监控。
 
----
-
-## 5. 下一步：要做的 3 件事（严格按顺序）
-
-1. 🤖 **AI 执行**：收敛双 LLM provider tree（合并 `infra/llm_providers/` 进 `infra/llm/`，或反向；最终保留单一权威实现）。完成前不开 R-FE-01。
-2. 🤖 **AI 输出 + 👤 HUMAN 决策**：`docs/design/frontend_stack_decision.md`——三方案对比（RN+Expo / Flutter / Next.js Web），按演示成本 / 跨端覆盖 / 单人维护成本评分。HUMAN 在 PR review 中拍板。
-3. 🤖 **AI 执行**：按 HUMAN 决策的栈，进入 Phase 9 §3.2（API contract lockdown / OpenAPI + TS gen）→ §3.3 scaffold → §3.4 Chat UI MVP → §3.5 Auth + Push → §3.6 cut criteria。Phase 9 cut criteria 全绿后无缝转 Phase 10。
+**并行债务**：
+- coref-004 precision (relation + other FP) → v1.1.0 prompt 迭代
+- Prometheus metrics 缺口
+- 集成测试金字塔、Soul Drift 回归
 
 ---
+
+## 5. 下一步
+
+1. 🤖 **P0-1 untracked 文件 audit + add**（24h）→ git add 关键 SS02 实现文件
+2. 🤖 **P0-2 拆分支 feat/ss02-llm-extractor-v1.0.3**（24h）→ cherry-pick 5 commits + add commit → PR
+3. 🤖 **P0-3 PR #41 收敛**（24h）→ close + 重开 MiMo-only PR
+4. 🤖 **P1-1 收敛 PR #39 / #40** → 关或合
+5. 🤖 **P1-2 v1.1.0 backlog issue** → GitHub issue + link PROJECT_STATUS
+6. 👤 **HUMAN 决策** — 前端技术栈（RN+Expo / Flutter / Next.js）
+
+详见 `docs/execution/SS02_ACCEPTANCE_AND_NEXT_STEPS_2026-06-21.md`
 
 ## 6. 当前风险
 
 | 风险 | 影响 | 缓解 |
 |------|------|------|
-| SS05/SS06 测试覆盖不足 | 回归风险 | 补充单元测试 |
-| repair_profile spec drift (#8) | Soul Spec 漂移 | 卡住 = 等 RFC，不强推 |
-| Observability 覆盖不足 | 内测可观测性 | 仅 turn_profiler，需补 Prometheus + log 聚合 |
+| **事实主干分支** | 任何 SS02 改动现在从 mimo 分支出，入 main 会夹带 12 commits | P0-2 拆分 feat/ss02-llm-extractor-v1.0.3 |
+| **PR #41 7 天上限** | 硬性条款，必须 24h 内收敛 | P0-3 close + 重开 MiMo-only |
+| **未追踪 SS02 文件** | main 跑 `from heart.ss02_memory.extractor.resolver import Resolver` 会 ImportError | P0-1 git add + commit |
+| SS05/SS06 测试覆盖不足 | 回归风险 | 并行债务 |
 
 ---
 
@@ -125,11 +125,10 @@ bash scripts/ci.sh integration-tests   # opt-in，需本地 postgres + redis + A
 
 ```
 1. docs/PROJECT_STATUS.md          ← 本文件（必读）
-2. docs/audit/2026-05-23_architecture_audit.md  ← 41 findings 全列表
-3. docs/design/integration_test_pyramid.md  ← Phase 7 集成测试设计
-4. docs/design/soul_drift_regression.md  ← Soul Drift 回归设计
-5. runtime_specs/00_runtime_worldview.md   ← 想了解世界观时读
-6. runtime_specs/0X_*.md          ← 想动哪个子系统时读对应那一份
+2. docs/audit/2026-06-20_dual_mode_skip_rationale.md  ← dual-mode 跳过理由
+3. docs/execution/MEMORY_EXTRACTOR_REFACTOR_AUDIT_AND_v1_0_2_PLAN.md  ← 审计 + v1.0.2 方案
+4. docs/execution/MEMORY_LLM_EXTRACTOR_REFACTOR.md  ← SS02 refactor 主 spec
+5. docs/design/memory_golden_set_design.md  ← Golden Set + strict scoring 定义
 ```
 
 其余文档详见 [`docs/README.md`](README.md)。
@@ -142,3 +141,6 @@ bash scripts/ci.sh integration-tests   # opt-in，需本地 postgres + redis + A
 - **每个 Phase 切换必须重写本文件 §2/§4/§5**。
 - **新增 blocker 必须进 §3，不进 GitHub Issues 不算数**（除非 issues 工作流后续被启用）。
 - 这份文件不能超过 200 行；超了说明需要把细节移到 `docs/design/` 或 `docs/audit/`。
+- **🟡 SS02 prompt 完结 @ 2026-06-21** — v1.0.3, commit 878cc57 (47/49)。**交付完结待 untracked SS02 实现文件入 main**。
+- **v1.1.0 backlog**: frag-004 / mixd-002 / adv-005（GitHub issue 待开）
+- 验收文档: `docs/execution/SS02_ACCEPTANCE_AND_NEXT_STEPS_2026-06-21.md`
