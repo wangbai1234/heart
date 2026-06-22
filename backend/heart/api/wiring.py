@@ -13,6 +13,7 @@ from functools import lru_cache
 from typing import Any, Optional
 
 import structlog
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from heart.core.config import settings
@@ -433,7 +434,7 @@ async def _write_safety_event(
         )
 
         await db_session.execute(
-            __import__("sqlalchemy").text(
+            text(
                 "INSERT INTO safety_events "
                 "(user_id, turn_id, severity, layer, reason, category, payload, created_at) "
                 "VALUES (:user_id, :turn_id, :severity, :layer, "

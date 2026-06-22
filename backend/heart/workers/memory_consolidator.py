@@ -118,7 +118,7 @@ class EpisodeClusterer:
             return []
 
         # For MVP: Simple time-based clustering
-        # TODO: Add semantic similarity clustering with embeddings
+        # TODO: Add semantic similarity clustering with embeddings # TODO(#issue-69)
 
         # Fetch turn metadata (we'd need a turns table - for now simulate)
         # In production, query turns table to get timestamps

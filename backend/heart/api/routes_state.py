@@ -389,9 +389,9 @@ async def dev_sleep(
 
     try:
         # Update last_activity_at to simulate time passing
-        from datetime import datetime, timezone
+        from datetime import datetime, timedelta, timezone
 
-        cutoff = datetime.now(timezone.utc) - __import__("datetime").timedelta(hours=hours)
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
         await db_session.execute(
             text(
                 "UPDATE sessions SET last_activity_at = :cutoff "

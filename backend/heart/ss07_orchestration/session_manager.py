@@ -13,6 +13,7 @@ from typing import Dict, Tuple
 from uuid import UUID, uuid4
 
 import structlog
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from heart.ss07_orchestration.models import Session
@@ -78,7 +79,7 @@ class SessionManager:
             session: The session to update (mutated in-place).
         """
         await db_session.execute(
-            __import__("sqlalchemy").text(
+            text(
                 "UPDATE sessions "
                 "SET turn_count = turn_count + 1, last_activity_at = NOW() "
                 "WHERE id = :session_id"
@@ -102,7 +103,7 @@ class SessionManager:
         """Load an existing session or insert a new one atomically."""
         try:
             result = await db_session.execute(
-                __import__("sqlalchemy").text(
+                text(
                     "SELECT id, user_id, character_id, started_at, last_activity_at, "
                     "       turn_count, suicide_protocol_active "
                     "FROM sessions "
@@ -135,7 +136,7 @@ class SessionManager:
         now = datetime.now(timezone.utc)
         try:
             await db_session.execute(
-                __import__("sqlalchemy").text(
+                text(
                     "INSERT INTO sessions (id, user_id, character_id, started_at, last_activity_at) "
                     "VALUES (:id, :user_id, :character_id, :started_at, :last_activity_at)"
                 ),

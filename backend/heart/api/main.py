@@ -79,6 +79,11 @@ async def _shutdown():
 async def lifespan(app: FastAPI):
     """FastAPI lifespan context manager (replaces deprecated on_event)."""
     await _startup()
+    from heart.core.config import settings
+    try:
+        settings.validate_jwt_secret()
+    except RuntimeError as e:
+        logger.warning("jwt_secret_invalid", error=str(e))
     yield
     await _shutdown()
 
