@@ -11,6 +11,7 @@ Interval: HEART_INNER_LOOP_INTERVAL_S (default: 3600 = 1 hour).
 from __future__ import annotations
 
 import asyncio
+import collections
 import os
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
@@ -25,8 +26,8 @@ from heart.ss06_inner_state.service import InnerStateService
 
 logger = structlog.get_logger(__name__)
 
-# In-memory store for proactive messages (will be replaced by DB in production)
-_proactive_messages: List[ProactiveMessage] = []
+# Bounded in-memory store for proactive messages (max 1000, FIFO eviction)
+_proactive_messages: collections.deque[ProactiveMessage] = collections.deque(maxlen=1000)
 
 
 def get_pending_proactive_messages(
@@ -107,77 +108,47 @@ class InnerLoopWorker:
         self._should_stop = True
 
     async def _tick_all_active_users(self):
-        """Tick all active user×character pairs."""
+        """Tick all active user×character pairs with a single DB session."""
         try:
             async with self.db_session_factory() as session:
-                # Get active users (interacted in last 7 days)
+                # Single JOIN query: get active users + relationship info + last activity
                 result = await session.execute(
                     text(
-                        "SELECT DISTINCT user_id, character_id "
-                        "FROM sessions "
-                        "WHERE last_activity_at > NOW() - INTERVAL '7 days'"
+                        "SELECT s.user_id, s.character_id, s.last_activity_at, "
+                        "r.current_stage, r.intimacy_level "
+                        "FROM sessions s "
+                        "LEFT JOIN relationship_states r "
+                        "  ON r.user_id = s.user_id AND r.character_id = s.character_id "
+                        "WHERE s.last_activity_at > NOW() - INTERVAL '7 days'"
                     )
                 )
                 rows = result.fetchall()
 
             logger.info("inner_loop_ticking", user_count=len(rows))
 
-            # Process each user with a fresh session to avoid transaction errors
             for row in rows:
                 user_id = row[0]
                 character_id = row[1]
+                last_activity = row[2]
+                relationship_stage = row[3] or "STRANGER"
+                intimacy = float(row[4] or 0.0)
 
+                # Calculate days since last interaction
+                days_since_last = 0.0
+                if last_activity:
+                    if hasattr(last_activity, "replace"):
+                        last_activity = last_activity.replace(tzinfo=timezone.utc)
+                    delta = datetime.now(timezone.utc) - last_activity
+                    days_since_last = delta.total_seconds() / 86400
+
+                # Check for anniversary
                 try:
-                    async with self.db_session_factory() as user_session:
-                        # Get relationship info for better tick context
-                        relationship_stage = "STRANGER"
-                        intimacy = 0.0
-
-                        # Get relationship state if available
-                        rel_result = await user_session.execute(
-                            text(
-                                "SELECT current_stage, intimacy_level "
-                                "FROM relationship_states "
-                                "WHERE user_id = :user_id AND character_id = :character_id"
-                            ),
-                            {"user_id": str(user_id), "character_id": character_id},
-                        )
-                        rel_row = rel_result.fetchone()
-                        if rel_row:
-                            relationship_stage = rel_row[0] or "STRANGER"
-                            intimacy = float(rel_row[1] or 0.0)
-
-                        # Calculate days since last interaction
-                        session_result = await user_session.execute(
-                            text(
-                                "SELECT last_activity_at "
-                                "FROM sessions "
-                                "WHERE user_id = :user_id AND character_id = :character_id"
-                            ),
-                            {"user_id": str(user_id), "character_id": character_id},
-                        )
-                        session_row = session_result.fetchone()
-                        days_since_last = 0.0
-                        if session_row and session_row[0]:
-                            last_activity = session_row[0]
-                            if hasattr(last_activity, "replace"):
-                                last_activity = last_activity.replace(tzinfo=timezone.utc)
-                            delta = datetime.now(timezone.utc) - last_activity
-                            days_since_last = delta.total_seconds() / 86400
-
-                        # Check for anniversary
+                    async with self.db_session_factory() as anniv_session:
                         is_anniversary = await self._check_anniversary(
-                            user_id, character_id, user_session
+                            user_id, character_id, anniv_session
                         )
-
-                except Exception as e:
-                    logger.error(
-                        "inner_loop_user_query_failed",
-                        user_id=str(user_id),
-                        character_id=character_id,
-                        error=str(e),
-                    )
-                    continue
+                except Exception:
+                    is_anniversary = False
 
                 # Tick (outside session to avoid holding connection)
                 try:
