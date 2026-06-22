@@ -184,7 +184,11 @@ async def readiness_check():
     return {"status": "ready", "components": {"api": "ok", "auth": "ok"}}
 
 
-@router.get("/profile/records", tags=["debug"])
+# Debug routes — only mounted when HEART_DEV_MODE=true (see main.py)
+dev_router = APIRouter(tags=["debug"])
+
+
+@dev_router.get("/records")
 async def get_profile_records():
     """Return collected turn profile records (debug only)."""
     from heart.observability.turn_profiler import get_collected_profiles
@@ -193,7 +197,7 @@ async def get_profile_records():
     return {"count": len(records), "records": records}
 
 
-@router.post("/profile/reset", tags=["debug"])
+@dev_router.post("/reset")
 async def reset_profile_records():
     """Reset collected turn profile records (debug only)."""
     from heart.observability.turn_profiler import reset_collected_profiles
