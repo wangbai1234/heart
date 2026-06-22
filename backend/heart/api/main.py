@@ -8,10 +8,15 @@ import time
 from contextlib import asynccontextmanager
 
 import structlog
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from prometheus_client import Counter, Histogram, generate_latest
+from slowapi import Limiter
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
+from slowapi.util import get_remote_address
 from sqlalchemy import text
 from starlette.responses import Response
 
@@ -206,6 +211,20 @@ def create_app() -> FastAPI:
     if os.getenv("HEART_DEV_MODE", "").lower() == "true":
         app.include_router(dev_router)  # /api/dev/*
         app.include_router(profile_dev_router, prefix="/api/profile")  # /api/profile/*
+
+    # Rate limiting
+    from .rate_limit import limiter
+
+    app.state.limiter = limiter
+
+    async def _rate_limit_handler(request: Request, exc: RateLimitExceeded):
+        return JSONResponse(
+            status_code=429,
+            content={"detail": f"Rate limit exceeded: {exc.detail}"},
+        )
+
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_handler)
+    app.add_middleware(SlowAPIMiddleware)
 
     # OpenTelemetry instrumentation
     FastAPIInstrumentor.instrument_app(app)
