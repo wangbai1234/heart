@@ -193,7 +193,7 @@ class ReplayRecorder:
 
     async def load_by_turn(self, turn_id: uuid.UUID) -> Optional[PromptBundle]:
         """Load a single snapshot by turn_id."""
-        return await self._load_one("turn_id = :id", {"id": str(turn_id)})
+        return await self._load_one(turn_id)
 
     async def load_by_session(
         self, session_id: uuid.UUID, turn_n: Optional[int] = None
@@ -209,7 +209,7 @@ class ReplayRecorder:
             return []
         return bundles
 
-    async def _load_one(self, where: str, params: Dict[str, Any]) -> Optional[PromptBundle]:
+    async def _load_one(self, turn_id: uuid.UUID) -> Optional[PromptBundle]:
         if self._engine is None:
             return None
         try:
@@ -218,17 +218,17 @@ class ReplayRecorder:
             async with self._engine.begin() as conn:
                 result = await conn.execute(
                     text(
-                        f"""
+                        """
                     SELECT prompt_bundle, raw_response, final_response,
                            latency_ms, model_name, token_count,
                            anti_pattern_hits, blocked, critic_score, critic_feedback,
                            created_at
                     FROM replay_snapshots
-                    WHERE {where}
+                    WHERE turn_id = :id
                     LIMIT 1
                     """
                     ),
-                    params,
+                    {"id": str(turn_id)},
                 )
                 row = result.fetchone()
                 if row is None:
