@@ -7,11 +7,12 @@ from typing import Optional
 from uuid import UUID as _UUID
 
 import structlog
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from heart.core.auth import Token, TokenData, auth_manager
+from heart.api.rate_limit import limiter
 
 from .wiring import get_db, get_orchestrator
 
@@ -58,11 +59,12 @@ async def get_current_user(authorization: Optional[str] = Header(None)) -> Token
 
 
 @router.post("/auth/login", response_model=Token)
-async def login(request: LoginRequest) -> Token:
-    logger.info("user_login", user_id=request.user_id, email=request.email)
+@limiter.limit("10/minute")
+async def login(request: Request, login_req: LoginRequest) -> Token:
+    logger.info("user_login", user_id=login_req.user_id, email=login_req.email)
     token = auth_manager.create_access_token(
-        user_id=request.user_id,
-        email=request.email,
+        user_id=login_req.user_id,
+        email=login_req.email,
     )
     return token
 
@@ -137,8 +139,10 @@ def _coerce_uuid(uid: str) -> _UUID:
 
 
 @router.post("/chat", response_model=ChatResponse)
+@limiter.limit("30/minute")
 async def chat(
-    request: ChatRequest,
+    request: Request,
+    chat_req: ChatRequest,
     current_user: TokenData = Depends(get_current_user),
     db_session: AsyncSession = Depends(get_db),
     orchestrator=Depends(get_orchestrator),
@@ -151,19 +155,19 @@ async def chat(
       3. ComposerService.compose (fail-soft fallback)
       4. MemoryService.encode_fast + InnerStateService.tick (fire-and-forget)
     """
-    last = _last_user_message(request.messages)
+    last = _last_user_message(chat_req.messages)
     if not last:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "No user message found")
 
     user_uuid = _coerce_uuid(str(current_user.user_id))
-    history = [{"role": m.role, "content": m.content} for m in request.messages[:-1]]
+    history = [{"role": m.role, "content": m.content} for m in chat_req.messages[:-1]]
     trace_id = _uuid_mod.uuid4()
 
     from heart.ss07_orchestration.models import TurnRequest
 
     turn_req = TurnRequest(
         user_id=user_uuid,
-        character_id=request.character_id,
+        character_id=chat_req.character_id,
         user_message=last,
         history=history,
         trace_id=trace_id,

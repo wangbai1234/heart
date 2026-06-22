@@ -17,12 +17,13 @@ from typing import Optional
 from uuid import UUID
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from heart.api.wiring import get_db, get_emotion_service, get_inner_state_service
 from heart.core.auth import TokenData, get_current_user
+from heart.api.rate_limit import limiter
 
 logger = structlog.get_logger(__name__)
 
@@ -30,7 +31,9 @@ router = APIRouter(prefix="/api/state", tags=["state-inspect"])
 
 
 @router.get("/emotion")
+@limiter.limit("60/minute")
 async def get_emotion_state(
+    request: Request,
     user_id: UUID = Query(..., description="User UUID"),
     character_id: str = Query("rin", description="Character ID"),
     current_user: TokenData = Depends(get_current_user),
@@ -56,7 +59,9 @@ async def get_emotion_state(
 
 
 @router.get("/relationship")
+@limiter.limit("60/minute")
 async def get_relationship_state(
+    request: Request,
     user_id: UUID = Query(..., description="User UUID"),
     character_id: str = Query("rin", description="Character ID"),
     db_session: AsyncSession = Depends(get_db),
@@ -113,7 +118,9 @@ async def get_relationship_state(
 
 
 @router.get("/inner")
+@limiter.limit("60/minute")
 async def get_inner_state(
+    request: Request,
     user_id: UUID = Query(..., description="User UUID"),
     character_id: str = Query("rin", description="Character ID"),
     current_user: TokenData = Depends(get_current_user),
@@ -152,7 +159,9 @@ memory_router = APIRouter(prefix="/api/memory", tags=["memory-inspect"])
 
 
 @memory_router.get("/recent")
+@limiter.limit("60/minute")
 async def get_recent_memories(
+    request: Request,
     user_id: UUID = Query(..., description="User UUID"),
     character_id: str = Query("rin", description="Character ID"),
     limit: int = Query(10, description="Max episodes to return"),
@@ -226,7 +235,9 @@ async def get_recent_memories(
 
 
 @memory_router.get("/l4")
+@limiter.limit("60/minute")
 async def get_l4_identity(
+    request: Request,
     user_id: UUID = Query(..., description="User UUID"),
     character_id: str = Query("rin", description="Character ID"),
     db_session: AsyncSession = Depends(get_db),
@@ -270,7 +281,9 @@ async def get_l4_identity(
 
 
 @memory_router.post("/forget")
+@limiter.limit("60/minute")
 async def forget_memory(
+    request: Request,
     user_id: UUID = Query(..., description="User UUID"),
     memory_id: str = Query(..., description="Memory ID to forget (soft delete)"),
     db_session: AsyncSession = Depends(get_db),
