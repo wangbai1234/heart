@@ -7,6 +7,8 @@ Core components:
 - StagePhaseEngine: Stage transition state machine
 - TrustTracker: Trust dimension updates
 - AttachmentTracker: Attachment dimension updates
+- ColdWarTracker: Cold war lifecycle management (§3.11)
+- ReunionStateMachine: Reunion 3-phase state machine (§3.10)
 - RelationshipService: Orchestration and persistence
 - SignalAggregator: Signal aggregation with anti-gaming dedup (v1.1)
 - DistinctSessionTracker: Per-session event counting (v1.1)
@@ -22,7 +24,9 @@ from .anti_gaming import (
     is_empty_message,
 )
 from .attachment_tracker import AttachmentTracker
+from .cold_war import ColdWarTracker
 from .models import RelationshipEvent, RelationshipState
+from .reunion import ReunionStateMachine
 from .service import RelationshipService
 from .signal_aggregator import SignalAggregator, create_signal_aggregator
 from .stage_engine import (
@@ -49,6 +53,9 @@ __all__ = [
     # Trackers
     "TrustTracker",
     "AttachmentTracker",
+    # Special States (§3.10/§3.11)
+    "ColdWarTracker",
+    "ReunionStateMachine",
     # Signal Aggregation (v1.1)
     "SignalAggregator",
     "create_signal_aggregator",

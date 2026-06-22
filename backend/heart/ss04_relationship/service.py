@@ -24,7 +24,9 @@ from ..ss04_relationship.anti_gaming import (
     is_empty_message,
 )
 from ..ss04_relationship.attachment_tracker import AttachmentTracker
+from ..ss04_relationship.cold_war import ColdWarTracker
 from ..ss04_relationship.models import RelationshipEvent, RelationshipState
+from ..ss04_relationship.reunion import ReunionStateMachine
 from ..ss04_relationship.signal_aggregator import create_signal_aggregator
 from ..ss04_relationship.stage_engine import (
     RelationshipStage,
@@ -70,6 +72,8 @@ class RelationshipService:
         self._stage_engines: dict[str, StagePhaseEngine] = {}
         self._trust_trackers: dict[str, TrustTracker] = {}
         self._attachment_trackers: dict[str, AttachmentTracker] = {}
+        self._cold_war_trackers: dict[str, ColdWarTracker] = {}
+        self._reunion_machines: dict[str, ReunionStateMachine] = {}
 
         # v1.1: Anti-gaming trackers (shared across characters)
         self._session_tracker = DistinctSessionTracker()
@@ -93,6 +97,32 @@ class RelationshipService:
         if character_id not in self._attachment_trackers:
             self._attachment_trackers[character_id] = AttachmentTracker()
         return self._attachment_trackers[character_id]
+
+    def _get_cold_war_tracker(self, character_id: str) -> ColdWarTracker:
+        """Get or create ColdWarTracker for character."""
+        if character_id not in self._cold_war_trackers:
+            soul_spec = self.soul_specs.get(character_id, {})
+            self._cold_war_trackers[character_id] = ColdWarTracker(soul_spec)
+        return self._cold_war_trackers[character_id]
+
+    def _get_reunion_machine(self, character_id: str) -> ReunionStateMachine:
+        """Get or create ReunionStateMachine for character."""
+        if character_id not in self._reunion_machines:
+            soul_spec = self.soul_specs.get(character_id, {})
+            self._reunion_machines[character_id] = ReunionStateMachine(soul_spec)
+        return self._reunion_machines[character_id]
+
+    def _state_to_dict(self, state: RelationshipState) -> dict[str, Any]:
+        """Convert ORM RelationshipState to dict for cold_war/reunion consumption."""
+        return {
+            "active_special_states": state.active_special_states or [],
+            "total_conflicts": state.total_conflicts or 0,
+            "recent_conflicts": state.recent_conflicts or [],
+            "trust_score": state.trust_score or 0.0,
+            "attachment_strength": state.attachment_strength or 0.0,
+            "current_stage": state.current_stage,
+            "longest_absence_days": state.longest_absence_days or 0,
+        }
 
     def _get_signal_aggregator(self, user_id: UUID, character_id: str) -> "SignalAggregator":  # noqa: F821
         """Get or create SignalAggregator for user×character."""
@@ -222,6 +252,7 @@ class RelationshipService:
         character_id: str,
         signals: SignalBatch,
         turn_id: UUID,
+        emotion_state: Optional[dict[str, Any]] = None,
     ) -> RelationshipState:
         """
         Process a single turn and update relationship state (§3.5).
@@ -229,7 +260,7 @@ class RelationshipService:
         Steps (§3.5):
         1. Load state
         2. Update continuous dimensions (trust, attachment, intimacy)
-        3. Update special states
+        3. Update special states (cold_war/reunion via full trackers, drifting via lightweight evaluator)
         4. Evaluate stage transition
         5. Persist state
         6. Write audit event if transition occurred
@@ -239,6 +270,7 @@ class RelationshipService:
             character_id: Character ID
             signals: Aggregated signals from this turn
             turn_id: Turn UUID (for audit trail)
+            emotion_state: Current emotion state dict (for cold war detection)
 
         Returns:
             Updated RelationshipState
@@ -294,43 +326,108 @@ class RelationshipService:
             state.longest_absence_days = int(days_since_last)
 
         # 3. Update special states (§3.5 step 4)
-        from heart.ss04_relationship.special_states import (
-            SpecialState,
-            advance_reunion_turn,
-            evaluate_special_state,
-        )
+        # Use full cold_war/reunion trackers when emotion_state is available;
+        # fall back to lightweight special_states evaluator otherwise.
+        if emotion_state is not None:
+            state_dict = self._state_to_dict(state)
+            cold_war_tracker = self._get_cold_war_tracker(character_id)
+            reunion_machine = self._get_reunion_machine(character_id)
 
-        new_special = evaluate_special_state(
-            current_states=state.active_special_states,
-            signals=signals,
-            days_since_last=days_since_last,
-            emotion_state=None,  # Not available in process_turn; use process_turn_raw for emotion-aware evaluation
-        )
-        if new_special is not None:
-            # Transition to new state
-            if new_special == SpecialState.NONE:
-                # Exit special state
-                state.active_special_states = [
-                    s for s in state.active_special_states if s.get("state") == "none"
-                ]
-                if not state.active_special_states:
-                    state.active_special_states = [{"state": "none", "entered_at": now.isoformat()}]
-            else:
-                # Enter new special state
-                state.active_special_states = [{
-                    "state": new_special.value,
-                    "entered_at": now.isoformat(),
-                    "turns_in_state": 0,
-                }]
+            # --- Cold War ---
+            in_cold_war = any(
+                s.get("state_type") == "COLD_WAR" for s in state_dict["active_special_states"]
+            )
+            if in_cold_war:
+                transition = cold_war_tracker.update_cold_war(state_dict, emotion_state)
+                if transition == "resolved":
+                    logger.info(
+                        "cold_war_resolved",
+                        user_id=str(user_id),
+                        character_id=character_id,
+                    )
+                elif transition == "to_reconciling":
+                    logger.info(
+                        "cold_war_to_reconciling",
+                        user_id=str(user_id),
+                        character_id=character_id,
+                    )
+            elif cold_war_tracker.should_trigger_cold_war(emotion_state, state_dict):
+                cold_war_tracker.initiate_cold_war(emotion_state, state_dict)
                 logger.info(
-                    "special_state_transition",
+                    "cold_war_initiated",
                     user_id=str(user_id),
                     character_id=character_id,
-                    new_state=new_special.value,
                 )
-        elif any(s.get("state") == SpecialState.REUNION.value for s in state.active_special_states):
-            # Advance reunion turn counter
-            state.active_special_states = advance_reunion_turn(state.active_special_states)
+
+            # --- Reunion ---
+            in_reunion = any(
+                s.get("state_type") == "REUNION" for s in state_dict["active_special_states"]
+            )
+            if in_reunion:
+                engagement = {
+                    "sustained_attention": signals.total_interactions > 3
+                    if hasattr(signals, "total_interactions")
+                    else False,
+                    "vulnerability_disclosed": False,
+                    "absence_explained": False,
+                }
+                result = reunion_machine.advance_reunion(state_dict, engagement)
+                if result is None:
+                    logger.info(
+                        "reunion_completed",
+                        user_id=str(user_id),
+                        character_id=character_id,
+                    )
+            elif reunion_machine.should_trigger_reunion(int(days_since_last), state_dict):
+                reunion_machine.initiate_reunion(
+                    state_dict, int(days_since_last), user_id, character_id
+                )
+                logger.info(
+                    "reunion_initiated",
+                    user_id=str(user_id),
+                    character_id=character_id,
+                    absence_days=int(days_since_last),
+                )
+
+            # Write back to ORM
+            state.active_special_states = state_dict["active_special_states"]
+            state.total_conflicts = state_dict["total_conflicts"]
+            state.recent_conflicts = state_dict["recent_conflicts"]
+        else:
+            # Lightweight fallback (no emotion_state available)
+            from heart.ss04_relationship.special_states import (
+                SpecialState,
+                advance_reunion_turn,
+                evaluate_special_state,
+            )
+
+            new_special = evaluate_special_state(
+                current_states=state.active_special_states,
+                signals=signals,
+                days_since_last=days_since_last,
+                emotion_state=None,
+            )
+            if new_special is not None:
+                if new_special == SpecialState.NONE:
+                    state.active_special_states = [
+                        s for s in state.active_special_states if s.get("state") == "none"
+                    ]
+                    if not state.active_special_states:
+                        state.active_special_states = [{"state": "none", "entered_at": now.isoformat()}]
+                else:
+                    state.active_special_states = [{
+                        "state": new_special.value,
+                        "entered_at": now.isoformat(),
+                        "turns_in_state": 0,
+                    }]
+                    logger.info(
+                        "special_state_transition",
+                        user_id=str(user_id),
+                        character_id=character_id,
+                        new_state=new_special.value,
+                    )
+            elif any(s.get("state") == SpecialState.REUNION.value for s in state.active_special_states):
+                state.active_special_states = advance_reunion_turn(state.active_special_states)
 
         # 4. Evaluate stage transition (§3.5 step 5)
         stage_engine = self._get_stage_engine(character_id)
