@@ -101,7 +101,7 @@ class FastEncoder:
         return FastSignals(
             detected_keywords=keywords,
             sentiment=sentiment,
-            candidate_identity_signals=[],  # DEPRECATED — always empty
+            candidate_identity_signals=[],  # Kept for FastSignals schema compat; always empty.
         )
 
     @property

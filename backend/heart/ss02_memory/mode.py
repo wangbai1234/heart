@@ -13,7 +13,6 @@ Usage:
 
 Deprecation timeline (Phase D §5.3):
     2026-06-19: default → "llm"; "regex"/"dual" emit deprecation warnings
-    2026-08-18: drop shadow table + RegexHintsProvider stub
     2026-10-17: full removal of RegexHintsProvider + Hint types
 """
 
