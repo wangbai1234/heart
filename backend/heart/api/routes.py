@@ -182,12 +182,6 @@ async def chat(
 
 # ── Health / Debug ──────────────────────────────────────────────────
 
-
-@router.get("/health/ready", tags=["health"])
-async def readiness_check():
-    return {"status": "ready", "components": {"api": "ok", "auth": "ok"}}
-
-
 # Debug routes — only mounted when HEART_DEV_MODE=true (see main.py)
 dev_router = APIRouter(tags=["debug"])
 
