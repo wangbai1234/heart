@@ -32,6 +32,10 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+import structlog
+
+logger = structlog.get_logger()
+
 _backend = Path(__file__).resolve().parent.parent
 if str(_backend) not in sys.path:
     sys.path.insert(0, str(_backend))
@@ -587,7 +591,7 @@ class SeedRunner:
             LLM_TOKENS_TOTAL.labels(model=model, token_type="input").inc(estimated_input_tokens)
             LLM_TOKENS_TOTAL.labels(model=model, token_type="output").inc(estimated_output_tokens)
         except Exception:
-            pass
+            logger.warning("seed_metrics_inc_failed", exc_info=True)
 
         result = {
             "user_name": user_name,
@@ -658,7 +662,7 @@ class SeedRunner:
                 soul_config=soul_spec,
             )
         except Exception:
-            pass
+            logger.warning("seed_emotion_process_failed", exc_info=True)
 
     def _build_signals(self, turn: Dict[str, Any], tracker: DemoTracker):
         """Build SignalBatch from turn data."""
