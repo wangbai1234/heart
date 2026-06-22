@@ -88,7 +88,7 @@ class TokenCounter:
 
     def exact(self, text: str) -> int:
         """Exact token count (V1 falls back to estimate; V2 -> tiktoken)."""
-        # TODO(heart-V2): plug in tiktoken / DeepSeek tokenizer per model.
+        # TODO(heart-V2): plug in tiktoken / DeepSeek tokenizer per model. # TODO(#issue-69)
         return self.estimate(text)
 
 

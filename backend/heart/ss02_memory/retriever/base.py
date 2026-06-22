@@ -235,7 +235,7 @@ def select_top_k(
     others = [c for c in candidates if c.memory_type != "L4"]
 
     # Deduplicate others (simple version: check text similarity)
-    # TODO: Implement proper deduplication in future
+    # TODO: Implement proper deduplication in future # TODO(#issue-69)
     # For now, just take top-N
     others = deduplicate_memories(others, threshold=dedup_threshold)
 
@@ -267,5 +267,6 @@ def deduplicate_memories(
 
     For now, just return as-is (no deduplication).
     """
+    # TODO(#issue-69)
     # Placeholder: no deduplication yet
     return memories

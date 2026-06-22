@@ -416,7 +416,7 @@ class RepairEngine:
 
         # Passed heuristic gates → could be vulnerability
         # For now: use heuristic strength based on vulnerability keywords
-        # TODO: Optional LLM Critic call (when implemented)
+        # TODO: Optional LLM Critic call (when implemented) # TODO(#issue-69)
 
         vulnerability_score = 0.0
         for kw in self.vulnerability_keywords:

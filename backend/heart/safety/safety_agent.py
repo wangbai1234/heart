@@ -17,6 +17,7 @@ from __future__ import annotations
 import asyncio
 import json
 import re
+import time
 from collections import deque
 from dataclasses import dataclass, field
 from enum import Enum
@@ -300,7 +301,7 @@ class WellbeingAccumulator:
         now = (
             asyncio.get_event_loop().time()
             if asyncio.get_event_loop().is_running()
-            else __import__("time").time()
+            else time.time()
         )
 
         state.despair_signals.append(signals.get("despair", 0.0))
