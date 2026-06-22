@@ -15,6 +15,7 @@ from prometheus_client import Counter, Histogram, generate_latest
 from sqlalchemy import text
 from starlette.responses import Response
 
+from .routes import dev_router as profile_dev_router
 from .routes import router
 from .routes_chat_ws import router as chat_ws_router
 from .routes_proactive import router as proactive_router
@@ -197,9 +198,14 @@ def create_app() -> FastAPI:
     app.include_router(proactive_router)
     app.include_router(state_router)
     app.include_router(memory_router)
-    app.include_router(dev_router)
     app.include_router(voice_router)
     app.include_router(chat_ws_router)
+
+    # Dev-only routes: gated behind HEART_DEV_MODE
+    import os
+    if os.getenv("HEART_DEV_MODE", "").lower() == "true":
+        app.include_router(dev_router)  # /api/dev/*
+        app.include_router(profile_dev_router, prefix="/api/profile")  # /api/profile/*
 
     # OpenTelemetry instrumentation
     FastAPIInstrumentor.instrument_app(app)
