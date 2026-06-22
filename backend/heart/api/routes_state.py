@@ -8,7 +8,7 @@ Provides endpoints for CLI to inspect:
 - Memory (recent episodes, L3 facts, L4 identity)
 - Proactive messages
 
-All endpoints are read-only and require user_id query param.
+All endpoints are read-only, require auth, and require user_id query param.
 """
 
 from __future__ import annotations
@@ -17,11 +17,12 @@ from typing import Optional
 from uuid import UUID
 
 import structlog
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from heart.api.wiring import get_db, get_emotion_service, get_inner_state_service
+from heart.core.auth import TokenData, get_current_user
 
 logger = structlog.get_logger(__name__)
 
@@ -32,7 +33,11 @@ router = APIRouter(prefix="/api/state", tags=["state-inspect"])
 async def get_emotion_state(
     user_id: UUID = Query(..., description="User UUID"),
     character_id: str = Query("rin", description="Character ID"),
+    current_user: TokenData = Depends(get_current_user),
 ):
+    """Get current emotion state for user×character."""
+    if str(current_user.user_id) != str(user_id):
+        raise HTTPException(403, "Cannot read another user's state")
     """Get current emotion state for user×character."""
     svc = get_emotion_service()
     if svc is None:
@@ -55,7 +60,11 @@ async def get_relationship_state(
     user_id: UUID = Query(..., description="User UUID"),
     character_id: str = Query("rin", description="Character ID"),
     db_session: AsyncSession = Depends(get_db),
+    current_user: TokenData = Depends(get_current_user),
 ):
+    """Get current relationship state for user×character."""
+    if str(current_user.user_id) != str(user_id):
+        raise HTTPException(403, "Cannot read another user's state")
     """Get current relationship state for user×character."""
     try:
         result = await db_session.execute(
@@ -107,7 +116,11 @@ async def get_relationship_state(
 async def get_inner_state(
     user_id: UUID = Query(..., description="User UUID"),
     character_id: str = Query("rin", description="Character ID"),
+    current_user: TokenData = Depends(get_current_user),
 ):
+    """Get current inner state for user×character."""
+    if str(current_user.user_id) != str(user_id):
+        raise HTTPException(403, "Cannot read another user's state")
     """Get current inner state for user×character."""
     svc = get_inner_state_service()
     if svc is None:
@@ -144,7 +157,11 @@ async def get_recent_memories(
     character_id: str = Query("rin", description="Character ID"),
     limit: int = Query(10, description="Max episodes to return"),
     db_session: AsyncSession = Depends(get_db),
+    current_user: TokenData = Depends(get_current_user),
 ):
+    """Get recent L2 episodes and L3 facts."""
+    if str(current_user.user_id) != str(user_id):
+        raise HTTPException(403, "Cannot read another user's memory")
     """Get recent L2 episodes and L3 facts."""
     episodes = []
     facts = []
@@ -213,7 +230,11 @@ async def get_l4_identity(
     user_id: UUID = Query(..., description="User UUID"),
     character_id: str = Query("rin", description="Character ID"),
     db_session: AsyncSession = Depends(get_db),
+    current_user: TokenData = Depends(get_current_user),
 ):
+    """Get L4 identity memories (她记得的我)."""
+    if str(current_user.user_id) != str(user_id):
+        raise HTTPException(403, "Cannot read another user's identity")
     """Get L4 identity memories (她记得的我)."""
     memories = []
     try:
@@ -253,7 +274,11 @@ async def forget_memory(
     user_id: UUID = Query(..., description="User UUID"),
     memory_id: str = Query(..., description="Memory ID to forget (soft delete)"),
     db_session: AsyncSession = Depends(get_db),
+    current_user: TokenData = Depends(get_current_user),
 ):
+    """Soft-delete a memory by setting do_not_recall=true (M-1: no physical deletion)."""
+    if str(current_user.user_id) != str(user_id):
+        raise HTTPException(403, "Cannot delete another user's memory")
     """Soft-delete a memory by setting do_not_recall=true (M-1: no physical deletion)."""
     try:
         result = await db_session.execute(

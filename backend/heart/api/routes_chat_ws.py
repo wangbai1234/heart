@@ -8,7 +8,9 @@ import uuid
 from typing import Any, Optional
 
 import structlog
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
+
+from heart.core.auth import auth_manager
 
 from .wiring import get_orchestrator, get_voice_service
 
@@ -213,7 +215,7 @@ async def _handle_message(
 
 
 @router.websocket("/api/chat/ws")
-async def chat_ws(ws: WebSocket):
+async def chat_ws(ws: WebSocket, token: Optional[str] = Query(None)):
     """WebSocket chat endpoint.
 
     Protocol:
@@ -231,6 +233,16 @@ async def chat_ws(ws: WebSocket):
             {"type": "turn_end", "turn_id": "..."}
             {"type": "interrupted", "turn_id": "..."}
     """
+    # Verify token before accepting
+    if not token:
+        await ws.close(code=1008, reason="Missing token")
+        return
+    try:
+        token_data = auth_manager.verify_token(token)
+    except Exception:
+        await ws.close(code=1008, reason="Invalid token")
+        return
+
     await ws.accept()
     active_turns: dict[str, Any] = {}
 
