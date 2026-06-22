@@ -11,8 +11,9 @@ from typing import Optional
 from uuid import UUID
 
 import structlog
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
+from heart.core.auth import TokenData, get_current_user
 from heart.ss06_inner_state.inner_loop_worker import get_pending_proactive_messages
 
 logger = structlog.get_logger(__name__)
@@ -24,6 +25,7 @@ router = APIRouter(prefix="/api/proactive", tags=["proactive"])
 async def get_pending_messages(
     user_id: UUID = Query(..., description="User UUID"),
     character_id: Optional[str] = Query(None, description="Character ID filter"),
+    current_user: TokenData = Depends(get_current_user),
 ):
     """Get pending proactive messages for a user.
 
@@ -34,6 +36,9 @@ async def get_pending_messages(
         user_id: User UUID (required)
         character_id: Optional character filter
     """
+    if str(current_user.user_id) != str(user_id):
+        raise HTTPException(403, "Cannot read another user's proactive messages")
+
     messages = get_pending_proactive_messages(
         user_id=user_id,
         character_id=character_id,

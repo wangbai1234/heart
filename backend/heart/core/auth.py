@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import jwt
-from fastapi import HTTPException, status
+from fastapi import Header, HTTPException, status
 from pydantic import BaseModel
 
 from .config import settings
@@ -171,3 +171,28 @@ auth_manager = AuthManager(
     public_key=settings.jwt_public_key,
     expire_minutes=settings.access_token_expire_minutes,
 )
+
+
+async def get_current_user(authorization: Optional[str] = Header(None)) -> TokenData:
+    """FastAPI dependency: extract and verify JWT from Authorization header.
+
+    Returns:
+        TokenData with user_id
+
+    Raises:
+        HTTPException: 401 if missing/invalid token
+    """
+    if not authorization:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    parts = authorization.split()
+    if len(parts) != 2 or parts[0].lower() != "bearer":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authorization header",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return auth_manager.verify_token(parts[1])

@@ -6,9 +6,11 @@ from io import BytesIO
 from typing import Optional
 
 import structlog
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+
+from heart.core.auth import TokenData, get_current_user
 
 from .wiring import get_voice_service
 
@@ -24,7 +26,10 @@ class SynthesizeRequest(BaseModel):
 
 
 @router.post("/synthesize")
-async def synthesize(req: SynthesizeRequest):
+async def synthesize(
+    req: SynthesizeRequest,
+    current_user: TokenData = Depends(get_current_user),
+):
     """Synthesize speech from text."""
     voice_service = get_voice_service()
     if not voice_service:
