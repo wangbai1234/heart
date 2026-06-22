@@ -174,3 +174,7 @@ class MiniMaxProvider:
     def name(self) -> str:
         """Provider name."""
         return "minimax"
+
+    async def close(self) -> None:
+        """Close the underlying HTTP client."""
+        await self._client.aclose()

@@ -8,7 +8,7 @@ import uuid
 from typing import Any, Optional
 
 import structlog
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
+from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 
 from heart.core.auth import auth_manager
 
@@ -238,7 +238,7 @@ async def chat_ws(ws: WebSocket, token: Optional[str] = Query(None)):
         await ws.close(code=1008, reason="Missing token")
         return
     try:
-        token_data = auth_manager.verify_token(token)
+        auth_manager.verify_token(token)
     except Exception:
         await ws.close(code=1008, reason="Invalid token")
         return

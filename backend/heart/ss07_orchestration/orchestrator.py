@@ -800,9 +800,11 @@ class Orchestrator:
                     character_id=character_id,
                 )
 
-            # Close the cold path session
+            # Close the cold path session and Redis client
             if cold_db_session is not None:
                 await cold_db_session.close()
+            if redis_client is not None:
+                await redis_client.close()
 
             logger.debug(
                 "cold_path_memory_encoded",

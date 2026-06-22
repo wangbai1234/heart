@@ -21,9 +21,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from heart.api.rate_limit import limiter
 from heart.api.wiring import get_db, get_emotion_service, get_inner_state_service
 from heart.core.auth import TokenData, get_current_user
-from heart.api.rate_limit import limiter
 
 logger = structlog.get_logger(__name__)
 
@@ -324,15 +324,13 @@ async def jump_phase(
     user_id: UUID = Query(..., description="User UUID"),
     character_id: str = Query("rin", description="Character ID"),
     phase: int = Query(..., description="Target phase (1-7)"),
-    dev: bool = Query(False, description="Dev mode flag from CLI"),
     db_session: AsyncSession = Depends(get_db),
 ):
     """Jump to a specific relationship phase (dev mode only)."""
     import os
 
-    server_dev = os.getenv("HEART_DEV_MODE", "").lower() == "true"
-    if not server_dev and not dev:
-        return {"error": "Dev mode not enabled. Set HEART_DEV_MODE=true or pass dev=true"}
+    if os.getenv("HEART_DEV_MODE", "").lower() != "true":
+        raise HTTPException(404, "Not found")
 
     stage_map = {
         1: "stranger",
@@ -377,15 +375,13 @@ async def dev_sleep(
     user_id: UUID = Query(..., description="User UUID"),
     character_id: str = Query("rin", description="Character ID"),
     hours: int = Query(24, description="Hours to fast-forward"),
-    dev: bool = Query(False, description="Dev mode flag from CLI"),
     db_session: AsyncSession = Depends(get_db),
 ):
     """Fast-forward time by N hours (triggers decay + inner loop tick)."""
     import os
 
-    server_dev = os.getenv("HEART_DEV_MODE", "").lower() == "true"
-    if not server_dev and not dev:
-        return {"error": "Dev mode not enabled. Set HEART_DEV_MODE=true or pass dev=true"}
+    if os.getenv("HEART_DEV_MODE", "").lower() != "true":
+        raise HTTPException(404, "Not found")
 
     try:
         # Update last_activity_at to simulate time passing
@@ -427,15 +423,13 @@ async def dev_coldwar(
     user_id: UUID = Query(..., description="User UUID"),
     character_id: str = Query("rin", description="Character ID"),
     active: bool = Query(True, description="Activate or deactivate cold war"),
-    dev: bool = Query(False, description="Dev mode flag from CLI"),
     db_session: AsyncSession = Depends(get_db),
 ):
     """Force cold war state on/off (dev mode only)."""
     import os
 
-    server_dev = os.getenv("HEART_DEV_MODE", "").lower() == "true"
-    if not server_dev and not dev:
-        return {"error": "Dev mode not enabled. Set HEART_DEV_MODE=true or pass dev=true"}
+    if os.getenv("HEART_DEV_MODE", "").lower() != "true":
+        raise HTTPException(404, "Not found")
 
     try:
         # Update relationship state using UPSERT

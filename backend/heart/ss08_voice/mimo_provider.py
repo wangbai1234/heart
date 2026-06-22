@@ -304,3 +304,7 @@ class MiMoProvider:
     def name(self) -> str:
         """Provider name."""
         return "mimo"
+
+    async def close(self) -> None:
+        """Close the underlying HTTP client."""
+        await self._client.aclose()

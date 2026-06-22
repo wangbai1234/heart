@@ -10,8 +10,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from heart.core.auth import TokenData, get_current_user
 from heart.api.rate_limit import limiter
+from heart.core.auth import TokenData, get_current_user
 
 from .wiring import get_voice_service
 

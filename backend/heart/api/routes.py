@@ -11,8 +11,8 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from heart.core.auth import Token, TokenData, auth_manager
 from heart.api.rate_limit import limiter
+from heart.core.auth import Token, TokenData, auth_manager
 
 from .wiring import get_db, get_orchestrator
 
