@@ -11,7 +11,7 @@
 | 文件 | 用途 |
 |------|------|
 | [`PROJECT_STATUS.md`](PROJECT_STATUS.md) | 当前 phase、blocker、下一步——任何新 session 必读 |
-| [`../HEART_PROJECT_VERIFICATION_MASTER_PLAN.md`](../HEART_PROJECT_VERIFICATION_MASTER_PLAN.md) | 验证计划（7 Phase 只读验证） |
+| ~~`../HEART_PROJECT_VERIFICATION_MASTER_PLAN.md`~~ | (已完成，参见 archive/) |
 | [`audit/2026-05-23_architecture_audit.md`](audit/2026-05-23_architecture_audit.md) | 41 findings 全表 |
 
 ## 2. 设计文档（`docs/design/`）
@@ -20,14 +20,9 @@
 
 | 文件 | 主题 |
 |------|------|
-| `consolidator_implementation_summary.md` | Memory consolidator |
-| `decay_engine_implementation.md` | Memory decay |
-| `forgetting_affect_implementation_summary.md` | 遗忘 × 情感 |
 | `integration_test_pyramid.md` | Phase 7 集成测试金字塔 |
 | `reconstructor_design.md` | Memory reconstructor 设计 |
-| `reconstructor_implementation_summary.md` | Reconstructor 实现总结 |
 | `repair_mechanic.md` | Relationship 修复机制 |
-| `retriever_implementation.md` | Memory retriever |
 | `soul_drift_regression.md` | Soul drift 回归套件 |
 
 ## 3. Runbooks（`docs/runbooks/`）
@@ -45,7 +40,7 @@
 | 路径 | 说明 |
 |------|------|
 | [`../runtime_specs/`](../runtime_specs/) | SS01–SS08 Runtime Bible（动子系统前必读对应一份） |
-| [`../engineering_execution/`](../engineering_execution/) | 工程方法、AI 模型路由、Phase 7+ 操作手册 |
+| [`../archive/execution/`](../archive/execution/) | 历史工程执行计划（仅参考） |
 | [`../backend/`](../backend/) | Python 服务代码 |
 | [`../soul_specs/`](../soul_specs/) | 角色 Soul Spec YAML（Rin, Dorothy …） |
 | [`../config/`](../config/) | 应用配置 YAML |

@@ -1,129 +1,59 @@
-# Heart Project - Claude Code Configuration
+# Claude Code Configuration
 
-## 项目信息
-- **名称**: Heart - AI Companion
-- **GitHub**: https://github.com/wangbai1234/heart.git
-- **技术栈**: Python 3.11 + FastAPI + PostgreSQL + Redis + Kubernetes
-- **当前工作目录**: /Users/wanglixun/heart
+## 📖 Session startup
 
----
+1. Read `AGENTS.md` (project-level rules)
+2. Read `README.md` (project overview)
 
-## 📖 每次 Session 必须执行
+## 🤖 Behavior rules — direct execution
 
-无论你是什么模型、何时开始，只要是一个**新 session**，必须先做以下事情（无需等用户提醒）：
+### ✅ I should do directly (no need to ask):
 
-### 1. 读取以下文件（按顺序）
-- [ ] `docs/PROJECT_STATUS.md` — 当前 phase、blocker、下一步
-- [ ] `AGENTS.md` — 项目级规范
-- [ ] `.claude/CLAUDE.md` — 本文件（行为规则）
+1. **File operations**
+   - Read, edit, create any project file
+   - Create new modules, tests, configs
+   - Delete temporary files
 
-### 2. 工作流
-修改代码后，按以下步骤**自动执行**（无需询问）：
-- [ ] 运行 `bash scripts/ci.sh`（lint + 测试）
-- [ ] `git add + git commit`
-- [ ] `git push`
-- [ ] `gh pr create`
+2. **Git operations**
+   - Commit (`git add + git commit`)
+   - Push to GitHub (`git push`)
+   - Create and switch branches (`git checkout -b`)
+   - View status, log, diff
 
-> ⚠️ 不运行测试就 push 是禁止行为（见底部 ❌ 禁止事项）
+3. **GitHub operations**
+   - Create Pull Requests (`gh pr create`)
+   - View PR status, comments, checks
+   - Create Issues for bug tracking
 
----
+4. **Local dev operations**
+   - Run tests
+   - Run linters
+   - Build Docker images
+   - Validate config files
 
-## 🤖 行为规则 - 直接执行权限
+### ❌ Needs confirmation:
 
-### ✅ 我应该直接做的事（无需询问）：
-
-1. **文件操作**
-   - 读取、编辑、创建项目内的所有文件
-   - 创建新的模块、测试、配置文件
-   - 删除无用的临时文件
-
-2. **Git 操作**
-   - 提交代码（git add + git commit）
-   - 推送代码到 GitHub（git push）
-   - 创建和管理分支（git checkout -b）
-   - 查看 git status、git log、git diff
-
-3. **GitHub 操作**
-   - 创建 Pull Request（gh pr create）
-   - 查看 PR 状态、评论、检查
-   - 创建 Issues（如果需要追踪 bug）
-
-4. **本地开发操作**
-   - 运行测试（pytest）
-   - 运行 linter（ruff、mypy）
-   - 构建 Docker 镜像
-   - 验证配置文件
-
-### ❌ 需要你确认的事：
-
-1. 推送到 main 分支（force push）
-2. 删除重要分支
-3. 修改关键基础设施配置（Kubernetes、数据库）
-4. 涉及金钱/成本的决策（AWS 资源等）
+1. Force push to main
+2. Delete important branches
+3. Modify critical infrastructure config (Kubernetes, database)
+4. Decisions involving cost (AWS resources, etc.)
 
 ---
 
-## 📋 工作流程
+## 📋 Workflow
 
-### 当你给我任务时：
-1. ✅ 我直接读取你的代码
-2. ✅ 我直接修改文件
-3. ✅ 我直接提交到 Git
-4. ✅ 我直接创建 PR 到 GitHub
-5. ✅ 我报告进度和结果
+When given a task:
+1. Read the code
+2. Modify files
+3. Commit to Git
+4. Create PR to GitHub
+5. Report progress
 
-### 无需等待你的确认（除非涉及上面的 ❌ 项）
-
----
-
-## 🏗️ 项目结构
-
-```
-heart/
-├── backend/
-│   ├── heart/           # 主代码
-│   ├── tests/
-│   │   ├── unit/
-│   │   └── integration/
-│   ├── migrations/      # Alembic 数据库迁移
-│   ├── Dockerfile
-│   └── requirements.txt
-├── config/              # 配置文件（YAML）
-├── soul_specs/          # Soul Spec 定义（YAML）
-├── infra/kubernetes/    # Kubernetes 部署文件
-├── runtime_specs/       # 完整的系统规范文档
-├── .github/workflows/   # CI/CD 管道
-└── .claude/CLAUDE.md    # 本文件
-```
+No need to wait for confirmation (unless ❌ items above).
 
 ---
 
-## 🚀 标准操作清单
-
-### 创建新功能时：
-- [ ] 创建特性分支：`git checkout -b feat/xxx`
-- [ ] 编写代码
-- [ ] 编写测试
-- [ ] 运行 lint 和测试
-- [ ] 提交：`git commit -m "feat: description"`
-- [ ] 推送：`git push -u origin feature/xxx`
-- [ ] 创建 PR：`gh pr create --title "..." --body "..."`
-
-### 修复 bug 时：
-- [ ] 创建 bug 分支：`git checkout -b fix/xxx`
-- [ ] 修复代码
-- [ ] 添加测试验证
-- [ ] 提交：`git commit -m "fix: description"`
-- [ ] 推送和创建 PR
-
-### 部署到 Kubernetes 时：
-- 确保所有 YAML 文件验证通过
-- CI 必须全绿（lint + tests + build）
-- 创建 PR 供 review
-
----
-
-## 📝 提交信息规范
+## 📝 Commit message format
 
 ```
 <type>: <description>
@@ -133,16 +63,9 @@ heart/
 <footer>
 ```
 
-**Type**:
-- feat: 新功能
-- fix: 修复
-- refactor: 重构
-- test: 测试相关
-- ci: CI/CD 相关
-- docs: 文档
-- chore: 构建、依赖等
+**Types**: `feat` `fix` `refactor` `test` `ci` `docs` `chore`
 
-**示例**:
+**Example**:
 ```
 feat: add memory consolidation worker
 
@@ -155,114 +78,81 @@ Closes #123
 
 ---
 
-## 🔧 常用命令
+## 🌿 Branch & PR governance
 
-```bash
-# 查看状态
-git status
-git log --oneline -10
+### PR lifecycle
+- **Any PR open > 7 days must be merged or closed.** No long-term hanging.
+- **Any person with open PRs ≥ 3 must close existing ones before opening new ones.**
+- **PR must have a clear base.** Default = `main`. Only in explicit stacked PR workflow may base ≠ main, and a dependency graph must be in the PR description.
 
-# 本地测试
-cd backend
-pytest tests/unit -v
-pytest tests/integration -v
+### Cross-branch fix anti-pattern
+- **Do NOT copy the same fix to N feature branches.**
+- Correct: fix goes to main first, other feature branches `git rebase main` to pick it up.
+- If you're about to create a second `xxx-fix` branch for the same fix, **stop and go through main hotfix flow**.
 
-# Lint 检查
-ruff check heart/
-mypy heart/
+### Branch naming & cleanup
+- Naming: `feat/<topic>`, `fix/<topic>`, `docs/<topic>`, `chore/<topic>`. Use `feat/` consistently, no mixing `feature/` and `feat/`.
+- **Delete on merge**: delete head branch (local + remote) immediately after PR merge.
+- **Weekly**: `git remote prune origin` to clean up remote dead links.
 
-# 构建 Docker
-docker build -f backend/Dockerfile -t heart/backend:test .
-```
+### "Factual trunk" anti-pattern
+- Do NOT turn a feature branch into a "de facto main" (10+ commits, multiple unrelated features, used as dev baseline).
+- If a branch has drifted from its original scope, **immediately split** into focused PRs, or merge to main and start new branches from main.
 
----
+### Multi-remote
+- Single authoritative remote = `origin` (GitHub).
+- Mirror remotes (Gitee, etc.) are **read-only / one-way push**. No development on mirror remotes.
 
-## 🌿 分支与 PR 治理（硬性约束，违反必须立即停下报告）
+### Parallel implementation prohibition
+- **Do NOT implement the same subsystem in parallel on different branches.**
+- Before starting any SSxx work, must check existing implementation with `git ls-tree -r <candidate base branch> -- path/to/SSxx*`.
+- If a rewrite is needed, **PR description must state why the existing version was abandoned**.
 
-### PR 生命周期
-- **任何 PR open 超过 7 天必须二选一**：合并 或 关闭。不允许长期挂起。
-- **任何时刻，单人 open PR 数 ≤ 3**。超过时禁止开新 PR，必须先收敛旧 PR。
-- **PR 必须有明确 base**：默认 base = `main`，仅在显式 stacked PR 工作流时才允许 base ≠ main，且必须在 PR 描述里画依赖图。
-
-### 跨分支 fix 反模式
-- **禁止把同一个 fix 横向复制到 N 个功能分支**。
-- 正确做法：fix 先合 main，其他功能分支 `git rebase main` 自动拿到修复。
-- 如果发现自己正在创建第二个 `xxx-fix` 分支去修同样的事，**立即停下，改走 main hotfix 流程**。
-
-### 分支命名与清理
-- 命名规范：`feat/<topic>`、`fix/<topic>`、`docs/<topic>`、`chore/<topic>`。统一 `feat/`，禁止 `feature/` 与 `feat/` 混用。
-- **合并即删除**：PR merge 后立即删除 head 分支（本地 + 远程）。GitHub 设置勾选 "Automatically delete head branches"。
-- **每周一次** `git remote prune origin` 清理远端死链。
-
-### "事实主干" 反模式
-- 禁止把某 feature 分支变成"事实主干"（持续累积 10+ 提交、包含多个不相关功能、被当作开发基线）。
-- 一旦发现某分支已偏离原始 scope，必须**立即拆分**为多个聚焦 PR，或合并到 main 后从 main 开新分支。
-
-### 多远端
-- 单一权威远端 = `origin`（GitHub）。
-- Gitee 等镜像远端**只读 / 单向 push**，不允许在镜像端开发或产生独立提交。
-
-### 平行实现禁令
-- **禁止在不同分支上对同一子系统做平行实现**。SS04/SS07/Safety 之所以曾出现 3 套不收敛版本，根因是不同 session 未核查现状就开新分支重写。
-- 开始任何 SSxx 模块工作前，**必须先 `git ls-tree -r <候选基线分支> -- backend/heart/ssXX_*`** 看现有实现，禁止"凭印象觉得这是空的"。
-- 如发现需要重写已有实现，**PR 描述必须写明"为什么放弃既有版本"**，否则 reviewer 必须 reject。
-
-### Agent 行为铁律
-- 跨分支代码状态判断**必须基于 `git show` / `git ls-tree` 实际输出**，禁止基于 commit message / PR title 推断模块是否存在。
-- 违反此条产出的报告/方案默认作废。
-
-### 提交前自检（每次 push 前必须问自己）
-1. 这个 PR 7 天内能合并吗？不能就不要开。
-2. base 是 main 吗？不是的话有没有写依赖说明？
-3. 这个修复该走 main hotfix 而非挂到 feature 分支吗？
-4. 我现在 open 的 PR 是不是 ≥ 3 个了？
-5. 我有没有用 `git ls-tree` 验证过现有实现，而不是凭印象？
+### Pre-push self-check (ask yourself before every push)
+1. Can this PR be merged in 7 days? If not, don't open it.
+2. Is base = main? If not, is there a dependency note?
+3. Should this fix go through main hotfix instead of a feature branch?
+4. Do I have ≥ 3 open PRs right now?
+5. Did I verify existing implementation with `git ls-tree`, not from memory?
 
 ---
 
-## 🧯 集成验证分档（替换原"红就停"硬规则）
+## 🧯 Integration verification tiers
 
-CI / lint / type-check 报错时按以下四档判定，不同档位不同处置：
+CI / lint / type-check errors are handled by tier:
 
-| 档 | 类型 | 处置 |
-|---|------|------|
-| **A** | 功能性错误（pytest 红、import 报错、运行时崩溃） | 立即停下，必须修复或回退。禁止 noqa / config 放宽。 |
-| **B** | 集成引入的**新增** lint / type 错误（baseline diff 证明 baseline 无） | 等同档 A，禁止静默。 |
-| **C** | 从源分支带入的**既有**债务（baseline diff 证明既有） | 不阻塞，走"债务登记仪式"（见下）。 |
-| **D** | 领域约定与 lint rule 冲突（数学符号 `L/N/K` 等） | 局部 `# noqa: <rule> — <领域理由>`，每处一行注释。 |
+| Tier | Type | Disposition |
+|------|------|------------|
+| **A** | Functional errors (test failures, import errors, runtime crashes) | Stop immediately. Must fix or revert. No noqa/config relaxation. |
+| **B** | **New** lint/type errors introduced by the integration (baseline diff proves baseline is clean) | Same as Tier A. No silent passing. |
+| **C** | **Existing** debt carried from source branch (baseline diff proves it exists) | Non-blocking, but requires "debt registration ceremony" (below). |
+| **D** | Domain convention vs lint rule conflict (math symbols `L/N/K`, etc.) | Local `# noqa: <rule> — <domain reason>`, one comment per occurrence. |
 
-### 债务登记仪式（档 C 专用，三步缺一不可）
-1. **`pyproject.toml` 用 `per-file-ignores` 登记**，配 issue 编号和 sunset date 注释。
-2. **开 tracking issue**：列出每条债务的文件 / 行号 / 修复建议 / sunset。
-3. **集成 PR body 加 `## Imported Tech Debt` 段落**，引用 issue。
+### Debt registration ceremony (Tier C only, all three steps required)
+1. Register in `pyproject.toml` with `per-file-ignores`, with issue number and sunset date comment.
+2. Open a tracking issue listing each debt (file/line/fix suggestion/sunset).
+3. Add `## Imported Tech Debt` section in the integration PR body referencing the issue.
 
-### 禁止
-- 全局放宽 ruff / mypy 规则换取单次集成通过（配置降级是单向门，per-file-ignore 是双向门——能改就选双向门）。
-- 无理由 `# noqa`（noqa 仅用于档 D）。
-- 把档 A/B 错误伪装成档 C 静默掉。
-- `per-file-ignores` 或 `[mypy-...]` ignore 不带 issue 链接 + sunset 注释 → **reviewer 必须 reject**。
-
----
-
-## ⚠️ 禁止事项
-
-- ❌ 直接在 main 分支提交（必须用 PR）
-- ❌ 提交 `.env` 或密钥文件
-- ❌ 不运行测试就 push
-- ❌ 删除用户数据相关的表（逻辑删除）
-- ❌ 修改已部署的 soul_specs（必须版本化）
-- ❌ CI 配置变更 PR 混入业务变更（CI 修复必须独立 PR）
+### Prohibitions
+- Global relaxation of ruff/mypy rules for integration convenience.
+- Unjustified `# noqa` (noqa only for Tier D).
+- Disguising Tier A/B errors as Tier C.
+- `per-file-ignores` or `[mypy-...]` ignore without issue link + sunset comment → **reviewer must reject**.
 
 ---
 
-## 📞 需要帮助时
+## ⚠️ Prohibitions
 
-如果遇到问题，我会：
-1. 自动修复能修复的（lint errors）
-2. 创建 git commit 记录问题
-3. 告诉你问题在哪里，需要你人工决策时才问
+- ❌ Commit directly to main (must use PR)
+- ❌ Commit `.env` or secret files
+- ❌ Push without running tests
+- ❌ Mix CI config changes with business changes in the same PR (CI fixes must be independent PRs)
 
 ---
 
-**最后更新**: 2026-06-03
-**版本**: 2.0.0
+## 📞 Need help?
+
+If something goes wrong, I will:
+1. Auto-fix what I can (lint errors)
+2. Create a git commit to record the issue
+3. Tell you where the problem is, and only ask when I need human decision

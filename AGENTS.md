@@ -62,6 +62,24 @@ LLM_PROVIDER=deepseek DEEPSEEK_API_KEY=sk-... pytest tests/e2e -m e2e -v  # real
 - `backend/tests/e2e/` — test suite (login → chat → DB assertion)
 - `.claude/skills/e2e-test/SKILL.md` — detailed SOP (when to run, how to diagnose failures)
 
+## Integration verification tiers (CI error handling)
+
+CI / lint / type-check errors are handled by tier:
+
+| Tier | Type | Disposition |
+|------|------|-------------|
+| **A** | Functional errors (test failures, import errors, runtime crashes) | Stop immediately. Must fix or revert. No noqa/config relaxation. |
+| **B** | **New** lint/type errors introduced by the integration (baseline diff proves baseline is clean) | Same as Tier A. No silent passing. |
+| **C** | **Existing** debt carried from source branch (baseline diff proves it exists) | Non-blocking, but requires "debt registration ceremony" (see below). |
+| **D** | Domain convention vs lint rule conflict (math symbols `L/N/K`, etc.) | Local `# noqa: <rule> — <domain reason>`, one comment per occurrence. |
+
+**Debt registration ceremony** (Tier C only, all three steps required):
+1. Register in `pyproject.toml` with `per-file-ignores`, with issue number and sunset date comment.
+2. Open a tracking issue listing each debt (file/line/fix suggestion/sunset).
+3. Add `## Imported Tech Debt` section in the integration PR body referencing the issue.
+
+**Prohibitions**: global ruff/mypy rule relaxation, unjustified `# noqa`, disguising A/B as C, `per-file-ignores` without issue link + sunset comment.
+
 ## Git & branching
 
 - **Never commit directly to main.** Use feature branches + PR.
@@ -74,7 +92,7 @@ LLM_PROVIDER=deepseek DEEPSEEK_API_KEY=sk-... pytest tests/e2e -m e2e -v  # real
 ## Key gotchas
 
 - **Two LLM provider trees** exist (`infra/llm/` and `infra/llm_providers/`) — known debt, do not add to the split.
-- **`engineering_execution/EXECUTION_PLAN.md`** is 97KB of historical planning; do not read it fully. Use `docs/PROJECT_STATUS.md` instead.
+- **`archive/execution/EXECUTION_PLAN.md`** is 97KB of historical planning; do not read it fully. Use `docs/PROJECT_STATUS.md` instead.
 - **Archived content** is in `archive/`. Do not delete it — it preserves decision history.
 - **Subsystem specs** in `runtime_specs/` are the contract. Code that contradicts them is a bug, not a feature.
 - **CI is minimal**: `scripts/ci.sh` is the only pipeline. Old Gitee Go workflows are archived.

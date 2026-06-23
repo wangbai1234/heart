@@ -8,9 +8,9 @@
 
 ```
 archive/
-├── ci-legacy/         Gitee Go / GitHub Actions 复杂 CI 配置 + 操作指南
-├── phase-reports/     Phase 0/CI 修复等阶段性完成报告
-└── docs-legacy/       被合并/废弃的旧 INDEX、session log、模型指南旧版
+├── execution/     已完成的执行计划 / 已实现的实现总结 / 已 supersede 的报告
+├── design/        已实现的方案设计 / 已 shipped 的 prompt 设计
+└── backend/       已完成的模块文档 / 重复的性能基线
 ```
 
 ## 归档原则
