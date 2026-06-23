@@ -120,7 +120,7 @@ bash scripts/ci.sh unit-tests
 bash scripts/ci.sh integration-tests   # opt-in，需本地 postgres + redis + API key
 ```
 
-历史 CI 配置存放：`archive/ci-legacy/`。
+历史 CI 配置存档：`archive/execution/`。
 
 ---
 
