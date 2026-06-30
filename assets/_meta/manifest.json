@@ -1,0 +1,90 @@
+[
+  {
+    "name": "character_shenwuyue_avatar",
+    "kind": "character",
+    "path": "assets/characters/character_shenwuyue_avatar.png",
+    "source": "web/design/source/phase2_screens/12_character.png",
+    "description": "Large circular avatar with the original violet aura.",
+    "transform": "circle_avatar"
+  },
+  {
+    "name": "character_taolesi_avatar",
+    "kind": "character",
+    "path": "assets/characters/character_taolesi_avatar.png",
+    "source": "web/design/source/phase2_screens/12_character.png",
+    "description": "Large circular avatar with the original blue aura.",
+    "transform": "circle_avatar"
+  },
+  {
+    "name": "character_youyou_avatar",
+    "kind": "character",
+    "path": "assets/characters/character_youyou_avatar.png",
+    "source": "web/design/source/phase2_screens/10_chat_light.png",
+    "description": "Small circular chat avatar extracted from the light chat screen.",
+    "transform": "circle_avatar"
+  },
+  {
+    "name": "illustration_heart_emblem",
+    "kind": "illustration",
+    "path": "assets/illustrations/illustration_heart_emblem.png",
+    "source": "web/design/source/phase1_foundations/07_app_icon.png",
+    "description": "Primary floating heart illustration on transparent background.",
+    "transform": "flood_extract"
+  },
+  {
+    "name": "illustration_gift_box",
+    "kind": "illustration",
+    "path": "assets/illustrations/illustration_gift_box.png",
+    "source": "web/design/source/phase2_screens/15_redeem.png",
+    "description": "Redeem-page gift box illustration with ribbon and soft glow.",
+    "transform": "flood_extract"
+  },
+  {
+    "name": "background_login_hero",
+    "kind": "background",
+    "path": "assets/backgrounds/background_login_hero.webp",
+    "source": "web/design/source/phase2_screens/14_login.png",
+    "description": "Wide fantasy sky hero used on the login screen.",
+    "transform": "crop_webp"
+  },
+  {
+    "name": "background_character_hero",
+    "kind": "background",
+    "path": "assets/backgrounds/background_character_hero.webp",
+    "source": "web/design/source/phase2_screens/12_character.png",
+    "description": "Character selection sky banner with centered heart emblem.",
+    "transform": "crop_webp"
+  },
+  {
+    "name": "background_castle_garden",
+    "kind": "background",
+    "path": "assets/backgrounds/background_castle_garden.webp",
+    "source": "web/design/source/phase1_foundations/01_style_tile.png",
+    "description": "Pastel castle-and-garden strip illustration from the style tile.",
+    "transform": "crop_webp"
+  },
+  {
+    "name": "illustration_empty_state_heart_cloud",
+    "kind": "illustration",
+    "path": "assets/illustrations/illustration_empty_state_heart_cloud.webp",
+    "source": "web/design/source/phase3_states/18_state_empty.png",
+    "description": "Heart-over-cloud cluster from the empty chat state.",
+    "transform": "crop_webp"
+  },
+  {
+    "name": "effect_starburst_pink",
+    "kind": "effect",
+    "path": "assets/effects/effect_starburst_pink.png",
+    "source": "web/design/source/phase2_screens/14_login.png",
+    "description": "Single glowing starburst for lightweight overlays.",
+    "transform": "flood_extract"
+  },
+  {
+    "name": "effect_glow_heart_soft",
+    "kind": "effect",
+    "path": "assets/effects/effect_glow_heart_soft.png",
+    "source": "web/design/source/phase1_foundations/07_app_icon.png",
+    "description": "Heart aura with extra glow padding for overlay use.",
+    "transform": "flood_extract"
+  }
+]
