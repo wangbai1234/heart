@@ -1,6 +1,8 @@
+import { useState, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Avatar } from '../components/ui/Avatar'
 import { TabBar } from '../components/ui/TabBar'
+import { Dialog } from '../components/ui/Dialog'
 import { useThemeStore } from '../stores/themeStore'
 import { useAppStore } from '../stores/appStore'
 import { useChatStore } from '../stores/chatStore'
@@ -22,6 +24,54 @@ type TimelineMessage = {
   audioDuration?: number
 }
 
+function SwipeableRow({ children, onDelete }: { children: React.ReactNode; onDelete: () => void }) {
+  const [offsetX, setOffsetX] = useState(0)
+  const startX = useRef(0)
+  const currentOffset = useRef(0)
+  const swiping = useRef(false)
+
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    startX.current = e.touches[0].clientX
+    currentOffset.current = offsetX
+    swiping.current = false
+  }, [offsetX])
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    const dx = e.touches[0].clientX - startX.current
+    if (Math.abs(dx) > 8) swiping.current = true
+    const next = Math.max(-80, Math.min(0, currentOffset.current + dx))
+    setOffsetX(next)
+  }, [])
+
+  const handleTouchEnd = useCallback(() => {
+    setOffsetX(offsetX < -40 ? -80 : 0)
+  }, [offsetX])
+
+  return (
+    <div className="relative overflow-hidden rounded-[24px]">
+      {/* Delete button behind */}
+      <div className="absolute inset-y-0 right-0 flex items-center" style={{ width: 80 }}>
+        <button
+          onClick={(e) => { e.stopPropagation(); onDelete() }}
+          className="flex h-full w-full items-center justify-center bg-[#FF5A5A] text-[14px] font-semibold text-white"
+        >
+          删除
+        </button>
+      </div>
+      {/* Foreground row */}
+      <div
+        className="relative z-10 transition-transform duration-200 ease-out"
+        style={{ transform: `translateX(${offsetX}px)` }}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+      >
+        {children}
+      </div>
+    </div>
+  )
+}
+
 export function ChatInboxPage() {
   const navigate = useNavigate()
   const { resolvedTheme } = useThemeStore()
@@ -30,12 +80,15 @@ export function ChatInboxPage() {
   const threads = useChatStore((s) => s.threads)
   const messages = useChatStore((s) => s.messages)
   const setActiveCharacter = useChatStore((s) => s.setActiveCharacter)
+  const clearThread = useChatStore((s) => s.clearThread)
+  const clearMessages = useChatStore((s) => s.clearMessages)
+  const [deleteTarget, setDeleteTarget] = useState<CharacterId | null>(null)
 
   const pageBg = resolvedTheme === 'dark'
     ? '/assets/backgrounds/暗色聊天背景图.png'
     : '/assets/backgrounds/聊天背景图.png'
 
-  const conversations = (Object.keys(CHARACTER_PROFILES) as CharacterId[]).map((characterId) => {
+  const allConversations = (Object.keys(CHARACTER_PROFILES) as CharacterId[]).map((characterId) => {
     const liveMessages = messages[characterId] ?? []
     const threadMessages = threads[characterId] ?? []
     const fallbackMessages = CONVERSATION_THREADS[characterId] ?? []
@@ -51,12 +104,21 @@ export function ChatInboxPage() {
       profile: CHARACTER_PROFILES[characterId],
       characterId,
       preview: getMessagePreview(previewTimeline),
-      updatedAt: lastMessage ? formatConversationTime(lastMessage.timestamp) : '刚刚',
+      updatedAt: lastMessage ? formatConversationTime(lastMessage.timestamp) : '',
       unreadCount,
       isSelected: currentCharacterId === characterId,
       totalMessages: timeline.length,
     }
   })
+
+  // Filter out characters with no messages
+  const conversations = allConversations.filter((c) => c.totalMessages > 0)
+
+  const handleDelete = (characterId: CharacterId) => {
+    clearThread(characterId)
+    clearMessages(characterId)
+    setDeleteTarget(null)
+  }
 
   return (
     <div className="relative h-full overflow-hidden">
@@ -66,98 +128,116 @@ export function ChatInboxPage() {
         <div style={{ height: 'var(--safe-top)' }} />
 
         <header className="flex items-center justify-between px-5 py-3">
-          <div>
-            <p className="text-[12px] tracking-[0.12em] text-[var(--color-text-muted)]">MESSAGES</p>
-            <h1 className="mt-1 text-[28px] font-semibold tracking-[-0.03em] text-[var(--color-ink)]">聊天列表</h1>
-          </div>
-          <button
-            onClick={() => navigate('/character')}
-            className="inline-flex h-[42px] items-center rounded-full border border-[var(--color-border-glass)] bg-[var(--color-glass-55)] px-4 text-[13px] text-[var(--color-ink)] backdrop-blur-[12px] active:scale-[0.97] transition-transform"
-          >
-            切换角色
-          </button>
+          <h1 className="mt-1 text-[28px] font-semibold tracking-[-0.03em] text-[var(--color-ink)]">聊天列表</h1>
         </header>
 
-        <div className="px-4">
-          <div className="rounded-[24px] border border-[var(--color-border-glass)] bg-[var(--color-glass-35)] px-4 py-4 backdrop-blur-[16px] shadow-[var(--shadow-soft)]">
-            <p className="text-[14px] font-medium text-[var(--color-ink)]">现在进入聊天会先展示消息列表</p>
-            <p className="mt-2 text-[13px] leading-[1.65] text-[var(--color-text-secondary)]">
-              选择一个角色查看最近消息与未读状态，再进入具体会话页面继续聊天。
-            </p>
-          </div>
-        </div>
-
         <div className="flex-1 overflow-y-auto px-4 pb-[180px] pt-4">
-          <div className="space-y-3">
-            {conversations.map((conversation) => (
-              <button
-                key={conversation.characterId}
-                onClick={() => {
-                  setCharacter(conversation.characterId)
-                  setActiveCharacter(conversation.characterId)
-                  navigate(`/chat/${conversation.characterId}`)
-                }}
-                className={`w-full rounded-[24px] border px-4 py-4 text-left backdrop-blur-[16px] transition-transform active:scale-[0.985] ${
-                  conversation.isSelected
-                    ? 'border-[rgba(255,183,197,0.38)] bg-[var(--color-glass-75)] shadow-[var(--shadow-card)]'
-                    : 'border-[var(--color-border-glass)] bg-[var(--color-glass-35)] shadow-[var(--shadow-soft)]'
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <Avatar src={conversation.profile.avatar} size={58} />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <p className="truncate text-[17px] font-semibold text-[var(--color-ink)]">
-                        {conversation.profile.name}
-                      </p>
-                      <span
-                        className="inline-flex h-6 items-center rounded-full px-2.5 text-[11px] font-medium"
-                        style={{
-                          color: conversation.profile.tagColor,
-                          backgroundColor: conversation.profile.tagBg,
-                        }}
-                      >
-                        {conversation.profile.tag}
-                      </span>
+          {conversations.length === 0 ? (
+            <div className="flex flex-col items-center justify-center pt-20">
+              <p className="text-[15px] text-[var(--color-text-muted)]">暂无聊天记录</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {conversations.map((conversation) => (
+                <SwipeableRow
+                  key={conversation.characterId}
+                  onDelete={() => setDeleteTarget(conversation.characterId)}
+                >
+                  <button
+                    onClick={() => {
+                      setCharacter(conversation.characterId)
+                      setActiveCharacter(conversation.characterId)
+                      navigate(`/chat/${conversation.characterId}`)
+                    }}
+                    className={`w-full rounded-[24px] border px-4 py-4 text-left backdrop-blur-[16px] transition-transform active:scale-[0.985] ${
+                      conversation.isSelected
+                        ? 'border-[rgba(255,183,197,0.38)] bg-[var(--color-glass-75)] shadow-[var(--shadow-card)]'
+                        : 'border-[var(--color-border-glass)] bg-[var(--color-glass-35)] shadow-[var(--shadow-soft)]'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <Avatar src={conversation.profile.avatar} size={58} />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <p className="truncate text-[17px] font-semibold text-[var(--color-ink)]">
+                            {conversation.profile.name}
+                          </p>
+                          <span
+                            className="inline-flex h-6 items-center rounded-full px-2.5 text-[11px] font-medium"
+                            style={{
+                              color: conversation.profile.tagColor,
+                              backgroundColor: conversation.profile.tagBg,
+                            }}
+                          >
+                            {conversation.profile.tag}
+                          </span>
+                        </div>
+                        <p className="mt-1 text-[13px] text-[var(--color-text-secondary)]">
+                          {conversation.profile.statusLabel}
+                        </p>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <p className="text-[12px] text-[var(--color-text-muted)]">{conversation.updatedAt}</p>
+                        {conversation.unreadCount > 0 ? (
+                          <span className="mt-2 inline-flex min-w-[24px] items-center justify-center rounded-full bg-[var(--color-unread-badge)] px-2 py-[2px] text-[11px] font-semibold text-white">
+                            {conversation.unreadCount}
+                          </span>
+                        ) : (
+                          <span className="mt-2 inline-flex rounded-full bg-[rgba(255,255,255,0.36)] px-2.5 py-[2px] text-[11px] text-[var(--color-text-muted)]">
+                            已读
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    <p className="mt-1 text-[13px] text-[var(--color-text-secondary)]">
-                      {conversation.profile.statusLabel}
-                    </p>
-                  </div>
-                  <div className="shrink-0 text-right">
-                    <p className="text-[12px] text-[var(--color-text-muted)]">{conversation.updatedAt}</p>
-                    {conversation.unreadCount > 0 ? (
-                      <span className="mt-2 inline-flex min-w-[24px] items-center justify-center rounded-full bg-[var(--color-unread-badge)] px-2 py-[2px] text-[11px] font-semibold text-white">
-                        {conversation.unreadCount}
-                      </span>
-                    ) : (
-                      <span className="mt-2 inline-flex rounded-full bg-[rgba(255,255,255,0.36)] px-2.5 py-[2px] text-[11px] text-[var(--color-text-muted)]">
-                        已读
-                      </span>
-                    )}
-                  </div>
-                </div>
 
-                <div className="mt-4 rounded-[18px] bg-[rgba(255,255,255,0.3)] px-3.5 py-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="truncate text-[14px] font-medium text-[var(--color-ink)]">
-                      {conversation.preview}
-                    </p>
-                    <span className="shrink-0 text-[12px] text-[var(--color-text-muted)]">
-                      {conversation.totalMessages} 条
-                    </span>
-                  </div>
-                  <p className="mt-2 text-[12px] leading-[1.55] text-[var(--color-text-secondary)]">
-                    点击进入与{conversation.profile.shortName}的具体聊天页面。
-                  </p>
-                </div>
-              </button>
-            ))}
-          </div>
+                    <div className="mt-4 rounded-[18px] bg-[rgba(255,255,255,0.3)] px-3.5 py-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="truncate text-[14px] font-medium text-[var(--color-ink)]">
+                          {conversation.preview}
+                        </p>
+                        <span className="shrink-0 text-[12px] text-[var(--color-text-muted)]">
+                          {conversation.totalMessages} 条
+                        </span>
+                      </div>
+                    </div>
+                  </button>
+                </SwipeableRow>
+              ))}
+            </div>
+          )}
         </div>
 
         <TabBar />
       </div>
+
+      {/* Delete confirmation dialog */}
+      <Dialog
+        open={deleteTarget !== null}
+        onClose={() => setDeleteTarget(null)}
+        title="确认删除聊天记录？"
+        actions={
+          <>
+            <button
+              onClick={() => setDeleteTarget(null)}
+              className={`flex-1 rounded-full px-4 py-3 text-[15px] font-medium ${
+                resolvedTheme === 'dark'
+                  ? 'bg-[rgba(255,255,255,0.06)] text-[#ECE9F4]'
+                  : 'bg-[rgba(255,255,255,0.75)] text-[#30344A]'
+              }`}
+            >
+              取消
+            </button>
+            <button
+              onClick={() => deleteTarget && handleDelete(deleteTarget)}
+              className="flex-1 rounded-full bg-[#FF5A5A] px-4 py-3 text-[15px] font-semibold text-white"
+            >
+              删除
+            </button>
+          </>
+        }
+      >
+        删除后页面消息将被清空，但角色长期记忆不会被删除。
+      </Dialog>
     </div>
   )
 }
