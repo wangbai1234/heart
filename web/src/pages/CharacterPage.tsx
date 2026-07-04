@@ -108,7 +108,7 @@ export function CharacterPage() {
         {/* Floating Bottom CTA */}
         <div
           className="absolute bottom-0 left-0 right-0 z-20 px-5"
-          style={{ paddingBottom: 'calc(80px + var(--safe-bottom))' }}
+          style={{ paddingBottom: 'calc(85px + var(--safe-bottom))' }}
         >
           <button
             onClick={handleConfirm}
