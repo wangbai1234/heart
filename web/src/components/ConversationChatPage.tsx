@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAppStore } from '../stores/appStore'
 import { useChatStore, type Message } from '../stores/chatStore'
 import { useAuthStore } from '../stores/authStore'
-import { CHARACTER_PROFILES } from '../data/uiContent'
+import { CHARACTER_PROFILES, type CharacterId } from '../data/uiContent'
 import { useWebSocket } from '../hooks/useWebSocket'
 import { getChatHistory } from '../services/api'
 import { BreathingDots } from './ui/BreathingDots'
@@ -24,11 +24,10 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
   const currentCharacterId = useAppStore((s) => s.currentCharacterId)
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
 
-  const messages = useChatStore((s) => s.messages)
+  const messages = useChatStore((s) => s.messages[currentCharacterId as CharacterId] ?? [])
   const isStreaming = useChatStore((s) => s.isStreaming)
   const isPlaying = useChatStore((s) => s.isPlaying)
   const addMessage = useChatStore((s) => s.addMessage)
-  const clearMessages = useChatStore((s) => s.clearMessages)
   const setCharacterId = useChatStore((s) => s.setCharacterId)
   const appendMessage = useChatStore((s) => s.appendMessage)
   const insufficientCredits = useChatStore((s) => s.insufficientCredits)
@@ -51,19 +50,19 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
   useEffect(() => {
     if (!isAuthenticated()) return
     setHistoryLoaded(false)
+    prevCharRef.current = currentCharacterId
 
-    // Only clear messages if character changed
-    if (prevCharRef.current !== currentCharacterId) {
-      clearMessages()
-      prevCharRef.current = currentCharacterId
+    const existing = useChatStore.getState().messages[currentCharacterId] ?? []
+    if (existing.length > 0) {
+      setHistoryLoaded(true)
+      return
     }
 
     getChatHistory(currentCharacterId, undefined, 50)
       .then((data) => {
-        // API returns newest first, we want oldest first
         const reversed = [...data.items].reverse()
         for (const item of reversed) {
-          addMessage({
+          addMessage(currentCharacterId, {
             id: item.id,
             role: item.role as 'user' | 'assistant',
             content: item.content,
@@ -73,7 +72,6 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
             audioDuration: item.audio_duration_ms ?? undefined,
           })
         }
-        // Sync last message to threads for HomePage
         if (reversed.length > 0) {
           const last = reversed[reversed.length - 1]
           appendMessage(currentCharacterId, {

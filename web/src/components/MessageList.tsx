@@ -2,7 +2,8 @@ import { useChatStore } from '../stores/chatStore'
 import VoiceMessageBubble from './VoiceMessageBubble'
 
 export function MessageList() {
-  const messages = useChatStore((s) => s.messages)
+  const characterId = useChatStore((s) => s.characterId)
+  const messages = useChatStore((s) => s.messages[characterId as keyof typeof s.messages] ?? [])
 
   return (
     <div className="flex-1 overflow-y-auto px-4 py-6 space-y-4">

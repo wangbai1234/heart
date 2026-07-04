@@ -89,10 +89,15 @@ export function ProfileEditPage() {
   }, [])
 
   const handleSave = async () => {
+    const trimmedName = displayName.trim()
+    if (!trimmedName) {
+      setToast({ visible: true, message: '请输入昵称' })
+      return
+    }
     setLoading(true)
     try {
       const res = await updateProfile({
-        display_name: displayName.trim() || undefined,
+        display_name: trimmedName,
         gender,
         birthdate: birthdate || undefined,
       })
@@ -101,7 +106,7 @@ export function ProfileEditPage() {
         setToast({ visible: true, message: '未满 18 周岁，无法使用本产品' })
         setTimeout(() => navigate('/age-gate', { replace: true }), 1500)
       } else {
-        setUser({ display_name: displayName.trim(), gender, birthdate })
+        setUser({ display_name: trimmedName, gender, birthdate })
         setToast({ visible: true, message: '保存成功' })
         setTimeout(() => navigate('/home', { replace: true }), 800)
       }

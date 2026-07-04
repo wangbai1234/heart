@@ -3,6 +3,7 @@ import { useChatStore } from '../stores/chatStore'
 import { useAppStore } from '../stores/appStore'
 import { useAuthStore } from '../stores/authStore'
 import { createAudioPlayer, wrapPCM16AsWAV, type AudioPlayer } from '../services/audioPlayer'
+import type { CharacterId } from '../data/uiContent'
 
 const WS_BASE = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/api/chat/ws`
 
@@ -40,6 +41,7 @@ export function useWebSocket() {
   const drainingPlayerRef = useRef<AudioPlayer | null>(null)
   const seenChunks = useRef<Set<string>>(new Set())
   const audioPreBuffer = useRef<ArrayBuffer[] | null>(null)
+  const activeCharRef = useRef<CharacterId>('rin')
 
   const addMessage = useChatStore(s => s.addMessage)
   const appendToLast = useChatStore(s => s.appendToLast)
@@ -90,11 +92,12 @@ export function useWebSocket() {
 
     ws.onmessage = async (ev) => {
       const msg: WsMessage = JSON.parse(ev.data)
+      const cid = activeCharRef.current
       switch (msg.type) {
         case 'turn_start':
           seenChunks.current.clear()
           setCurrentTurnId(msg.turn_id ?? null)
-          addMessage({
+          addMessage(cid, {
             id: msg.turn_id ?? crypto.randomUUID(),
             role: 'assistant',
             content: '',
@@ -104,7 +107,7 @@ export function useWebSocket() {
           setPlaying(true)
           break
         case 'text_delta':
-          appendToLast(msg.delta ?? '')
+          appendToLast(cid, msg.delta ?? '')
           break
         case 'sentence':
           setVad({
@@ -118,12 +121,13 @@ export function useWebSocket() {
             const currentTurnId = useChatStore.getState().currentTurnId
             if (msg.turn_id !== currentTurnId) return
             // Mark message as voice on first audio chunk
-            const msgs = useChatStore.getState().messages
+            const msgs = useChatStore.getState().messages[cid] ?? []
             const lastMsg = msgs[msgs.length - 1]
             if (lastMsg && lastMsg.id === currentTurnId && lastMsg.kind !== 'voice') {
-              useChatStore.setState({
-                messages: msgs.map(m => m.id === currentTurnId ? { ...m, kind: 'voice' as const } : m)
-              })
+              const updated = msgs.map(m => m.id === currentTurnId ? { ...m, kind: 'voice' as const } : m)
+              useChatStore.setState((s) => ({
+                messages: { ...s.messages, [cid]: updated },
+              }))
             }
             const key = `${msg.turn_id}:${msg.sentence_seq ?? 0}:${msg.seq}`
             if (seenChunks.current.has(key)) return
@@ -160,12 +164,11 @@ export function useWebSocket() {
           setCurrentTurnId(null)
           // Sync last assistant message to threads for HomePage
           {
-            const msgs = useChatStore.getState().messages
+            const msgs = useChatStore.getState().messages[cid] ?? []
             const lastMsg = msgs[msgs.length - 1]
             if (lastMsg && lastMsg.role === 'assistant') {
-              const { currentCharacterId } = useAppStore.getState()
               const { appendMessage } = useChatStore.getState()
-              appendMessage(currentCharacterId, {
+              appendMessage(cid, {
                 id: lastMsg.id,
                 role: 'assistant',
                 content: lastMsg.content,
@@ -261,10 +264,11 @@ export function useWebSocket() {
 
       const { currentCharacterId } = useAppStore.getState()
       const characterId = currentCharacterId
-      const { voiceChatEnabled } = (window as any).__appStore?.getState?.() ?? { voiceChatEnabled: {} as Record<string, boolean> }
+      activeCharRef.current = characterId
+      const { voiceChatEnabled } = useAppStore.getState()
       const voiceEnabled = voiceChatEnabled?.[characterId] ?? false
       const turnId = crypto.randomUUID()
-      addMessage({
+      addMessage(characterId, {
         id: `user-${turnId}`,
         role: 'user',
         content: text,
@@ -272,9 +276,8 @@ export function useWebSocket() {
       })
       // Sync user message to threads for HomePage
       {
-        const { currentCharacterId } = useAppStore.getState()
         const { appendMessage: appendThread } = useChatStore.getState()
-        appendThread(currentCharacterId, {
+        appendThread(characterId, {
           id: `user-${turnId}`,
           role: 'user',
           content: text,

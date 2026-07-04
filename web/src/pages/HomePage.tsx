@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { useThemeStore } from '../stores/themeStore'
 import { useAppStore } from '../stores/appStore'
+import { useAuthStore } from '../stores/authStore'
 import { useChatStore } from '../stores/chatStore'
 import { Avatar } from '../components/ui/Avatar'
 import { TabBar } from '../components/ui/TabBar'
@@ -10,7 +11,8 @@ import { CHARACTER_PROFILES, formatConversationTime, getConversationPreview, get
 export function HomePage() {
   const navigate = useNavigate()
   const { resolvedTheme } = useThemeStore()
-  const { userAvatar, setCharacter } = useAppStore()
+  const { setCharacter } = useAppStore()
+  const userAvatar = useAuthStore((s) => s.user?.avatar_url ?? null)
   const threads = useChatStore((s) => s.threads)
   const setActiveCharacter = useChatStore((s) => s.setActiveCharacter)
   const loading = false
@@ -18,7 +20,9 @@ export function HomePage() {
     ? '/assets/backgrounds/暗色聊天背景图.png'
     : '/assets/backgrounds/聊天背景图.png'
   const heroBg = getHeroBanner(resolvedTheme)
-  const recentConversations = (Object.keys(CHARACTER_PROFILES) as CharacterId[]).map((id) => {
+  const recentConversations = (Object.keys(CHARACTER_PROFILES) as CharacterId[])
+    .filter((id) => threads[id] && threads[id].length > 0)
+    .map((id) => {
     const profile = CHARACTER_PROFILES[id]
     const messages = threads[id]
     const lastMessage = messages[messages.length - 1]
