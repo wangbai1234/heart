@@ -114,11 +114,11 @@ export function OnboardingPage() {
                   <div className="absolute inset-x-0 bottom-0 h-[56%] bg-gradient-to-b from-transparent via-[rgba(255,250,247,0.92)] to-[#FFF9F6]" />
                 </div>
 
-                <div className="relative mt-12 px-6 text-center">
+                <div className="relative mt-5 px-6 text-center">
                   <h1 className="whitespace-pre-line text-[20px] font-semibold leading-[1.38] tracking-[-0.03em] text-[#2E3348]">
                     {step.title}
                   </h1>
-                  <p className="mx-auto mt-4 max-w-[286px] text-[14px] leading-[1.72] tracking-[-0.01em] text-[rgba(61,69,96,0.62)]">
+                  <p className="mx-auto mt-2 max-w-[286px] text-[14px] leading-[1.72] tracking-[-0.01em] text-[rgba(61,69,96,0.62)]">
                     {step.description}
                   </p>
                 </div>
@@ -129,9 +129,9 @@ export function OnboardingPage() {
 
         <div
           className="relative z-20 px-4"
-          style={{ paddingBottom: 'calc(4px + var(--safe-bottom))', marginTop: '-10px' }}
+          style={{ paddingBottom: 'calc(4px + var(--safe-bottom))', marginTop: '-6px' }}
         >
-          <div className="mb-2.5 flex justify-center gap-3">
+          <div className="mb-1.5 flex justify-center gap-3">
             {steps.map((_, index) => (
               <span
                 key={index}
