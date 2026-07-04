@@ -99,7 +99,7 @@ export function OnboardingPage() {
                 className="relative flex h-full shrink-0 flex-col"
                 style={{ width: `${100 / steps.length}%` }}
               >
-                <div className="relative h-[52vh] min-h-[380px] w-full overflow-hidden">
+                <div className="relative h-[56vh] min-h-[400px] w-full overflow-hidden">
                   <img
                     src={step.image}
                     alt={step.title}
