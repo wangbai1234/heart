@@ -115,10 +115,10 @@ export function OnboardingPage() {
                 </div>
 
                 <div className="relative -mt-16 px-6 text-center">
-                  <h1 className="whitespace-pre-line text-[20px] font-semibold leading-[1.38] tracking-[-0.03em] text-[#2E3348]">
+                  <h1 className="whitespace-pre-line text-[22px] font-semibold leading-[1.38] tracking-[-0.03em] text-[#2E3348]">
                     {step.title}
                   </h1>
-                  <p className="mx-auto mt-4 max-w-[286px] text-[14px] leading-[1.72] tracking-[-0.01em] text-[rgba(61,69,96,0.62)]">
+                  <p className="mx-auto mt-4 max-w-[286px] text-[15px] leading-[1.72] tracking-[-0.01em] text-[rgba(61,69,96,0.62)]">
                     {step.description}
                   </p>
                 </div>
