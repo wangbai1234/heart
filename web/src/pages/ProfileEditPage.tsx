@@ -98,6 +98,7 @@ export function ProfileEditPage() {
       } else {
         setUser({ display_name: displayName.trim(), gender, birthdate })
         setToast({ visible: true, message: '保存成功' })
+        setTimeout(() => navigate('/home', { replace: true }), 800)
       }
     } catch (err: any) {
       setToast({ visible: true, message: err.message || '保存失败' })
