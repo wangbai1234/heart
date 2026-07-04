@@ -413,20 +413,26 @@ class RelationshipService:
                         s for s in state.active_special_states if s.get("state") == "none"
                     ]
                     if not state.active_special_states:
-                        state.active_special_states = [{"state": "none", "entered_at": now.isoformat()}]
+                        state.active_special_states = [
+                            {"state": "none", "entered_at": now.isoformat()}
+                        ]
                 else:
-                    state.active_special_states = [{
-                        "state": new_special.value,
-                        "entered_at": now.isoformat(),
-                        "turns_in_state": 0,
-                    }]
+                    state.active_special_states = [
+                        {
+                            "state": new_special.value,
+                            "entered_at": now.isoformat(),
+                            "turns_in_state": 0,
+                        }
+                    ]
                     logger.info(
                         "special_state_transition",
                         user_id=str(user_id),
                         character_id=character_id,
                         new_state=new_special.value,
                     )
-            elif any(s.get("state") == SpecialState.REUNION.value for s in state.active_special_states):
+            elif any(
+                s.get("state") == SpecialState.REUNION.value for s in state.active_special_states
+            ):
                 state.active_special_states = advance_reunion_turn(state.active_special_states)
 
         # 4. Evaluate stage transition (§3.5 step 5)

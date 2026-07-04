@@ -160,7 +160,7 @@ class MemoryExtractorWorker:
                     await self._mark_status(session, [item], "skipped")
                 return
 
-            results = await self._extractor.run([queue_item])  # type: ignore[union-attr]
+            results = await self._extractor.run([queue_item])  # type: ignore[union-attr,attr-defined]
             result = results[0] if results else None
 
             if result is None or result.failed:

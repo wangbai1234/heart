@@ -249,7 +249,7 @@ class MemoryService:
                 from heart.ss02_memory.retriever.orchestrator import RetrievalOrchestrator
 
                 orchestrator = RetrievalOrchestrator(self._db)
-                retriever_result = await orchestrator.retrieve(query_context, top_k)
+                retriever_result = await orchestrator.retrieve(query_context, top_k)  # type: ignore[arg-type]
 
                 # Convert retriever-layer ScoredMemory → service-layer RetrievedMemory
                 reconstructor = self._get_reconstructor(character_id)
@@ -257,32 +257,42 @@ class MemoryService:
                 for sm in retriever_result.memories:
                     try:
                         reconstructed = reconstructor.reconstruct(sm)
-                        voice_dna_applied = list(reconstructor.voice_dna) if hasattr(reconstructor, "voice_dna") else []
+                        voice_dna_applied = (
+                            list(reconstructor.voice_dna)
+                            if hasattr(reconstructor, "voice_dna")
+                            else []
+                        )
                     except Exception as e:
-                        logger.warning("reconstruct_failed_fallback", memory_id=str(sm.memory_id), error=str(e))
+                        logger.warning(
+                            "reconstruct_failed_fallback", memory_id=str(sm.memory_id), error=str(e)
+                        )
                         reconstructed = _fallback_text(sm.memory)
                         voice_dna_applied = []
 
                     state = getattr(sm.memory, "state", "vivid") or "vivid"
-                    retrieved.append(RetrievedMemory(
-                        memory_id=sm.memory_id,
-                        memory_type=sm.memory_type,
-                        state=state,
-                        reconstructed_text=reconstructed,
-                        raw_content=_fallback_text(sm.memory),
-                        score=sm.score,
-                        score_breakdown=sm.score_breakdown,
-                        uncertainty_level=_state_to_uncertainty(state),
-                        voice_dna_applied=voice_dna_applied,
-                        source_evidence=_fallback_text(sm.memory),
-                    ))
+                    retrieved.append(
+                        RetrievedMemory(
+                            memory_id=sm.memory_id,
+                            memory_type=sm.memory_type,
+                            state=state,
+                            reconstructed_text=reconstructed,
+                            raw_content=_fallback_text(sm.memory),
+                            score=sm.score,
+                            score_breakdown=sm.score_breakdown,
+                            uncertainty_level=_state_to_uncertainty(state),
+                            voice_dna_applied=voice_dna_applied,
+                            source_evidence=_fallback_text(sm.memory),
+                        )
+                    )
 
                 # Convert forgetting hints
                 forgetting_hints: list[ForgettingHint] = []
                 for h in retriever_result.recently_forgotten_hints:
                     hint_text = getattr(h, "hint_text", None) or getattr(h, "text", None) or str(h)
                     related_to = getattr(h, "related_to", "") or ""
-                    forgetting_hints.append(ForgettingHint(hint_text=hint_text, related_to=related_to))
+                    forgetting_hints.append(
+                        ForgettingHint(hint_text=hint_text, related_to=related_to)
+                    )
 
                 return MemoryRetrievalResult(
                     query_id=uuid4(),
@@ -975,7 +985,15 @@ class MemoryService:
 
 def _fallback_text(memory) -> str:
     """Best-effort raw text when Reconstructor fails."""
-    for attr in ("episode_summary", "summary", "literal_text", "raw_evidence", "identity_text", "key", "value"):
+    for attr in (
+        "episode_summary",
+        "summary",
+        "literal_text",
+        "raw_evidence",
+        "identity_text",
+        "key",
+        "value",
+    ):
         v = getattr(memory, attr, None)
         if v:
             return str(v)

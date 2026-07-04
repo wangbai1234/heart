@@ -282,8 +282,7 @@ def _score_envelope(
         detail["kind_match"] = kind_match
         if not kind_match:
             hard_fails.append(
-                f"{key[0]}.{key[1]}: kind mismatch "
-                f"(exp={exp.get('kind')}, act={act.get('kind')})"
+                f"{key[0]}.{key[1]}: kind mismatch (exp={exp.get('kind')}, act={act.get('kind')})"
             )
         if not detail["operation_match"]:
             hard_fails.append(
@@ -296,8 +295,7 @@ def _score_envelope(
         detail["prior_value_id_match"] = pvid_match
         if not pvid_match:
             hard_fails.append(
-                f"{key[0]}.{key[1]}: prior_value_id mismatch "
-                f"(exp={exp_pvid}, act={act_pvid})"
+                f"{key[0]}.{key[1]}: prior_value_id mismatch (exp={exp_pvid}, act={act_pvid})"
             )
 
         # source_turns SEMI: accept any overlap; only HARD when completely disjoint
@@ -317,15 +315,10 @@ def _score_envelope(
         # reasoning floor check: must cite at least one source turn
         reasoning = act.get("reasoning", "")
         src_ids = act.get("source_turns", [])
-        cites_turn = any(
-            _re.search(rf"\bT{sid}\b", reasoning, _re.IGNORECASE)
-            for sid in src_ids
-        )
+        cites_turn = any(_re.search(rf"\bT{sid}\b", reasoning, _re.IGNORECASE) for sid in src_ids)
         detail["reasoning_citation_ok"] = cites_turn
         if not cites_turn and src_ids:
-            hard_fails.append(
-                f"{key[0]}.{key[1]}: reasoning missing turn citation"
-            )
+            hard_fails.append(f"{key[0]}.{key[1]}: reasoning missing turn citation")
 
         tp_details.append(detail)
 
@@ -361,12 +354,7 @@ def _score_envelope(
     # ── Pass / fail ────────────────────────────────────────────
     drop_recall = drop_score["recall"]
     has_hard_fail = len(hard_fails) > 0
-    passed = (
-        not has_hard_fail
-        and recall >= 0.8
-        and precision >= 0.7
-        and drop_recall >= 0.8
-    )
+    passed = not has_hard_fail and recall >= 0.8 and precision >= 0.7 and drop_recall >= 0.8
 
     return {
         "case_id": case_id,
@@ -429,9 +417,7 @@ def _score_dropped(
     soft_warnings: list[str] = []
 
     for turn_id in fp_turns:
-        hard_fails.append(
-            f"dropped T{turn_id}: unexpected drop (reason={act_by_turn[turn_id]})"
-        )
+        hard_fails.append(f"dropped T{turn_id}: unexpected drop (reason={act_by_turn[turn_id]})")
     for turn_id in fn_turns:
         hard_fails.append(
             f"dropped T{turn_id}: missed expected drop (reason={exp_by_turn[turn_id]})"
@@ -441,8 +427,7 @@ def _score_dropped(
         act_reason = act_by_turn[turn_id]
         if exp_reason != act_reason:
             soft_warnings.append(
-                f"dropped T{turn_id}: reason differs "
-                f"(exp={exp_reason}, act={act_reason})"
+                f"dropped T{turn_id}: reason differs (exp={exp_reason}, act={act_reason})"
             )
 
     return {

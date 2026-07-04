@@ -1,0 +1,58 @@
+- generic [ref=e3]:
+  - generic [ref=e4]:
+    - banner [ref=e5]:
+      - button [ref=e6]:
+        - img [ref=e7]
+      - heading "兑换会员" [level=1] [ref=e9]
+    - main [ref=e10]:
+      - generic [ref=e11]:
+        - generic [ref=e12]: 🎁
+        - heading "输入兑换码激活会员" [level=2] [ref=e13]
+        - paragraph [ref=e14]: 在「爱发电」赞助后，你会收到一串 12 位的兑换码。
+        - generic [ref=e15]:
+          - textbox [ref=e16]
+          - textbox [ref=e17]
+          - textbox [ref=e18]
+          - textbox [ref=e19]
+          - textbox [ref=e20]
+          - textbox [ref=e21]
+          - textbox [ref=e22]
+          - textbox [ref=e23]
+          - textbox [ref=e24]
+          - textbox [ref=e25]
+          - textbox [ref=e26]
+          - textbox [ref=e27]
+        - button "📋 粘贴兑换码" [ref=e28]
+        - button "立即激活" [ref=e29]
+      - generic [ref=e30]:
+        - heading "? 如何获取兑换码" [level=3] [ref=e31]:
+          - generic [ref=e32]: "?"
+          - text: 如何获取兑换码
+        - list [ref=e33]:
+          - listitem [ref=e34]:
+            - generic [ref=e35]: "1"
+            - text: 前往「爱发电」赞助页面
+          - listitem [ref=e36]:
+            - generic [ref=e37]: "2"
+            - text: 选择心仪的赞助挡位
+          - listitem [ref=e38]:
+            - generic [ref=e39]: "3"
+            - text: 完成支付后查收兑换码邮件
+          - listitem [ref=e40]:
+            - generic [ref=e41]: "4"
+            - text: 回到 yuoyuo 输入兑换码
+        - button "去爱发电 →" [ref=e42]
+      - paragraph [ref=e43]: 兑换码一次性有效，激活后不可退还。
+  - generic [ref=e44]:
+    - button "首页" [ref=e45]:
+      - img [ref=e46]
+      - generic [ref=e48]: 首页
+    - button "聊天" [ref=e49]:
+      - img [ref=e50]
+      - generic [ref=e52]: 聊天
+    - button "角色" [ref=e53]:
+      - img [ref=e54]
+      - generic [ref=e56]: 角色
+    - button "设置" [ref=e57]:
+      - img [ref=e58]
+      - generic [ref=e60]: 设置

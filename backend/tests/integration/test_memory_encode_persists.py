@@ -76,6 +76,7 @@ class TestMemoryEncodePersists:
 
         # Wait for cold path tasks to complete
         import asyncio
+
         await asyncio.sleep(0.1)
 
         # Verify DB session was used for memory encoding
@@ -149,6 +150,7 @@ class TestMemoryEncodePersists:
 
         # Wait for cold path tasks to complete
         import asyncio
+
         await asyncio.sleep(0.1)
 
         # Verify MemoryEncodingEvent was added to DB
@@ -159,7 +161,9 @@ class TestMemoryEncodePersists:
             for call in mock_db_session.add.call_args_list
             if isinstance(call.args[0], MemoryEncodingEvent)
         ]
-        assert len(added_events) == 1, f"Should have added one MemoryEncodingEvent, got {len(added_events)}: {mock_db_session.add.call_args_list}"
+        assert len(added_events) == 1, (
+            f"Should have added one MemoryEncodingEvent, got {len(added_events)}: {mock_db_session.add.call_args_list}"
+        )
         event = added_events[0]
         assert event.user_id == user_id
         assert event.character_id == character_id

@@ -39,14 +39,17 @@ class TestJwtSecretValidation:
             pytest.fail("Settings raised RuntimeError for a valid-length secret")
 
     def test_default_secret_raises(self, monkeypatch):
-        """With no explicit secret, the default placeholder must fail (no .env override)."""
-        monkeypatch.delenv("JWT_SECRET_KEY", raising=False)
+        """With no explicit secret, the default placeholder must fail.
+
+        Removes all JWT env vars and .env file to test pure defaults.
+        Default algorithm is RS256, so it raises about missing keys.
+        """
+        for key in ("JWT_SECRET_KEY", "JWT_PRIVATE_KEY", "JWT_PUBLIC_KEY", "JWT_ALGORITHM"):
+            monkeypatch.delenv(key, raising=False)
         saved = Settings.model_config.get("env_file")
         Settings.model_config["env_file"] = ".env.nonexistent"
         try:
-            with pytest.raises(
-                RuntimeError, match="JWT_SECRET_KEY must be set to a strong random value"
-            ):
+            with pytest.raises(RuntimeError):
                 Settings()
         finally:
             if saved is not None:

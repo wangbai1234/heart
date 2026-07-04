@@ -7,23 +7,19 @@ from typing import Optional
 from uuid import UUID as _UUID
 
 import structlog
-from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from heart.core.auth import Token, TokenData, auth_manager
 from heart.api.rate_limit import limiter
+from heart.core.auth import Token, TokenData, auth_manager, get_current_user
 
+from .deps import require_age_verified
 from .wiring import get_db, get_orchestrator
 
 logger = structlog.get_logger()
 
 router = APIRouter(prefix="/api", tags=["api"])
-
-
-class LoginRequest(BaseModel):
-    user_id: str
-    email: Optional[str] = None
 
 
 class ChatMessage(BaseModel):
@@ -42,26 +38,21 @@ class ChatResponse(BaseModel):
     message_id: str
 
 
-async def get_current_user(authorization: Optional[str] = Header(None)) -> TokenData:
-    if not authorization:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Not authenticated",
-        )
-    parts = authorization.split()
-    if len(parts) != 2 or parts[0].lower() != "bearer":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Invalid authorization header",
-        )
-    token = parts[1]
-    return auth_manager.verify_token(token)
+# ── Legacy stub login — DEV MODE ONLY (see main.py) ────────────────
+
+dev_auth_router = APIRouter(prefix="/auth", tags=["auth-dev"])
 
 
-@router.post("/auth/login", response_model=Token)
+class LoginRequest(BaseModel):
+    user_id: str
+    email: Optional[str] = None
+
+
+@dev_auth_router.post("/login", response_model=Token)
 @limiter.limit("10/minute")
 async def login(request: Request, login_req: LoginRequest) -> Token:
-    logger.info("user_login", user_id=login_req.user_id, email=login_req.email)
+    """DEV-ONLY stub login: accepts any user_id, issues JWT immediately."""
+    logger.warning("dev_login_used", user_id=login_req.user_id)
     token = auth_manager.create_access_token(
         user_id=login_req.user_id,
         email=login_req.email,
@@ -69,24 +60,14 @@ async def login(request: Request, login_req: LoginRequest) -> Token:
     return token
 
 
-@router.post("/auth/refresh", response_model=Token)
+@dev_auth_router.post("/refresh", response_model=Token)
 async def refresh_token(current_user: TokenData = Depends(get_current_user)) -> Token:
+    """DEV-ONLY stub refresh."""
     new_token = auth_manager.create_access_token(
         user_id=current_user.user_id,
         email=current_user.email,
     )
-    logger.info("token_refreshed", user_id=current_user.user_id)
     return new_token
-
-
-@router.get("/auth/verify")
-async def verify_token(current_user: TokenData = Depends(get_current_user)) -> dict:
-    return {
-        "user_id": current_user.user_id,
-        "email": current_user.email,
-        "exp": current_user.exp.isoformat() if current_user.exp else None,
-        "valid": True,
-    }
 
 
 @router.post("/chat/echo", response_model=ChatResponse)
@@ -143,7 +124,7 @@ def _coerce_uuid(uid: str) -> _UUID:
 async def chat(
     request: Request,
     chat_req: ChatRequest,
-    current_user: TokenData = Depends(get_current_user),
+    current_user: TokenData = Depends(require_age_verified),
     db_session: AsyncSession = Depends(get_db),
     orchestrator=Depends(get_orchestrator),
 ) -> ChatResponse:

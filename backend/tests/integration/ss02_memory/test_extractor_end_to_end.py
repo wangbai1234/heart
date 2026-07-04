@@ -189,7 +189,9 @@ class TestExtractorEndToEnd:
                 extractor_run_id=run_id,
                 session_id=uuid4(),
                 window=[
-                    TurnInput(turn_id=1, speaker="user", ts="2026-06-19T09:00:00Z", text=f"test {i}"),
+                    TurnInput(
+                        turn_id=1, speaker="user", ts="2026-06-19T09:00:00Z", text=f"test {i}"
+                    ),
                 ],
                 model="fake-model",
             )

@@ -176,20 +176,12 @@ async def test_synthesize_missing_audio(provider, sample_request):
 
 
 def test_extract_audio_from_choices_message():
-    data = {
-        "choices": [
-            {"message": {"audio": {"data": "SGVsbG8="}}}
-        ]
-    }
+    data = {"choices": [{"message": {"audio": {"data": "SGVsbG8="}}}]}
     assert _extract_audio_from_chunk(data) == b"Hello"
 
 
 def test_extract_audio_from_choices_delta():
-    data = {
-        "choices": [
-            {"delta": {"audio": {"data": "V09STEQ="}}}
-        ]
-    }
+    data = {"choices": [{"delta": {"audio": {"data": "V09STEQ="}}}]}
     assert _extract_audio_from_chunk(data) == b"WORLD"
 
 
@@ -237,9 +229,7 @@ async def test_stream_chunks_audio():
     # Create 100KB of audio (fake data) — enough for multiple 48KB chunks
     audio_bytes = b"\x00\x01" * 51200  # 100KB
     audio_b64 = base64.b64encode(audio_bytes).decode()
-    response_data = json.dumps(
-        {"choices": [{"message": {"audio": {"data": audio_b64}}}]}
-    ).encode()
+    response_data = json.dumps({"choices": [{"message": {"audio": {"data": audio_b64}}}]}).encode()
 
     mock_stream_ctx = MagicMock()
     mock_response = MagicMock()

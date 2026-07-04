@@ -13,8 +13,8 @@ from uuid import UUID
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
-from heart.core.auth import TokenData, get_current_user
 from heart.api.rate_limit import limiter
+from heart.core.auth import TokenData, get_current_user
 from heart.ss06_inner_state.inner_loop_worker import get_pending_proactive_messages
 
 logger = structlog.get_logger(__name__)

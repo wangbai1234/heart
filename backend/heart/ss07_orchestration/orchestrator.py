@@ -221,12 +221,12 @@ class Orchestrator:
             if severity == "PURPLE":
                 care_resp = await self._care_path(req, classification, db_session)
                 yield {"type": "text_delta", "delta": care_resp.response}
-                yield {"type": "turn_end", "full_text": care_resp.response}
+                yield {"type": "turn_end", "full_text": care_resp.response, "path": "care"}
                 return
             elif severity == "RED":
                 reject_resp = await self._reject_path(req, classification, db_session)
                 yield {"type": "text_delta", "delta": reject_resp.response}
-                yield {"type": "turn_end", "full_text": reject_resp.response}
+                yield {"type": "turn_end", "full_text": reject_resp.response, "path": "reject"}
                 return
 
         # Emotion + Relationship updates
@@ -244,13 +244,23 @@ class Orchestrator:
             logger.error("composer_build_failed_stream", error=str(exc))
             fallback = self._fallback_message(req.character_id)
             yield {"type": "text_delta", "delta": fallback}
-            yield {"type": "turn_end", "full_text": fallback}
+            yield {
+                "type": "turn_end",
+                "full_text": fallback,
+                "path": "fallback",
+                "was_fallback": True,
+            }
             return
 
         if composer is None:
             fallback = self._fallback_message(req.character_id)
             yield {"type": "text_delta", "delta": fallback}
-            yield {"type": "turn_end", "full_text": fallback}
+            yield {
+                "type": "turn_end",
+                "full_text": fallback,
+                "path": "fallback",
+                "was_fallback": True,
+            }
             return
 
         # Stream compose
@@ -278,7 +288,7 @@ class Orchestrator:
         # Fire cold path (fire-and-forget, uses own session internally)
         self._fire_cold_path(req, TurnProfiler(), full_text, days_since_last)
 
-        yield {"type": "turn_end", "full_text": full_text}
+        yield {"type": "turn_end", "full_text": full_text, "path": "normal"}
 
     async def _stream_compose(
         self,
@@ -670,9 +680,7 @@ class Orchestrator:
         """
         try:
             asyncio.create_task(
-                self._cold_path_memory_encode(
-                    req.user_id, req.character_id, req.user_message
-                )
+                self._cold_path_memory_encode(req.user_id, req.character_id, req.user_message)
             )
         except Exception as e:
             logger.error(

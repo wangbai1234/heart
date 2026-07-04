@@ -1,4 +1,7 @@
-"""WebSocket chat route — per runtime_specs/08_voice.md VP3+VP4+VP5."""
+"""WebSocket chat route — per runtime_specs/08_voice.md VP3+VP4+VP5.
+
+Also provides REST chat history endpoint.
+"""
 
 from __future__ import annotations
 
@@ -8,23 +11,17 @@ import uuid
 from typing import Any, Optional
 
 import structlog
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
+from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
+from sqlalchemy import text as sql_text
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from heart.core.auth import auth_manager
+from heart.core.auth import TokenData, auth_manager, get_current_user
 
-from .wiring import get_orchestrator, get_voice_service
+from .wiring import get_db, get_orchestrator, get_voice_service
 
 logger = structlog.get_logger(__name__)
 
 router = APIRouter()
-
-
-def _parse_user_id(user_id: Optional[str]) -> uuid.UUID:
-    """Parse user_id string to UUID."""
-    try:
-        return uuid.UUID(user_id) if user_id else uuid.UUID("00000000-0000-0000-0000-000000000001")
-    except ValueError:
-        return uuid.UUID("00000000-0000-0000-0000-000000000001")
 
 
 def _create_stream_session(voice_service: Any, ws: WebSocket, cache: Any = None) -> Any:
@@ -35,13 +32,14 @@ def _create_stream_session(voice_service: Any, ws: WebSocket, cache: Any = None)
     from heart.ss08_voice.stream_session import StreamSession
 
     async def send_audio(
-        t_id: str, seq: int, audio_bytes: bytes, is_last: bool, fmt: str = "mp3"
+        t_id: str, seq: int, audio_bytes: bytes, is_last: bool, fmt: str = "pcm16"
     ) -> None:
-        """Send audio chunk to WebSocket."""
+        """Send audio chunk to WebSocket as pcm16 with sentence_seq."""
         await ws.send_json(
             {
                 "type": "audio_chunk",
                 "turn_id": t_id,
+                "sentence_seq": 0,
                 "seq": seq,
                 "format": fmt,
                 "data_b64": base64.b64encode(audio_bytes).decode() if audio_bytes else "",
@@ -100,7 +98,6 @@ async def _handle_event(
     elif event_type == "turn_end":
         if stream_session:
             await stream_session.finish()
-        await _send_turn_end(ws, turn_id)
         return True
     return False
 
@@ -133,27 +130,236 @@ async def _process_stream_events(
         active_turns.pop(turn_id, None)
 
 
-async def _handle_chat_message(
-    ws: WebSocket, msg: dict[str, Any], active_turns: dict[str, Any], cache: Any = None
+async def _precheck_billing(
+    user_uuid: uuid.UUID,
+    character_id: str,
+    turn_id: str,
+    ws: WebSocket,
+) -> tuple[bool, bool]:
+    """Pre-check voice setting and balance. Returns (effective_voice, can_proceed)."""
+    try:
+        from sqlalchemy.ext.asyncio import AsyncSession
+
+        from heart.billing import get_balance
+        from heart.core.config import settings as cfg
+
+        from .wiring import _get_engine
+
+        async with AsyncSession(_get_engine(), expire_on_commit=False) as db:
+            result = await db.execute(
+                sql_text(
+                    "SELECT voice_enabled FROM user_character_settings WHERE user_id = :uid AND character_id = :cid"
+                ),
+                {"uid": user_uuid, "cid": character_id},
+            )
+            row = result.scalar_one_or_none()
+            effective_voice = row if row is not None else False
+
+            balance = await get_balance(db, user_uuid)
+            expected_cost = (
+                cfg.credits_per_voice_turn if effective_voice else cfg.credits_per_text_turn
+            )
+
+            if balance < expected_cost:
+                await ws.send_json(
+                    {
+                        "type": "insufficient_credits",
+                        "turn_id": turn_id,
+                        "needed": expected_cost,
+                        "balance": balance,
+                    }
+                )
+                return effective_voice, False
+            return effective_voice, True
+    except Exception as e:
+        logger.warning("billing_precheck_failed", error=str(e))
+        await ws.send_json({"type": "error", "msg": "Billing check failed"})
+        return False, False
+
+
+async def _post_turn_billing(
+    ws: WebSocket,
+    user_uuid: uuid.UUID,
+    turn_id: str,
+    character_id: str,
+    user_text: str,
+    collected_text: list[str],
+    actual_modality: str,
+    turn_safety_blocked: bool,
+    stream_session: Any = None,
 ) -> None:
-    """Handle a single chat message."""
+    """Charge credits and persist chat messages after turn completes."""
+    try:
+        from sqlalchemy.ext.asyncio import AsyncSession
+
+        from heart.billing import InsufficientCreditsError, charge_turn
+        from heart.core.config import settings as cfg
+
+        from .wiring import _get_engine
+
+        credits_charged = 0
+        audio_url = None
+        audio_duration_ms = None
+
+        # Upload audio to S3 if voice modality
+        if actual_modality == "voice" and stream_session and stream_session.full_audio:
+            try:
+                from heart.infra.storage import is_s3_configured, upload_file
+
+                if is_s3_configured():
+                    audio_bytes = stream_session.full_audio
+                    key = f"chat_audio/{user_uuid}/{turn_id}.wav"
+                    audio_url = await upload_file(audio_bytes, key, "audio/wav")
+                    # Estimate duration: PCM16 @24kHz mono = 2 bytes/sample
+                    audio_duration_ms = int(len(audio_bytes) / (24000 * 2) * 1000)
+            except Exception as e:
+                logger.warning("audio_upload_failed", error=str(e))
+
+        async with AsyncSession(_get_engine(), expire_on_commit=False) as db:
+            if not turn_safety_blocked:
+                try:
+                    new_balance = await charge_turn(db, user_uuid, turn_id, actual_modality)
+                    credits_charged = (
+                        cfg.credits_per_voice_turn
+                        if actual_modality == "voice"
+                        else cfg.credits_per_text_turn
+                    )
+                    await ws.send_json(
+                        {
+                            "type": "turn_end",
+                            "turn_id": turn_id,
+                            "modality": actual_modality,
+                            "credits_charged": credits_charged,
+                            "balance": new_balance,
+                        }
+                    )
+                except InsufficientCreditsError as ice:
+                    await ws.send_json(
+                        {
+                            "type": "insufficient_credits",
+                            "turn_id": turn_id,
+                            "needed": ice.needed,
+                            "balance": ice.balance,
+                        }
+                    )
+
+            await db.execute(
+                sql_text("""INSERT INTO chat_messages (id, user_id, character_id, turn_id, role, content, modality, created_at)
+                            VALUES (:id, :uid, :cid, :tid, 'user', :content, 'text', NOW())"""),
+                {
+                    "id": uuid.uuid4(),
+                    "uid": user_uuid,
+                    "cid": character_id,
+                    "tid": uuid.UUID(turn_id),
+                    "content": user_text,
+                },
+            )
+            full_text = "".join(collected_text)
+            await db.execute(
+                sql_text("""INSERT INTO chat_messages (id, user_id, character_id, turn_id, role, content, modality, audio_url, audio_duration_ms, credits_charged, created_at)
+                            VALUES (:id, :uid, :cid, :tid, 'assistant', :content, :modality, :audio_url, :audio_dur, :credits, NOW())"""),
+                {
+                    "id": uuid.uuid4(),
+                    "uid": user_uuid,
+                    "cid": character_id,
+                    "tid": uuid.UUID(turn_id),
+                    "content": full_text,
+                    "modality": actual_modality,
+                    "audio_url": audio_url,
+                    "audio_dur": audio_duration_ms,
+                    "credits": credits_charged,
+                },
+            )
+            await db.commit()
+    except Exception as e:
+        logger.error("chat_persist_failed", error=str(e))
+
+
+async def _run_orchestrator(
+    ws: WebSocket,
+    orch: Any,
+    req: Any,
+    stream_session: Any,
+    turn_id: str,
+    character_id: str,
+    active_turns: dict[str, Any],
+) -> tuple[bool, bool, bool, list[str]]:
+    """Run orchestrator stream. Returns (turn_completed, safety_blocked, audio_produced, collected_text)."""
+    turn_completed = False
+    safety_blocked = False
+    collected_text: list[str] = []
+    turn_path = "normal"
+
+    if stream_session:
+        active_turns[turn_id] = stream_session
+
+    try:
+        async for event in orch.process_turn_stream(req, db_session=None):
+            if stream_session and stream_session.is_cancelled:
+                break
+
+            etype = event.get("type")
+            if etype == "text_delta":
+                collected_text.append(event.get("delta", ""))
+            if etype == "turn_end":
+                turn_completed = True
+                turn_path = event.get("path", "normal")
+                if turn_path in ("care", "reject", "fallback"):
+                    safety_blocked = True
+
+            if await _handle_event(ws, event, stream_session, turn_id, character_id):
+                break
+    except Exception as e:
+        logger.error("chat_ws_stream_error", error=str(e))
+        if stream_session:
+            stream_session.cancel()
+        await ws.send_json({"type": "error", "msg": str(e)})
+    finally:
+        active_turns.pop(turn_id, None)
+
+    audio_produced = stream_session.audio_produced if stream_session else False
+    return turn_completed, safety_blocked, audio_produced, collected_text
+
+
+async def _handle_chat_message(
+    ws: WebSocket,
+    msg: dict[str, Any],
+    active_turns: dict[str, Any],
+    user_id: str,
+    cache: Any = None,
+) -> None:
+    """Handle a single chat message with billing integration.
+
+    user_id is taken from the authenticated token (not from message body).
+    Flow: voice setting check → balance pre-check → orchestrator → charge → persist.
+    """
+    from sqlalchemy import text as sql_text
+
     turn_id = msg.get("turn_id") or str(uuid.uuid4())
     user_text = msg.get("text", "")
-    user_id = msg.get("user_id")
     character_id = msg.get("character_id", "rin")
 
     if not user_text:
         await ws.send_json({"type": "error", "msg": "Missing text"})
         return
 
-    user_uuid = _parse_user_id(user_id)
+    user_uuid = uuid.UUID(user_id)
+
+    # ── 1. Pre-check: voice setting + balance ──
+    effective_voice, can_proceed = await _precheck_billing(user_uuid, character_id, turn_id, ws)
+    if not can_proceed:
+        return
+
+    # ── 2. Run orchestrator ──
     orch = get_orchestrator()
     if orch is None:
         await ws.send_json({"type": "error", "msg": "Orchestrator not available"})
         return
 
     voice_service = get_voice_service()
-    stream_session = _create_stream_session(voice_service, ws, cache=cache)
+    stream_session = _create_stream_session(
+        voice_service if effective_voice else None, ws, cache=cache
+    )
     if stream_session:
         await stream_session.start()
 
@@ -168,7 +374,34 @@ async def _handle_chat_message(
     )
 
     await ws.send_json({"type": "turn_start", "turn_id": turn_id})
-    await _process_stream_events(ws, orch, req, stream_session, turn_id, character_id, active_turns)
+
+    turn_completed, turn_safety_blocked, audio_produced, collected_text = await _run_orchestrator(
+        ws,
+        orch,
+        req,
+        stream_session,
+        turn_id,
+        character_id,
+        active_turns,
+    )
+
+    # ── 3. Post-turn: charge + persist ──
+    if turn_completed:
+        actual_modality = "voice" if audio_produced else "text"
+        await _post_turn_billing(
+            ws,
+            user_uuid,
+            turn_id,
+            character_id,
+            user_text,
+            collected_text,
+            actual_modality,
+            turn_safety_blocked,
+            stream_session,
+        )
+    else:
+        # Turn didn't complete (cancelled) — send basic turn_end
+        await _send_turn_end(ws, turn_id)
 
 
 async def _handle_interrupt(ws: WebSocket, msg: dict[str, Any], active_turns: dict) -> None:
@@ -201,17 +434,114 @@ async def _handle_message(
     msg: dict[str, Any],
     active_turns: dict[str, Any],
     cache: Any,
+    user_id: str,
 ) -> None:
     """Handle a single WebSocket message."""
     msg_type = msg.get("type")
     if msg_type == "chat":
-        await _handle_chat_message(ws, msg, active_turns, cache)
+        await _handle_chat_message(ws, msg, active_turns, user_id, cache)
     elif msg_type == "interrupt":
         await _handle_interrupt(ws, msg, active_turns)
     elif msg_type == "backpressure":
         await _handle_backpressure(msg, active_turns)
     elif msg_type == "resume":
         await _handle_resume(msg, active_turns)
+
+
+# ── REST: Chat History ──────────────────────────────────────────────
+
+
+@router.get("/api/chat/history")
+async def get_chat_history(
+    character_id: str = Query(...),
+    cursor: Optional[str] = Query(None),
+    limit: int = Query(30, ge=1, le=100),
+    current_user: TokenData = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Get paginated chat history for a character (newest first)."""
+    uid = uuid.UUID(current_user.user_id)
+
+    if cursor:
+        result = await db.execute(
+            sql_text("""
+                SELECT id, role, content, modality, audio_url, audio_duration_ms,
+                       credits_charged, turn_id, created_at
+                FROM chat_messages
+                WHERE user_id = :uid AND character_id = :cid AND created_at < :cursor
+                ORDER BY created_at DESC
+                LIMIT :limit
+            """),
+            {"uid": uid, "cid": character_id, "cursor": cursor, "limit": limit + 1},
+        )
+    else:
+        result = await db.execute(
+            sql_text("""
+                SELECT id, role, content, modality, audio_url, audio_duration_ms,
+                       credits_charged, turn_id, created_at
+                FROM chat_messages
+                WHERE user_id = :uid AND character_id = :cid
+                ORDER BY created_at DESC
+                LIMIT :limit
+            """),
+            {"uid": uid, "cid": character_id, "limit": limit + 1},
+        )
+
+    rows = result.mappings().all()
+    has_next = len(rows) > limit
+    items = rows[:limit]
+
+    return {
+        "items": [
+            {
+                "id": str(r["id"]),
+                "role": r["role"],
+                "content": r["content"],
+                "modality": r["modality"],
+                "audio_url": r["audio_url"],
+                "audio_duration_ms": r["audio_duration_ms"],
+                "credits_charged": r["credits_charged"],
+                "turn_id": str(r["turn_id"]) if r["turn_id"] else None,
+                "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+            }
+            for r in items
+        ],
+        "next_cursor": items[-1]["created_at"].isoformat() if has_next and items else None,
+    }
+
+
+async def _check_age_verified(user_id: str) -> bool:
+    """Check if user has passed age verification. Returns True if verified."""
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from .wiring import _get_engine
+
+    async with AsyncSession(_get_engine(), expire_on_commit=False) as db:
+        result = await db.execute(
+            sql_text("SELECT age_verified_at FROM users WHERE id = :uid"),
+            {"uid": uuid.UUID(user_id)},
+        )
+        return result.scalar_one_or_none() is not None
+
+
+async def _verify_ws_token(ws: WebSocket, token: Optional[str]) -> Optional[str]:
+    """Verify WS token and age. Returns user_id or None (ws already closed)."""
+    if not token:
+        await ws.close(code=1008, reason="Missing token")
+        return None
+    try:
+        token_data = auth_manager.verify_token(token)
+    except Exception:
+        await ws.close(code=1008, reason="Invalid token")
+        return None
+
+    if not await _check_age_verified(token_data.user_id):
+        await ws.accept()
+        await ws.send_json({"type": "error", "code": "age_verification_required"})
+        await ws.close(code=1008, reason="age_verification_required")
+        return None
+
+    return token_data.user_id
 
 
 @router.websocket("/api/chat/ws")
@@ -233,14 +563,8 @@ async def chat_ws(ws: WebSocket, token: Optional[str] = Query(None)):
             {"type": "turn_end", "turn_id": "..."}
             {"type": "interrupted", "turn_id": "..."}
     """
-    # Verify token before accepting
-    if not token:
-        await ws.close(code=1008, reason="Missing token")
-        return
-    try:
-        token_data = auth_manager.verify_token(token)
-    except Exception:
-        await ws.close(code=1008, reason="Invalid token")
+    user_id = await _verify_ws_token(ws, token)
+    if not user_id:
         return
 
     await ws.accept()
@@ -258,7 +582,7 @@ async def chat_ws(ws: WebSocket, token: Optional[str] = Query(None)):
             except json.JSONDecodeError:
                 await ws.send_json({"type": "error", "msg": "Invalid JSON"})
                 continue
-            await _handle_message(ws, msg, active_turns, cache)
+            await _handle_message(ws, msg, active_turns, cache, user_id)
 
     except WebSocketDisconnect:
         logger.info("chat_ws_disconnect")

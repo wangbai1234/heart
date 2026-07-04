@@ -1,4 +1,8 @@
-"""JWT authentication module for Heart API."""
+"""JWT authentication module for Heart/yuoyuo API.
+
+Supports RS256 (default) and HS256. Access tokens are short-lived (30min).
+Refresh tokens are managed via auth_sessions table (see routes_auth.py).
+"""
 
 from datetime import datetime, timedelta, timezone
 from typing import Optional
@@ -41,20 +45,11 @@ class AuthManager:
     def __init__(
         self,
         secret_key: str = "",
-        algorithm: str = "HS256",
+        algorithm: str = "RS256",
         private_key: str = "",
         public_key: str = "",
-        expire_minutes: int = 43200,
+        expire_minutes: int = 30,
     ):
-        """Initialize auth manager.
-
-        Args:
-            secret_key: Secret key for HS256 signing
-            algorithm: JWT algorithm (HS256 or RS256)
-            private_key: PEM private key for RS256 signing
-            public_key: PEM public key for RS256 verification
-            expire_minutes: Token expiration time in minutes (default: 30 days)
-        """
         self.algorithm = algorithm
         self.expire_minutes = expire_minutes
 
@@ -68,14 +63,9 @@ class AuthManager:
             self._verify_key = secret_key
 
     def create_access_token(self, user_id: str, email: Optional[str] = None) -> Token:
-        """Create a JWT access token.
+        """Create a short-lived JWT access token.
 
-        Args:
-            user_id: User ID
-            email: Optional email address
-
-        Returns:
-            Token object with access token and expiration
+        Claims: sub (user_id), email, exp, iat, typ="access"
         """
         expires = datetime.now(timezone.utc) + timedelta(minutes=self.expire_minutes)
 
@@ -84,6 +74,7 @@ class AuthManager:
             "email": email,
             "exp": int(expires.timestamp()),
             "iat": int(datetime.now(timezone.utc).timestamp()),
+            "typ": "access",
         }
 
         encoded_jwt = jwt.encode(
@@ -101,14 +92,8 @@ class AuthManager:
     def verify_token(self, token: str) -> TokenData:
         """Verify and decode JWT token.
 
-        Args:
-            token: JWT token string
-
-        Returns:
-            TokenData with user_id and email
-
-        Raises:
-            HTTPException: If token is invalid or expired
+        Returns TokenData with user_id and email.
+        Raises HTTPException 401 if invalid or expired.
         """
         try:
             payload = jwt.decode(
@@ -127,12 +112,11 @@ class AuthManager:
                     headers={"WWW-Authenticate": "Bearer"},
                 )
 
-            token_data = TokenData(
+            return TokenData(
                 user_id=user_id,
                 email=email,
                 exp=datetime.fromtimestamp(exp, tz=timezone.utc) if exp else None,
             )
-            return token_data
 
         except jwt.ExpiredSignatureError:
             raise HTTPException(
@@ -148,13 +132,10 @@ class AuthManager:
             ) from e
 
     def refresh_token(self, token: str) -> Token:
-        """Refresh an existing token.
+        """Refresh an existing token (verify + re-issue).
 
-        Args:
-            token: Current JWT token
-
-        Returns:
-            New Token object
+        Convenience method for backward compatibility.
+        For production refresh with rotation, use routes_auth.py.
         """
         token_data = self.verify_token(token)
         return self.create_access_token(
@@ -176,11 +157,8 @@ auth_manager = AuthManager(
 async def get_current_user(authorization: Optional[str] = Header(None)) -> TokenData:
     """FastAPI dependency: extract and verify JWT from Authorization header.
 
-    Returns:
-        TokenData with user_id
-
-    Raises:
-        HTTPException: 401 if missing/invalid token
+    Returns TokenData with user_id.
+    Raises HTTPException 401 if missing/invalid token.
     """
     if not authorization:
         raise HTTPException(

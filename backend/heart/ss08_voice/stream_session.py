@@ -46,6 +46,8 @@ class StreamSession:
         self._cancelled = False
         self._paused = False
         self._current_response: Optional[Any] = None
+        self.audio_produced = False
+        self._all_audio_chunks: list[bytes] = []
 
     def cancel(self) -> None:
         """Cancel the stream session."""
@@ -73,6 +75,13 @@ class StreamSession:
     def is_cancelled(self) -> bool:
         """Check if session is cancelled."""
         return self._cancelled
+
+    @property
+    def full_audio(self) -> bytes:
+        """Get all accumulated audio as a single bytes object (WAV format)."""
+        if not self._all_audio_chunks:
+            return b""
+        return b"".join(self._all_audio_chunks)
 
     async def submit(
         self,
@@ -168,6 +177,8 @@ class StreamSession:
                     chunk_fmt,
                 )
                 self._global_seq += 1
+        if audio_chunks:
+            self.audio_produced = True
         return audio_chunks
 
     async def _cache_audio(self, req: Any, text: str, audio_chunks: list[bytes]) -> None:
@@ -197,6 +208,8 @@ class StreamSession:
 
             # Stream TTS
             audio_chunks = await self._stream_tts(req, turn_id, character_id)
+            if audio_chunks:
+                self._all_audio_chunks.extend(audio_chunks)
 
             # Cache result
             await self._cache_audio(req, text, audio_chunks)

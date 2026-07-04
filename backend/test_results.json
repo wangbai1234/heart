@@ -1,0 +1,51 @@
+{
+  "timestamp": "2026-06-18T11:11:05.264299+00:00",
+  "test_user_id": "b4b555d8-8125-4cd7-a142-03f193d9f0d6",
+  "character_id": "rin",
+  "total": 8,
+  "passed": 0,
+  "failed": 8,
+  "pass_rate": "0.0%",
+  "results": [
+    {
+      "test": "情感记忆 - 个人信息召回",
+      "passed": false,
+      "details": "姓名召回: False, 年龄召回: False"
+    },
+    {
+      "test": "情感记忆 - 情感事件召回",
+      "passed": false,
+      "details": "情感关键词召回: False"
+    },
+    {
+      "test": "情绪演进 - 情绪状态变化",
+      "passed": false,
+      "details": "情绪是否变化: False"
+    },
+    {
+      "test": "关系阶段 - 阶段演进",
+      "passed": false,
+      "details": "初始: unknown(信任0) → 最终: unknown(信任0)"
+    },
+    {
+      "test": "冷战机制 - 冲突检测",
+      "passed": false,
+      "details": "关系阶段变化: unknown → unknown → unknown"
+    },
+    {
+      "test": "冷战机制 - 修复检测",
+      "passed": false,
+      "details": "修复后阶段: unknown → unknown"
+    },
+    {
+      "test": "记忆持久性 - 重要事件记忆",
+      "passed": false,
+      "details": "关键信息召回: False"
+    },
+    {
+      "test": "安全检测 - 危机内容识别",
+      "passed": false,
+      "details": "安全关键词: ['帮助', '支持', '专业', '关怀', '热线']..."
+    }
+  ]
+}
