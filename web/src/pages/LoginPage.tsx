@@ -100,7 +100,7 @@ export function LoginPage() {
             yuoyuo
           </h1>
           <p className="text-[14px] text-[var(--color-text-muted)] mt-1">
-            一个会记得你的伙伴
+            独属于你的虚拟宇宙
           </p>
         </div>
 
