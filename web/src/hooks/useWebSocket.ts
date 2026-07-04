@@ -120,6 +120,7 @@ export function useWebSocket() {
           if (msg.data_b64) {
             const currentTurnId = useChatStore.getState().currentTurnId
             if (msg.turn_id !== currentTurnId) return
+            console.log('[ws] audio_chunk received', { turn_id: msg.turn_id, seq: msg.seq, format: msg.format, dataLen: msg.data_b64.length })
             // Mark message as voice on first audio chunk
             const msgs = useChatStore.getState().messages[cid] ?? []
             const lastMsg = msgs[msgs.length - 1]
@@ -162,6 +163,7 @@ export function useWebSocket() {
           setStreaming(false)
           setPlaying(false)
           setCurrentTurnId(null)
+          console.log('[ws] turn_end', { cid, audioPreBuffered: audioPreBuffer.current?.length ?? 0 })
           // Sync last assistant message to threads for HomePage
           {
             const msgs = useChatStore.getState().messages[cid] ?? []
@@ -267,6 +269,7 @@ export function useWebSocket() {
       activeCharRef.current = characterId
       const { voiceChatEnabled } = useAppStore.getState()
       const voiceEnabled = voiceChatEnabled?.[characterId] ?? false
+      console.log('[ws] sendMessage', { characterId, voiceEnabled, voiceChatEnabled })
       const turnId = crypto.randomUUID()
       addMessage(characterId, {
         id: `user-${turnId}`,
