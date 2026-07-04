@@ -28,7 +28,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
   const isStreaming = useChatStore((s) => s.isStreaming)
   const isPlaying = useChatStore((s) => s.isPlaying)
   const addMessage = useChatStore((s) => s.addMessage)
-  const clear = useChatStore((s) => s.clear)
+  const clearMessages = useChatStore((s) => s.clearMessages)
   const setCharacterId = useChatStore((s) => s.setCharacterId)
   const appendMessage = useChatStore((s) => s.appendMessage)
   const insufficientCredits = useChatStore((s) => s.insufficientCredits)
@@ -47,10 +47,16 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
   }, [currentCharacterId, setCharacterId])
 
   // Load chat history from API on mount / character change
+  const prevCharRef = useRef(currentCharacterId)
   useEffect(() => {
     if (!isAuthenticated()) return
     setHistoryLoaded(false)
-    clear()
+
+    // Only clear messages if character changed
+    if (prevCharRef.current !== currentCharacterId) {
+      clearMessages()
+      prevCharRef.current = currentCharacterId
+    }
 
     getChatHistory(currentCharacterId, undefined, 50)
       .then((data) => {

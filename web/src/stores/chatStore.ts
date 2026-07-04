@@ -54,6 +54,7 @@ interface ChatState {
   setInsufficientCredits: (needed: number, balance: number) => void
   clearInsufficientCredits: () => void
   clear: () => void
+  clearMessages: () => void
 }
 
 function cloneThreads(): Record<CharacterId, ConversationMessage[]> {
@@ -138,5 +139,6 @@ export const useChatStore = create<ChatState>((set) => ({
   setCharacterId: (id) => set({ characterId: id }),
   setInsufficientCredits: (needed, balance) => set({ insufficientCredits: { needed, balance } }),
   clearInsufficientCredits: () => set({ insufficientCredits: null }),
-  clear: () => set({ messages: [], isStreaming: false, isPlaying: false, currentTurnId: null, characterId: 'rin', insufficientCredits: null }),
+  clear: () => set((s) => ({ messages: [], isStreaming: false, isPlaying: false, currentTurnId: null, characterId: s.characterId, insufficientCredits: null })),
+  clearMessages: () => set({ messages: [], isStreaming: false, isPlaying: false, currentTurnId: null, insufficientCredits: null }),
 }))

@@ -15,6 +15,7 @@ export function CharacterBackstagePage() {
   const voiceChatEnabled = useAppStore((s) => s.voiceChatEnabled[currentCharacterId])
   const setVoiceChatEnabled = useAppStore((s) => s.setVoiceChatEnabled)
   const clearThread = useChatStore((s) => s.clearThread)
+  const clearMessages = useChatStore((s) => s.clearMessages)
   const [confirmOpen, setConfirmOpen] = useState(false)
 
   const profile = CHARACTER_PROFILES[currentCharacterId]
@@ -55,6 +56,7 @@ export function CharacterBackstagePage() {
 
   const handleClearThread = () => {
     clearThread(currentCharacterId)
+    clearMessages()
     setConfirmOpen(false)
     navigate('/chat')
   }
