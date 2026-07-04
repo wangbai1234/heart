@@ -27,7 +27,7 @@ const tabs: TabItem[] = [
   },
   {
     id: 'chat',
-    label: '聊天',
+    label: '消息',
     path: '/chat',
     icon: (active) => (
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={active ? '#FFB7C5' : '#8E8E9A'} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
@@ -85,7 +85,7 @@ export function TabBar() {
             >
               {tab.icon(active)}
               <span className={`text-[10px] ${active ? 'text-[var(--color-tab-active)]' : 'text-[#8E8E9A]'}`}>
-                {active ? tab.label : ''}
+                {tab.label}
               </span>
               {active && (
                 <div className="w-1 h-1 rounded-full bg-[var(--color-tab-active)]" />

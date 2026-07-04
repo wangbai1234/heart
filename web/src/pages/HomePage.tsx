@@ -87,12 +87,6 @@ export function HomePage() {
               <div className="mb-4">
                 <div className="flex items-center justify-between pl-1 pr-1 mb-3">
                   <span className="text-[16px] font-bold text-[var(--color-ink)]">最近公告</span>
-                  <button
-                    onClick={() => navigate('/chat')}
-                    className="text-[13px] text-[var(--color-text-secondary)] active:opacity-70"
-                  >
-                    去看消息
-                  </button>
                 </div>
 
                 <div className="bg-[var(--color-glass-35)] backdrop-blur-[12px] rounded-[20px] border border-[var(--color-border-glass)] overflow-hidden">
