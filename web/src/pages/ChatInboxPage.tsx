@@ -8,6 +8,7 @@ import { useAppStore } from '../stores/appStore'
 import { useChatStore } from '../stores/chatStore'
 import {
   CHARACTER_PROFILES,
+  CONVERSATION_THREADS,
   formatConversationTime,
   getMessagePreview,
   getUnreadMessageCount,
@@ -78,6 +79,7 @@ export function ChatInboxPage() {
   const setCharacter = useAppStore((s) => s.setCharacter)
   const threads = useChatStore((s) => s.threads)
   const messages = useChatStore((s) => s.messages)
+  const clearedCharacters = useChatStore((s) => s.clearedCharacters)
   const setActiveCharacter = useChatStore((s) => s.setActiveCharacter)
   const clearThread = useChatStore((s) => s.clearThread)
   const clearMessages = useChatStore((s) => s.clearMessages)
@@ -90,8 +92,9 @@ export function ChatInboxPage() {
   const allConversations = (Object.keys(CHARACTER_PROFILES) as CharacterId[]).map((characterId) => {
     const liveMessages = messages[characterId] ?? []
     const threadMessages = threads[characterId] ?? []
-    const fallbackMessages = CONVERSATION_THREADS[characterId] ?? []
-    const timeline = (liveMessages.length > 0 ? liveMessages : threadMessages) as TimelineMessage[]
+    const isCleared = clearedCharacters.has(characterId)
+    const fallbackMessages = isCleared ? [] : (CONVERSATION_THREADS[characterId] ?? [])
+    const timeline = (liveMessages.length > 0 ? liveMessages : threadMessages.length > 0 ? threadMessages : fallbackMessages) as TimelineMessage[]
     const previewTimeline = timeline.map((item) => ({
       ...item,
       kind: item.kind ?? 'text',

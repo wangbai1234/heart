@@ -38,6 +38,7 @@ interface ChatState {
   vad: VadState
   characterId: string
   insufficientCredits: { needed: number; balance: number } | null
+  clearedCharacters: Set<CharacterId>
 
   // Thread management (from conversationStore)
   setActiveCharacter: (id: CharacterId) => void
@@ -81,16 +82,22 @@ export const useChatStore = create<ChatState>((set) => ({
   vad: { energy: 0, mood: 'neutral', intimacy: 0 },
   characterId: 'rin',
   insufficientCredits: null,
+  clearedCharacters: new Set<CharacterId>(),
 
   // Thread management
   setActiveCharacter: (id) => set({ activeCharacterId: id }),
   appendMessage: (characterId, message) =>
-    set((state) => ({
-      threads: {
-        ...state.threads,
-        [characterId]: [...state.threads[characterId], message],
-      },
-    })),
+    set((state) => {
+      const cleared = new Set(state.clearedCharacters)
+      cleared.delete(characterId)
+      return {
+        threads: {
+          ...state.threads,
+          [characterId]: [...state.threads[characterId], message],
+        },
+        clearedCharacters: cleared,
+      }
+    }),
   clearThread: (characterId) =>
     set((state) => ({
       threads: {
@@ -160,11 +167,16 @@ export const useChatStore = create<ChatState>((set) => ({
   clearInsufficientCredits: () => set({ insufficientCredits: null }),
   clear: () => set((s) => ({ messages: emptyMessages(), isStreaming: false, isPlaying: false, currentTurnId: null, characterId: s.characterId, insufficientCredits: null })),
   clearMessages: (characterId) =>
-    set((s) => ({
-      messages: { ...s.messages, [characterId]: [] },
-      isStreaming: false,
-      isPlaying: false,
-      currentTurnId: null,
-      insufficientCredits: null,
-    })),
+    set((s) => {
+      const cleared = new Set(s.clearedCharacters)
+      cleared.add(characterId)
+      return {
+        messages: { ...s.messages, [characterId]: [] },
+        clearedCharacters: cleared,
+        isStreaming: false,
+        isPlaying: false,
+        currentTurnId: null,
+        insufficientCredits: null,
+      }
+    }),
 }))
