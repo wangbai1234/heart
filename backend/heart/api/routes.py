@@ -40,7 +40,7 @@ class ChatResponse(BaseModel):
 
 # ── Legacy stub login — DEV MODE ONLY (see main.py) ────────────────
 
-dev_auth_router = APIRouter(prefix="/auth", tags=["auth-dev"])
+dev_auth_router = APIRouter(prefix="/api/auth", tags=["auth-dev"])
 
 
 class LoginRequest(BaseModel):

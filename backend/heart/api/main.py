@@ -222,10 +222,10 @@ def create_app() -> FastAPI:
     app.include_router(voice_router)
     app.include_router(chat_ws_router)
 
-    # Dev-only routes: gated behind HEART_DEV_MODE
+    # Dev-only routes: gated behind HEART_DEV_MODE (process env takes precedence over .env)
     import os
 
-    if os.getenv("HEART_DEV_MODE", "").lower() == "true":
+    if os.environ.get("HEART_DEV_MODE", "").lower() == "true":
         app.include_router(dev_router)  # /api/dev/*
         app.include_router(profile_dev_router, prefix="/api/profile")  # /api/profile/*
         app.include_router(dev_auth_router)  # /api/auth/login (stub, dev only)

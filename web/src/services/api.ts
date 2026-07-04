@@ -199,17 +199,19 @@ export async function uploadAvatar(file: File): Promise<{ avatar_url: string }> 
   formData.append('file', file)
 
   const { accessToken } = (await import('../stores/authStore')).useAuthStore.getState()
+  if (!accessToken) throw new Error('未登录')
+
   const res = await fetch('/api/profile/avatar', {
     method: 'POST',
     headers: { Authorization: `Bearer ${accessToken}` },
     body: formData,
   })
 
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: 'Upload failed' }))
-    throw new Error(err.detail || 'Upload failed')
+  const data = await res.json().catch(() => null)
+  if (!res.ok || !data) {
+    throw new Error(data?.detail || `上传失败 (${res.status})`)
   }
-  return res.json()
+  return data
 }
 
 // ── Account API ────────────────────────────────────────────────────
