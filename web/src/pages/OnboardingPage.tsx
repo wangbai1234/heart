@@ -129,7 +129,7 @@ export function OnboardingPage() {
 
         <div
           className="relative z-20 px-4"
-          style={{ paddingBottom: 'calc(4px + var(--safe-bottom))', marginTop: '-10px' }}
+          style={{ paddingBottom: 'calc(4px + var(--safe-bottom))', marginTop: '-64px' }}
         >
           <div className="mb-2.5 flex justify-center gap-3">
             {steps.map((_, index) => (
