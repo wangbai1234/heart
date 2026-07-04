@@ -103,7 +103,7 @@ export function OnboardingPage() {
                   <img
                     src={step.image}
                     alt={step.title}
-                    className="absolute inset-0 h-full w-full object-cover scale-[1.35]"
+                    className="absolute inset-0 h-full w-full object-cover scale-[1.08]"
                     style={{
                       objectPosition: step.objectPosition,
                     }}
