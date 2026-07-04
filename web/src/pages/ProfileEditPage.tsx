@@ -5,12 +5,16 @@ import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { SegmentedControl } from '../components/ui/SegmentedControl'
 import { Toast } from '../components/ui/Toast'
+import { BottomSheet } from '../components/ui/BottomSheet'
+import { DatePicker } from '../components/ui/DatePicker'
 import { getProfile, updateProfile, uploadAvatar } from '../services/api'
 
-async function compressImage(file: File, maxSize: number): Promise<File> {
+function compressImage(file: File, maxSize: number): Promise<File> {
   return new Promise((resolve) => {
+    const objectUrl = URL.createObjectURL(file)
     const img = new Image()
     img.onload = () => {
+      URL.revokeObjectURL(objectUrl)
       const canvas = document.createElement('canvas')
       let { width, height } = img
       if (width > maxSize || height > maxSize) {
@@ -27,16 +31,29 @@ async function compressImage(file: File, maxSize: number): Promise<File> {
       canvas.getContext('2d')!.drawImage(img, 0, 0, width, height)
       canvas.toBlob(
         (blob) => {
-          if (blob) resolve(new File([blob], file.name, { type: 'image/webp' }))
-          else resolve(file)
+          if (blob) {
+            const webpName = file.name.replace(/\.[^.]+$/, '.webp')
+            resolve(new File([blob], webpName, { type: 'image/webp' }))
+          } else {
+            resolve(file)
+          }
         },
         'image/webp',
         0.85,
       )
     }
-    img.onerror = () => resolve(file)
-    img.src = URL.createObjectURL(file)
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl)
+      resolve(file)
+    }
+    img.src = objectUrl
   })
+}
+
+function formatBirthdate(iso: string): string {
+  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (!m) return ''
+  return `${m[1]}年${parseInt(m[2])}月${parseInt(m[3])}日`
 }
 
 const GENDER_OPTIONS = [
@@ -55,9 +72,9 @@ export function ProfileEditPage() {
   const [birthdate, setBirthdate] = useState(user?.birthdate || '')
   const [loading, setLoading] = useState(false)
   const [toast, setToast] = useState({ visible: false, message: '' })
+  const [showDatePicker, setShowDatePicker] = useState(false)
 
   useEffect(() => {
-    // Load latest profile
     getProfile().then((data) => {
       const u = data.user
       setDisplayName(u.display_name || '')
@@ -93,8 +110,7 @@ export function ProfileEditPage() {
     const file = e.target.files?.[0]
     if (!file) return
     try {
-      // Compress to ≤512px
-      const compressed = await compressImage(file, 512)
+      const compressed = await compressImage(file, 512).catch(() => file)
       const res = await uploadAvatar(compressed)
       setUser({ avatar_url: res.avatar_url })
       setToast({ visible: true, message: '头像更新成功' })
@@ -159,13 +175,17 @@ export function ProfileEditPage() {
 
           <div>
             <label className="text-[13px] text-[var(--color-text-secondary)] mb-1 block">出生日期</label>
-            <input
-              type="date"
-              value={birthdate}
-              onChange={(e) => setBirthdate(e.target.value)}
-              max={new Date().toISOString().split('T')[0]}
-              className="w-full px-4 py-3 rounded-[12px] bg-[var(--color-glass-35)] backdrop-blur-[12px] border border-[var(--color-divider-inset)] text-[var(--color-ink)] text-[15px] outline-none focus:border-[var(--color-primary)]"
-            />
+            <button
+              type="button"
+              onClick={() => setShowDatePicker(true)}
+              className="w-full px-4 py-3 rounded-[12px] bg-[var(--color-glass-35)] backdrop-blur-[12px] border border-[var(--color-divider-inset)] text-[15px] text-left outline-none focus:border-[var(--color-primary)] transition-colors"
+            >
+              {birthdate ? (
+                <span className="text-[var(--color-ink)]">{formatBirthdate(birthdate)}</span>
+              ) : (
+                <span className="text-[var(--color-text-placeholder)]">请选择出生日期</span>
+              )}
+            </button>
           </div>
         </div>
 
@@ -177,6 +197,16 @@ export function ProfileEditPage() {
       </div>
 
       <div style={{ height: 'var(--safe-bottom)' }} />
+
+      {/* Date Picker BottomSheet */}
+      <BottomSheet open={showDatePicker} onClose={() => setShowDatePicker(false)}>
+        <DatePicker
+          value={birthdate}
+          onChange={setBirthdate}
+          onConfirm={() => setShowDatePicker(false)}
+        />
+      </BottomSheet>
+
       <Toast visible={toast.visible} message={toast.message} onDismiss={() => setToast({ visible: false, message: '' })} />
     </div>
   )
