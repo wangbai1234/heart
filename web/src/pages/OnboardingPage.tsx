@@ -103,7 +103,7 @@ export function OnboardingPage() {
                   <img
                     src={step.image}
                     alt={step.title}
-                    className="absolute inset-0 h-full w-full object-cover scale-[1.08]"
+                    className="absolute inset-0 h-full w-full object-cover"
                     style={{
                       objectPosition: step.objectPosition,
                     }}
@@ -114,7 +114,7 @@ export function OnboardingPage() {
                   <div className="absolute inset-x-0 bottom-0 h-[56%] bg-gradient-to-b from-transparent via-[rgba(255,250,247,0.92)] to-[#FFF9F6]" />
                 </div>
 
-                <div className="relative mt-12 px-6 text-center">
+                <div className="relative -mt-16 px-6 text-center">
                   <h1 className="whitespace-pre-line text-[20px] font-semibold leading-[1.38] tracking-[-0.03em] text-[#2E3348]">
                     {step.title}
                   </h1>
