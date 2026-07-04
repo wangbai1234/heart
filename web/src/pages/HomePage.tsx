@@ -1,6 +1,5 @@
 import { useNavigate } from 'react-router-dom'
 import { useThemeStore } from '../stores/themeStore'
-import { useAppStore } from '../stores/appStore'
 import { useAuthStore } from '../stores/authStore'
 import { Avatar } from '../components/ui/Avatar'
 import { TabBar } from '../components/ui/TabBar'
@@ -10,7 +9,6 @@ import { HOME_ANNOUNCEMENTS, getHeroBanner } from '../data/uiContent'
 export function HomePage() {
   const navigate = useNavigate()
   const { resolvedTheme } = useThemeStore()
-  const { currentCharacterId } = useAppStore()
   const userAvatar = useAuthStore((s) => s.user?.avatar_url ?? null)
   const loading = false
   const pageBg = resolvedTheme === 'dark'
@@ -136,22 +134,6 @@ export function HomePage() {
                     </div>
                   ))}
                 </div>
-              </div>
-
-              <div className="mb-4 rounded-[22px] border border-[rgba(255,183,197,0.18)] bg-[var(--color-glass-35)] px-4 py-4 backdrop-blur-[12px]">
-                <div className="mb-2 flex items-center justify-between">
-                  <span className="text-[15px] font-semibold text-[var(--color-ink)]">当前聊天入口</span>
-                  <span className="text-[12px] text-[var(--color-primary)]">已切换为消息列表模式</span>
-                </div>
-                <p className="text-[13px] leading-[1.65] text-[var(--color-text-secondary)]">
-                  现在进入聊天页会先看到各个角色的消息列表与未读数量，再点进对应角色开始聊天。
-                </p>
-                <button
-                  onClick={() => navigate('/chat')}
-                  className="mt-4 inline-flex h-[42px] items-center rounded-full bg-[rgba(255,183,197,0.18)] px-4 text-[14px] font-medium text-[var(--color-primary)] active:scale-[0.97] transition-transform"
-                >
-                  查看 {currentCharacterId === 'rin' ? '神无月凛' : '桃乐丝'} 的消息
-                </button>
               </div>
 
               <div className="h-[140px]" aria-hidden="true" />
