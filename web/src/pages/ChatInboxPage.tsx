@@ -8,7 +8,6 @@ import { useAppStore } from '../stores/appStore'
 import { useChatStore } from '../stores/chatStore'
 import {
   CHARACTER_PROFILES,
-  CONVERSATION_THREADS,
   formatConversationTime,
   getMessagePreview,
   getUnreadMessageCount,
@@ -92,7 +91,7 @@ export function ChatInboxPage() {
     const liveMessages = messages[characterId] ?? []
     const threadMessages = threads[characterId] ?? []
     const fallbackMessages = CONVERSATION_THREADS[characterId] ?? []
-    const timeline = (liveMessages.length > 0 ? liveMessages : threadMessages.length > 0 ? threadMessages : fallbackMessages) as TimelineMessage[]
+    const timeline = (liveMessages.length > 0 ? liveMessages : threadMessages) as TimelineMessage[]
     const previewTimeline = timeline.map((item) => ({
       ...item,
       kind: item.kind ?? 'text',

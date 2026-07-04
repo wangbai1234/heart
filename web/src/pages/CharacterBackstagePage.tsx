@@ -58,7 +58,7 @@ export function CharacterBackstagePage() {
     clearThread(currentCharacterId)
     clearMessages(currentCharacterId)
     setConfirmOpen(false)
-    navigate(`/chat/${currentCharacterId}`)
+    navigate('/chat')
   }
 
   return (
