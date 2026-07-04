@@ -58,7 +58,7 @@ export function CharacterBackstagePage() {
     clearThread(currentCharacterId)
     clearMessages(currentCharacterId)
     setConfirmOpen(false)
-    navigate('/chat')
+    navigate(`/chat/${currentCharacterId}`)
   }
 
   return (
@@ -75,7 +75,7 @@ export function CharacterBackstagePage() {
         <div style={{ height: 'var(--safe-top)' }} />
 
         <button
-          onClick={() => navigate('/chat')}
+          onClick={() => navigate(`/chat/${currentCharacterId}`)}
           className={`mb-14 flex h-[52px] w-[52px] items-center justify-center rounded-full backdrop-blur-[18px] border ${
             resolvedTheme === 'dark'
               ? 'bg-[rgba(255,255,255,0.06)] border-[rgba(255,255,255,0.08)]'

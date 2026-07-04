@@ -1,128 +1,172 @@
-import { useState } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useRef, useState, type TouchEvent } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAppStore } from '../stores/appStore'
 
 const steps = [
   {
-    image: '/assets/backgrounds/引导页1背景图.png',
-    title: '我是 yuoyuo，会陪你聊心事。',
+    image: '/assets/backgrounds/引导页1背景图_ext.png',
+    title: '我是yuoyuo，\n独属于你的虚拟宇宙。',
     description: '我会记得你说过的话，理解你的情绪。',
+    objectPosition: 'center 12%',
   },
   {
-    image: '/assets/backgrounds/引导页2背景图.png',
+    image: '/assets/backgrounds/引导页2背景图_ext.png',
     title: '你的对话只属于你。',
-    description: '数据加密存储，端到端可审计。',
+    description: '数据加密存储，注销即记忆全部消散。',
+    objectPosition: 'center 10%',
   },
   {
-    image: '/assets/backgrounds/引导页3背景图.png',
+    image: '/assets/backgrounds/引导页3背景图_ext.png',
     title: '在爱发电赞助即可解锁会员。',
-    description: '支持微信 / 支付宝；赞助后获取兑换码，回到这里输入即可激活。',
+    description: '支持微信/支付宝；赞助后领取兑换码，回到这里输入即可激活。',
+    objectPosition: 'center 14%',
   },
-]
+] as const
+
+const SWIPE_THRESHOLD = 42
 
 export function OnboardingPage() {
-  const [currentStep, setCurrentStep] = useState(0)
   const navigate = useNavigate()
   const { setHasSeenOnboarding } = useAppStore()
+  const [currentStep, setCurrentStep] = useState(0)
+  const touchStartX = useRef<number | null>(null)
+  const touchStartY = useRef<number | null>(null)
 
   const isLast = currentStep === steps.length - 1
 
+  const finishOnboarding = () => {
+    setHasSeenOnboarding(true)
+    navigate('/login', { replace: true })
+  }
+
   const handleNext = () => {
     if (isLast) {
-      setHasSeenOnboarding(true)
-      navigate('/login', { replace: true })
-    } else {
-      setCurrentStep((s) => s + 1)
+      finishOnboarding()
+      return
     }
+    setCurrentStep((step) => Math.min(step + 1, steps.length - 1))
   }
 
-  const handleBack = () => {
-    if (currentStep > 0) {
-      setCurrentStep((s) => s - 1)
-    }
+  const handleTouchStart = (event: TouchEvent<HTMLDivElement>) => {
+    const touch = event.touches[0]
+    touchStartX.current = touch.clientX
+    touchStartY.current = touch.clientY
   }
 
-  const step = steps[currentStep]
+  const handleTouchEnd = (event: TouchEvent<HTMLDivElement>) => {
+    if (touchStartX.current == null || touchStartY.current == null) return
+
+    const touch = event.changedTouches[0]
+    const deltaX = touch.clientX - touchStartX.current
+    const deltaY = touch.clientY - touchStartY.current
+
+    touchStartX.current = null
+    touchStartY.current = null
+
+    if (Math.abs(deltaX) < SWIPE_THRESHOLD || Math.abs(deltaX) < Math.abs(deltaY)) return
+
+    if (deltaX < 0) {
+      setCurrentStep((step) => Math.min(step + 1, steps.length - 1))
+      return
+    }
+
+    setCurrentStep((step) => Math.max(step - 1, 0))
+  }
 
   return (
-    <div className="relative w-full h-full flex flex-col bg-[var(--color-surface)]">
-      {/* Back button */}
-      {currentStep > 0 && (
-        <button
-          onClick={handleBack}
-          className="absolute top-[calc(var(--safe-top)+8px)] left-5 z-10 w-[44px] h-[44px] flex items-center justify-center"
-        >
-          <svg width="12" height="20" viewBox="0 0 12 20" fill="none" stroke="var(--color-ink)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="10,2 2,10 10,18" />
-          </svg>
-        </button>
-      )}
+    <div className="relative isolate h-full overflow-hidden bg-[#FFF9F5]">
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(255,202,218,0.58),transparent_34%),radial-gradient(circle_at_bottom,rgba(255,234,228,0.92),transparent_46%),linear-gradient(180deg,#FFF9F6_0%,#FFFDFC_46%,#FFF9F7_100%)]" />
+      <div className="absolute left-1/2 top-[8%] h-[220px] w-[220px] -translate-x-1/2 rounded-full bg-[rgba(255,183,197,0.22)] blur-[72px]" />
+      <div className="absolute bottom-[18%] left-1/2 h-[280px] w-[280px] -translate-x-1/2 rounded-full bg-[rgba(255,232,221,0.9)] blur-[96px]" />
 
-      {/* Safe area spacer */}
-      <div style={{ height: 'var(--safe-top)' }} />
+      <div
+        className="relative z-10 flex h-full flex-col"
+        style={{ paddingTop: 'var(--safe-top)' }}
+        onTouchStart={handleTouchStart}
+        onTouchEnd={handleTouchEnd}
+      >
+        <div className="relative flex-1 overflow-hidden">
+          <div
+            className="flex h-full transition-transform duration-500 ease-out"
+            style={{
+              width: `${steps.length * 100}%`,
+              transform: `translateX(-${currentStep * (100 / steps.length)}%)`,
+            }}
+          >
+            {steps.map((step) => (
+              <section
+                key={step.image}
+                className="relative flex h-full shrink-0 flex-col"
+                style={{ width: `${100 / steps.length}%` }}
+              >
+                <div className="relative h-[52vh] min-h-[380px] w-full overflow-hidden">
+                  <img
+                    src={step.image}
+                    alt={step.title}
+                    className="absolute inset-0 h-full w-full object-cover"
+                    style={{
+                      objectPosition: step.objectPosition,
+                    }}
+                  />
+                  <div className="absolute inset-y-0 left-0 w-[9%] bg-gradient-to-r from-[#FFF9F6] via-[rgba(255,249,246,0.45)] to-transparent" />
+                  <div className="absolute inset-y-0 right-0 w-[9%] bg-gradient-to-l from-[#FFF9F6] via-[rgba(255,249,246,0.45)] to-transparent" />
+                  <div className="absolute inset-x-0 top-0 h-[12%] bg-gradient-to-b from-[rgba(255,249,245,0.38)] via-[rgba(255,249,245,0.16)] to-transparent" />
+                  <div className="absolute inset-x-0 bottom-0 h-[56%] bg-gradient-to-b from-transparent via-[rgba(255,250,247,0.92)] to-[#FFF9F6]" />
+                </div>
 
-      {/* Illustration — larger, top-centered */}
-      <div className="flex-1 flex items-center justify-center px-6 pt-4 pb-4">
-        <img
-          key={currentStep}
-          src={step.image}
-          alt={step.title}
-          className="w-full max-w-[360px] max-h-[60%] object-contain animate-[fade-in-up_280ms_var(--ease-standard)]"
-        />
-      </div>
-
-      {/* Bottom content */}
-      <div className="px-6 pb-6" style={{ paddingBottom: 'calc(32px + var(--safe-bottom))' }}>
-        <h2 className="text-[22px] font-semibold text-[var(--color-ink)] text-center mb-3 leading-[1.3]">
-          {step.title}
-        </h2>
-        <p className="text-[15px] text-[var(--color-text-secondary)] text-center mb-6 leading-[1.6]">
-          {step.description}
-        </p>
-
-        {/* Legal links on step 2 */}
-        {currentStep === 1 && (
-          <p className="text-center text-[12px] text-[var(--color-text-muted)] mb-4">
-            <Link to="/legal/terms" className="underline">用户协议</Link>
-            {' · '}
-            <Link to="/legal/privacy" className="underline">隐私政策</Link>
-          </p>
-        )}
-
-        {/* Page dots */}
-        <div className="flex justify-center gap-2 mb-6">
-          {steps.map((_, i) => (
-            <div
-              key={i}
-              className={`rounded-full transition-all duration-300 ${
-                i === currentStep
-                  ? 'w-6 h-2 bg-[var(--color-primary)]'
-                  : 'w-2 h-2 bg-[var(--color-glass-55)]'
-              }`}
-            />
-          ))}
+                <div className="relative mt-12 px-6 text-center">
+                  <h1 className="whitespace-pre-line text-[20px] font-semibold leading-[1.38] tracking-[-0.03em] text-[#2E3348]">
+                    {step.title}
+                  </h1>
+                  <p className="mx-auto mt-4 max-w-[286px] text-[14px] leading-[1.72] tracking-[-0.01em] text-[rgba(61,69,96,0.62)]">
+                    {step.description}
+                  </p>
+                </div>
+              </section>
+            ))}
+          </div>
         </div>
 
-        {/* Primary button */}
-        <button
-          onClick={handleNext}
-          className="w-full py-4 rounded-full bg-gradient-to-r from-[#FFB7C5] to-[#FF8FAB] text-white text-[17px] font-semibold shadow-[0_8px_24px_-4px_rgba(255,143,171,0.35)] active:scale-[0.97] transition-transform"
+        <div
+          className="relative z-20 px-4"
+          style={{ paddingBottom: 'calc(4px + var(--safe-bottom))', marginTop: '-10px' }}
         >
-          {isLast ? '开始体验' : '下一步'}
-        </button>
+          <div className="mb-2.5 flex justify-center gap-3">
+            {steps.map((_, index) => (
+              <span
+                key={index}
+                className={`h-[10px] rounded-full transition-all duration-300 ${
+                  currentStep === index
+                    ? 'w-[10px] bg-[#FF84A7] shadow-[0_4px_10px_rgba(255,132,167,0.28)]'
+                    : 'w-[10px] bg-[rgba(255,194,206,0.55)]'
+                }`}
+              />
+            ))}
+          </div>
 
-        {/* Redeem link on last step */}
-        {isLast && (
           <button
-            onClick={() => {
-              setHasSeenOnboarding(true)
-              navigate('/redeem')
-            }}
-            className="w-full text-center text-[14px] text-[var(--color-ink)] py-3 mt-2 active:opacity-60"
+            onClick={handleNext}
+            className={`h-[58px] w-full rounded-full text-[17px] font-medium tracking-[-0.02em] transition-transform active:scale-[0.985] ${
+              isLast
+                ? 'bg-gradient-to-r from-[#FF8FB0] to-[#FFB3B9] text-white shadow-[0_16px_30px_rgba(255,143,171,0.24)]'
+                : 'border border-[rgba(255,168,188,0.68)] bg-[rgba(255,255,255,0.82)] text-[#FF91AD] shadow-[0_10px_26px_rgba(255,214,225,0.28)]'
+            }`}
           >
-            我已有兑换码 →
+            {isLast ? '开始体验' : '下一步'}
           </button>
-        )}
+
+          {isLast && (
+            <button
+              onClick={() => {
+                setHasSeenOnboarding(true)
+                navigate('/redeem')
+              }}
+              className="mt-4 w-full text-center text-[14px] font-medium text-[#FF89A7] transition-opacity active:opacity-70"
+            >
+              我有兑换码 →
+            </button>
+          )}
+        </div>
       </div>
     </div>
   )

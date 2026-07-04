@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { useAppStore } from '../stores/appStore'
 import { useChatStore, type Message } from '../stores/chatStore'
 import { useAuthStore } from '../stores/authStore'
@@ -17,12 +17,19 @@ interface ConversationChatPageProps {
 
 export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
   const navigate = useNavigate()
+  const params = useParams<{ characterId?: string }>()
   const [input, setInput] = useState('')
   const [historyLoaded, setHistoryLoaded] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
 
-  const currentCharacterId = useAppStore((s) => s.currentCharacterId)
+  const storedCharacterId = useAppStore((s) => s.currentCharacterId)
+  const setCharacter = useAppStore((s) => s.setCharacter)
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
+  const setActiveCharacter = useChatStore((s) => s.setActiveCharacter)
+
+  const routeCharacterId = params.characterId
+  const isValidCharacterId = routeCharacterId === 'rin' || routeCharacterId === 'dorothy'
+  const currentCharacterId = (isValidCharacterId ? routeCharacterId : storedCharacterId) as CharacterId
 
   const messages = useChatStore((s) => s.messages[currentCharacterId as CharacterId] ?? [])
   const isStreaming = useChatStore((s) => s.isStreaming)
@@ -42,8 +49,16 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
 
   // Set character ID in chat store
   useEffect(() => {
+    if (routeCharacterId && !isValidCharacterId) {
+      navigate('/chat', { replace: true })
+      return
+    }
+    if (currentCharacterId !== storedCharacterId) {
+      setCharacter(currentCharacterId)
+    }
+    setActiveCharacter(currentCharacterId)
     setCharacterId(currentCharacterId)
-  }, [currentCharacterId, setCharacterId])
+  }, [currentCharacterId, isValidCharacterId, navigate, routeCharacterId, setActiveCharacter, setCharacter, setCharacterId, storedCharacterId])
 
   // Load chat history from API on mount / character change
   const prevCharRef = useRef(currentCharacterId)
@@ -170,7 +185,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
         }`}
         style={{ paddingTop: 'calc(var(--safe-top) + 12px)' }}
       >
-        <button onClick={() => navigate('/home')} className="w-[44px] h-[44px] flex items-center justify-center">
+        <button onClick={() => navigate('/chat')} className="w-[44px] h-[44px] flex items-center justify-center">
           <svg width="12" height="20" viewBox="0 0 12 20" fill="none" stroke={isDark ? '#E4E4E7' : 'var(--color-ink)'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="10,2 2,10 10,18" />
           </svg>

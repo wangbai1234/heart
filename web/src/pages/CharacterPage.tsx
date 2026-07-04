@@ -22,8 +22,8 @@ export function CharacterPage() {
   const handleConfirm = () => {
     setCharacter(selected as 'rin' | 'dorothy')
     setActiveCharacter(selected as 'rin' | 'dorothy')
-    setToast({ visible: true, message: '选择成功' })
-    setTimeout(() => navigate('/chat'), 800)
+    setToast({ visible: true, message: '已切换角色，去查看消息' })
+    setTimeout(() => navigate('/chat'), 700)
   }
 
   return (

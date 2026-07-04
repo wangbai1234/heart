@@ -58,9 +58,9 @@ export function OTPInput({ length = 12, groupSize = 4, onComplete, onChange }: O
   }
 
   return (
-    <div className="flex justify-center items-center gap-2">
+    <div className="flex w-full max-w-full items-center justify-center overflow-hidden px-1">
       {groups.map((group, gi) => (
-        <div key={gi} className="flex items-center gap-[6px]">
+        <div key={gi} className="flex items-center gap-[4px] sm:gap-[6px]">
           {group.digits.map((digit, di) => {
             const index = group.startIndex + di
             return (
@@ -74,8 +74,13 @@ export function OTPInput({ length = 12, groupSize = 4, onComplete, onChange }: O
                 onChange={(e) => handleChange(index, e.target.value)}
                 onKeyDown={(e) => handleKeyDown(index, e)}
                 onPaste={handlePaste}
+                style={{
+                  width: 'clamp(22px, 5.8vw, 32px)',
+                  height: 'clamp(42px, 11vw, 52px)',
+                  fontSize: 'clamp(14px, 3.8vw, 18px)',
+                }}
                 className={`
-                  w-[44px] h-[52px] text-center text-[18px] font-semibold font-brand
+                  min-w-0 text-center font-semibold font-brand
                   rounded-[12px] border
                   bg-[var(--color-glass-35)] backdrop-blur-[12px]
                   outline-none transition-colors
@@ -89,7 +94,7 @@ export function OTPInput({ length = 12, groupSize = 4, onComplete, onChange }: O
             )
           })}
           {gi < groups.length - 1 && (
-            <span className="text-[18px] text-[var(--color-text-muted)] mx-1">—</span>
+            <span className="mx-[2px] text-[14px] text-[var(--color-text-muted)] sm:mx-1 sm:text-[18px]">—</span>
           )}
         </div>
       ))}

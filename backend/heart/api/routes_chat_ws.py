@@ -88,7 +88,6 @@ async def _handle_event(
     elif event_type == "sentence":
         await _send_sentence(ws, turn_id, event)
         if stream_session:
-            logger.info("voice_submit_sentence", text=event["text"][:30], turn_id=turn_id)
             await stream_session.submit(
                 turn_id=turn_id,
                 sentence=event["text"],
@@ -155,12 +154,6 @@ async def _precheck_billing(
             )
             row = result.scalar_one_or_none()
             effective_voice = row if row is not None else False
-            logger.info(
-                "precheck_voice",
-                character_id=character_id,
-                db_row=row,
-                effective_voice=effective_voice,
-            )
 
             balance = await get_balance(db, user_uuid)
             expected_cost = (
@@ -366,12 +359,6 @@ async def _handle_chat_message(
     voice_service = get_voice_service()
     stream_session = _create_stream_session(
         voice_service if effective_voice else None, ws, cache=cache
-    )
-    logger.info(
-        "chat_ws_session",
-        effective_voice=effective_voice,
-        voice_service=bool(voice_service),
-        stream_session=bool(stream_session),
     )
     if stream_session:
         await stream_session.start()

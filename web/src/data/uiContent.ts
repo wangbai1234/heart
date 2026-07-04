@@ -23,6 +23,14 @@ export interface ConversationMessage {
   duration?: string
 }
 
+export interface HomeAnnouncement {
+  id: string
+  title: string
+  summary: string
+  publishedAt: number
+  tag: string
+}
+
 export const HERO_BANNER = {
   light: '/assets/backgrounds/background_login_hero.webp',
   dark: '/assets/backgrounds/暗色风格background_login_hero.webp.png',
@@ -95,18 +103,18 @@ export const CONVERSATION_THREADS: Record<CharacterId, ConversationMessage[]> = 
     },
     {
       id: 'rin-4',
-      role: 'assistant',
-      content: 'AI 朗读 · 可点击播放',
+      role: 'user',
+      content: '今天有点想和你多聊一会儿。',
       timestamp: minutes(122),
-      kind: 'voice',
-      duration: '0:18',
+      kind: 'text',
     },
     {
       id: 'rin-5',
-      role: 'user',
-      content: '好。',
+      role: 'assistant',
+      content: 'AI 朗读 · 可点击播放',
       timestamp: minutes(120),
-      kind: 'text',
+      kind: 'voice',
+      duration: '0:18',
     },
   ],
   dorothy: [
@@ -119,13 +127,37 @@ export const CONVERSATION_THREADS: Record<CharacterId, ConversationMessage[]> = 
     },
     {
       id: 'dorothy-2',
-      role: 'user',
-      content: '我会在这里等你哦。',
+      role: 'assistant',
+      content: '我给你留了一条新的晚安消息，记得点开听听呀。',
       timestamp: minutes(75),
       kind: 'text',
     },
   ],
 }
+
+export const HOME_ANNOUNCEMENTS: HomeAnnouncement[] = [
+  {
+    id: 'notice-0704',
+    title: '角色后台已上线，语音开关支持按角色单独保存',
+    summary: '现在可以在聊天页右上角进入角色后台，为不同角色分别设置语音回复偏好。',
+    publishedAt: now - 4 * 60 * 60 * 1000,
+    tag: '最新',
+  },
+  {
+    id: 'notice-0702',
+    title: '会员兑换页已升级，激活码输入与引导流程更顺滑',
+    summary: '兑换码支持直接粘贴与自动分组填写，首次引导也同步更新为三屏新版说明。',
+    publishedAt: now - 28 * 60 * 60 * 1000,
+    tag: '更新',
+  },
+  {
+    id: 'notice-0629',
+    title: '私密对话能力优化，聊天记录展示更接近真实消息产品',
+    summary: '聊天入口改为先查看会话列表，再进入对应角色的具体会话页面。',
+    publishedAt: now - 5 * 24 * 60 * 60 * 1000,
+    tag: '公告',
+  },
+]
 
 export function getHeroBanner(theme: 'light' | 'dark') {
   return HERO_BANNER[theme]
@@ -139,13 +171,38 @@ export function getLoginHero(theme: 'light' | 'dark') {
   return LOGIN_HERO[theme]
 }
 
-export function getConversationPreview(messages: ConversationMessage[]) {
+type PreviewMessage = Pick<ConversationMessage, 'content' | 'duration' | 'kind' | 'role'>
+
+function formatVoiceDuration(value?: string | number) {
+  if (!value) return '0:00'
+  if (typeof value === 'string') return value
+
+  const totalSeconds = Math.max(1, Math.round(value / 1000))
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`
+}
+
+export function getMessagePreview(messages: PreviewMessage[]) {
   const last = messages[messages.length - 1]
   if (!last) return '开始新的对话'
   if (last.kind === 'voice') {
-    return `语音消息 · ${last.duration ?? '0:00'}`
+    return `语音消息 · ${formatVoiceDuration(last.duration)}`
   }
   return last.content || '新的消息'
+}
+
+export function getConversationPreview(messages: ConversationMessage[]) {
+  return getMessagePreview(messages)
+}
+
+export function getUnreadMessageCount(messages: Array<Pick<PreviewMessage, 'role'>>) {
+  let unreadCount = 0
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    if (messages[index].role !== 'assistant') break
+    unreadCount += 1
+  }
+  return unreadCount
 }
 
 export function formatConversationTime(timestamp: number) {

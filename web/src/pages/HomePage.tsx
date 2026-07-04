@@ -2,45 +2,24 @@ import { useNavigate } from 'react-router-dom'
 import { useThemeStore } from '../stores/themeStore'
 import { useAppStore } from '../stores/appStore'
 import { useAuthStore } from '../stores/authStore'
-import { useChatStore } from '../stores/chatStore'
 import { Avatar } from '../components/ui/Avatar'
 import { TabBar } from '../components/ui/TabBar'
 import { Skeleton } from '../components/ui/Skeleton'
-import { CHARACTER_PROFILES, formatConversationTime, getConversationPreview, getHeroBanner, type CharacterId } from '../data/uiContent'
+import { HOME_ANNOUNCEMENTS, getHeroBanner } from '../data/uiContent'
 
 export function HomePage() {
   const navigate = useNavigate()
   const { resolvedTheme } = useThemeStore()
-  const { setCharacter } = useAppStore()
+  const { currentCharacterId } = useAppStore()
   const userAvatar = useAuthStore((s) => s.user?.avatar_url ?? null)
-  const threads = useChatStore((s) => s.threads)
-  const setActiveCharacter = useChatStore((s) => s.setActiveCharacter)
   const loading = false
   const pageBg = resolvedTheme === 'dark'
     ? '/assets/backgrounds/暗色聊天背景图.png'
     : '/assets/backgrounds/聊天背景图.png'
   const heroBg = getHeroBanner(resolvedTheme)
-  const recentConversations = (Object.keys(CHARACTER_PROFILES) as CharacterId[])
-    .filter((id) => threads[id] && threads[id].length > 0)
-    .map((id) => {
-    const profile = CHARACTER_PROFILES[id]
-    const messages = threads[id]
-    const lastMessage = messages[messages.length - 1]
-    return {
-      id,
-      name: profile.name,
-      avatar: profile.avatar,
-      preview: getConversationPreview(messages),
-      time: lastMessage ? formatConversationTime(lastMessage.timestamp) : '刚刚',
-      unread: messages.length > 0,
-    }
-  })
-
-  const openConversation = (id: CharacterId) => {
-    setCharacter(id)
-    setActiveCharacter(id)
-    navigate('/chat')
-  }
+  const latestAnnouncements = [...HOME_ANNOUNCEMENTS]
+    .sort((left, right) => right.publishedAt - left.publishedAt)
+    .slice(0, 3)
 
   return (
     <div className="relative w-full h-full overflow-hidden">
@@ -106,37 +85,73 @@ export function HomePage() {
                 ))}
               </div>
 
-              {/* Recent Conversations */}
+              {/* Recent Announcements */}
               <div className="mb-4">
                 <div className="flex items-center justify-between pl-1 pr-1 mb-3">
-                  <span className="text-[16px] font-bold text-[var(--color-ink)]">最近的话</span>
-                  <span className="text-[13px] text-[var(--color-text-secondary)]">查看全部</span>
+                  <span className="text-[16px] font-bold text-[var(--color-ink)]">最近公告</span>
+                  <button
+                    onClick={() => navigate('/chat')}
+                    className="text-[13px] text-[var(--color-text-secondary)] active:opacity-70"
+                  >
+                    去看消息
+                  </button>
                 </div>
 
                 <div className="bg-[var(--color-glass-35)] backdrop-blur-[12px] rounded-[20px] border border-[var(--color-border-glass)] overflow-hidden">
-                  {recentConversations.map((conv) => (
-                    <button
-                      key={conv.id}
-                      onClick={() => openConversation(conv.id)}
-                      className="w-full flex items-center gap-[14px] py-2.5 px-4 active:bg-[rgba(255,183,197,0.12)] transition-colors"
+                  {latestAnnouncements.map((announcement, index) => (
+                    <div
+                      key={announcement.id}
+                      className="px-4 py-4"
                     >
-                      <Avatar src={conv.avatar} size={52} />
-                      <div className="flex-1 min-w-0 text-left">
-                        <p className="text-[16px] font-semibold text-[var(--color-ink)]">{conv.name}</p>
-                        <p className="text-[14px] text-[var(--color-text-secondary)] truncate">{conv.preview}</p>
+                      <div className="flex items-start gap-3">
+                        <div className="w-[44px] h-[44px] rounded-[16px] bg-[rgba(255,183,197,0.18)] flex items-center justify-center shrink-0">
+                          <NoticeIcon />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="mb-1 flex items-center gap-2">
+                            <span className="inline-flex h-6 items-center rounded-full bg-[rgba(255,183,197,0.18)] px-2.5 text-[12px] font-medium text-[var(--color-primary)]">
+                              {announcement.tag}
+                            </span>
+                            <span className="text-[12px] text-[var(--color-text-muted)]">
+                              {new Intl.DateTimeFormat('zh-CN', {
+                                month: 'numeric',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                                hour12: false,
+                              }).format(new Date(announcement.publishedAt))}
+                            </span>
+                          </div>
+                          <p className="text-[15px] font-semibold leading-[1.45] text-[var(--color-ink)]">
+                            {announcement.title}
+                          </p>
+                          <p className="mt-1 text-[13px] leading-[1.65] text-[var(--color-text-secondary)]">
+                            {announcement.summary}
+                          </p>
+                        </div>
                       </div>
-                      <div className="flex flex-col items-end gap-1 shrink-0">
-                        <span className="text-[13px] text-[var(--color-text-muted)]">{conv.time}</span>
-                        {conv.unread && (
-                          <div className="w-2 h-2 rounded-full bg-[var(--color-unread-badge)]" />
-                        )}
-                      </div>
-                    </button>
+                      {index < latestAnnouncements.length - 1 && (
+                        <div className="mt-4 h-px bg-[var(--color-divider)]" />
+                      )}
+                    </div>
                   ))}
-                  {recentConversations.length > 1 && (
-                    <div className="h-px bg-[var(--color-divider)] ml-[70px]" />
-                  )}
                 </div>
+              </div>
+
+              <div className="mb-4 rounded-[22px] border border-[rgba(255,183,197,0.18)] bg-[var(--color-glass-35)] px-4 py-4 backdrop-blur-[12px]">
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="text-[15px] font-semibold text-[var(--color-ink)]">当前聊天入口</span>
+                  <span className="text-[12px] text-[var(--color-primary)]">已切换为消息列表模式</span>
+                </div>
+                <p className="text-[13px] leading-[1.65] text-[var(--color-text-secondary)]">
+                  现在进入聊天页会先看到各个角色的消息列表与未读数量，再点进对应角色开始聊天。
+                </p>
+                <button
+                  onClick={() => navigate('/chat')}
+                  className="mt-4 inline-flex h-[42px] items-center rounded-full bg-[rgba(255,183,197,0.18)] px-4 text-[14px] font-medium text-[var(--color-primary)] active:scale-[0.97] transition-transform"
+                >
+                  查看 {currentCharacterId === 'rin' ? '神无月凛' : '桃乐丝'} 的消息
+                </button>
               </div>
 
               <div className="h-[140px]" aria-hidden="true" />
@@ -148,6 +163,15 @@ export function HomePage() {
         <TabBar />
       </div>
     </div>
+  )
+}
+
+function NoticeIcon() {
+  return (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--color-primary)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 3a4 4 0 0 0-4 4v1.2A7 7 0 0 1 5.4 14L4 15.3V17h16v-1.7L18.6 14A7 7 0 0 1 16 8.2V7a4 4 0 0 0-4-4Z" />
+      <path d="M10 20a2 2 0 0 0 4 0" />
+    </svg>
   )
 }
 

@@ -124,6 +124,8 @@ class StreamSession:
         Attempts primary provider first.  If it fails (e.g. MiMo 401),
         retries with fallback if available.
         """
+        import inspect
+
         audio_chunks = []
         provider = self._voice.provider
         fallback = self._voice.fallback_provider
@@ -133,7 +135,8 @@ class StreamSession:
             if provider.name == "mimo":
                 stream = await provider.stream_synthesize(req, character_id)  # type: ignore[call-arg]
             else:
-                stream = await provider.stream_synthesize(req)
+                result = provider.stream_synthesize(req)
+                stream = await result if inspect.isawaitable(result) else result
 
             self._current_response = getattr(stream, "_response", None)
             audio_chunks = await self._consume_stream(stream, turn_id)
@@ -148,7 +151,8 @@ class StreamSession:
                     error=str(primary_err),
                 )
                 try:
-                    fb_stream = await fallback.stream_synthesize(req)
+                    fb_result = fallback.stream_synthesize(req)
+                    fb_stream = await fb_result if inspect.isawaitable(fb_result) else fb_result
                     self._current_response = getattr(fb_stream, "_response", None)
                     audio_chunks = await self._consume_stream(fb_stream, turn_id)
                 except Exception as fb_err:
@@ -166,14 +170,23 @@ class StreamSession:
         async for chunk in stream:
             if self._cancelled:
                 return audio_chunks
+            chunk_fmt = getattr(chunk, "format", "mp3")
             if chunk.data:
                 audio_chunks.append(chunk.data)
-                chunk_fmt = getattr(chunk, "format", "mp3")
                 await self._send(
                     turn_id,
                     self._global_seq,
                     chunk.data,
                     chunk.is_last,
+                    chunk_fmt,
+                )
+                self._global_seq += 1
+            elif chunk.is_last:
+                await self._send(
+                    turn_id,
+                    self._global_seq,
+                    b"",
+                    True,
                     chunk_fmt,
                 )
                 self._global_seq += 1

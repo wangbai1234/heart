@@ -5,6 +5,7 @@ import { SplashPage } from './pages/SplashPage'
 import { OnboardingPage } from './pages/OnboardingPage'
 import { LoginPage } from './pages/LoginPage'
 import { HomePage } from './pages/HomePage'
+import { ChatInboxPage } from './pages/ChatInboxPage'
 import { ChatLightPage } from './pages/ChatLightPage'
 import { ChatDarkPage } from './pages/ChatDarkPage'
 import { CharacterPage } from './pages/CharacterPage'
@@ -19,7 +20,7 @@ import { UIStatePreviewPage } from './pages/UIStatePreviewPage'
 import { useThemeStore } from './stores/themeStore'
 import { useAppStore } from './stores/appStore'
 
-function ChatRouter() {
+function ChatConversationRouter() {
   const { resolvedTheme } = useThemeStore()
   return resolvedTheme === 'dark' ? <ChatDarkPage /> : <ChatLightPage />
 }
@@ -41,7 +42,8 @@ export function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/redeem" element={<RedeemPage />} />
         <Route path="/home" element={<HomePage />} />
-        <Route path="/chat" element={<ChatRouter />} />
+        <Route path="/chat" element={<ChatInboxPage />} />
+        <Route path="/chat/:characterId" element={<ChatConversationRouter />} />
         <Route path="/character-backstage" element={<CharacterBackstagePage />} />
         <Route path="/character" element={<CharacterPage />} />
         <Route path="/settings" element={<SettingsPage />} />
