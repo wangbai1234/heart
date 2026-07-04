@@ -4,17 +4,17 @@ import { useAppStore } from '../stores/appStore'
 
 const steps = [
   {
-    image: '/assets/backgrounds/首次引导页1.png',
+    image: '/assets/backgrounds/引导页1背景图.png',
     title: '我是 yuoyuo，会陪你聊心事。',
     description: '我会记得你说过的话，理解你的情绪。',
   },
   {
-    image: '/assets/backgrounds/首次引导页2.png',
+    image: '/assets/backgrounds/引导页2背景图.png',
     title: '你的对话只属于你。',
     description: '数据加密存储，端到端可审计。',
   },
   {
-    image: '/assets/backgrounds/首次引导页3.png',
+    image: '/assets/backgrounds/引导页3背景图.png',
     title: '在爱发电赞助即可解锁会员。',
     description: '支持微信 / 支付宝；赞助后获取兑换码，回到这里输入即可激活。',
   },

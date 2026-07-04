@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
+import { useThemeStore } from '../stores/themeStore'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { SegmentedControl } from '../components/ui/SegmentedControl'
@@ -67,6 +68,10 @@ export function ProfileEditPage() {
   const navigate = useNavigate()
   const user = useAuthStore((s) => s.user)
   const setUser = useAuthStore((s) => s.setUser)
+  const { resolvedTheme } = useThemeStore()
+  const pageBg = resolvedTheme === 'dark'
+    ? '/assets/backgrounds/暗色聊天背景图.png'
+    : '/assets/backgrounds/聊天背景图.png'
   const [displayName, setDisplayName] = useState(user?.display_name || '')
   const [gender, setGender] = useState(user?.gender || 'undisclosed')
   const [birthdate, setBirthdate] = useState(user?.birthdate || '')
@@ -121,7 +126,9 @@ export function ProfileEditPage() {
   }
 
   return (
-    <div className="w-full h-full flex flex-col" style={{ background: 'var(--color-bg)' }}>
+    <div className="relative w-full h-full overflow-hidden">
+      <img src={pageBg} alt="" className="absolute inset-0 w-full h-full object-cover z-0" />
+      <div className="relative z-10 w-full h-full flex flex-col">
       {/* Header */}
       <div className="flex items-center justify-between px-5 pt-4 pb-3" style={{ paddingTop: 'var(--safe-top)' }}>
         <button onClick={() => navigate(-1 as any)} className="text-[var(--color-ink)] text-[14px] active:opacity-60">← 返回</button>
@@ -209,6 +216,7 @@ export function ProfileEditPage() {
       </BottomSheet>
 
       <Toast visible={toast.visible} message={toast.message} onDismiss={() => setToast({ visible: false, message: '' })} />
+      </div>
     </div>
   )
 }

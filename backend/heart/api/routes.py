@@ -9,10 +9,12 @@ from uuid import UUID as _UUID
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from heart.api.rate_limit import limiter
 from heart.core.auth import Token, TokenData, auth_manager, get_current_user
+from heart.core.config import settings
 
 from .deps import require_age_verified
 from .wiring import get_db, get_orchestrator
@@ -50,12 +52,38 @@ class LoginRequest(BaseModel):
 
 @dev_auth_router.post("/login", response_model=Token)
 @limiter.limit("10/minute")
-async def login(request: Request, login_req: LoginRequest) -> Token:
-    """DEV-ONLY stub login: accepts any user_id, issues JWT immediately."""
+async def login(
+    request: Request,
+    login_req: LoginRequest,
+    db: AsyncSession = Depends(get_db),
+) -> Token:
+    """DEV-ONLY stub login: ensure a matching user row exists, then issue JWT."""
     logger.warning("dev_login_used", user_id=login_req.user_id)
+    email = (login_req.email or f"{login_req.user_id}@dev.local").strip().lower()
+    uid = _UUID(login_req.user_id)
+
+    await db.execute(
+        text(
+            """
+            INSERT INTO users (id, email, credits_balance, status, last_login_at)
+            VALUES (:id, :email, :credits, 'active', NOW())
+            ON CONFLICT (id) DO UPDATE
+            SET email = EXCLUDED.email,
+                status = 'active',
+                last_login_at = NOW()
+            """
+        ),
+        {
+            "id": uid,
+            "email": email,
+            "credits": settings.signup_grant_credits,
+        },
+    )
+    await db.commit()
+
     token = auth_manager.create_access_token(
         user_id=login_req.user_id,
-        email=login_req.email,
+        email=email,
     )
     return token
 

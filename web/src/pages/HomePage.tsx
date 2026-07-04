@@ -15,8 +15,8 @@ export function HomePage() {
   const setActiveCharacter = useChatStore((s) => s.setActiveCharacter)
   const loading = false
   const pageBg = resolvedTheme === 'dark'
-    ? '/assets/backgrounds/暗色背景图.png'
-    : '/assets/backgrounds/亮色背景图.png'
+    ? '/assets/backgrounds/暗色聊天背景图.png'
+    : '/assets/backgrounds/聊天背景图.png'
   const heroBg = getHeroBanner(resolvedTheme)
   const recentConversations = (Object.keys(CHARACTER_PROFILES) as CharacterId[]).map((id) => {
     const profile = CHARACTER_PROFILES[id]
@@ -28,7 +28,7 @@ export function HomePage() {
       avatar: profile.avatar,
       preview: getConversationPreview(messages),
       time: lastMessage ? formatConversationTime(lastMessage.timestamp) : '刚刚',
-      unread: true,
+      unread: messages.length > 0,
     }
   })
 

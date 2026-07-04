@@ -16,8 +16,8 @@ export function RedeemPage() {
   const [showHelp, setShowHelp] = useState(false)
 
   const bgImage = resolvedTheme === 'dark'
-    ? '/assets/backgrounds/暗色背景图.png'
-    : '/assets/backgrounds/亮色背景图.png'
+    ? '/assets/backgrounds/暗色聊天背景图.png'
+    : '/assets/backgrounds/聊天背景图.png'
 
   const isCodeComplete = code.replace(/[^a-zA-Z0-9]/g, '').length === 12
 

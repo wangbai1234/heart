@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { concatWavBase64 } from '../services/audioConcat'
-import { CONVERSATION_THREADS, type CharacterId, type ConversationMessage } from '../data/uiContent'
+import { type CharacterId, type ConversationMessage } from '../data/uiContent'
 
 export interface Message {
   id: string
@@ -58,8 +58,8 @@ interface ChatState {
 
 function cloneThreads(): Record<CharacterId, ConversationMessage[]> {
   return {
-    rin: [...CONVERSATION_THREADS.rin],
-    dorothy: [...CONVERSATION_THREADS.dorothy],
+    rin: [],
+    dorothy: [],
   }
 }
 

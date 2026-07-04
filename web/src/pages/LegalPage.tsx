@@ -23,7 +23,11 @@ export function LegalPage() {
   return (
     <div className="w-full h-full flex flex-col" style={{ background: 'var(--color-bg)' }}>
       <div className="flex items-center px-5 pt-4 pb-3" style={{ paddingTop: 'var(--safe-top)' }}>
-        <button onClick={() => navigate(-1 as any)} className="text-[var(--color-ink)] text-[14px] active:opacity-60">← 返回</button>
+        <button onClick={() => navigate(-1 as any)} className="w-[44px] h-[44px] flex items-center justify-center active:opacity-60 transition-opacity" aria-label="返回">
+          <svg width="12" height="20" viewBox="0 0 12 20" fill="none" stroke="var(--color-ink)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="10,2 2,10 10,18" />
+          </svg>
+        </button>
         <h2 className="flex-1 text-center text-[17px] font-semibold text-[var(--color-ink)] pr-10">{title}</h2>
       </div>
       <div className="flex-1 overflow-y-auto px-5 pb-8">

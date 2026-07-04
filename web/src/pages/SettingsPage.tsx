@@ -37,8 +37,8 @@ export function SettingsPage() {
   const themeLabel = theme === 'light' ? '浅色' : theme === 'dark' ? '深色' : '自动'
 
   const bgImage = resolvedTheme === 'dark'
-    ? '/assets/backgrounds/暗色背景图.png'
-    : '/assets/backgrounds/亮色背景图.png'
+    ? '/assets/backgrounds/暗色聊天背景图.png'
+    : '/assets/backgrounds/聊天背景图.png'
 
   const displayName = user?.display_name || user?.email?.split('@')[0] || '用户'
 

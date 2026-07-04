@@ -30,6 +30,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
   const addMessage = useChatStore((s) => s.addMessage)
   const clear = useChatStore((s) => s.clear)
   const setCharacterId = useChatStore((s) => s.setCharacterId)
+  const appendMessage = useChatStore((s) => s.appendMessage)
   const insufficientCredits = useChatStore((s) => s.insufficientCredits)
   const clearInsufficientCredits = useChatStore((s) => s.clearInsufficientCredits)
 
@@ -37,8 +38,8 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
 
   const profile = CHARACTER_PROFILES[currentCharacterId]
   const pageBg = isDark
-    ? '/assets/backgrounds/暗色背景图.png'
-    : '/assets/backgrounds/亮色背景图.png'
+    ? '/assets/backgrounds/暗色聊天背景图.png'
+    : '/assets/backgrounds/聊天背景图.png'
 
   // Set character ID in chat store
   useEffect(() => {
@@ -64,6 +65,17 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
             kind: item.modality === 'voice' ? 'voice' : 'text',
             audioData: item.audio_url ?? undefined,
             audioDuration: item.audio_duration_ms ?? undefined,
+          })
+        }
+        // Sync last message to threads for HomePage
+        if (reversed.length > 0) {
+          const last = reversed[reversed.length - 1]
+          appendMessage(currentCharacterId, {
+            id: last.id,
+            role: last.role as 'assistant' | 'user',
+            content: last.content,
+            timestamp: new Date(last.created_at).getTime(),
+            kind: last.modality === 'voice' ? 'voice' : 'text',
           })
         }
         setHistoryLoaded(true)

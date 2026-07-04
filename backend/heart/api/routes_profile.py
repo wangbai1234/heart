@@ -8,6 +8,7 @@ from typing import Optional
 
 import structlog
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
+from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -140,10 +141,15 @@ async def upload_avatar(
     from heart.infra.storage import upload_avatar as s3_upload_avatar
 
     if is_s3_configured():
-        # Upload to MinIO/S3
-        avatar_url = await s3_upload_avatar(str(uid), data, file.content_type)
+        try:
+            avatar_url = await s3_upload_avatar(str(uid), data, file.content_type)
+        except Exception as exc:
+            logger.warning("avatar_s3_upload_failed_fallback_to_data_url", error=str(exc))
+            import base64
+
+            b64 = base64.b64encode(data).decode()
+            avatar_url = f"data:{file.content_type};base64,{b64}"
     else:
-        # Fallback: store as base64 data URL
         import base64
 
         b64 = base64.b64encode(data).decode()
@@ -156,3 +162,17 @@ async def upload_avatar(
     await db.commit()
 
     return {"avatar_url": avatar_url}
+
+
+@router.get("/avatar-file/{path:path}")
+async def get_avatar_file(path: str) -> Response:
+    """Proxy avatar file from S3/MinIO storage."""
+    from heart.core.config import settings
+    from heart.infra.storage import get_s3_object
+
+    try:
+        data, content_type = await get_s3_object(f"avatars/{path}")
+        return Response(content=data, media_type=content_type)
+    except Exception as exc:
+        logger.warning("avatar_proxy_fetch_failed", path=path, error=str(exc))
+        raise HTTPException(status_code=404, detail="Avatar not found") from exc

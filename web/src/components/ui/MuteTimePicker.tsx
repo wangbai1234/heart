@@ -28,6 +28,10 @@ export function MuteTimePicker({
   onChangeNever,
   onConfirm,
 }: MuteTimePickerProps) {
+  const startMinutes = parseInt(startHour) * 60 + parseInt(startMin)
+  const endMinutes = parseInt(endHour) * 60 + parseInt(endMin)
+  const isValidRange = isNever || endMinutes > startMinutes
+
   return (
     <div>
       <h3 className="text-[18px] font-semibold text-[var(--color-ink)] text-center mb-4">
@@ -106,8 +110,15 @@ export function MuteTimePicker({
         </div>
       </div>
 
+      {/* Validation warning */}
+      {!isValidRange && (
+        <p className="text-[12px] text-[var(--color-primary)] text-center mt-3">
+          结束时间不能早于或等于开始时间
+        </p>
+      )}
+
       {/* Confirm */}
-      <Button variant="primary" size="sm" onClick={onConfirm} className="mt-5 w-full">
+      <Button variant="primary" size="sm" onClick={onConfirm} disabled={!isValidRange} className="mt-5 w-full">
         完成
       </Button>
     </div>

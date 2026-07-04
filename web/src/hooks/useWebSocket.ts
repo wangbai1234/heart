@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { useChatStore } from '../stores/chatStore'
+import { useAppStore } from '../stores/appStore'
 import { useAuthStore } from '../stores/authStore'
 import { createAudioPlayer, wrapPCM16AsWAV, type AudioPlayer } from '../services/audioPlayer'
 
@@ -157,6 +158,23 @@ export function useWebSocket() {
           setStreaming(false)
           setPlaying(false)
           setCurrentTurnId(null)
+          // Sync last assistant message to threads for HomePage
+          {
+            const msgs = useChatStore.getState().messages
+            const lastMsg = msgs[msgs.length - 1]
+            if (lastMsg && lastMsg.role === 'assistant') {
+              const { currentCharacterId } = useAppStore.getState()
+              const { appendMessage } = useChatStore.getState()
+              appendMessage(currentCharacterId, {
+                id: lastMsg.id,
+                role: 'assistant',
+                content: lastMsg.content,
+                timestamp: lastMsg.timestamp,
+                kind: lastMsg.kind === 'voice' ? 'voice' : 'text',
+                duration: lastMsg.duration,
+              })
+            }
+          }
           // Sync credits balance if provided
           if (msg.balance !== undefined) {
             const { setBalance } = (await import('../stores/creditsStore')).useCreditsStore.getState()
@@ -241,7 +259,8 @@ export function useWebSocket() {
       if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
       if (isStreaming) return
 
-      const { characterId } = useChatStore.getState()
+      const { currentCharacterId } = useAppStore.getState()
+      const characterId = currentCharacterId
       const { voiceChatEnabled } = (window as any).__appStore?.getState?.() ?? { voiceChatEnabled: {} as Record<string, boolean> }
       const voiceEnabled = voiceChatEnabled?.[characterId] ?? false
       const turnId = crypto.randomUUID()
@@ -251,6 +270,18 @@ export function useWebSocket() {
         content: text,
         timestamp: Date.now(),
       })
+      // Sync user message to threads for HomePage
+      {
+        const { currentCharacterId } = useAppStore.getState()
+        const { appendMessage: appendThread } = useChatStore.getState()
+        appendThread(currentCharacterId, {
+          id: `user-${turnId}`,
+          role: 'user',
+          content: text,
+          timestamp: Date.now(),
+          kind: 'text',
+        })
+      }
       setStreaming(true)
 
       wsRef.current.send(

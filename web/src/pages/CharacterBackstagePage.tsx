@@ -38,8 +38,8 @@ export function CharacterBackstagePage() {
     }
   }
   const pageBg = resolvedTheme === 'dark'
-    ? '/assets/backgrounds/暗色背景图.png'
-    : '/assets/backgrounds/亮色背景图.png'
+    ? '/assets/backgrounds/暗色聊天背景图.png'
+    : '/assets/backgrounds/聊天背景图.png'
 
   const cardClassName = resolvedTheme === 'dark'
     ? 'bg-[rgba(29,31,52,0.48)] border-[rgba(255,255,255,0.08)] shadow-[0_24px_60px_rgba(4,7,24,0.2)]'

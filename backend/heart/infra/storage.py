@@ -88,9 +88,10 @@ async def upload_file(
 
 
 async def upload_avatar(user_id: str, data: bytes, content_type: str) -> str:
-    """Upload avatar image and return URL.
+    """Upload avatar image and return proxied URL.
 
     Generates key: avatars/{user_id}/{uuid}.{ext}
+    Returns: /api/profile/avatar-file/{user_id}/{filename}
     """
     ext_map = {
         "image/jpeg": "jpg",
@@ -98,8 +99,36 @@ async def upload_avatar(user_id: str, data: bytes, content_type: str) -> str:
         "image/webp": "webp",
     }
     ext = ext_map.get(content_type, "jpg")
-    key = f"avatars/{user_id}/{uuid.uuid4().hex}.{ext}"
-    return await upload_file(data, key, content_type)
+    filename = f"{uuid.uuid4().hex}.{ext}"
+    key = f"avatars/{user_id}/{filename}"
+    await _upload_to_s3(key, data, content_type)
+    return f"/api/profile/avatar-file/{user_id}/{filename}"
+
+
+async def _upload_to_s3(key: str, data: bytes, content_type: str) -> None:
+    """Upload raw bytes to S3/MinIO."""
+    client = _get_s3_client()
+    await ensure_bucket()
+    from heart.core.config import settings
+
+    client.put_object(
+        Bucket=settings.s3_bucket_name,
+        Key=key,
+        Body=data,
+        ContentType=content_type,
+    )
+    logger.info("file_uploaded", key=key, size=len(data))
+
+
+async def get_s3_object(key: str) -> tuple[bytes, str]:
+    """Fetch object from S3/MinIO. Returns (data, content_type)."""
+    client = _get_s3_client()
+    from heart.core.config import settings
+
+    resp = client.get_object(Bucket=settings.s3_bucket_name, Key=key)
+    data = resp["Body"].read()
+    content_type = resp.get("ContentType", "application/octet-stream")
+    return data, content_type
 
 
 def is_s3_configured() -> bool:
