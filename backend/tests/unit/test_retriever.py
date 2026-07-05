@@ -62,7 +62,7 @@ def query_context(user_id, character_id):
     """Sample query context."""
     return QueryContext(
         query_text="我的猫叫什么名字？",
-        query_embedding=[0.1] * 768,  # 768-dim embedding
+        query_embedding=[0.1] * 1024,  # 1024-dim embedding (bge-m3)
         keywords=["猫", "名字"],
         current_emotion={"valence": 0.3, "arousal": 0.4},
         current_time=datetime.now(timezone.utc),
@@ -93,7 +93,7 @@ def l2_memory(user_id, character_id):
         updated_at=datetime.now(timezone.utc) - timedelta(hours=24),
     )
     # Add semantic_vector as attribute (not in constructor)
-    memory.semantic_vector = [0.1] * 768
+    memory.semantic_vector = [0.1] * 1024
     return memory
 
 
@@ -118,7 +118,7 @@ def l3_fact(user_id, character_id):
         last_confirmed_at=datetime.now(timezone.utc),
     )
     # Add semantic_vector as attribute
-    fact.semantic_vector = [0.1] * 768
+    fact.semantic_vector = [0.1] * 1024
     return fact
 
 

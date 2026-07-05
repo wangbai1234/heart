@@ -31,7 +31,7 @@ class QueryContext:
 
     # Text-based cues
     query_text: str
-    query_embedding: Optional[List[float]] = None  # 1536-dim from OpenAI
+    query_embedding: Optional[List[float]] = None  # 1024-dim from BAAI/bge-m3
     keywords: List[str] = field(default_factory=list)
 
     # Emotional cues
