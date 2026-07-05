@@ -222,11 +222,12 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
         {messages.map((msg, index) => {
           const prev = index > 0 ? messages[index - 1] : null
           const showTime = shouldShowTimestamp(msg, prev)
+          const isAI = msg.role === 'assistant'
 
           return (
-            <div key={msg.id}>
+            <div key={msg.id} className={`flex flex-col ${isAI ? 'items-start' : 'items-end'}`}>
               {showTime && (
-                <div className="flex justify-center py-2">
+                <div className="flex justify-center py-2 w-full">
                   <span className={`inline-flex h-[22px] items-center rounded-full px-2.5 text-[11px] ${
                     isDark
                       ? 'bg-[rgba(255,255,255,0.08)] text-[rgba(228,228,231,0.5)]'
