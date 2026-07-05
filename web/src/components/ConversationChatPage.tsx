@@ -239,6 +239,10 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
           const showTime = shouldShowTimestamp(msg, prev)
           const showAvatar = !prev || prev.role !== msg.role || showTime
 
+          // Skip empty message bubbles during streaming (turn_start without text_delta yet)
+          const isLatestEmpty = msg.content === '' && isStreaming && index === messages.length - 1
+          if (isLatestEmpty) return null
+
           return (
             <div key={msg.id} className="flex flex-col">
               {showTime && (
