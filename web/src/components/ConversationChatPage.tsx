@@ -202,8 +202,8 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
                 ? 'bg-[rgba(255,255,255,0.06)] backdrop-blur-[16px] rounded-[20px_20px_20px_6px] text-[#EFE7DD] border border-[rgba(255,255,255,0.06)]'
                 : 'bg-[var(--color-glass-75)] backdrop-blur-[16px] rounded-[20px_20px_20px_6px] text-[var(--color-ink)] border border-[var(--color-border-glass)]'
               : isDark
-                ? 'bg-gradient-to-br from-[#4A5B8F] to-[#6C7DB5] rounded-[6px_20px_20px_20px] text-[#EFE7DD]'
-                : 'bg-gradient-to-br from-[#A7C7E7] to-[#BFD7EE] rounded-[6px_20px_20px_20px] text-white'
+                ? 'bg-gradient-to-br from-[#4A5B8F] to-[#6C7DB5] rounded-[6px_20px_20px_20px] text-[#EFE7DD] min-w-[48px] whitespace-nowrap'
+                : 'bg-gradient-to-br from-[#A7C7E7] to-[#BFD7EE] rounded-[6px_20px_20px_20px] text-white min-w-[48px] whitespace-nowrap'
           }`}
         >
           <p className="text-[16px] leading-[1.6]">{msg.content}</p>
