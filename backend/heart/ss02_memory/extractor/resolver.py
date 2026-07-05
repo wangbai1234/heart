@@ -34,13 +34,55 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from heart.ss02_memory.models import FactNode
 
-from .types import ExtractionCandidate, ExtractionEnvelope
+from .types import Attribute, ExtractionCandidate, ExtractionEnvelope, Kind
 
 logger = structlog.get_logger()
 
 # EWMA smoothing factor
 _EWMA_ALPHA = 0.7
 _EWMA_BETA = 0.3
+
+# ── Defensive validation: implausible identity values ─────────
+# The extraction prompt (R6 + few-shot Example 3) already tells the LLM never
+# to tag interrogatives ("我叫什么吗") as disclosures. But the LLM occasionally
+# disobeys, and a mis-tagged disclosure like (self, name, value="什么吗") slips
+# past the kind-based REJECT below and pollutes L3 → later gets promoted to L4.
+# This deterministic guard rejects such values regardless of what the LLM did.
+#
+# Scope: only identity attributes whose value must be a concrete proper noun.
+_IDENTITY_ATTRIBUTES = {Attribute.NAME, Attribute.NICKNAME}
+# Interrogative words (substring match) — a real name/nickname never contains these.
+_INTERROGATIVE_MARKERS = (
+    "什么",
+    "什麼",
+    "谁",
+    "誰",
+    "啥",
+    "多少",
+    "几岁",
+    "怎么",
+    "怎樣",
+    "咋",
+    "干嘛",
+    "干什么",
+    "哪",
+)
+# Trailing question particles.
+_QUESTION_PARTICLES = ("吗", "呢", "吧")
+# Bare pronouns / demonstratives that are never a real identity value.
+_PRONOUN_VALUES = {
+    "我",
+    "你",
+    "他",
+    "她",
+    "它",
+    "谁",
+    "这",
+    "那",
+    "这个",
+    "那个",
+    "自己",
+}
 
 
 class DecisionType(str, enum.Enum):
@@ -115,6 +157,22 @@ class Resolver:
                 decision=DecisionType.REJECT,
                 candidate=candidate,
                 reason=f"kind={candidate.kind.value}, not a real disclosure",
+            )
+
+        # ── Defensive: reject implausible identity values ──
+        # Catches LLM mis-tagging an interrogative ("我叫什么吗") as a name
+        # disclosure, which would otherwise CREATE a dirty L3 → L4 row.
+        if candidate.kind == Kind.DISCLOSURE and is_implausible_identity_value(
+            candidate.attribute, candidate.value
+        ):
+            return ResolverDecision(
+                decision=DecisionType.REJECT,
+                candidate=candidate,
+                reason=(
+                    f"implausible identity value for {candidate.attribute.value}: "
+                    f"{candidate.value!r} looks like an interrogative/pronoun, "
+                    f"not a real disclosure"
+                ),
             )
 
         # ── Look up matching active L3 row ──
@@ -196,6 +254,30 @@ class Resolver:
         )
         result = await self._session.execute(stmt)
         return result.scalar_one_or_none()
+
+
+def is_implausible_identity_value(attribute: Attribute, value: str) -> bool:
+    """True if `value` cannot be a real value for an identity `attribute`.
+
+    Identity attributes (name/nickname) must be concrete proper nouns. A value
+    that is empty, a bare pronoun, or contains interrogative markers / trailing
+    question particles is almost certainly an LLM mis-tag of a 疑问句 ("我叫什么
+    吗") and must not create an L3 fact.
+
+    Shared with the one-time L4/L3 cleanup script so both use identical criteria.
+    """
+    if attribute not in _IDENTITY_ATTRIBUTES:
+        return False
+    v = value.strip()
+    if not v:
+        return True
+    if v in _PRONOUN_VALUES:
+        return True
+    if any(marker in v for marker in _INTERROGATIVE_MARKERS):
+        return True
+    if any(v.endswith(particle) for particle in _QUESTION_PARTICLES):
+        return True
+    return False
 
 
 def _values_match(candidate_value: str, l3_object: str) -> bool:
