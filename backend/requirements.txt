@@ -1,5 +1,12 @@
 # API Framework
-fastapi>=0.115.0
+# NOTE: cap <0.137 — fastapi>=0.137 changed route registration in a way that is
+# incompatible with slowapi 0.1.10 (latest): every @limiter.limit-decorated
+# route silently fails to register on the app (create_app() drops /api/chat,
+# /api/voice/synthesize, /api/credits/redeem, etc.), which also disables their
+# age-gate dependency. Local dev happened to resolve 0.136.1 (works); CI's fresh
+# install pulled 0.139 and surfaced it. Lift this cap once slowapi supports
+# fastapi>=0.137. Tracking: see docs/MEMORY_FIX_PLAN.md follow-ups.
+fastapi>=0.115.0,<0.137
 uvicorn[standard]>=0.30.0
 
 # Database
