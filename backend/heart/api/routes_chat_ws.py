@@ -24,7 +24,10 @@ from .wiring import _get_engine, get_db, get_orchestrator, get_voice_service
 logger = structlog.get_logger(__name__)
 
 router = APIRouter()
-RECENT_HISTORY_LIMIT = 40
+# Recent same-character turns injected into the prompt for short-term
+# continuity. 50 aligns with the commercial spec (docs/upgrade/commercial).
+# Beyond this window, continuity relies on SS02 long-term recall.
+RECENT_HISTORY_LIMIT = 50
 
 
 def _extract_storage_key(audio_url: str) -> str | None:

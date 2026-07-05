@@ -308,6 +308,27 @@ class MemoryService:
                         ForgettingHint(hint_text=hint_text, related_to=related_to)
                     )
 
+                # INV-M-4: recall tracking. Reinforce L2 episodic hits so
+                # recall_count / last_recalled_at reflect actual usage
+                # (previously never updated → stuck at 0 / null). boost=0.0
+                # tracks the recall without inflating importance_score, which
+                # would otherwise create a recall→importance→recall feedback
+                # loop. Best-effort: a failure here must not break the turn.
+                l2_hit_ids = [m.memory_id for m in retrieved if m.memory_type == "L2"]
+                if l2_hit_ids:
+                    try:
+                        await self.reinforce(
+                            l2_hit_ids,
+                            ReinforcementTrigger(
+                                trigger_type="recall_no_objection",
+                                context="auto_recall",
+                                boost=0.0,
+                            ),
+                        )
+                        await self._db.commit()
+                    except Exception as e:
+                        logger.warning("auto_reinforce_failed", error=str(e))
+
                 return MemoryRetrievalResult(
                     query_id=uuid4(),
                     retrieved_at=datetime.now(timezone.utc),

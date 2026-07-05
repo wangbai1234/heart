@@ -5,7 +5,12 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from heart.api.routes_chat_ws import _load_recent_conversation_history
+from heart.api.routes_chat_ws import RECENT_HISTORY_LIMIT, _load_recent_conversation_history
+
+
+def test_recent_history_limit_is_50():
+    """Short-term window aligned to the commercial spec (最近 50 条)."""
+    assert RECENT_HISTORY_LIMIT == 50
 
 
 @pytest.mark.asyncio

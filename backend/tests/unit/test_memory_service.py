@@ -117,6 +117,60 @@ class TestRetrieveAPI:
         with pytest.raises(ValueError, match="INV-M-6"):
             service._enforce_user_isolation(user_id, character_id, bad_context)
 
+    @pytest.mark.asyncio
+    async def test_retrieve_reinforces_l2_hits(self, user_id, character_id, query_context):
+        """retrieve() must reinforce L2 hits (INV-M-4 recall tracking).
+
+        Previously recall_count/last_recalled_at were never updated because
+        retrieve() never called reinforce(). This guards that regression.
+        """
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        from heart.ss02_memory.retriever.base import ScoredMemory
+
+        svc = MemoryService(db_session=AsyncMock())
+
+        mem = MagicMock()
+        mem.state = "vivid"
+        mem.episode_summary = "猫叫年糕"
+        sm = ScoredMemory(
+            memory=mem,
+            memory_id=uuid4(),
+            memory_type="L2",
+            score_breakdown={"recency": 0.9},
+            score=0.9,
+            retrieved_by=["recency"],
+        )
+        retriever_result = MagicMock()
+        retriever_result.memories = [sm]
+        retriever_result.recently_forgotten_hints = []
+        retriever_result.total_candidates = 1
+        retriever_result.strategies_used = ["recency"]
+        retriever_result.retrieval_time_ms = 1.0
+        retriever_result.l4_included = 0
+
+        orch_instance = MagicMock()
+        orch_instance.retrieve = AsyncMock(return_value=retriever_result)
+
+        svc.reinforce = AsyncMock()
+        svc._get_reconstructor = MagicMock(return_value=None)  # force fallback text path
+
+        with patch(
+            "heart.ss02_memory.retriever.orchestrator.RetrievalOrchestrator",
+            return_value=orch_instance,
+        ):
+            result = await svc.retrieve(
+                user_id=user_id,
+                character_id=character_id,
+                query_context=query_context,
+                top_k=5,
+            )
+
+        assert len(result.memories) == 1
+        svc.reinforce.assert_awaited_once()
+        reinforced_ids = svc.reinforce.await_args.args[0]
+        assert sm.memory_id in reinforced_ids
+
 
 class TestGetL4:
     """Tests for get_l4() L4 identity memory read."""
