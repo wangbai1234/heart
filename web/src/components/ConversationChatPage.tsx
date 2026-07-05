@@ -135,9 +135,9 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
       return (
         <div className={`flex items-start gap-2 ${isAI ? 'self-start' : 'self-end flex-row-reverse'}`}>
           {showAvatar ? (
-            <Avatar src={avatar} size={28} className="shrink-0 mt-[2px]" />
+            <Avatar src={avatar} size={40} className="shrink-0 mt-[2px]" />
           ) : (
-            <div className="w-[28px] shrink-0" />
+            <div className="w-[40px] shrink-0" />
           )}
           <div
             className={`max-w-[320px] backdrop-blur-[16px] rounded-[20px_20px_20px_6px] p-3 ${
@@ -166,9 +166,9 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
     return (
       <div className={`flex items-start gap-2 ${isAI ? 'self-start' : 'self-end flex-row-reverse'}`}>
         {showAvatar ? (
-          <Avatar src={avatar} size={28} className="shrink-0 mt-[2px]" />
+          <Avatar src={avatar} size={40} className="shrink-0 mt-[2px]" />
         ) : (
-          <div className="w-[28px] shrink-0" />
+          <div className="w-[40px] shrink-0" />
         )}
         <div
           className={`max-w-[67%] px-4 py-[14px] ${
