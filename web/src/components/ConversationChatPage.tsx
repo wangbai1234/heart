@@ -9,6 +9,7 @@ import { getChatHistory } from '../services/api'
 import { BreathingDots } from './ui/BreathingDots'
 import { Dialog } from './ui/Dialog'
 import { Button } from './ui/Button'
+import { Avatar } from './ui/Avatar'
 import VoiceMessageBubble from './VoiceMessageBubble'
 
 interface ConversationChatPageProps {
@@ -25,6 +26,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
   const storedCharacterId = useAppStore((s) => s.currentCharacterId)
   const setCharacter = useAppStore((s) => s.setCharacter)
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
+  const userAvatar = useAuthStore((s) => s.user?.avatar_url ?? null)
   const setActiveCharacter = useChatStore((s) => s.setActiveCharacter)
 
   const routeCharacterId = params.characterId
@@ -124,50 +126,63 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
   }, [interrupt])
 
   // Render a single message bubble
-  const renderMessage = (msg: Message) => {
+  const renderMessage = (msg: Message, showAvatar: boolean) => {
     const isAI = msg.role === 'assistant'
+    const avatar = isAI ? profile.avatar : userAvatar
 
     // Voice message with audio
     if (msg.kind === 'voice' && msg.audioData) {
       return (
-        <div
-          key={msg.id}
-          className={`self-start max-w-[320px] backdrop-blur-[16px] rounded-[20px_20px_20px_6px] p-3 ${
-            isDark
-              ? 'bg-[rgba(255,255,255,0.06)] border border-[rgba(255,255,255,0.08)] shadow-[0_4px_12px_rgba(0,0,0,0.12)]'
-              : 'bg-[var(--color-glass-75)] border border-[var(--color-border-glass)] shadow-[var(--shadow-soft)]'
-          }`}
-        >
-          <VoiceMessageBubble
-            audioData={msg.audioData}
-            duration={msg.audioDuration ?? 3000}
-            format={msg.audioFormat ?? 'wav'}
-            isDark={isDark}
-          />
-          {msg.content && (
-            <p className={`text-[13px] mt-2 ${isDark ? 'text-[rgba(228,228,231,0.5)]' : 'text-[var(--color-text-secondary)]'}`}>
-              {msg.content}
-            </p>
+        <div className={`flex items-end gap-2 ${isAI ? 'self-start' : 'self-end flex-row-reverse'}`}>
+          {showAvatar ? (
+            <Avatar src={avatar} size={32} className="shrink-0 mb-[2px]" />
+          ) : (
+            <div className="w-[32px] shrink-0" />
           )}
+          <div
+            className={`max-w-[320px] backdrop-blur-[16px] rounded-[20px_20px_20px_6px] p-3 ${
+              isDark
+                ? 'bg-[rgba(255,255,255,0.06)] border border-[rgba(255,255,255,0.08)] shadow-[0_4px_12px_rgba(0,0,0,0.12)]'
+                : 'bg-[var(--color-glass-75)] border border-[var(--color-border-glass)] shadow-[var(--shadow-soft)]'
+            }`}
+          >
+            <VoiceMessageBubble
+              audioData={msg.audioData}
+              duration={msg.audioDuration ?? 3000}
+              format={msg.audioFormat ?? 'wav'}
+              isDark={isDark}
+            />
+            {msg.content && (
+              <p className={`text-[13px] mt-2 ${isDark ? 'text-[rgba(228,228,231,0.5)]' : 'text-[var(--color-text-secondary)]'}`}>
+                {msg.content}
+              </p>
+            )}
+          </div>
         </div>
       )
     }
 
     // Text message
     return (
-      <div
-        key={msg.id}
-        className={`max-w-[67%] px-4 py-[14px] ${
-          isAI
-            ? isDark
-              ? 'self-start bg-[rgba(255,255,255,0.06)] backdrop-blur-[16px] rounded-[20px_20px_20px_6px] text-[#EFE7DD] border border-[rgba(255,255,255,0.06)]'
-              : 'self-start bg-[var(--color-glass-75)] backdrop-blur-[16px] rounded-[20px_20px_20px_6px] text-[var(--color-ink)] border border-[var(--color-border-glass)]'
-            : isDark
-              ? 'self-end bg-gradient-to-br from-[#4A5B8F] to-[#6C7DB5] rounded-[6px_20px_20px_20px] text-[#EFE7DD]'
-              : 'self-end bg-gradient-to-br from-[#A7C7E7] to-[#BFD7EE] rounded-[6px_20px_20px_20px] text-white'
-        }`}
-      >
-        <p className="text-[16px] leading-[1.6]">{msg.content}</p>
+      <div className={`flex items-end gap-2 ${isAI ? 'self-start' : 'self-end flex-row-reverse'}`}>
+        {showAvatar ? (
+          <Avatar src={avatar} size={32} className="shrink-0 mb-[2px]" />
+        ) : (
+          <div className="w-[32px] shrink-0" />
+        )}
+        <div
+          className={`max-w-[67%] px-4 py-[14px] ${
+            isAI
+              ? isDark
+                ? 'bg-[rgba(255,255,255,0.06)] backdrop-blur-[16px] rounded-[20px_20px_20px_6px] text-[#EFE7DD] border border-[rgba(255,255,255,0.06)]'
+                : 'bg-[var(--color-glass-75)] backdrop-blur-[16px] rounded-[20px_20px_20px_6px] text-[var(--color-ink)] border border-[var(--color-border-glass)]'
+              : isDark
+                ? 'bg-gradient-to-br from-[#4A5B8F] to-[#6C7DB5] rounded-[6px_20px_20px_20px] text-[#EFE7DD]'
+                : 'bg-gradient-to-br from-[#A7C7E7] to-[#BFD7EE] rounded-[6px_20px_20px_20px] text-white'
+          }`}
+        >
+          <p className="text-[16px] leading-[1.6]">{msg.content}</p>
+        </div>
       </div>
     )
   }
@@ -222,12 +237,12 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
         {messages.map((msg, index) => {
           const prev = index > 0 ? messages[index - 1] : null
           const showTime = shouldShowTimestamp(msg, prev)
-          const isAI = msg.role === 'assistant'
+          const showAvatar = !prev || prev.role !== msg.role || showTime
 
           return (
-            <div key={msg.id} className={`flex flex-col ${isAI ? 'items-start' : 'items-end'}`}>
+            <div key={msg.id} className="flex flex-col">
               {showTime && (
-                <div className="flex justify-center py-2 w-full">
+                <div className="flex justify-center py-2">
                   <span className={`inline-flex h-[22px] items-center rounded-full px-2.5 text-[11px] ${
                     isDark
                       ? 'bg-[rgba(255,255,255,0.08)] text-[rgba(228,228,231,0.5)]'
@@ -237,7 +252,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
                   </span>
                 </div>
               )}
-              {renderMessage(msg)}
+              {renderMessage(msg, showAvatar)}
             </div>
           )
         })}
