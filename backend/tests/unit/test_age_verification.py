@@ -17,7 +17,13 @@ from fastapi.testclient import TestClient
 from heart.api.deps import require_age_verified
 from heart.core.auth import TokenData, auth_manager
 
-pytestmark = pytest.mark.asyncio
+# NOTE: asyncio_mode = "auto" (pyproject) already runs `async def` tests as
+# asyncio, so a module-level `pytestmark = pytest.mark.asyncio` is redundant
+# for the async tests AND wrongly tags the *sync* introspection test below
+# with the asyncio mark. Under some pytest-asyncio versions that made the
+# sync test run inside an event loop, where building the app + introspecting
+# routes behaved differently and produced an empty gated set (green locally,
+# red in CI). Mark async tests individually instead.
 
 
 def _make_token(user_id: str = None) -> str:
@@ -83,13 +89,23 @@ class TestAgeGateEndpointRegistration:
 
         app = create_app()
 
-        # Collect routes that use require_age_verified
+        # Collect routes that use require_age_verified. Walk the whole
+        # dependant tree (not just top-level dependencies) so the check is
+        # robust to how a given FastAPI version nests sub-dependencies.
+        def _uses_gate(dependant) -> bool:
+            stack = list(getattr(dependant, "dependencies", []))
+            while stack:
+                dep = stack.pop()
+                if getattr(getattr(dep, "call", None), "__name__", "") == "require_age_verified":
+                    return True
+                stack.extend(getattr(dep, "dependencies", []))
+            return False
+
         gated_paths = set()
         for route in app.routes:
-            if hasattr(route, "dependant"):
-                for dep in route.dependant.dependencies:
-                    if hasattr(dep, "call") and getattr(dep.call, "__name__", "") == "require_age_verified":
-                        gated_paths.add(route.path)
+            dependant = getattr(route, "dependant", None)
+            if dependant is not None and _uses_gate(dependant):
+                gated_paths.add(route.path)
 
         # These should be gated
         assert "/api/chat" in gated_paths, f"REST /api/chat not gated. Gated: {gated_paths}"
