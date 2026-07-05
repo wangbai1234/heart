@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useAppStore } from '../stores/appStore'
 import { useChatStore, type Message } from '../stores/chatStore'
 import { useAuthStore } from '../stores/authStore'
-import { CHARACTER_PROFILES, type CharacterId } from '../data/uiContent'
+import { CHARACTER_PROFILES, shouldShowTimestamp, formatChatTime, type CharacterId } from '../data/uiContent'
 import { useWebSocket } from '../hooks/useWebSocket'
 import { getChatHistory } from '../services/api'
 import { BreathingDots } from './ui/BreathingDots'
@@ -219,7 +219,27 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
           </div>
         )}
 
-        {messages.map(renderMessage)}
+        {messages.map((msg, index) => {
+          const prev = index > 0 ? messages[index - 1] : null
+          const showTime = shouldShowTimestamp(msg, prev)
+
+          return (
+            <div key={msg.id}>
+              {showTime && (
+                <div className="flex justify-center py-2">
+                  <span className={`inline-flex h-[22px] items-center rounded-full px-2.5 text-[11px] ${
+                    isDark
+                      ? 'bg-[rgba(255,255,255,0.08)] text-[rgba(228,228,231,0.5)]'
+                      : 'bg-[rgba(0,0,0,0.06)] text-[var(--color-text-muted)]'
+                  }`}>
+                    {formatChatTime(msg.timestamp)}
+                  </span>
+                </div>
+              )}
+              {renderMessage(msg)}
+            </div>
+          )
+        })}
 
         {/* Streaming indicator */}
         {isStreaming && !isPlaying && (
