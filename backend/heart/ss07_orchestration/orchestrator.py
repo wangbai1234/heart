@@ -48,6 +48,36 @@ DEFAULT_CARE_RESPONSE = (
     "If you're in immediate crisis, call 988 (US) or your local emergency services."
 )
 
+# ── Lightweight message sentiment (lexicon, no LLM) ─────────────────
+# Shared, lazily-built FastEncoder so we don't reload the lexicon per turn.
+_FAST_ENCODER: Any = None
+
+
+def _message_sentiment(user_id: UUID, character_id: str, text: str) -> float:
+    """Lexicon sentiment of a user message in [-1, 1] (0.0 on any failure).
+
+    Used to feed the emotion contagion input and to score memory episodes,
+    instead of hardcoding a neutral value.
+    """
+    global _FAST_ENCODER
+    try:
+        from heart.ss02_memory.encoder.fast import FastEncoder
+        from heart.ss02_memory.service import Turn as MemoryTurn
+
+        if _FAST_ENCODER is None:
+            _FAST_ENCODER = FastEncoder()
+        turn = MemoryTurn(
+            turn_index=0,
+            role="user",
+            content=text,
+            user_id=user_id,
+            character_id=character_id,
+            timestamp=datetime.now(timezone.utc),
+        )
+        return float(_FAST_ENCODER.encode(turn).sentiment)
+    except Exception:
+        return 0.0
+
 
 # ── Orchestrator ────────────────────────────────────────────────────
 
@@ -517,12 +547,20 @@ class Orchestrator:
             if session_info and session_info.get("current_stage"):
                 relationship_phase = session_info["current_stage"]
 
-            # Build context for emotion service
+            # Build context for emotion service. Feed the *real* user
+            # sentiment (lexicon) into contagion instead of a constant, so
+            # the character's emotion actually responds to the message.
+            sentiment = _message_sentiment(req.user_id, req.character_id, req.user_message)
             context = {
                 "days_since_last": days_since_last,
                 "hours_since_last": hours_since_last,
                 "relationship_phase": relationship_phase,
-                "user_emotion_vad": {"valence": 0, "arousal": 0.3, "dominance": 0.5},
+                "user_emotion_vad": {
+                    "valence": sentiment,
+                    # Arousal rises with emotional intensity; neutral ≈ 0.3.
+                    "arousal": min(1.0, 0.3 + 0.4 * abs(sentiment)),
+                    "dominance": 0.5,
+                },
             }
 
             # Get soul config for character
@@ -777,34 +815,73 @@ class Orchestrator:
                 )
                 await svc.queue_llm_encoding(event)
 
-                # Create L2 episode directly from user message (bypass consolidation)
+                # Create L2 episode from the user message (bypass consolidation).
+                # Use the REAL emotion state (updated earlier this turn by
+                # _update_emotion) for the episode's emotional peak instead of a
+                # hardcoded arousal, and derive importance from multiple signals.
                 from heart.ss02_memory.models import EpisodicMemory
 
-                now = datetime.now(timezone.utc).replace(tzinfo=None)
-                episode = EpisodicMemory(
-                    id=uuid4(),
-                    user_id=user_id,
-                    character_id=character_id,
-                    episode_summary=user_message[:200],
-                    episode_raw_turn_ids=[],
-                    episode_start_at=now,
-                    episode_end_at=now,
-                    emotional_peak={
-                        "valence": signals.sentiment,
-                        "arousal": 0.5,
-                        "label": "user_message",
-                    },
-                    emotional_end={"valence": signals.sentiment, "arousal": 0.5},
-                    emotional_significance=max(0.3, abs(signals.sentiment)),
-                    importance_score=max(0.3, abs(signals.sentiment)),
-                    initial_importance=max(0.3, abs(signals.sentiment)),
-                    decay_immunity=max(0.3, abs(signals.sentiment)),
-                    state="vivid",
-                    recall_count=0,
-                    created_at=now,
-                    updated_at=now,
+                vad: dict[str, Any] = {}
+                try:
+                    if self._emotion_service is not None:
+                        ecb = await self._emotion_service.get_context_block(
+                            user_id=user_id, character_id=character_id
+                        )
+                        vad = ecb.get("vad") or {}
+                except Exception:
+                    vad = {}
+
+                valence = float(vad.get("valence", signals.sentiment))
+                arousal = float(vad.get("arousal", min(1.0, 0.3 + 0.4 * abs(signals.sentiment))))
+                has_hint = bool(signals.detected_keywords)
+                intensity = max(abs(valence), arousal)
+
+                # Multi-signal importance (was hardcoded max(0.3, |sentiment|)):
+                # emotional intensity + presence of a fact/identity hint + length.
+                importance = min(
+                    1.0,
+                    0.2
+                    + 0.5 * intensity
+                    + (0.3 if has_hint else 0.0)
+                    + min(0.2, len(user_message) / 200.0 * 0.2),
                 )
-                cold_db_session.add(episode)
+
+                # Denoise: skip only ultra-trivial acknowledgements (very short,
+                # neutral, no fact hint) so they don't crowd out substantive
+                # episodes in recency retrieval. Factual disclosures are kept.
+                trivial = (
+                    len(user_message.strip()) < 6
+                    and not has_hint
+                    and abs(valence) < 0.15
+                    and arousal < 0.4
+                )
+
+                if not trivial:
+                    now = datetime.now(timezone.utc).replace(tzinfo=None)
+                    episode = EpisodicMemory(
+                        id=uuid4(),
+                        user_id=user_id,
+                        character_id=character_id,
+                        episode_summary=user_message[:200],
+                        episode_raw_turn_ids=[],
+                        episode_start_at=now,
+                        episode_end_at=now,
+                        emotional_peak={
+                            "valence": valence,
+                            "arousal": arousal,
+                            "label": "user_message",
+                        },
+                        emotional_end={"valence": valence, "arousal": arousal},
+                        emotional_significance=intensity,
+                        importance_score=importance,
+                        initial_importance=importance,
+                        decay_immunity=importance,
+                        state="vivid",
+                        recall_count=0,
+                        created_at=now,
+                        updated_at=now,
+                    )
+                    cold_db_session.add(episode)
 
                 await cold_db_session.commit()
                 logger.debug(
