@@ -130,11 +130,17 @@ def get_replay_recorder():
 
 @lru_cache
 def get_emotion_service():
-    """Process singleton: EmotionService (lexicon-based, in-memory)."""
+    """Process singleton: EmotionService (lexicon-based, in-memory).
+
+    Injects a session_factory so the singleton can persist each turn's
+    EmotionEvent through its own short-lived cold session (it holds no
+    request-bound session). Without it the append-only emotion_events log
+    would never be written.
+    """
     try:
         from heart.ss03_emotion.service import EmotionService
 
-        svc = EmotionService()
+        svc = EmotionService(session_factory=_get_session_factory())
         logger.info("wiring_emotion_service_initialized")
         return svc
     except Exception as e:

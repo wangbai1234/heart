@@ -41,14 +41,21 @@ class EmotionService:
     Target latency: process_turn P95 < 30ms
     """
 
-    def __init__(self, config_path: str = None, db_session=None, redis_client=None):
+    def __init__(
+        self, config_path: str = None, db_session=None, redis_client=None, session_factory=None
+    ):
         """
         Initialize EmotionService with lexicon and profiles.
 
         Args:
             config_path: Path to emotion_lexicon.yaml
-            db_session: Optional SQLAlchemy AsyncSession for persistence
+            db_session: Optional request-bound AsyncSession for persistence.
             redis_client: Optional Redis client for caching
+            session_factory: Optional callable returning a fresh AsyncSession
+                (an async_sessionmaker). Used when no request-bound db_session
+                is set — e.g. the process-singleton EmotionService opens its own
+                short-lived session per turn to persist the append-only
+                EmotionEvent. Without it, events are computed but never stored.
         """
         if config_path is None:
             project_root = Path(__file__).parent.parent.parent.parent
@@ -65,26 +72,90 @@ class EmotionService:
 
         # Persistence: DB when available, in-memory fallback
         self._db = db_session
+        self._session_factory = session_factory
         self._redis = redis_client
         self._state_cache: Dict[tuple, Dict[str, Any]] = {}
         self._ensured_emotion_event_partitions: set[str] = set()
 
         if db_session is not None:
             logger.info("emotion_service_initialized_with_db")
+        elif session_factory is not None:
+            logger.info("emotion_service_initialized_with_session_factory")
         else:
             logger.info("emotion_service_initialized_memory_only")
 
-    async def _ensure_emotion_event_partition(self, created_at: datetime) -> None:
-        """Ensure the monthly emotion_events partition exists before flush."""
-        if self._db is None:
-            return
+    async def _ensure_emotion_event_partition(self, session, created_at: datetime) -> None:
+        """Ensure the monthly emotion_events partition exists on `session`."""
         await ensure_monthly_partition(
-            self._db,
+            session,
             parent_table="emotion_events",
             partition_prefix="emotion_events",
             created_at=created_at,
             cache=self._ensured_emotion_event_partitions,
         )
+
+    async def _persist_emotion_event(
+        self,
+        *,
+        user_id,
+        character_id,
+        detected_triggers,
+        current_state,
+        new_state,
+        turn_id,
+    ) -> None:
+        """Persist one turn_processed EmotionEvent.
+
+        Uses the request-bound session (flush; caller commits) when present,
+        else a short-lived cold session (commit) built from session_factory.
+        No-op when neither is configured. Never raises.
+        """
+        if self._db is None and self._session_factory is None:
+            return
+
+        from uuid import uuid4
+
+        from heart.ss03_emotion.models import EmotionEvent
+
+        event_created_at = datetime.now(timezone.utc)
+        event = EmotionEvent(
+            event_id=uuid4(),
+            user_id=user_id,
+            character_id=character_id,
+            event_type="turn_processed",
+            payload={
+                "triggers": [t.get("trigger_type") for t in detected_triggers],
+                "primary_emotion": new_state.get("primary_emotion"),
+                "active_emotions": [e.get("emotion") for e in new_state.get("active_stack", [])],
+            },
+            turn_index=None,
+            source_turn_id=turn_id,
+            vad_before={
+                "valence": current_state.get("vad_valence", 0),
+                "arousal": current_state.get("vad_arousal", 0),
+                "dominance": current_state.get("vad_dominance", 0),
+            },
+            vad_after={
+                "valence": new_state["vad_valence"],
+                "arousal": new_state["vad_arousal"],
+                "dominance": new_state["vad_dominance"],
+            },
+            created_at=event_created_at,
+        )
+
+        try:
+            if self._db is not None:
+                await self._ensure_emotion_event_partition(self._db, event_created_at)
+                self._db.add(event)
+                await self._db.flush()
+            else:
+                # Process singleton: own the write end-to-end in a cold session.
+                async with self._session_factory() as cold:
+                    await self._ensure_emotion_event_partition(cold, event_created_at)
+                    cold.add(event)
+                    await cold.commit()
+        except Exception as e:
+            logger.error("emotion_event_persist_failed", error=str(e), user_id=str(user_id))
 
     async def get_current_state(
         self,
@@ -272,46 +343,17 @@ class EmotionService:
         key = (str(user_id), character_id)
         self._state_cache[key] = new_state
 
-        # Persist EmotionEvent to DB (append-only audit log)
-        if self._db is not None:
-            try:
-                from uuid import uuid4
-
-                from heart.ss03_emotion.models import EmotionEvent
-
-                event_created_at = datetime.now(timezone.utc)
-                await self._ensure_emotion_event_partition(event_created_at)
-
-                event = EmotionEvent(
-                    event_id=uuid4(),
-                    user_id=user_id,
-                    character_id=character_id,
-                    event_type="turn_processed",
-                    payload={
-                        "triggers": [t.get("trigger_type") for t in detected_triggers],
-                        "primary_emotion": new_state.get("primary_emotion"),
-                        "active_emotions": [
-                            e.get("emotion") for e in new_state.get("active_stack", [])
-                        ],
-                    },
-                    turn_index=None,
-                    source_turn_id=turn_id,
-                    vad_before={
-                        "valence": current_state.get("vad_valence", 0),
-                        "arousal": current_state.get("vad_arousal", 0),
-                        "dominance": current_state.get("vad_dominance", 0),
-                    },
-                    vad_after={
-                        "valence": new_state["vad_valence"],
-                        "arousal": new_state["vad_arousal"],
-                        "dominance": new_state["vad_dominance"],
-                    },
-                    created_at=event_created_at,
-                )
-                self._db.add(event)
-                await self._db.flush()
-            except Exception as e:
-                logger.error("emotion_event_persist_failed", error=str(e), user_id=str(user_id))
+        # Persist EmotionEvent (append-only audit log).
+        # Prefer a request-bound session; otherwise (process singleton) open a
+        # short-lived cold session so events are still durably recorded.
+        await self._persist_emotion_event(
+            user_id=user_id,
+            character_id=character_id,
+            detected_triggers=detected_triggers,
+            current_state=current_state,
+            new_state=new_state,
+            turn_id=turn_id,
+        )
 
         # Cache in Redis if available (sync call, no await needed for set)
         if self._redis is not None:
