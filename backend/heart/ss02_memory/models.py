@@ -106,7 +106,7 @@ class EpisodicMemory(Base):
     reinforcement_history: Mapped[list[dict]] = mapped_column(JSONB, nullable=False, default=list)
 
     # Vectors
-    semantic_vector: Mapped[Vector] = mapped_column(Vector(768), nullable=True)
+    semantic_vector: Mapped[Vector] = mapped_column(Vector(1024), nullable=True)
     emotional_vector: Mapped[Vector] = mapped_column(Vector(256), nullable=True)
 
     # Associations
@@ -219,7 +219,7 @@ class FactNode(Base):
     related_facts: Mapped[list[dict]] = mapped_column(JSONB, nullable=False, default=list)
 
     # Vector
-    semantic_vector: Mapped[Vector] = mapped_column(Vector(768), nullable=True)
+    semantic_vector: Mapped[Vector] = mapped_column(Vector(1024), nullable=True)
 
     # Recall Tracking
     recall_count: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
