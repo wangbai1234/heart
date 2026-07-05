@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import asyncio
+import re
 from typing import Any, Callable, Optional
 
 import structlog
@@ -11,6 +11,40 @@ from heart.ss08_voice.service import VoiceService
 from heart.ss08_voice.voice_cache import VoiceCache, should_cache
 
 logger = structlog.get_logger(__name__)
+
+
+_PARENTHETICAL_PATTERN = re.compile(r"[（(][^()（）]*[)）]")
+
+
+def _extract_tts_stage_directions(text: str) -> tuple[str, list[str]]:
+    """Remove parenthetical stage directions for TTS only.
+
+    Keeps the original text intact for transcript/history, but avoids reading
+    bracketed descriptions such as:
+    （目光停顿片刻，嗓音带着雨后的凉意）
+    """
+    if not text:
+        return "", []
+    stripped = text
+    directions: list[str] = []
+    # Re-run until stable so multiple short bracket segments are removed.
+    while True:
+        directions.extend(
+            match.group(0)[1:-1].strip() for match in _PARENTHETICAL_PATTERN.finditer(stripped)
+        )
+        next_text = _PARENTHETICAL_PATTERN.sub("", stripped)
+        if next_text == stripped:
+            break
+        stripped = next_text
+    stripped = re.sub(r"\s{2,}", " ", stripped)
+    stripped = re.sub(r"\n{3,}", "\n\n", stripped)
+    return stripped.strip(), [item for item in directions if item]
+
+
+def _strip_tts_stage_directions(text: str) -> str:
+    """Return only the speakable text, preserving square brackets."""
+    stripped, _ = _extract_tts_stage_directions(text)
+    return stripped
 
 
 class StreamSession:
@@ -40,14 +74,18 @@ class StreamSession:
         self._voice = voice_service
         self._send = ws_send_audio
         self._cache = cache
-        self._queue: asyncio.Queue[tuple | None] = asyncio.Queue(maxsize=10)
-        self._consumer_task: Optional[asyncio.Task] = None
         self._global_seq = 0
         self._cancelled = False
         self._paused = False
         self._current_response: Optional[Any] = None
         self.audio_produced = False
         self._all_audio_chunks: list[bytes] = []
+        self._text_parts: list[str] = []
+        self._last_turn_id: str | None = None
+        self._last_character_id: str | None = None
+        self._last_vad: dict | None = None
+        self._last_intimacy: float = 0.0
+        self._last_active_emotions: list[Any] = []
 
     def cancel(self) -> None:
         """Cancel the stream session."""
@@ -58,10 +96,6 @@ class StreamSession:
             except Exception:
                 pass
             self._current_response = None
-        try:
-            self._queue.put_nowait(None)
-        except Exception:
-            pass
 
     def pause(self) -> None:
         """Pause the stream session (backpressure)."""
@@ -89,22 +123,83 @@ class StreamSession:
         sentence: str,
         vad: dict | None,
         intimacy: float,
+        active_emotions: list[Any] | None,
         character_id: str,
     ) -> None:
         """Submit a sentence for TTS synthesis."""
         if self._cancelled:
             return
-        await self._queue.put((turn_id, sentence, vad, intimacy, character_id))
+        cleaned = sentence.strip()
+        if not cleaned:
+            return
+        self._text_parts.append(cleaned)
+        self._last_turn_id = turn_id
+        self._last_character_id = character_id
+        self._last_vad = vad
+        self._last_intimacy = intimacy
+        self._last_active_emotions = active_emotions or []
 
     async def start(self) -> None:
-        """Start the consumer task."""
-        self._consumer_task = asyncio.create_task(self._consume())
+        """Start the session."""
+        return None
 
     async def finish(self) -> None:
-        """Signal completion and wait for consumer to finish."""
-        await self._queue.put(None)
-        if self._consumer_task:
-            await self._consumer_task
+        """Synthesize the whole turn once and send a single audio chunk."""
+        if self._cancelled:
+            return
+        full_text = "".join(self._text_parts).strip()
+        if not full_text or not self._last_turn_id or not self._last_character_id:
+            return
+        tts_text, stage_directions = _extract_tts_stage_directions(full_text)
+        tts_text = tts_text or full_text
+
+        req = self._voice.director.derive(
+            text=tts_text,
+            character_id=self._last_character_id,
+            vad=self._last_vad,
+            intimacy=self._last_intimacy,
+            active_emotions=self._last_active_emotions,
+            stage_directions=stage_directions,
+        )
+        logger.info(
+            "tts_request_prepared",
+            character_id=self._last_character_id,
+            voice_id=req.voice_id,
+            emotion=req.emotion,
+            speed=req.speed,
+            pitch=req.pitch,
+            stage_directions=stage_directions,
+            text_preview=req.text[:120],
+        )
+
+        cached_audio = await self._check_cache(req, req.text)
+        if cached_audio:
+            logger.info(
+                "tts_cache_hit",
+                character_id=self._last_character_id,
+                voice_id=req.voice_id,
+                emotion=req.emotion,
+            )
+            self._all_audio_chunks = [cached_audio]
+            self.audio_produced = True
+            await self._send(self._last_turn_id, self._global_seq, cached_audio, True, req.format)
+            self._global_seq += 1
+            return
+
+        result = await self._voice.synthesize_with_fallback(req, self._last_character_id)
+        if self._cancelled or not result.audio:
+            return
+        self._all_audio_chunks = [result.audio]
+        self.audio_produced = True
+        await self._send(
+            self._last_turn_id,
+            self._global_seq,
+            result.audio,
+            True,
+            result.format,
+        )
+        self._global_seq += 1
+        await self._cache_audio(req, req.text, [result.audio])
 
     async def _check_cache(self, req: Any, text: str) -> Optional[bytes]:
         """Check cache for audio."""
@@ -113,137 +208,9 @@ class StreamSession:
         cache_key = VoiceCache.cache_key(req.voice_id, req.emotion, req.speed, req.pitch, text)
         return await self._cache.get(cache_key)
 
-    async def _send_cached_audio(self, turn_id: str, audio: bytes, fmt: str = "mp3") -> None:
-        """Send cached audio as single chunk."""
-        await self._send(turn_id, self._global_seq, audio, True, fmt)
-        self._global_seq += 1
-
-    async def _stream_tts(self, req: Any, turn_id: str, character_id: str) -> list[bytes]:
-        """Stream TTS synthesis and return collected audio chunks.
-
-        Attempts primary provider first.  If it fails (e.g. MiMo 401),
-        retries with fallback if available.
-        """
-        import inspect
-
-        audio_chunks = []
-        provider = self._voice.provider
-        fallback = self._voice.fallback_provider
-
-        stream = None
-        try:
-            if provider.name == "mimo":
-                stream = await provider.stream_synthesize(req, character_id)  # type: ignore[call-arg]
-            else:
-                result = provider.stream_synthesize(req)
-                stream = await result if inspect.isawaitable(result) else result
-
-            self._current_response = getattr(stream, "_response", None)
-            audio_chunks = await self._consume_stream(stream, turn_id)
-
-        except Exception as primary_err:
-            stream = None
-            self._current_response = None
-            if fallback and fallback.name != provider.name:
-                logger.warning(
-                    "tts_stream_provider_failed",
-                    provider=provider.name,
-                    error=str(primary_err),
-                )
-                try:
-                    fb_result = fallback.stream_synthesize(req)
-                    fb_stream = await fb_result if inspect.isawaitable(fb_result) else fb_result
-                    self._current_response = getattr(fb_stream, "_response", None)
-                    audio_chunks = await self._consume_stream(fb_stream, turn_id)
-                except Exception as fb_err:
-                    logger.error("tts_fallback_failed", error=str(fb_err))
-                    raise primary_err from fb_err
-            else:
-                raise
-
-        self._current_response = None
-        return audio_chunks
-
-    async def _consume_stream(self, stream: Any, turn_id: str) -> list[bytes]:
-        """Consume an async chunk iterator and send audio to WebSocket."""
-        audio_chunks: list[bytes] = []
-        async for chunk in stream:
-            if self._cancelled:
-                return audio_chunks
-            chunk_fmt = getattr(chunk, "format", "mp3")
-            if chunk.data:
-                audio_chunks.append(chunk.data)
-                await self._send(
-                    turn_id,
-                    self._global_seq,
-                    chunk.data,
-                    chunk.is_last,
-                    chunk_fmt,
-                )
-                self._global_seq += 1
-            elif chunk.is_last:
-                await self._send(
-                    turn_id,
-                    self._global_seq,
-                    b"",
-                    True,
-                    chunk_fmt,
-                )
-                self._global_seq += 1
-        if audio_chunks:
-            self.audio_produced = True
-        return audio_chunks
-
     async def _cache_audio(self, req: Any, text: str, audio_chunks: list[bytes]) -> None:
         """Cache audio if conditions are met."""
         if self._cache and should_cache(text) and audio_chunks:
             cache_key = VoiceCache.cache_key(req.voice_id, req.emotion, req.speed, req.pitch, text)
             full_audio = b"".join(audio_chunks)
             await self._cache.set(cache_key, full_audio)
-
-    async def _process_item(self, item: tuple) -> None:
-        """Process a single item from the queue."""
-        turn_id, text, vad, intimacy, character_id = item
-
-        try:
-            req = self._voice.director.derive(
-                text=text,
-                character_id=character_id,
-                vad=vad,
-                intimacy=intimacy,
-            )
-
-            # Check cache
-            cached_audio = await self._check_cache(req, text)
-            if cached_audio:
-                await self._send_cached_audio(turn_id, cached_audio)
-                return
-
-            # Stream TTS
-            audio_chunks = await self._stream_tts(req, turn_id, character_id)
-            if audio_chunks:
-                self._all_audio_chunks.extend(audio_chunks)
-
-            # Cache result
-            await self._cache_audio(req, text, audio_chunks)
-
-        except Exception as e:
-            self._current_response = None
-            if not self._cancelled:
-                logger.error(
-                    "tts_stream_failed",
-                    error=str(e),
-                    text=text[:30] if text else "",
-                )
-
-    async def _consume(self) -> None:
-        """Consumer loop: process sentences and generate TTS audio."""
-        while True:
-            while self._paused and not self._cancelled:
-                await asyncio.sleep(0.1)
-
-            item = await self._queue.get()
-            if item is None or self._cancelled:
-                return
-
-            await self._process_item(item)

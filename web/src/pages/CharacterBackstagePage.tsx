@@ -54,7 +54,7 @@ export function CharacterBackstagePage() {
     ? 'text-[rgba(236,233,244,0.68)]'
     : 'text-[rgba(47,54,74,0.54)]'
 
-  const handleClearThread = () => {
+  const handleClearThread = async () => {
     clearThread(currentCharacterId)
     clearMessages(currentCharacterId)
     setConfirmOpen(false)
@@ -158,7 +158,7 @@ export function CharacterBackstagePage() {
                   清空聊天记录
                 </h2>
                 <p className={`max-w-[210px] text-[14px] leading-[1.58] ${subtleTextClassName}`}>
-                  只清空页面，记忆数据不会删除，需删除请移步设置页面
+                  只在当前设备隐藏聊天页面内容，服务端记录和记忆都会保留
                 </p>
               </div>
               <div className="shrink-0 pr-2">
@@ -195,7 +195,7 @@ export function CharacterBackstagePage() {
             </>
           )}
         >
-          页面消息会被立即清空，但角色长期记忆不会被删除。
+          当前设备上的聊天页面会立即清空，服务端聊天记录和角色记忆不会删除。
         </Dialog>
       </div>
     </div>

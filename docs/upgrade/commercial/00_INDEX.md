@@ -29,7 +29,7 @@
 - **没有 `users` 表**。全库迁移（`migrations/versions/001–010`）里只有记忆/情绪/关系/会话/安全表。用户身份完全靠调用方自报。
 - **登录是桩**：`POST /api/auth/login {user_id, email?}` → 直接签发 JWT。**无邮箱验证、无 OTP、无密码**。`email` 仅写进 token claim。
 - **JWT 默认 HS256**（`config.py` `jwt_algorithm="HS256"`），非 AGENTS.md 所称 RS256；30 天有效期；**无服务端 session 存储、无吊销、无 refresh 轮换**。
-- **没有聊天记录表**。REST `/api/chat` 的 history 由客户端自带；WS 路径 history 恒为空。聊天"历史"是从记忆子系统（L1 Redis + L2/L3/L4）重建的，**没有逐条 transcript**。
+- **已有聊天记录表 `chat_messages`**。聊天消息会持久化到服务端；`GET /api/chat/history` 从表里分页读取。WS 主聊天链路在进入编排层前，会注入**最近 40 条同角色对话**到 `TurnRequest.history`，用于短期上下文连续性；长期记忆仍由 L1/L2/L3/L4 负责。
 - **TTS 是进程级全局开关**：是否出语音只取决于 `MIMO_API_KEY`/`MINIMAX_API_KEY` 是否配置。**没有 per-user / per-character 的 TTS 开关**。默认 provider = MiMo（`voice_provider="mimo"`）。
 - **没有任何 credits / transactions / subscription / redemption / payment 表或路由**。`config.py` 里只有未被引用的 Stripe 占位符。
 - **角色是 YAML soul spec**（`soul_specs/{rin,dorothy}/v1.0.0.yaml`），非 DB 行。soul spec 里**没有 TTS 设置**。

@@ -2,10 +2,10 @@
 
 > 依赖：模块 4（token/user）、模块 3（credits 扣费）、模块 2（18+ 门禁）。
 > 现状关键差距（务必先读 `00_INDEX §1`）：
-> - 路由 `/chat`（`ConversationChatPage`）是 **mock**：canned `setTimeout` 回复 + 装饰性 waveform，**不接 WS、不放真实音频**。
-> - 真实 WS/音频管线（`useWebSocket`+`chatStore`+`VoiceMessageBubble`+`audioPlayer`）只在**未路由**的 legacy `ChatPage`。
-> - **无 `chat_messages` 表**：历史由记忆重建，无逐条 transcript。
-> - **TTS 进程级全局**：无 per-user/per-character 开关；`appStore.voiceChatEnabled` 只存本地、后端不认。
+> - `/chat` 已接入真实聊天管线；历史页与聊天页都基于 `chat_messages` 渲染。
+> - WS 主聊天链路在进入编排层前，会注入最近 **40** 条同角色对话到 `TurnRequest.history`，不再是空数组占位。
+> - `chat_messages` 表已存在并承载文本/语音消息持久化与历史分页。
+> - 每角色语音开关已落库到 `user_character_settings`，但 TTS 服务可用性仍受进程级 provider 配置影响。
 > 本模块三件事：① 每角色 TTS 开关真正生效并落库；② 聊天消息持久化（text/audio 可区分、可回放）；③ 把真实 WS 管线接进路由 UI，并在 turn 边界接入计费。
 
 ---
@@ -107,6 +107,7 @@ turn_end（正常收尾，非安全拦截/非 fallback）：
 
 ## 5. 聊天历史加载（跨设备）
 - `GET /api/chat/history?character_id=&cursor=&limit=30` → 倒序分页 `chat_messages` → 前端进 `/chat` 时拉取填充。
+- WS 主聊天链路额外会从 `chat_messages` 读取最近 40 条同角色消息，按从旧到新顺序注入编排层 `history`，用于短期上下文连续性。
 - 替代当前 `conversationStore` 的 mock 种子；`conversationStore` 改为「从 API 装填 + WS 增量 append」。
 
 ## 6. 前端改造（把真实管线接进路由 UI —— 本模块最重工作）

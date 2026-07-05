@@ -165,12 +165,13 @@ class Orchestrator:
             safety_severity=severity,
         )
 
-    async def _get_vad_and_intimacy(
+    async def _get_voice_state(
         self, req: TurnRequest, db_session: Any
-    ) -> tuple[dict[str, float] | None, float]:
-        """Get VAD and intimacy for sentence events."""
+    ) -> tuple[dict[str, float] | None, float, list[dict[str, Any]]]:
+        """Get emotion and relationship state for voice sentence events."""
         vad = None
         intimacy = 0.0
+        active_emotions: list[dict[str, Any]] = []
 
         if self._emotion_service:
             try:
@@ -178,6 +179,7 @@ class Orchestrator:
                     req.user_id, req.character_id
                 )
                 vad = ctx_block.get("vad")
+                active_emotions = ctx_block.get("active_emotions") or []
             except Exception:
                 pass
 
@@ -190,7 +192,7 @@ class Orchestrator:
             except Exception:
                 pass
 
-        return vad, intimacy
+        return vad, intimacy, active_emotions
 
     async def process_turn_stream(
         self,
@@ -233,8 +235,8 @@ class Orchestrator:
         await self._update_emotion(req, session.session_id)
         await self._update_relationship(req, db_session, session.session_id)
 
-        # Get VAD and intimacy for sentence events
-        vad, intimacy = await self._get_vad_and_intimacy(req, db_session)
+        # Get voice-relevant emotion and relationship state for sentence events.
+        vad, intimacy, active_emotions = await self._get_voice_state(req, db_session)
 
         # Build composer
         composer = None
@@ -266,7 +268,7 @@ class Orchestrator:
         # Stream compose
         full_text = ""
         async for event in self._stream_compose(
-            req, composer, session.session_id, vad, intimacy, cancel_token
+            req, composer, session.session_id, vad, intimacy, active_emotions, cancel_token
         ):
             if event["type"] == "text_delta":
                 full_text += event["delta"]
@@ -297,6 +299,7 @@ class Orchestrator:
         session_id: UUID,
         vad: dict[str, float] | None,
         intimacy: float,
+        active_emotions: list[dict[str, Any]] | None = None,
         cancel_token: Optional[asyncio.Event] = None,
     ) -> AsyncGenerator[dict, None]:
         """Stream compose and yield events."""
@@ -333,6 +336,7 @@ class Orchestrator:
                         "text": sentence,
                         "vad": vad,
                         "intimacy": intimacy,
+                        "active_emotions": active_emotions or [],
                     }
         except Exception as exc:
             logger.error("compose_stream_failed", error=str(exc))
@@ -345,6 +349,7 @@ class Orchestrator:
                 "text": tail,
                 "vad": vad,
                 "intimacy": intimacy,
+                "active_emotions": active_emotions or [],
             }
 
     # ── Private: Safety ─────────────────────────────────────────────
@@ -770,7 +775,7 @@ class Orchestrator:
                     },
                     status="llm_pending",
                 )
-                cold_db_session.add(event)
+                await svc.queue_llm_encoding(event)
 
                 # Create L2 episode directly from user message (bypass consolidation)
                 from heart.ss02_memory.models import EpisodicMemory

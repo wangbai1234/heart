@@ -272,3 +272,9 @@ export async function updateCharacterSettings(
     body: JSON.stringify({ voice_enabled: voiceEnabled }),
   })
 }
+
+export async function clearCharacterConversations(characterId: string): Promise<{ ok: boolean }> {
+  return request(`/characters/${characterId}/clear-conversations`, {
+    method: 'POST',
+  })
+}

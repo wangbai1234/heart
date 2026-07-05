@@ -19,6 +19,26 @@ function bytesToB64(bytes: Uint8Array): string {
   return btoa(binary)
 }
 
+function concatBinaryBase64(chunks: { dataB64: string; durationMs: number }[]) {
+  if (chunks.length === 0) return { dataB64: '', durationMs: 0 }
+  if (chunks.length === 1) return chunks[0]
+
+  const parts = chunks.map((chunk) => b64ToBytes(chunk.dataB64))
+  const totalLength = parts.reduce((sum, part) => sum + part.length, 0)
+  const output = new Uint8Array(totalLength)
+
+  let offset = 0
+  for (const part of parts) {
+    output.set(part, offset)
+    offset += part.length
+  }
+
+  return {
+    dataB64: bytesToB64(output),
+    durationMs: chunks.reduce((sum, chunk) => sum + chunk.durationMs, 0),
+  }
+}
+
 /**
  * 从 WAV 文件头中解析出 header 长度（通常 44 字节，但可能有 extra fmt chunk）。
  */
@@ -90,4 +110,14 @@ export function concatWavBase64(chunks: { dataB64: string; durationMs: number }[
   }
 
   return { dataB64: bytesToB64(output), durationMs: totalDurationMs }
+}
+
+export function concatAudioBase64(
+  chunks: { dataB64: string; durationMs: number }[],
+  format: 'wav' | 'mp3',
+): {
+  dataB64: string
+  durationMs: number
+} {
+  return format === 'wav' ? concatWavBase64(chunks) : concatBinaryBase64(chunks)
 }

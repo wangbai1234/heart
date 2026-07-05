@@ -67,3 +67,40 @@ async def update_character_settings(
         voice_enabled=body.voice_enabled,
     )
     return {"voice_enabled": body.voice_enabled}
+
+
+@router.post("/{character_id}/clear-conversations")
+async def clear_character_conversations(
+    character_id: str,
+    current_user: TokenData = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Clear persisted chat messages for one character only."""
+    uid = uuid.UUID(current_user.user_id)
+
+    try:
+        await db.execute(
+            text(
+                """
+                DELETE FROM chat_messages
+                WHERE user_id = :uid AND character_id = :cid
+                """
+            ),
+            {"uid": uid, "cid": character_id},
+        )
+    except Exception as exc:
+        logger.warning(
+            "character_conversations_clear_failed",
+            user_id=str(uid),
+            character_id=character_id,
+            error=str(exc),
+        )
+        raise HTTPException(status_code=500, detail="清空聊天记录失败") from exc
+
+    await db.commit()
+    logger.info(
+        "character_conversations_cleared",
+        user_id=str(uid),
+        character_id=character_id,
+    )
+    return {"ok": True}

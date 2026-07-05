@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef } from 'react'
 import { useChatStore } from '../stores/chatStore'
 import { useAppStore } from '../stores/appStore'
 import { useAuthStore } from '../stores/authStore'
-import { createAudioPlayer, wrapPCM16AsWAV, type AudioPlayer } from '../services/audioPlayer'
+import { wrapPCM16AsWAV } from '../services/audioPlayer'
 import type { CharacterId } from '../data/uiContent'
 
 const WS_BASE = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/api/chat/ws`
@@ -33,15 +33,27 @@ function b64ToArrayBuffer(b64: string): ArrayBuffer {
   return buf.buffer
 }
 
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer)
+  let binary = ''
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i])
+  return btoa(binary)
+}
+
+function estimateChunkDurationMs(buffer: ArrayBuffer, format?: string) {
+  if (format === 'pcm16') {
+    return Math.max(1, Math.round(buffer.byteLength / (24000 * 2) * 1000))
+  }
+  return Math.max(1, Math.round(buffer.byteLength * 8 / 128))
+}
+
 export function useWebSocket() {
   const wsRef = useRef<WebSocket | null>(null)
   const connectRef = useRef<(() => void) | null>(null)
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const playerRef = useRef<AudioPlayer | null>(null)
-  const drainingPlayerRef = useRef<AudioPlayer | null>(null)
   const seenChunks = useRef<Set<string>>(new Set())
-  const audioPreBuffer = useRef<ArrayBuffer[] | null>(null)
   const activeCharRef = useRef<CharacterId>('rin')
+  const pendingVoiceTurnRef = useRef(false)
 
   const addMessage = useChatStore(s => s.addMessage)
   const appendToLast = useChatStore(s => s.appendToLast)
@@ -49,21 +61,9 @@ export function useWebSocket() {
   const setPlaying = useChatStore(s => s.setPlaying)
   const setCurrentTurnId = useChatStore(s => s.setCurrentTurnId)
   const setVad = useChatStore(s => s.setVad)
+  const appendMessageAudio = useChatStore(s => s.appendMessageAudio)
+  const finalizeMessageAudio = useChatStore(s => s.finalizeMessageAudio)
   const isStreaming = useChatStore(s => s.isStreaming)
-
-  const ensurePlayer = useCallback(async (format?: string): Promise<AudioPlayer> => {
-    if (drainingPlayerRef.current) {
-      try { drainingPlayerRef.current.stop() } catch { /* ignore */ }
-      drainingPlayerRef.current = null
-    }
-    if (playerRef.current && playerRef.current.isAlive()) return playerRef.current
-    if (playerRef.current) { try { playerRef.current.stop() } catch { /* ignore */ } }
-    const p = createAudioPlayer(format)
-    await p.init()
-    p.onBufferedMs(() => {})
-    playerRef.current = p
-    return p
-  }, [])
 
   const connect = useCallback(() => {
     if (reconnectTimerRef.current) {
@@ -79,16 +79,13 @@ export function useWebSocket() {
 
     const { accessToken } = useAuthStore.getState()
     if (!accessToken) {
-      console.log('[ws] no token, skipping connect')
       return
     }
 
     const ws = new WebSocket(`${WS_BASE}?token=${accessToken}`)
     wsRef.current = ws
 
-    ws.onopen = () => {
-      console.log('[ws] connected')
-    }
+    ws.onopen = () => {}
 
     ws.onmessage = async (ev) => {
       const msg: WsMessage = JSON.parse(ev.data)
@@ -102,9 +99,10 @@ export function useWebSocket() {
             role: 'assistant',
             content: '',
             timestamp: Date.now(),
+            kind: pendingVoiceTurnRef.current ? 'voice' : 'text',
           })
           setStreaming(true)
-          setPlaying(true)
+          setPlaying(false)
           break
         case 'text_delta':
           appendToLast(cid, msg.delta ?? '')
@@ -132,32 +130,30 @@ export function useWebSocket() {
             const key = `${msg.turn_id}:${msg.sentence_seq ?? 0}:${msg.seq}`
             if (seenChunks.current.has(key)) return
             seenChunks.current.add(key)
-            let buf = b64ToArrayBuffer(msg.data_b64)
+            const rawBuffer = b64ToArrayBuffer(msg.data_b64)
+            const durationMs = estimateChunkDurationMs(rawBuffer, msg.format)
+            const audioFormat = msg.format === 'pcm16' ? 'wav' : 'mp3'
+            let storedB64 = msg.data_b64
             if (msg.format === 'pcm16') {
-              buf = wrapPCM16AsWAV(buf)
+              storedB64 = arrayBufferToBase64(wrapPCM16AsWAV(rawBuffer))
             }
-            const preBufferCount = 2
-            if (!playerRef.current || !playerRef.current.isAlive()) {
-              if (seenChunks.current.size < preBufferCount && !msg.is_last) {
-                if (!audioPreBuffer.current) audioPreBuffer.current = []
-                audioPreBuffer.current.push(buf)
-                return
-              }
-              await ensurePlayer(msg.format)
-              if (audioPreBuffer.current) {
-                for (const preBuf of audioPreBuffer.current) {
-                  playerRef.current!.enqueue(preBuf)
-                }
-                audioPreBuffer.current = null
-              }
-            }
-            playerRef.current!.enqueue(buf)
+            appendMessageAudio(cid, currentTurnId, storedB64, durationMs, msg.seq ?? 0, audioFormat)
           }
           break
         case 'turn_end':
-          if (playerRef.current) {
-            drainingPlayerRef.current = playerRef.current
-            playerRef.current = null
+          if (msg.turn_id) {
+            finalizeMessageAudio(cid, msg.turn_id)
+            if (msg.modality) {
+              const normalizedKind = msg.modality === 'voice' ? 'voice' : 'text'
+              useChatStore.setState((s) => ({
+                messages: {
+                  ...s.messages,
+                  [cid]: (s.messages[cid] ?? []).map((message) =>
+                    message.id === msg.turn_id ? { ...message, kind: normalizedKind } : message,
+                  ),
+                },
+              }))
+            }
           }
           setStreaming(false)
           setPlaying(false)
@@ -175,6 +171,7 @@ export function useWebSocket() {
                 timestamp: lastMsg.timestamp,
                 kind: lastMsg.kind === 'voice' ? 'voice' : 'text',
                 duration: lastMsg.duration,
+                audioDuration: lastMsg.audioDuration,
               })
             }
           }
@@ -183,42 +180,33 @@ export function useWebSocket() {
             const { setBalance } = (await import('../stores/creditsStore')).useCreditsStore.getState()
             setBalance(msg.balance)
           }
+          pendingVoiceTurnRef.current = false
           break
         case 'insufficient_credits':
           setStreaming(false)
           setPlaying(false)
           setCurrentTurnId(null)
+          pendingVoiceTurnRef.current = false
           {
             const { setInsufficientCredits } = useChatStore.getState()
             setInsufficientCredits(msg.needed ?? 0, msg.balance ?? 0)
           }
           break
         case 'interrupted':
-          if (drainingPlayerRef.current) {
-            try { drainingPlayerRef.current.stop() } catch { /* ignore */ }
-            drainingPlayerRef.current = null
-          }
-          playerRef.current?.stop()
-          playerRef.current = null
           setStreaming(false)
           setPlaying(false)
           setCurrentTurnId(null)
+          pendingVoiceTurnRef.current = false
           break
         case 'error':
-          if (drainingPlayerRef.current) {
-            try { drainingPlayerRef.current.stop() } catch { /* ignore */ }
-            drainingPlayerRef.current = null
-          }
-          playerRef.current?.stop()
-          playerRef.current = null
           setStreaming(false)
           setPlaying(false)
+          pendingVoiceTurnRef.current = false
           break
       }
     }
 
     ws.onclose = async (ev) => {
-      console.log('[ws] disconnected', ev.code, ev.reason)
       // 1008 = token invalid/expired → try refresh once
       if (ev.code === 1008) {
         try {
@@ -251,7 +239,7 @@ export function useWebSocket() {
     ws.onerror = (err) => {
       console.error('[ws] error', err)
     }
-  }, [addMessage, appendToLast, setStreaming, setPlaying, setCurrentTurnId, setVad, ensurePlayer])
+  }, [addMessage, appendMessageAudio, appendToLast, finalizeMessageAudio, setStreaming, setPlaying, setCurrentTurnId, setVad])
 
   useEffect(() => {
     connectRef.current = connect
@@ -267,6 +255,7 @@ export function useWebSocket() {
       activeCharRef.current = characterId
       const { voiceChatEnabled } = useAppStore.getState()
       const voiceEnabled = voiceChatEnabled?.[characterId] ?? false
+      pendingVoiceTurnRef.current = voiceEnabled
       const turnId = crypto.randomUUID()
       addMessage(characterId, {
         id: `user-${turnId}`,
@@ -303,8 +292,6 @@ export function useWebSocket() {
   const interrupt = useCallback(() => {
     const turnId = useChatStore.getState().currentTurnId
     if (!wsRef.current || !turnId) return
-    playerRef.current?.stop()
-    playerRef.current = null
     wsRef.current.send(JSON.stringify({ type: 'interrupt', turn_id: turnId }))
   }, [])
 
@@ -317,12 +304,6 @@ export function useWebSocket() {
       }
       wsRef.current?.close()
       wsRef.current = null
-      if (drainingPlayerRef.current) {
-        try { drainingPlayerRef.current.stop() } catch { /* ignore */ }
-        drainingPlayerRef.current = null
-      }
-      playerRef.current?.stop()
-      playerRef.current = null
     }
   }, [connect])
 

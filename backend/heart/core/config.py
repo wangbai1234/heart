@@ -144,13 +144,18 @@ class Settings(BaseSettings):
     minimax_api_key: str | None = None
     minimax_group_id: str | None = None
     minimax_base_url: str = "https://api.minimax.io/v1"
+    minimax_rin_clone_voice_id: str | None = None
+    minimax_dorothy_voice_id: str | None = None
+    minimax_tts_model: str = "speech-2.8-hd"
+    minimax_language_boost: str | None = "Chinese"
+    voice_profiles: str | None = None
 
     # MiMo TTS (voiceclone v2.5)
     mimo_api_key: str | None = None
     mimo_base_url: str = "https://api.xiaomimimo.com/v1"
     mimo_reference_audio_path: str = "assets/reference_voices/rin.wav"
     mimo_model: str = "mimo-v2.5-tts-voiceclone"
-    voice_provider: str = "mimo"  # "mimo" | "minimax"
+    voice_provider: str = "minimax"  # "mimo" | "minimax"
     voice_fallback_enabled: bool = True
 
     @model_validator(mode="after")

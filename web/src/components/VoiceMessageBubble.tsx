@@ -1,29 +1,65 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
-
-const BAR_COUNT = 5
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useChatStore } from '../stores/chatStore'
+import { useAuthStore } from '../stores/authStore'
 
 interface VoiceMessageBubbleProps {
-  audioData: string // base64 WAV 音频
-  duration: number  // 时长（毫秒）
-  format: string    // "wav"
+  audioData: string
+  duration: number
+  format: string
   isDark?: boolean
 }
 
-export default function VoiceMessageBubble({ audioData, duration, format, isDark = false }: VoiceMessageBubbleProps) {
+const PLAYING_LEVELS = [
+  [10, 16, 12],
+  [16, 10, 18],
+  [11, 18, 9],
+  [18, 12, 15],
+]
+
+export default function VoiceMessageBubble({
+  audioData,
+  duration,
+  format,
+  isDark = false,
+}: VoiceMessageBubbleProps) {
   const [isPlaying, setIsPlaying] = useState(false)
   const [audioUrl, setAudioUrl] = useState<string | null>(null)
-  const [barHeights, setBarHeights] = useState<number[]>(Array(BAR_COUNT).fill(4))
+  const [frameIndex, setFrameIndex] = useState(0)
   const audioRef = useRef<HTMLAudioElement | null>(null)
-  const audioCtxRef = useRef<AudioContext | null>(null)
-  const analyserRef = useRef<AnalyserNode | null>(null)
-  const rafRef = useRef<number | null>(null)
+  const setGlobalPlaying = useChatStore((s) => s.setPlaying)
 
-  // 将 base64 转为 Blob URL，或直接使用 URL
   useEffect(() => {
     if (!audioData) return
+    let cancelled = false
+    let blobUrl: string | null = null
 
-    // If it's already a URL (from history), use directly
     if (audioData.startsWith('http') || audioData.startsWith('blob:')) {
+      setAudioUrl(audioData)
+      return
+    }
+
+    if (audioData.startsWith('/api/')) {
+      const { accessToken } = useAuthStore.getState()
+      fetch(audioData, {
+        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+      })
+        .then((res) => {
+          if (!res.ok) throw new Error(`Audio fetch failed: ${res.status}`)
+          return res.blob()
+        })
+        .then((blob) => {
+          if (cancelled) return
+          blobUrl = URL.createObjectURL(blob)
+          setAudioUrl(blobUrl)
+        })
+        .catch(() => {})
+      return () => {
+        cancelled = true
+        if (blobUrl) URL.revokeObjectURL(blobUrl)
+      }
+    }
+
+    if (audioData.startsWith('/')) {
       setAudioUrl(audioData)
       return
     }
@@ -40,146 +76,131 @@ export default function VoiceMessageBubble({ audioData, duration, format, isDark
     setAudioUrl(url)
 
     return () => {
-      if (!audioData.startsWith('http') && !audioData.startsWith('blob:')) {
-        URL.revokeObjectURL(url)
-      }
-      stopVisualization()
+      URL.revokeObjectURL(url)
     }
   }, [audioData, format])
 
-  const stopVisualization = useCallback(() => {
-    if (rafRef.current) {
-      cancelAnimationFrame(rafRef.current)
-      rafRef.current = null
+  useEffect(() => {
+    setGlobalPlaying(isPlaying)
+    return () => {
+      setGlobalPlaying(false)
     }
-    if (audioCtxRef.current) {
-      try { audioCtxRef.current.close() } catch { /* ignore */ }
-      audioCtxRef.current = null
-      analyserRef.current = null
+  }, [isPlaying, setGlobalPlaying])
+
+  useEffect(() => {
+    if (!isPlaying) {
+      setFrameIndex(0)
+      return
     }
+    const timer = window.setInterval(() => {
+      setFrameIndex((prev) => (prev + 1) % PLAYING_LEVELS.length)
+    }, 220)
+    return () => window.clearInterval(timer)
+  }, [isPlaying])
+
+  const stopPlayback = useCallback(() => {
+    if (audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current.currentTime = 0
+      audioRef.current = null
+    }
+    setIsPlaying(false)
   }, [])
 
-  const startVisualization = useCallback(() => {
-    const analyser = analyserRef.current
-    if (!analyser) return
+  useEffect(() => {
+    return () => {
+      stopPlayback()
+    }
+  }, [stopPlayback])
 
-    const dataArray = new Uint8Array(analyser.frequencyBinCount)
-
-    const updateBars = () => {
-      if (!analyserRef.current) return
-      analyserRef.current.getByteFrequencyData(dataArray)
-
-      // Sample frequency bins into BAR_COUNT bars
-      const binSize = Math.floor(dataArray.length / BAR_COUNT)
-      const newHeights: number[] = []
-      for (let i = 0; i < BAR_COUNT; i++) {
-        let sum = 0
-        for (let j = i * binSize; j < (i + 1) * binSize; j++) {
-          sum += dataArray[j]
-        }
-        const avg = sum / binSize
-        // Map 0-255 to 4-16px height
-        const height = Math.max(4, Math.min(16, (avg / 255) * 16))
-        newHeights.push(height)
+  useEffect(() => {
+    const handleVisibilityStop = () => {
+      if (document.hidden) {
+        stopPlayback()
       }
-      setBarHeights(newHeights)
-      rafRef.current = requestAnimationFrame(updateBars)
     }
 
-    rafRef.current = requestAnimationFrame(updateBars)
-  }, [])
+    const handlePageHide = () => {
+      stopPlayback()
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityStop)
+    window.addEventListener('pagehide', handlePageHide)
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityStop)
+      window.removeEventListener('pagehide', handlePageHide)
+    }
+  }, [stopPlayback])
 
   const handlePlayPause = useCallback(() => {
     if (!audioUrl) return
 
     if (isPlaying) {
-      // Stop
-      if (audioRef.current) {
-        audioRef.current.pause()
-        audioRef.current.currentTime = 0
-      }
-      stopVisualization()
-      setIsPlaying(false)
-      setBarHeights(Array(BAR_COUNT).fill(4))
-    } else {
-      // Play with AnalyserNode
-      const audio = new Audio(audioUrl)
-      audioRef.current = audio
-
-      try {
-        const audioCtx = new AudioContext()
-        const source = audioCtx.createMediaElementSource(audio)
-        const analyser = audioCtx.createAnalyser()
-        analyser.fftSize = 128
-        source.connect(analyser)
-        analyser.connect(audioCtx.destination)
-
-        audioCtxRef.current = audioCtx
-        analyserRef.current = analyser
-      } catch {
-        // MediaElementSource already connected or unsupported — fallback to random bars
-      }
-
-      audio.play().then(() => {
-        setIsPlaying(true)
-        startVisualization()
-        audio.onended = () => {
-          setIsPlaying(false)
-          stopVisualization()
-          setBarHeights(Array(BAR_COUNT).fill(4))
-        }
-      }).catch(console.error)
+      stopPlayback()
+      return
     }
-  }, [audioUrl, isPlaying, startVisualization, stopVisualization])
 
-  const durationSeconds = Math.ceil(duration / 1000)
-  const bubbleWidth = Math.min(200, Math.max(80, durationSeconds * 10))
+    const audio = new Audio(audioUrl)
+    audioRef.current = audio
+    audio.onended = () => stopPlayback()
+    audio.onerror = () => stopPlayback()
+    audio
+      .play()
+      .then(() => setIsPlaying(true))
+      .catch(() => stopPlayback())
+  }, [audioUrl, isPlaying, stopPlayback])
+
+  const durationSeconds = Math.max(1, Math.ceil(duration / 1000))
+  const durationLabel = `${durationSeconds}''`
+  const bubbleWidth = Math.min(196, Math.max(152, 110 + durationSeconds * 7))
+  const bars = isPlaying ? PLAYING_LEVELS[frameIndex] : [8, 12, 16]
+  const label = useMemo(() => (isPlaying ? '播放中' : '点击收听'), [isPlaying])
 
   return (
     <button
+      type="button"
       onClick={handlePlayPause}
-      className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-colors ${
+      className={`flex h-[56px] items-center gap-3 rounded-[28px] px-4 py-2.5 text-left transition-colors ${
         isDark
-          ? 'bg-[rgba(255,255,255,0.06)] hover:bg-[rgba(255,255,255,0.10)]'
-          : 'bg-[var(--color-surface-light)] hover:bg-[var(--color-surface)]'
+          ? 'bg-[linear-gradient(180deg,rgba(255,255,255,0.12),rgba(255,255,255,0.08))] border border-[rgba(255,255,255,0.08)] hover:bg-[linear-gradient(180deg,rgba(255,255,255,0.16),rgba(255,255,255,0.1))]'
+          : 'bg-[linear-gradient(180deg,rgba(255,255,255,0.82),rgba(255,255,255,0.64))] border border-[rgba(255,255,255,0.72)] hover:bg-[linear-gradient(180deg,rgba(255,255,255,0.88),rgba(255,255,255,0.7))]'
       }`}
-      style={{ width: `${bubbleWidth}px` }}
+      style={{ width: `${bubbleWidth}px`, maxWidth: '100%' }}
     >
-      {/* 播放/暂停图标 */}
-      <div className="w-4 h-4 flex-shrink-0">
-        {isPlaying ? (
-          <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-[var(--color-primary)]">
-            <rect x="6" y="4" width="4" height="16" />
-            <rect x="14" y="4" width="4" height="16" />
-          </svg>
-        ) : (
-          <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-[var(--color-text-secondary)]">
-            <path d="M8 5v14l11-7z" />
-          </svg>
-        )}
+      <div
+        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${
+          isDark ? 'bg-[rgba(255,255,255,0.12)]' : 'bg-[rgba(255,255,255,0.9)]'
+        }`}
+      >
+        <svg
+          viewBox="0 0 24 24"
+          className={`h-[16px] w-[16px] ${isDark ? 'fill-[#F5ECF7]' : 'fill-[#6F7489]'}`}
+          aria-hidden="true"
+        >
+          <path d="M13.5 5.25a.75.75 0 0 1 .75.75v12a.75.75 0 0 1-1.28.53L8.9 14.47H6.75A1.75 1.75 0 0 1 5 12.72V11.3c0-.97.78-1.75 1.75-1.75H8.9l4.07-4.08a.75.75 0 0 1 .53-.22Zm3.31 2.16a.75.75 0 0 1 1.06.06 6.8 6.8 0 0 1 0 9.06.75.75 0 0 1-1.12-1 5.3 5.3 0 0 0 0-7.06.75.75 0 0 1 .06-1.06Zm-1.9 1.78a.75.75 0 0 1 1.06.06 4 4 0 0 1 0 5.3.75.75 0 1 1-1.12-1 2.5 2.5 0 0 0 0-3.3.75.75 0 0 1 .06-1.06Z" />
+        </svg>
       </div>
 
-      {/* 波形条 — AnalyserNode 驱动 or 静态 */}
-      <div className="flex items-end gap-[2px] flex-1 h-[16px]">
-        {barHeights.map((h, i) => (
-          <div
-            key={i}
-            className={`flex-1 rounded-full transition-all ${
-              isPlaying
-                ? 'bg-gradient-to-t from-[var(--color-primary)] to-[var(--color-accent)]'
-                : 'bg-[var(--color-text-secondary)]'
-            }`}
-            style={{
-              height: `${h}px`,
-              transitionDuration: isPlaying ? '60ms' : '200ms',
-            }}
-          />
-        ))}
+      <div className="min-w-0 flex-1">
+        <div className="flex h-[18px] items-end gap-[3px]">
+          {bars.map((height, index) => (
+            <span
+              key={index}
+              className={`block w-[3px] shrink-0 self-end rounded-full transition-[height,opacity] duration-150 ${
+                isDark ? 'bg-[#EED9E8]' : 'bg-[#9196AA]'
+              }`}
+              style={{ height: `${height}px`, opacity: isPlaying ? 1 : 0.72 }}
+            />
+          ))}
+        </div>
+        <p className={`mt-1 whitespace-nowrap text-[11px] leading-none ${isDark ? 'text-[rgba(245,236,247,0.68)]' : 'text-[rgba(111,116,137,0.72)]'}`}>
+          {label}
+        </p>
       </div>
 
-      {/* 时长显示 */}
-      <span className="text-xs text-[var(--color-text-secondary)] flex-shrink-0">
-        {durationSeconds}s
+      <span className={`shrink-0 text-[13px] font-medium ${isDark ? 'text-[rgba(245,236,247,0.78)]' : 'text-[rgba(111,116,137,0.88)]'}`}>
+        {durationLabel}
       </span>
     </button>
   )

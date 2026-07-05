@@ -17,6 +17,8 @@ from uuid import UUID
 import structlog
 import yaml
 
+from heart.infra.partitions import ensure_monthly_partition
+
 logger = structlog.get_logger()
 
 from heart.ss03_emotion.contagion import apply_contagion
@@ -65,11 +67,24 @@ class EmotionService:
         self._db = db_session
         self._redis = redis_client
         self._state_cache: Dict[tuple, Dict[str, Any]] = {}
+        self._ensured_emotion_event_partitions: set[str] = set()
 
         if db_session is not None:
             logger.info("emotion_service_initialized_with_db")
         else:
             logger.info("emotion_service_initialized_memory_only")
+
+    async def _ensure_emotion_event_partition(self, created_at: datetime) -> None:
+        """Ensure the monthly emotion_events partition exists before flush."""
+        if self._db is None:
+            return
+        await ensure_monthly_partition(
+            self._db,
+            parent_table="emotion_events",
+            partition_prefix="emotion_events",
+            created_at=created_at,
+            cache=self._ensured_emotion_event_partitions,
+        )
 
     async def get_current_state(
         self,
@@ -264,6 +279,9 @@ class EmotionService:
 
                 from heart.ss03_emotion.models import EmotionEvent
 
+                event_created_at = datetime.now(timezone.utc)
+                await self._ensure_emotion_event_partition(event_created_at)
+
                 event = EmotionEvent(
                     event_id=uuid4(),
                     user_id=user_id,
@@ -288,6 +306,7 @@ class EmotionService:
                         "arousal": new_state["vad_arousal"],
                         "dominance": new_state["vad_dominance"],
                     },
+                    created_at=event_created_at,
                 )
                 self._db.add(event)
                 await self._db.flush()

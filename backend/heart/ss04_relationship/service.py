@@ -18,6 +18,7 @@ import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..infra.partitions import ensure_monthly_partition
 from ..ss04_relationship.anti_gaming import (
     DistinctSessionTracker,
     SignalCooldownTracker,
@@ -74,6 +75,7 @@ class RelationshipService:
         self._attachment_trackers: dict[str, AttachmentTracker] = {}
         self._cold_war_trackers: dict[str, ColdWarTracker] = {}
         self._reunion_machines: dict[str, ReunionStateMachine] = {}
+        self._ensured_relationship_event_partitions: set[str] = set()
 
         # v1.1: Anti-gaming trackers (shared across characters)
         self._session_tracker = DistinctSessionTracker()
@@ -128,6 +130,16 @@ class RelationshipService:
         """Get or create SignalAggregator for user×character."""
         return create_signal_aggregator(
             str(user_id), character_id, self._session_tracker, self._cooldown_tracker
+        )
+
+    async def _ensure_relationship_event_partition(self, created_at: datetime) -> None:
+        """Ensure the monthly relationship_events partition exists before flush."""
+        await ensure_monthly_partition(
+            self.db,
+            parent_table="relationship_events",
+            partition_prefix="relationship_events",
+            created_at=created_at,
+            cache=self._ensured_relationship_event_partitions,
         )
 
     # ─── Read API ───────────────────────────────────────────
@@ -554,6 +566,9 @@ class RelationshipService:
         if decision.gate_block_reason:
             event_payload["gate_block_reason"] = decision.gate_block_reason
 
+        event_created_at = datetime.now(timezone.utc)
+        await self._ensure_relationship_event_partition(event_created_at)
+
         event = RelationshipEvent(
             user_id=state.user_id,
             character_id=state.character_id,
@@ -572,6 +587,7 @@ class RelationshipService:
                 "intimacy": state.intimacy_level,
             },
             triggered_by_turn_id=turn_id,
+            created_at=event_created_at,
         )
 
         self.db.add(event)

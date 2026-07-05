@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { concatWavBase64 } from '../services/audioConcat'
+import { concatAudioBase64 } from '../services/audioConcat'
 import { type CharacterId, type ConversationMessage } from '../data/uiContent'
 
 export interface Message {
@@ -12,7 +12,7 @@ export interface Message {
   audioData?: string
   audioDuration?: number
   audioFormat?: string
-  audioChunks?: { dataB64: string; durationMs: number; seq: number }[]
+  audioChunks?: { dataB64: string; durationMs: number; seq: number; format: 'wav' | 'mp3' }[]
 }
 
 export interface VadState {
@@ -49,7 +49,14 @@ interface ChatState {
   addMessage: (characterId: CharacterId, msg: Message) => void
   appendToLast: (characterId: CharacterId, delta: string) => void
   setMessageAudio: (characterId: CharacterId, turnId: string, audioData: string, duration: number, format: string) => void
-  appendMessageAudio: (characterId: CharacterId, turnId: string, dataB64: string, durationMs: number, seq: number) => void
+  appendMessageAudio: (
+    characterId: CharacterId,
+    turnId: string,
+    dataB64: string,
+    durationMs: number,
+    seq: number,
+    format: 'wav' | 'mp3',
+  ) => void
   finalizeMessageAudio: (characterId: CharacterId, turnId: string) => void
   setStreaming: (v: boolean) => void
   setPlaying: (v: boolean) => void
@@ -108,12 +115,17 @@ export const useChatStore = create<ChatState>((set) => ({
 
   // Streaming management — all keyed by characterId
   addMessage: (characterId, msg) =>
-    set((s) => ({
-      messages: {
-        ...s.messages,
-        [characterId]: [...s.messages[characterId], msg],
-      },
-    })),
+    set((s) => {
+      const cleared = new Set(s.clearedCharacters)
+      cleared.delete(characterId)
+      return {
+        messages: {
+          ...s.messages,
+          [characterId]: [...s.messages[characterId], msg],
+        },
+        clearedCharacters: cleared,
+      }
+    }),
   appendToLast: (characterId, delta) =>
     set((s) => {
       const msgs = [...s.messages[characterId]]
@@ -134,16 +146,16 @@ export const useChatStore = create<ChatState>((set) => ({
         ),
       },
     })),
-  appendMessageAudio: (characterId, turnId, dataB64, durationMs, seq) =>
+  appendMessageAudio: (characterId, turnId, dataB64, durationMs, seq, format) =>
     set((s) => ({
       messages: {
         ...s.messages,
         [characterId]: s.messages[characterId].map(m => {
           if (m.id !== turnId) return m
           const chunks = m.audioChunks ? [...m.audioChunks] : []
-          chunks.push({ dataB64, durationMs, seq })
+          chunks.push({ dataB64, durationMs, seq, format })
           chunks.sort((a, b) => a.seq - b.seq)
-          return { ...m, audioChunks: chunks }
+          return { ...m, audioChunks: chunks, audioFormat: format }
         }),
       },
     })),
@@ -153,8 +165,9 @@ export const useChatStore = create<ChatState>((set) => ({
         ...s.messages,
         [characterId]: s.messages[characterId].map(m => {
           if (m.id !== turnId || !m.audioChunks || m.audioChunks.length === 0) return m
-          const { dataB64, durationMs } = concatWavBase64(m.audioChunks)
-          return { ...m, audioData: dataB64, audioDuration: durationMs, audioFormat: 'wav' }
+          const format = m.audioChunks[0].format
+          const { dataB64, durationMs } = concatAudioBase64(m.audioChunks, format)
+          return { ...m, audioData: dataB64, audioDuration: durationMs, audioFormat: format }
         }),
       },
     })),

@@ -9,19 +9,61 @@ import base64
 import json
 import uuid
 from typing import Any, Optional
+from urllib.parse import urlparse
 
 import structlog
-from fastapi import APIRouter, Depends, Query, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi.responses import Response
 from sqlalchemy import text as sql_text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from heart.core.auth import TokenData, auth_manager, get_current_user
 
-from .wiring import get_db, get_orchestrator, get_voice_service
+from .wiring import _get_engine, get_db, get_orchestrator, get_voice_service
 
 logger = structlog.get_logger(__name__)
 
 router = APIRouter()
+RECENT_HISTORY_LIMIT = 40
+
+
+def _extract_storage_key(audio_url: str) -> str | None:
+    """Extract object key from stored S3/MinIO URL."""
+    if not audio_url:
+        return None
+    parsed = urlparse(audio_url)
+    path = parsed.path.lstrip("/")
+    if not path or "/" not in path:
+        return None
+    return path.split("/", 1)[1]
+
+
+async def _load_recent_conversation_history(
+    db: AsyncSession,
+    user_id: uuid.UUID,
+    character_id: str,
+    limit: int = RECENT_HISTORY_LIMIT,
+) -> list[dict[str, str]]:
+    """Load the most recent persisted turns for prompt conversation history."""
+    result = await db.execute(
+        sql_text(
+            """
+            SELECT role, content
+            FROM chat_messages
+            WHERE user_id = :uid AND character_id = :cid
+            ORDER BY created_at DESC
+            LIMIT :limit
+            """
+        ),
+        {"uid": user_id, "cid": character_id, "limit": limit},
+    )
+    rows = result.mappings().all()
+    history = [
+        {"role": row["role"], "content": row["content"] or ""}
+        for row in reversed(rows)
+        if row["role"] in ("user", "assistant")
+    ]
+    return history
 
 
 def _create_stream_session(voice_service: Any, ws: WebSocket, cache: Any = None) -> Any:
@@ -65,6 +107,7 @@ async def _send_sentence(ws: WebSocket, turn_id: str, event: dict) -> None:
             "text": event["text"],
             "vad": event.get("vad"),
             "intimacy": event.get("intimacy", 0.0),
+            "active_emotions": event.get("active_emotions", []),
         }
     )
 
@@ -93,6 +136,7 @@ async def _handle_event(
                 sentence=event["text"],
                 vad=event.get("vad"),
                 intimacy=event.get("intimacy", 0.0),
+                active_emotions=event.get("active_emotions", []),
                 character_id=character_id,
             )
     elif event_type == "turn_end":
@@ -116,11 +160,12 @@ async def _process_stream_events(
         active_turns[turn_id] = stream_session
 
     try:
-        async for event in orch.process_turn_stream(req, db_session=None):
-            if stream_session and stream_session.is_cancelled:
-                break
-            if await _handle_event(ws, event, stream_session, turn_id, character_id):
-                break
+        async with AsyncSession(_get_engine(), expire_on_commit=False) as db:
+            async for event in orch.process_turn_stream(req, db_session=db):
+                if stream_session and stream_session.is_cancelled:
+                    break
+                if await _handle_event(ws, event, stream_session, turn_id, character_id):
+                    break
     except Exception as e:
         logger.error("chat_ws_stream_error", error=str(e))
         if stream_session:
@@ -257,7 +302,7 @@ async def _post_turn_billing(
             full_text = "".join(collected_text)
             await db.execute(
                 sql_text("""INSERT INTO chat_messages (id, user_id, character_id, turn_id, role, content, modality, audio_url, audio_duration_ms, credits_charged, created_at)
-                            VALUES (:id, :uid, :cid, :tid, 'assistant', :content, :modality, :audio_url, :audio_dur, :credits, NOW())"""),
+                            VALUES (:id, :uid, :cid, :tid, 'assistant', :content, :modality, :audio_url, :audio_dur, :credits, clock_timestamp())"""),
                 {
                     "id": uuid.uuid4(),
                     "uid": user_uuid,
@@ -283,6 +328,7 @@ async def _run_orchestrator(
     turn_id: str,
     character_id: str,
     active_turns: dict[str, Any],
+    db_session: AsyncSession,
 ) -> tuple[bool, bool, bool, list[str]]:
     """Run orchestrator stream. Returns (turn_completed, safety_blocked, audio_produced, collected_text)."""
     turn_completed = False
@@ -294,7 +340,7 @@ async def _run_orchestrator(
         active_turns[turn_id] = stream_session
 
     try:
-        async for event in orch.process_turn_stream(req, db_session=None):
+        async for event in orch.process_turn_stream(req, db_session=db_session):
             if stream_session and stream_session.is_cancelled:
                 break
 
@@ -333,8 +379,6 @@ async def _handle_chat_message(
     user_id is taken from the authenticated token (not from message body).
     Flow: voice setting check → balance pre-check → orchestrator → charge → persist.
     """
-    from sqlalchemy import text as sql_text
-
     turn_id = msg.get("turn_id") or str(uuid.uuid4())
     user_text = msg.get("text", "")
     character_id = msg.get("character_id", "rin")
@@ -363,27 +407,34 @@ async def _handle_chat_message(
     if stream_session:
         await stream_session.start()
 
-    from heart.ss07_orchestration.models import TurnRequest
+    async with AsyncSession(_get_engine(), expire_on_commit=False) as db:
+        from heart.ss07_orchestration.models import TurnRequest
 
-    req = TurnRequest(
-        user_id=user_uuid,
-        character_id=character_id,
-        user_message=user_text,
-        history=[],
-        trace_id=uuid.UUID(turn_id),
-    )
+        history = await _load_recent_conversation_history(db, user_uuid, character_id)
+        req = TurnRequest(
+            user_id=user_uuid,
+            character_id=character_id,
+            user_message=user_text,
+            history=history,
+            trace_id=uuid.UUID(turn_id),
+        )
 
-    await ws.send_json({"type": "turn_start", "turn_id": turn_id})
-
-    turn_completed, turn_safety_blocked, audio_produced, collected_text = await _run_orchestrator(
-        ws,
-        orch,
-        req,
-        stream_session,
-        turn_id,
-        character_id,
-        active_turns,
-    )
+        await ws.send_json({"type": "turn_start", "turn_id": turn_id})
+        (
+            turn_completed,
+            turn_safety_blocked,
+            audio_produced,
+            collected_text,
+        ) = await _run_orchestrator(
+            ws,
+            orch,
+            req,
+            stream_session,
+            turn_id,
+            character_id,
+            active_turns,
+            db,
+        )
 
     # ── 3. Post-turn: charge + persist ──
     if turn_completed:
@@ -508,6 +559,44 @@ async def get_chat_history(
         ],
         "next_cursor": items[-1]["created_at"].isoformat() if has_next and items else None,
     }
+
+
+@router.get("/api/chat/audio/{message_id}")
+async def get_chat_audio(
+    message_id: str,
+    current_user: TokenData = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    """Serve a user's persisted voice message audio through same-origin auth."""
+    uid = uuid.UUID(current_user.user_id)
+    result = await db.execute(
+        sql_text(
+            """
+            SELECT audio_url
+            FROM chat_messages
+            WHERE id = :mid AND user_id = :uid AND modality = 'voice'
+            LIMIT 1
+            """
+        ),
+        {"mid": uuid.UUID(message_id), "uid": uid},
+    )
+    row = result.mappings().first()
+    if not row or not row["audio_url"]:
+        raise HTTPException(status_code=404, detail="Audio not found")
+
+    key = _extract_storage_key(row["audio_url"])
+    if not key:
+        raise HTTPException(status_code=404, detail="Invalid audio URL")
+
+    try:
+        from heart.infra.storage import get_s3_object
+
+        data, content_type = await get_s3_object(key)
+    except Exception as exc:
+        logger.warning("chat_audio_fetch_failed", message_id=message_id, error=str(exc))
+        raise HTTPException(status_code=404, detail="Audio unavailable") from exc
+
+    return Response(content=data, media_type=content_type)
 
 
 async def _check_age_verified(user_id: str) -> bool:

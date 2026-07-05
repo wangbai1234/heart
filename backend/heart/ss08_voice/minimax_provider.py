@@ -6,6 +6,7 @@ from typing import AsyncIterator
 import httpx
 import structlog
 
+from heart.core.config import settings
 from heart.ss08_voice.errors import TTSProviderError
 from heart.ss08_voice.types import AudioChunk, TTSRequest, TTSResult
 
@@ -16,7 +17,11 @@ _VALID_EMOTIONS = {"happy", "sad", "angry", "fearful", "disgusted", "surprised",
 
 
 class MiniMaxProvider:
-    """MiniMax TTS Provider (speech-02-turbo)."""
+    """MiniMax TTS Provider.
+
+    Defaults to `speech-2.8-hd` so cloned voices can retain better prosody,
+    filler-word rendering, and pause naturalness.
+    """
 
     def __init__(self, api_key: str, group_id: str, base_url: str = "https://api.minimax.io/v1"):
         self._api_key = api_key
@@ -24,12 +29,10 @@ class MiniMaxProvider:
         self._base_url = base_url.rstrip("/")
         self._client = httpx.AsyncClient(timeout=30.0)
 
-    async def synthesize(self, req: TTSRequest) -> TTSResult:
-        """Synthesize speech from text (non-streaming)."""
+    def _build_body(self, req: TTSRequest, stream: bool) -> dict:
         emotion = req.emotion if req.emotion in _VALID_EMOTIONS else "neutral"
-
         body = {
-            "model": "speech-02-turbo",
+            "model": settings.minimax_tts_model,
             "text": req.text,
             "voice_setting": {
                 "voice_id": req.voice_id,
@@ -37,6 +40,7 @@ class MiniMaxProvider:
                 "vol": req.volume,
                 "pitch": req.pitch,
                 "emotion": emotion,
+                "english_normalization": False,
             },
             "audio_setting": {
                 "sample_rate": req.sample_rate,
@@ -45,6 +49,15 @@ class MiniMaxProvider:
                 "channel": 1,
             },
         }
+        if settings.minimax_language_boost:
+            body["language_boost"] = settings.minimax_language_boost
+        if stream:
+            body["stream"] = True
+        return body
+
+    async def synthesize(self, req: TTSRequest) -> TTSResult:
+        """Synthesize speech from text (non-streaming)."""
+        body = self._build_body(req, stream=False)
 
         try:
             response = await self._client.post(
@@ -86,26 +99,7 @@ class MiniMaxProvider:
 
     async def stream_synthesize(self, req: TTSRequest) -> AsyncIterator[AudioChunk]:
         """Synthesize speech from text (streaming)."""
-        emotion = req.emotion if req.emotion in _VALID_EMOTIONS else "neutral"
-
-        body = {
-            "model": "speech-02-turbo",
-            "text": req.text,
-            "stream": True,
-            "voice_setting": {
-                "voice_id": req.voice_id,
-                "speed": req.speed,
-                "vol": req.volume,
-                "pitch": req.pitch,
-                "emotion": emotion,
-            },
-            "audio_setting": {
-                "sample_rate": req.sample_rate,
-                "bitrate": 128000,
-                "format": req.format,
-                "channel": 1,
-            },
-        }
+        body = self._build_body(req, stream=True)
 
         seq = 0
         try:

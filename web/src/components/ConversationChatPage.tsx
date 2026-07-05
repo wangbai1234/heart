@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useAppStore } from '../stores/appStore'
 import { useChatStore, type Message } from '../stores/chatStore'
 import { useAuthStore } from '../stores/authStore'
-import { CHARACTER_PROFILES, shouldShowTimestamp, formatChatTime, type CharacterId } from '../data/uiContent'
+import { CHARACTER_PROFILES, shouldShowTimestamp, formatChatTime, formatTextByDisplayWidth, type CharacterId } from '../data/uiContent'
 import { useWebSocket } from '../hooks/useWebSocket'
 import { getChatHistory } from '../services/api'
 import { BreathingDots } from './ui/BreathingDots'
@@ -21,6 +21,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
   const params = useParams<{ characterId?: string }>()
   const [input, setInput] = useState('')
   const [historyLoaded, setHistoryLoaded] = useState(false)
+  const [expandedVoiceTextIds, setExpandedVoiceTextIds] = useState<Set<string>>(new Set())
   const scrollRef = useRef<HTMLDivElement>(null)
 
   const storedCharacterId = useAppStore((s) => s.currentCharacterId)
@@ -34,6 +35,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
   const currentCharacterId = (isValidCharacterId ? routeCharacterId : storedCharacterId) as CharacterId
 
   const messages = useChatStore((s) => s.messages[currentCharacterId as CharacterId] ?? [])
+  const isCleared = useChatStore((s) => s.clearedCharacters.has(currentCharacterId as CharacterId))
   const isStreaming = useChatStore((s) => s.isStreaming)
   const isPlaying = useChatStore((s) => s.isPlaying)
   const addMessage = useChatStore((s) => s.addMessage)
@@ -74,6 +76,10 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
       setHistoryLoaded(true)
       return
     }
+    if (isCleared) {
+      setHistoryLoaded(true)
+      return
+    }
 
     getChatHistory(currentCharacterId, undefined, 50)
       .then((data) => {
@@ -85,8 +91,9 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
             content: item.content,
             timestamp: new Date(item.created_at).getTime(),
             kind: item.modality === 'voice' ? 'voice' : 'text',
-            audioData: item.audio_url ?? undefined,
+            audioData: item.modality === 'voice' && item.audio_url ? `/api/chat/audio/${item.id}` : undefined,
             audioDuration: item.audio_duration_ms ?? undefined,
+            audioFormat: item.modality === 'voice' ? 'wav' : undefined,
           })
         }
         if (reversed.length > 0) {
@@ -97,6 +104,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
             content: last.content,
             timestamp: new Date(last.created_at).getTime(),
             kind: last.modality === 'voice' ? 'voice' : 'text',
+            audioDuration: last.audio_duration_ms ?? undefined,
           })
         }
         setHistoryLoaded(true)
@@ -104,7 +112,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
       .catch(() => {
         setHistoryLoaded(true)
       })
-  }, [currentCharacterId, isAuthenticated])
+  }, [currentCharacterId, isAuthenticated, isCleared])
 
   // Auto-scroll on new messages
   useEffect(() => {
@@ -125,12 +133,44 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
     interrupt()
   }, [interrupt])
 
+  const toggleVoiceTranscript = useCallback((messageId: string) => {
+    setExpandedVoiceTextIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(messageId)) {
+        next.delete(messageId)
+      } else {
+        next.add(messageId)
+      }
+      return next
+    })
+  }, [])
+
   // Render a single message bubble
   const renderMessage = (msg: Message, showAvatar: boolean) => {
     const isAI = msg.role === 'assistant'
     const avatar = isAI ? profile.avatar : userAvatar
 
-    // Show breathing dots in bubble when message is empty during streaming
+    // Voice mode loading bubble uses the same shell as text loading
+    if (msg.kind === 'voice' && !msg.audioData) {
+      return (
+        <div className={`flex items-start gap-2 ${isAI ? 'self-start' : 'self-end flex-row-reverse'}`}>
+          {showAvatar ? (
+            <Avatar src={avatar} size={40} className="shrink-0 mt-[2px]" />
+          ) : (
+            <div className="w-[40px] shrink-0" />
+          )}
+          <div className={`max-w-[67%] px-4 py-[14px] ${
+            isDark
+              ? 'bg-[rgba(255,255,255,0.06)] backdrop-blur-[16px] rounded-[20px_20px_20px_6px] border border-[rgba(255,255,255,0.06)]'
+              : 'bg-[var(--color-glass-75)] backdrop-blur-[16px] rounded-[20px_20px_20px_6px] border border-[var(--color-border-glass)]'
+          }`}>
+            <BreathingDots />
+          </div>
+        </div>
+      )
+    }
+
+    // Show breathing dots in text bubble when message is empty during streaming
     const isEmpty = msg.content === '' && isStreaming
     if (isEmpty) {
       return (
@@ -157,6 +197,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
 
     // Voice message with audio
     if (msg.kind === 'voice' && msg.audioData) {
+      const transcriptExpanded = expandedVoiceTextIds.has(msg.id)
       return (
         <div className={`flex items-start gap-2 ${isAI ? 'self-start' : 'self-end flex-row-reverse'}`}>
           {showAvatar ? (
@@ -164,23 +205,40 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
           ) : (
             <div className="w-[40px] shrink-0" />
           )}
-          <div
-            className={`max-w-[320px] backdrop-blur-[16px] rounded-[20px_20px_20px_6px] p-3 ${
-              isDark
-                ? 'bg-[rgba(255,255,255,0.06)] border border-[rgba(255,255,255,0.08)] shadow-[0_4px_12px_rgba(0,0,0,0.12)]'
-                : 'bg-[var(--color-glass-75)] border border-[var(--color-border-glass)] shadow-[var(--shadow-soft)]'
-            }`}
-          >
-            <VoiceMessageBubble
-              audioData={msg.audioData}
-              duration={msg.audioDuration ?? 3000}
-              format={msg.audioFormat ?? 'wav'}
-              isDark={isDark}
-            />
-            {msg.content && (
-              <p className={`text-[13px] mt-2 ${isDark ? 'text-[rgba(228,228,231,0.5)]' : 'text-[var(--color-text-secondary)]'}`}>
+          <div className="max-w-[348px]">
+            <div className="flex items-end gap-2">
+              <div className="flex-1">
+                <VoiceMessageBubble
+                  audioData={msg.audioData}
+                  duration={msg.audioDuration ?? 3000}
+                  format={msg.audioFormat ?? 'wav'}
+                  isDark={isDark}
+                />
+              </div>
+              {msg.content && (
+                <button
+                  type="button"
+                  onClick={() => toggleVoiceTranscript(msg.id)}
+                  className={`mb-1 shrink-0 rounded-full px-3 py-2 text-[12px] font-medium backdrop-blur-[14px] transition-colors ${
+                    isDark
+                      ? 'bg-[rgba(255,255,255,0.08)] text-[rgba(248,242,250,0.82)] border border-[rgba(255,255,255,0.08)]'
+                      : 'bg-[rgba(255,255,255,0.58)] text-[rgba(91,93,117,0.82)] border border-[rgba(255,255,255,0.74)]'
+                  }`}
+                >
+                  {transcriptExpanded ? '收起文字' : '转文字'}
+                </button>
+              )}
+            </div>
+            {msg.content && transcriptExpanded && (
+              <div
+                className={`mt-2 rounded-[20px] px-4 py-3 text-[13px] leading-[1.65] backdrop-blur-[14px] ${
+                  isDark
+                    ? 'bg-[rgba(255,255,255,0.06)] text-[rgba(236,230,241,0.76)] border border-[rgba(255,255,255,0.06)]'
+                    : 'bg-[rgba(255,255,255,0.52)] text-[rgba(93,95,118,0.84)] border border-[rgba(255,255,255,0.68)]'
+                }`}
+              >
                 {msg.content}
-              </p>
+              </div>
             )}
           </div>
         </div>
@@ -202,11 +260,13 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
                 ? 'bg-[rgba(255,255,255,0.06)] backdrop-blur-[16px] rounded-[20px_20px_20px_6px] text-[#EFE7DD] border border-[rgba(255,255,255,0.06)]'
                 : 'bg-[var(--color-glass-75)] backdrop-blur-[16px] rounded-[20px_20px_20px_6px] text-[var(--color-ink)] border border-[var(--color-border-glass)]'
               : isDark
-                ? 'bg-gradient-to-br from-[#4A5B8F] to-[#6C7DB5] rounded-[6px_20px_20px_20px] text-[#EFE7DD] min-w-[48px] w-fit'
-                : 'bg-gradient-to-br from-[#A7C7E7] to-[#BFD7EE] rounded-[6px_20px_20px_20px] text-white min-w-[48px] w-fit'
+                ? 'bg-gradient-to-br from-[#4A5B8F] to-[#6C7DB5] rounded-[6px_20px_20px_20px] text-[#EFE7DD] min-w-[48px]'
+                : 'bg-gradient-to-br from-[#A7C7E7] to-[#BFD7EE] rounded-[6px_20px_20px_20px] text-white min-w-[48px]'
           }`}
         >
-          <p className="text-[16px] leading-[1.6]">{msg.content}</p>
+          <p className={`text-[16px] leading-[1.6] ${isAI ? '' : 'whitespace-pre-wrap'}`}>
+            {isAI ? msg.content : formatTextByDisplayWidth(msg.content)}
+          </p>
         </div>
       </div>
     )

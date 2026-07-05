@@ -21,6 +21,7 @@ export interface ConversationMessage {
   timestamp: number
   kind: 'text' | 'voice'
   duration?: string
+  audioDuration?: number
 }
 
 export interface HomeAnnouncement {
@@ -171,7 +172,7 @@ export function getLoginHero(theme: 'light' | 'dark') {
   return LOGIN_HERO[theme]
 }
 
-type PreviewMessage = Pick<ConversationMessage, 'content' | 'duration' | 'kind' | 'role'>
+type PreviewMessage = Pick<ConversationMessage, 'content' | 'duration' | 'kind' | 'role' | 'audioDuration'>
 
 function formatVoiceDuration(value?: string | number) {
   if (!value) return '0:00'
@@ -187,7 +188,7 @@ export function getMessagePreview(messages: PreviewMessage[]) {
   const last = messages[messages.length - 1]
   if (!last) return '开始新的对话'
   if (last.kind === 'voice') {
-    return `语音消息 · ${formatVoiceDuration(last.duration)}`
+    return `语音消息 · ${formatVoiceDuration(last.duration ?? last.audioDuration)}`
   }
   return last.content || '新的消息'
 }
@@ -259,4 +260,44 @@ export function formatChatTime(timestamp: number): string {
   }
 
   return `${date.getMonth() + 1}/${date.getDate()} ${pad2(date.getHours())}:${pad2(date.getMinutes())}`
+}
+
+function isCJK(char: string): boolean {
+  const code = char.charCodeAt(0)
+  return (
+    (code >= 0x4e00 && code <= 0x9fff) ||
+    (code >= 0x3400 && code <= 0x4dbf) ||
+    (code >= 0xf900 && code <= 0xfaff) ||
+    (code >= 0x3000 && code <= 0x303f) ||
+    (code >= 0xff00 && code <= 0xffef)
+  )
+}
+
+function displayWidth(char: string): number {
+  return isCJK(char) ? 2 : 1
+}
+
+export function formatTextByDisplayWidth(text: string, maxWidth = 30): string {
+  const lines: string[] = []
+  let line = ''
+  let width = 0
+
+  for (const char of text) {
+    if (char === '\n') {
+      lines.push(line)
+      line = ''
+      width = 0
+      continue
+    }
+    const w = displayWidth(char)
+    if (width + w > maxWidth) {
+      lines.push(line)
+      line = ''
+      width = 0
+    }
+    line += char
+    width += w
+  }
+  lines.push(line)
+  return lines.join('\n')
 }

@@ -29,6 +29,7 @@ function SwipeableRow({ children, onDelete }: { children: React.ReactNode; onDel
   const startX = useRef(0)
   const currentOffset = useRef(0)
   const swiping = useRef(false)
+  const isOpen = offsetX <= -40
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     startX.current = e.touches[0].clientX
@@ -49,16 +50,20 @@ function SwipeableRow({ children, onDelete }: { children: React.ReactNode; onDel
 
   return (
     <div className="relative overflow-hidden rounded-[24px]">
-      {/* Delete button behind */}
-      <div className="absolute inset-y-0 right-0 flex items-center" style={{ width: 80 }}>
+      <div className="absolute inset-0 rounded-[24px] bg-transparent" />
+      <div
+        className={`absolute inset-y-0 right-0 flex items-center justify-end transition-opacity duration-150 ${
+          isOpen ? 'opacity-100' : 'pointer-events-none opacity-0'
+        }`}
+        style={{ width: 80 }}
+      >
         <button
           onClick={(e) => { e.stopPropagation(); onDelete() }}
-          className="flex h-full w-full items-center justify-center bg-[#FF5A5A] text-[14px] font-semibold text-white"
+          className="flex h-full w-full items-center justify-center rounded-r-[24px] bg-[#FF5A5A] text-[14px] font-semibold text-white"
         >
           删除
         </button>
       </div>
-      {/* Foreground row */}
       <div
         className="relative z-10 transition-transform duration-200 ease-out"
         style={{ transform: `translateX(${offsetX}px)` }}
@@ -98,6 +103,7 @@ export function ChatInboxPage() {
     const previewTimeline = timeline.map((item) => ({
       ...item,
       kind: item.kind ?? 'text',
+      audioDuration: item.audioDuration,
     }))
     const lastMessage = timeline[timeline.length - 1]
     const unreadCount = getUnreadMessageCount(timeline)
@@ -116,7 +122,7 @@ export function ChatInboxPage() {
   // Filter out characters with no messages
   const conversations = allConversations.filter((c) => c.totalMessages > 0)
 
-  const handleDelete = (characterId: CharacterId) => {
+  const handleDelete = async (characterId: CharacterId) => {
     clearThread(characterId)
     clearMessages(characterId)
     setDeleteTarget(null)
@@ -230,7 +236,11 @@ export function ChatInboxPage() {
               取消
             </button>
             <button
-              onClick={() => deleteTarget && handleDelete(deleteTarget)}
+              onClick={() => {
+                if (deleteTarget) {
+                  void handleDelete(deleteTarget)
+                }
+              }}
               className="flex-1 rounded-full bg-[#FF5A5A] px-4 py-3 text-[15px] font-semibold text-white"
             >
               删除
@@ -238,7 +248,7 @@ export function ChatInboxPage() {
           </>
         }
       >
-        删除后页面消息将被清空，但角色长期记忆不会被删除。
+        删除后只会隐藏当前设备上的页面消息，服务端聊天记录和角色记忆不会被删除。
       </Dialog>
     </div>
   )

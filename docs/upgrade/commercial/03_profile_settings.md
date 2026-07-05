@@ -62,11 +62,13 @@
 ## 4. 隐私与数据操作
 
 ### 4.1 清除聊天缓存
-- 语义澄清：本产品**没有逐条 transcript 表**（历史由记忆重建）。模块1 引入 `chat_messages` 后，"清除聊天缓存"= 清空该用户的**可见聊天消息 + L1 Redis 工作记忆 + 前端本地会话**，**默认不删** L2/L3/L4 长期记忆（那属于"注销账号"或"遗忘特定记忆"）。
-- API：`POST /api/account/clear-conversations { character_id? }` → 逻辑清空 `chat_messages`（打 `cleared_at` 或删该用户行——聊天消息非"用户核心数据"，可硬删本表，但为审计建议软标记）+ 清 Redis L1 + 返回 ok。
+- 语义澄清：本产品现已引入 `chat_messages`。但**角色后台页**的"清空聊天记录"已经改为**纯前端隐藏**：只隐藏当前设备上的聊天页面内容，**不删除**服务端 `chat_messages`，也**不删除** L1/L2/L3/L4 记忆。
+- 当前行为拆分：
+  1. `POST /api/account/clear-conversations`：仍然是账号级"清聊天缓存"接口，会清该用户的 `chat_messages` + L1 Redis 工作记忆，默认不删 L2/L3/L4。
+  2. `/character-backstage` 的"清空聊天记录"：不调用后端删除接口，只清当前设备前端会话显示；重新产生新消息后会恢复该角色页面。
 - **二次确认 + 数据说明文案**（`Dialog`，必须用）：
-  > 标题：「清除聊天缓存」
-  > 正文：「这会清空当前设备与云端的聊天对话记录。yuoyuo 对你的长期了解（TA 记住的关于你的事）不会被删除——如需彻底删除，请使用『注销账号』。此操作不可撤销。」
+  > 标题：「清空聊天记录」
+  > 正文：「这会隐藏当前设备上的聊天页面内容。云端聊天记录与角色长期记忆都会保留——如需清除云端数据，请使用设置页里的账号级清理能力。此操作不会删除长期记忆。」
   > 按钮：主「确认清除」/ 次「取消」
 
 ### 4.2 注销账号（逻辑删除 + 宽限期）
@@ -122,7 +124,8 @@ Profile 相关字段（`display_name/avatar_url/gender/birthdate/age_verified_at
 - 首登无生日 → 强制补全；填 <18 → 服务端拒验证 → 拦截页，chat/voice 返回 403。
 - 填 ≥18 → `age_verified_at` 落库 → 放行。
 - 改昵称/性别/头像持久化，重登仍在。
-- 清除聊天缓存：`chat_messages` 清空 + L1 清，长期记忆仍在。
+- 角色后台页清空聊天记录：仅当前设备前端隐藏，服务端记录与长期记忆仍在。
+- 账号级清除聊天缓存：`chat_messages` 清空 + L1 清，长期记忆仍在。
 - 注销：两段确认 → status=deleted + 邮箱匿名 + sessions 吊销 + 排期行写入；30 天任务清数据；原邮箱可重新注册。
 
 ---
@@ -135,7 +138,7 @@ Profile 相关字段（`display_name/avatar_url/gender/birthdate/age_verified_at
 后端：
 1. 迁移 013_account_and_char_settings.py：建 account_deletion_requests（+ 模块1 的 user_character_settings，可合并）。字段按 §5 / 模块1 §3。写 downgrade。
 2. routes_profile.py：GET/PATCH /api/profile（PATCH 收 birthdate 时服务端重算周岁，<18 拒写 age_verified_at 返回 age_verified:false，>=18 写入，不信前端）、POST /api/profile/avatar（multipart→S3/MinIO，校验类型≤5MB，路径 avatars/{uid}/{uuid}.webp）。
-3. routes_account.py：POST /api/account/clear-conversations（清 chat_messages+L1 Redis，保留长期记忆）、POST /api/account/delete（users.status=deleted+deleted_at+email 匿名化+吊销所有 auth_sessions+写 account_deletion_requests purge_after=+30d）、POST /api/account/export（导出 JSON）。
+3. routes_account.py：POST /api/account/clear-conversations（账号级清 chat_messages+L1 Redis，保留长期记忆）、POST /api/account/delete（users.status=deleted+deleted_at+email 匿名化+吊销所有 auth_sessions+写 account_deletion_requests purge_after=+30d）、POST /api/account/export（导出 JSON）。
 4. workers 定时清除任务：purge_after<now 且 pending → 清该用户记忆/情绪/关系/chat_messages/头像 → status=purged。
 5. 门禁：age_verified_at IS NULL 的用户访问 chat/voice/credits 消费类路由返回 403 age_verification_required（profile/export/delete 除外）。
 

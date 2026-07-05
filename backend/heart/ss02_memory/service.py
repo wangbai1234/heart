@@ -27,6 +27,7 @@ from uuid import UUID, uuid4
 import structlog
 
 from heart.infra.invariants import invariant
+from heart.infra.partitions import ensure_monthly_partition
 
 import heart.infra.invariant_predicates  # noqa: F401, E402 isort:skip
 
@@ -197,12 +198,25 @@ class MemoryService:
         self._db = db_session
         self._redis = redis_client
         self._embedding = embedding_service
+        self._ensured_encoding_event_partitions: set[str] = set()
 
         # Lazily-initialized sub-components
         self._fast_encoder = None
         self._decay_engine = None
 
         logger.info("memory_service_initialized", has_db=db_session is not None)
+
+    async def _ensure_memory_encoding_partition(self, created_at: datetime) -> None:
+        """Ensure the monthly memory_encoding_events partition exists before flush."""
+        if self._db is None:
+            return
+        await ensure_monthly_partition(
+            self._db,
+            parent_table="memory_encoding_events",
+            partition_prefix="memory_encoding_events",
+            created_at=created_at,
+            cache=self._ensured_encoding_event_partitions,
+        )
 
     # ─────────── Read API ───────────
 
@@ -611,6 +625,9 @@ class MemoryService:
         Spec: §7.2 写入者, §7.3 调用顺序 (T+50ms → T+5min worker)
         """
         if self._db is not None:
+            if event.created_at is None:
+                event.created_at = datetime.now(timezone.utc).replace(tzinfo=None)
+            await self._ensure_memory_encoding_partition(event.created_at)
             self._db.add(event)
             await self._db.flush()
             logger.debug("encoding_queued", event_id=str(event.event_id))
