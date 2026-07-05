@@ -230,3 +230,33 @@ export function formatConversationTime(timestamp: number) {
 
   return `${date.getMonth() + 1}/${date.getDate()}`
 }
+
+function isSameDay(a: Date, b: Date): boolean {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
+}
+
+function pad2(n: number): string {
+  return n < 10 ? `0${n}` : `${n}`
+}
+
+export function shouldShowTimestamp(current: { timestamp: number }, previous: { timestamp: number } | null): boolean {
+  if (!previous) return true
+  return current.timestamp - previous.timestamp > 5 * 60 * 1000
+}
+
+export function formatChatTime(timestamp: number): string {
+  const date = new Date(timestamp)
+  const now = new Date()
+
+  if (isSameDay(date, now)) {
+    return `${pad2(date.getHours())}:${pad2(date.getMinutes())}`
+  }
+
+  const yesterday = new Date(now)
+  yesterday.setDate(now.getDate() - 1)
+  if (isSameDay(date, yesterday)) {
+    return `昨天 ${pad2(date.getHours())}:${pad2(date.getMinutes())}`
+  }
+
+  return `${date.getMonth() + 1}/${date.getDate()} ${pad2(date.getHours())}:${pad2(date.getMinutes())}`
+}
