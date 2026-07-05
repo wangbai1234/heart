@@ -258,15 +258,18 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
         })}
 
         {/* Streaming indicator */}
-        {isStreaming && !isPlaying && (
-          <div
-            className={`self-start backdrop-blur-[16px] rounded-[20px_20px_20px_6px] px-5 py-3 ${
-              isDark
-                ? 'bg-[rgba(255,255,255,0.06)] border border-[rgba(255,255,255,0.06)]'
-                : 'bg-[var(--color-glass-75)] border border-[var(--color-border-glass)]'
-            }`}
-          >
-            <BreathingDots />
+        {isStreaming && (
+          <div className={`flex items-end gap-2 self-start`}>
+            <Avatar src={profile.avatar} size={40} className="shrink-0 mt-[2px]" />
+            <div
+              className={`backdrop-blur-[16px] rounded-[20px_20px_20px_6px] px-5 py-3 ${
+                isDark
+                  ? 'bg-[rgba(255,255,255,0.06)] border border-[rgba(255,255,255,0.06)]'
+                  : 'bg-[var(--color-glass-75)] border border-[var(--color-border-glass)]'
+              }`}
+            >
+              <BreathingDots />
+            </div>
           </div>
         )}
       </div>
