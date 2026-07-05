@@ -57,9 +57,7 @@ class TestColdWarTrackerWiring:
         db = AsyncMock()
         soul_spec = {
             "character_id": "rin",
-            "relational_template": {
-                "cold_war_modifiers": {"trigger_threshold": 0.3}
-            },
+            "relational_template": {"cold_war_modifiers": {"trigger_threshold": 0.3}},
         }
         service = RelationshipService(db, {"rin": soul_spec})
         tracker = service._get_cold_war_tracker("rin")
@@ -85,9 +83,7 @@ class TestColdWarTrackerWiring:
         """Cold war should NOT trigger if already in cold war."""
         tracker = ColdWarTracker()
         emotion = _make_emotion_state(coldness=0.7, cause="conflict")
-        rel_state = _make_relationship_state(
-            active_special_states=[{"state_type": "COLD_WAR"}]
-        )
+        rel_state = _make_relationship_state(active_special_states=[{"state_type": "COLD_WAR"}])
 
         assert tracker.should_trigger_cold_war(emotion, rel_state) is False
 
@@ -114,9 +110,7 @@ class TestColdWarTrackerWiring:
 
         # Simulate low repair progress (below reconciling threshold 0.4)
         emotion_with_repair = _make_emotion_state(coldness=0.6)
-        emotion_with_repair["pending_repairs"] = [
-            {"emotion": "coldness", "repair_progress": 0.2}
-        ]
+        emotion_with_repair["pending_repairs"] = [{"emotion": "coldness", "repair_progress": 0.2}]
 
         transition = tracker.update_cold_war(rel_state, emotion_with_repair)
         assert transition is None  # Not yet resolved, not yet reconciling
@@ -134,9 +128,7 @@ class TestColdWarTrackerWiring:
 
         # Simulate repair progress above reconciling threshold
         emotion_with_repair = _make_emotion_state(coldness=0.6)
-        emotion_with_repair["pending_repairs"] = [
-            {"emotion": "coldness", "repair_progress": 0.6}
-        ]
+        emotion_with_repair["pending_repairs"] = [{"emotion": "coldness", "repair_progress": 0.6}]
 
         transition = tracker.update_cold_war(rel_state, emotion_with_repair)
         assert transition == "to_reconciling"
@@ -171,9 +163,7 @@ class TestReunionStateMachineWiring:
     def test_reunion_no_trigger_already_in_reunion(self):
         """Reunion should NOT trigger if already in reunion."""
         machine = ReunionStateMachine()
-        rel_state = _make_relationship_state(
-            active_special_states=[{"state_type": "REUNION"}]
-        )
+        rel_state = _make_relationship_state(active_special_states=[{"state_type": "REUNION"}])
 
         assert machine.should_trigger_reunion(10, rel_state) is False
 

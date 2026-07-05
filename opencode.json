@@ -1,0 +1,22 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "mcp-postgres": {
+      "command": [
+        "npx",
+        "-y",
+        "mcp-postgres@latest"
+      ],
+      "enabled": true,
+      "environment": {
+        "DB_HOST": "localhost",
+        "DB_NAME": "heart",
+        "DB_PASSWORD": "heartdev",
+        "DB_PORT": "5432",
+        "DB_READ_ONLY": "true",
+        "DB_USER": "heart"
+      },
+      "type": "local"
+    }
+  }
+}

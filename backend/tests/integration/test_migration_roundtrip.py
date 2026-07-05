@@ -31,14 +31,34 @@ REV_008 = "008_memory_extraction_dlq"
 REV_009 = "009_memory_l4_extras"
 REV_010 = "010_memory_regex_shadow"
 
-ALL_REVISIONS = [BASE, REV_001, REV_002, REV_003, REV_004, REV_005, REV_006, REV_007, REV_008, REV_009, REV_010]
+ALL_REVISIONS = [
+    BASE,
+    REV_001,
+    REV_002,
+    REV_003,
+    REV_004,
+    REV_005,
+    REV_006,
+    REV_007,
+    REV_008,
+    REV_009,
+    REV_010,
+]
 
 # Tables expected per migration (excluding alembic_version and partition children)
 _TABLES_001 = {
-    "episodic_memories", "fact_nodes", "identity_memories",
-    "memory_encoding_events", "consolidation_jobs",
+    "episodic_memories",
+    "fact_nodes",
+    "identity_memories",
+    "memory_encoding_events",
+    "consolidation_jobs",
 }
-_TABLES_002 = _TABLES_001 | {"emotion_states", "emotion_events", "relationship_states", "relationship_events"}
+_TABLES_002 = _TABLES_001 | {
+    "emotion_states",
+    "emotion_events",
+    "relationship_states",
+    "relationship_events",
+}
 _TABLES_003 = _TABLES_002  # ALTER only, no new tables
 _TABLES_004 = _TABLES_003 | {"replay_snapshots"}
 _TABLES_005 = _TABLES_004 | {"safety_events"}
@@ -408,7 +428,18 @@ async def test_alembic_head_is_consistently_reachable(
     await _clean_database(db_url)
 
     # Test that each revision can be upgraded to from base
-    for rev in [REV_001, REV_002, REV_003, REV_004, REV_005, REV_006, REV_007, REV_008, REV_009, REV_010]:
+    for rev in [
+        REV_001,
+        REV_002,
+        REV_003,
+        REV_004,
+        REV_005,
+        REV_006,
+        REV_007,
+        REV_008,
+        REV_009,
+        REV_010,
+    ]:
         # Start from base
         engine = create_async_engine(db_url)
         async with engine.begin() as conn:
@@ -461,7 +492,9 @@ async def test_migration_chain_has_no_gaps(postgres_container, alembic_cfg, migr
     ]
     for rev_id, expected_parent in chain:
         rev = revisions[rev_id]
-        parents = rev.down_revision if isinstance(rev.down_revision, tuple) else (rev.down_revision,)
+        parents = (
+            rev.down_revision if isinstance(rev.down_revision, tuple) else (rev.down_revision,)
+        )
         assert expected_parent in parents, (
             f"{rev_id} down_revision {rev.down_revision} != {expected_parent}"
         )

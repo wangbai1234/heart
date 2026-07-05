@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { useChatStore } from '../stores/chatStore'
-import { createAudioPlayer, wrapPCM16AsWAV, type AudioPlayer } from '../services/audioPlayer'
+import { useAppStore } from '../stores/appStore'
+import { useAuthStore } from '../stores/authStore'
+import { wrapPCM16AsWAV } from '../services/audioPlayer'
+import type { CharacterId } from '../data/uiContent'
 
-const WS_URL = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/api/chat/ws`
+const WS_BASE = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/api/chat/ws`
 
 interface WsMessage {
   type: string
@@ -17,6 +20,10 @@ interface WsMessage {
   vad?: { energy?: number; mood?: string }
   intimacy?: number
   msg?: string
+  modality?: string
+  credits_charged?: number
+  balance?: number
+  needed?: number
 }
 
 function b64ToArrayBuffer(b64: string): ArrayBuffer {
@@ -26,16 +33,27 @@ function b64ToArrayBuffer(b64: string): ArrayBuffer {
   return buf.buffer
 }
 
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer)
+  let binary = ''
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i])
+  return btoa(binary)
+}
+
+function estimateChunkDurationMs(buffer: ArrayBuffer, format?: string) {
+  if (format === 'pcm16') {
+    return Math.max(1, Math.round(buffer.byteLength / (24000 * 2) * 1000))
+  }
+  return Math.max(1, Math.round(buffer.byteLength * 8 / 128))
+}
+
 export function useWebSocket() {
   const wsRef = useRef<WebSocket | null>(null)
   const connectRef = useRef<(() => void) | null>(null)
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const playerRef = useRef<AudioPlayer | null>(null)
-  // Holds a player whose turn has ended but whose audio is still draining.
-  // Stopped (audio cut) when the next turn starts via ensurePlayer().
-  const drainingPlayerRef = useRef<AudioPlayer | null>(null)
   const seenChunks = useRef<Set<string>>(new Set())
-  const audioPreBuffer = useRef<ArrayBuffer[] | null>(null)
+  const activeCharRef = useRef<CharacterId>('rin')
+  const pendingVoiceTurnRef = useRef(false)
 
   const addMessage = useChatStore(s => s.addMessage)
   const appendToLast = useChatStore(s => s.appendToLast)
@@ -43,24 +61,9 @@ export function useWebSocket() {
   const setPlaying = useChatStore(s => s.setPlaying)
   const setCurrentTurnId = useChatStore(s => s.setCurrentTurnId)
   const setVad = useChatStore(s => s.setVad)
+  const appendMessageAudio = useChatStore(s => s.appendMessageAudio)
+  const finalizeMessageAudio = useChatStore(s => s.finalizeMessageAudio)
   const isStreaming = useChatStore(s => s.isStreaming)
-
-  const ensurePlayer = useCallback(async (format?: string): Promise<AudioPlayer> => {
-    // Stop any draining player from the previous turn (its audio is cut on new turn start).
-    if (drainingPlayerRef.current) {
-      console.log('[ws] ensurePlayer: stopping draining player')
-      try { drainingPlayerRef.current.stop() } catch { /* ignore */ }
-      drainingPlayerRef.current = null
-    }
-    if (playerRef.current && playerRef.current.isAlive()) return playerRef.current
-    if (playerRef.current) { try { playerRef.current.stop() } catch { /* ignore */ } }
-    console.log('[ws] ensurePlayer: creating new player, format:', format ?? 'unknown')
-    const p = createAudioPlayer(format)
-    await p.init()
-    p.onBufferedMs(() => {})
-    playerRef.current = p
-    return p
-  }, [])
 
   const connect = useCallback(() => {
     if (reconnectTimerRef.current) {
@@ -74,30 +77,35 @@ export function useWebSocket() {
       wsRef.current = null
     }
 
-    const ws = new WebSocket(WS_URL)
+    const { accessToken } = useAuthStore.getState()
+    if (!accessToken) {
+      return
+    }
+
+    const ws = new WebSocket(`${WS_BASE}?token=${accessToken}`)
     wsRef.current = ws
 
-    ws.onopen = () => {
-      console.log('[ws] connected')
-    }
+    ws.onopen = () => {}
 
     ws.onmessage = async (ev) => {
       const msg: WsMessage = JSON.parse(ev.data)
+      const cid = activeCharRef.current
       switch (msg.type) {
         case 'turn_start':
-          console.log('[ws] turn_start received, turn_id:', msg.turn_id)
           seenChunks.current.clear()
           setCurrentTurnId(msg.turn_id ?? null)
-          addMessage({
+          addMessage(cid, {
             id: msg.turn_id ?? crypto.randomUUID(),
             role: 'assistant',
             content: '',
             timestamp: Date.now(),
+            kind: pendingVoiceTurnRef.current ? 'voice' : 'text',
           })
-          setPlaying(true)
+          setStreaming(true)
+          setPlaying(false)
           break
         case 'text_delta':
-          appendToLast(msg.delta ?? '')
+          appendToLast(cid, msg.delta ?? '')
           break
         case 'sentence':
           setVad({
@@ -109,85 +117,119 @@ export function useWebSocket() {
         case 'audio_chunk':
           if (msg.data_b64) {
             const currentTurnId = useChatStore.getState().currentTurnId
-            if (msg.turn_id !== currentTurnId) {
-              console.log('[ws] audio_chunk rejected: turn_id mismatch', msg.turn_id, '!==', currentTurnId)
-              return
+            if (msg.turn_id !== currentTurnId) return
+            // Mark message as voice on first audio chunk
+            const msgs = useChatStore.getState().messages[cid] ?? []
+            const lastMsg = msgs[msgs.length - 1]
+            if (lastMsg && lastMsg.id === currentTurnId && lastMsg.kind !== 'voice') {
+              const updated = msgs.map(m => m.id === currentTurnId ? { ...m, kind: 'voice' as const } : m)
+              useChatStore.setState((s) => ({
+                messages: { ...s.messages, [cid]: updated },
+              }))
             }
             const key = `${msg.turn_id}:${msg.sentence_seq ?? 0}:${msg.seq}`
-            if (seenChunks.current.has(key)) {
-              console.log('[ws] audio_chunk rejected: duplicate', key)
-              return
-            }
+            if (seenChunks.current.has(key)) return
             seenChunks.current.add(key)
-            let buf = b64ToArrayBuffer(msg.data_b64)
+            const rawBuffer = b64ToArrayBuffer(msg.data_b64)
+            const durationMs = estimateChunkDurationMs(rawBuffer, msg.format)
+            const audioFormat = msg.format === 'pcm16' ? 'wav' : 'mp3'
+            let storedB64 = msg.data_b64
             if (msg.format === 'pcm16') {
-              buf = wrapPCM16AsWAV(buf)
+              storedB64 = arrayBufferToBase64(wrapPCM16AsWAV(rawBuffer))
             }
-            // Pre-buffer: wait for 2 chunks before creating player and starting playback.
-            // This avoids starting playback on the first chunk and stalling if the second is slow.
-            const preBufferCount = 2
-            if (!playerRef.current || !playerRef.current.isAlive()) {
-              if (seenChunks.current.size < preBufferCount && !msg.is_last) {
-                // Accumulate in a temp buffer instead of playing immediately
-                if (!audioPreBuffer.current) audioPreBuffer.current = []
-                audioPreBuffer.current.push(buf)
-                console.log('[ws] audio_chunk pre-buffered', key, 'count:', audioPreBuffer.current.size)
-                return
-              }
-              await ensurePlayer(msg.format)
-              // Flush pre-buffered chunks
-              if (audioPreBuffer.current) {
-                for (const preBuf of audioPreBuffer.current) {
-                  playerRef.current!.enqueue(preBuf)
-                }
-                audioPreBuffer.current = null
-              }
-            }
-            console.log('[ws] audio_chunk enqueued', key, 'size:', buf.byteLength, 'fmt:', msg.format)
-            playerRef.current!.enqueue(buf)
+            appendMessageAudio(cid, currentTurnId, storedB64, durationMs, msg.seq ?? 0, audioFormat)
           }
           break
         case 'turn_end':
-          // Move player to draining state so buffered audio plays out naturally.
-          // ensurePlayer() on the next turn_start will stop it before starting fresh.
-          console.log('[ws] turn_end received, player alive:', playerRef.current?.isAlive())
-          if (playerRef.current) {
-            drainingPlayerRef.current = playerRef.current
-            playerRef.current = null
+          if (msg.turn_id) {
+            finalizeMessageAudio(cid, msg.turn_id)
+            if (msg.modality) {
+              const normalizedKind = msg.modality === 'voice' ? 'voice' : 'text'
+              useChatStore.setState((s) => ({
+                messages: {
+                  ...s.messages,
+                  [cid]: (s.messages[cid] ?? []).map((message) =>
+                    message.id === msg.turn_id ? { ...message, kind: normalizedKind } : message,
+                  ),
+                },
+              }))
+            }
           }
           setStreaming(false)
           setPlaying(false)
           setCurrentTurnId(null)
+          // Sync last assistant message to threads for HomePage
+          {
+            const msgs = useChatStore.getState().messages[cid] ?? []
+            const lastMsg = msgs[msgs.length - 1]
+            if (lastMsg && lastMsg.role === 'assistant') {
+              const { appendMessage } = useChatStore.getState()
+              appendMessage(cid, {
+                id: lastMsg.id,
+                role: 'assistant',
+                content: lastMsg.content,
+                timestamp: lastMsg.timestamp,
+                kind: lastMsg.kind === 'voice' ? 'voice' : 'text',
+                duration: lastMsg.duration,
+                audioDuration: lastMsg.audioDuration,
+              })
+            }
+          }
+          // Sync credits balance if provided
+          if (msg.balance !== undefined) {
+            const { setBalance } = (await import('../stores/creditsStore')).useCreditsStore.getState()
+            setBalance(msg.balance)
+          }
+          pendingVoiceTurnRef.current = false
+          break
+        case 'insufficient_credits':
+          setStreaming(false)
+          setPlaying(false)
+          setCurrentTurnId(null)
+          pendingVoiceTurnRef.current = false
+          {
+            const { setInsufficientCredits } = useChatStore.getState()
+            setInsufficientCredits(msg.needed ?? 0, msg.balance ?? 0)
+          }
           break
         case 'interrupted':
-          console.log('[ws] interrupted received')
-          if (drainingPlayerRef.current) {
-            try { drainingPlayerRef.current.stop() } catch { /* ignore */ }
-            drainingPlayerRef.current = null
-          }
-          playerRef.current?.stop()
-          playerRef.current = null
           setStreaming(false)
           setPlaying(false)
           setCurrentTurnId(null)
+          pendingVoiceTurnRef.current = false
           break
         case 'error':
-          console.error('[ws] error:', msg.msg)
-          if (drainingPlayerRef.current) {
-            try { drainingPlayerRef.current.stop() } catch { /* ignore */ }
-            drainingPlayerRef.current = null
-          }
-          playerRef.current?.stop()
-          playerRef.current = null
           setStreaming(false)
           setPlaying(false)
+          pendingVoiceTurnRef.current = false
           break
       }
     }
 
-    ws.onclose = () => {
-      console.log('[ws] disconnected, reconnecting in 2s...')
-      if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current)
+    ws.onclose = async (ev) => {
+      // 1008 = token invalid/expired → try refresh once
+      if (ev.code === 1008) {
+        try {
+          const { refreshToken } = useAuthStore.getState()
+          if (refreshToken) {
+            // Use the shared refresh dedup from api.ts
+            const { doRefreshToken } = await import('../services/api')
+            await doRefreshToken(refreshToken)
+            // Reconnect with new token
+            reconnectTimerRef.current = setTimeout(() => {
+              reconnectTimerRef.current = null
+              connectRef.current?.()
+            }, 500)
+            return
+          }
+        } catch {
+          // Refresh failed — clear session, go to login
+          useAuthStore.getState().clearSession()
+          window.location.href = '/login'
+          return
+        }
+      }
+      // Normal reconnect
       reconnectTimerRef.current = setTimeout(() => {
         reconnectTimerRef.current = null
         connectRef.current?.()
@@ -197,7 +239,7 @@ export function useWebSocket() {
     ws.onerror = (err) => {
       console.error('[ws] error', err)
     }
-  }, [addMessage, appendToLast, setStreaming, setPlaying, setCurrentTurnId, setVad, ensurePlayer])
+  }, [addMessage, appendMessageAudio, appendToLast, finalizeMessageAudio, setStreaming, setPlaying, setCurrentTurnId, setVad])
 
   useEffect(() => {
     connectRef.current = connect
@@ -208,14 +250,30 @@ export function useWebSocket() {
       if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
       if (isStreaming) return
 
-      const { characterId } = useChatStore.getState()
+      const { currentCharacterId } = useAppStore.getState()
+      const characterId = currentCharacterId
+      activeCharRef.current = characterId
+      const { voiceChatEnabled } = useAppStore.getState()
+      const voiceEnabled = voiceChatEnabled?.[characterId] ?? false
+      pendingVoiceTurnRef.current = voiceEnabled
       const turnId = crypto.randomUUID()
-      addMessage({
+      addMessage(characterId, {
         id: `user-${turnId}`,
         role: 'user',
         content: text,
         timestamp: Date.now(),
       })
+      // Sync user message to threads for HomePage
+      {
+        const { appendMessage: appendThread } = useChatStore.getState()
+        appendThread(characterId, {
+          id: `user-${turnId}`,
+          role: 'user',
+          content: text,
+          timestamp: Date.now(),
+          kind: 'text',
+        })
+      }
       setStreaming(true)
 
       wsRef.current.send(
@@ -224,6 +282,7 @@ export function useWebSocket() {
           text,
           character_id: characterId,
           turn_id: turnId,
+          voice_enabled: voiceEnabled,
         }),
       )
     },
@@ -233,8 +292,6 @@ export function useWebSocket() {
   const interrupt = useCallback(() => {
     const turnId = useChatStore.getState().currentTurnId
     if (!wsRef.current || !turnId) return
-    playerRef.current?.stop()
-    playerRef.current = null
     wsRef.current.send(JSON.stringify({ type: 'interrupt', turn_id: turnId }))
   }, [])
 
@@ -247,12 +304,6 @@ export function useWebSocket() {
       }
       wsRef.current?.close()
       wsRef.current = null
-      if (drainingPlayerRef.current) {
-        try { drainingPlayerRef.current.stop() } catch { /* ignore */ }
-        drainingPlayerRef.current = null
-      }
-      playerRef.current?.stop()
-      playerRef.current = null
     }
   }, [connect])
 

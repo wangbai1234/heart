@@ -14,6 +14,7 @@ from heart.core.auth import auth_manager
 @pytest.fixture
 def client():
     from heart.api.main import app
+
     return TestClient(app)
 
 
@@ -25,7 +26,6 @@ def auth_headers():
 
 @pytest.mark.integration
 class TestRateLimit:
-
     def test_login_rate_limit(self, client):
         """Login should enforce 10/minute rate limit."""
         # Send 11 requests rapidly

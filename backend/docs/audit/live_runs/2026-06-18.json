@@ -1,0 +1,14 @@
+[
+  {
+    "timestamp": "2026-06-18T09:57:23.637227+00:00",
+    "total_cost": 0.00024626000000000004,
+    "tests_run": 5,
+    "per_test": {
+      "tests/live/test_real_turn_full_wiring.py::TestRealTurnFullWiring::test_live__full_wiring_turn_produces_all_spans": 0.0,
+      "tests/live/test_real_turn_smoke.py::TestRealTurnSmoke::test_live__deepseek_responds_to_basic_greeting": 1.3160000000000001e-05,
+      "tests/live/test_real_turn_smoke.py::TestRealTurnMinimalLatency::test_live__deepseek_responds_under_30_seconds": 1.3160000000000001e-05,
+      "tests/live/test_voice_dna_baseline.py::TestVoiceDNABaseline::test_live__generate_rin_baseline": 0.00024626000000000004,
+      "tests/live/test_voice_dna_baseline.py::TestVoiceDnaSmoke::test_live__rin_uses_voice_dna_patterns": 0.00024626000000000004
+    }
+  }
+]

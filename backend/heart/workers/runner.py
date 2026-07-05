@@ -107,6 +107,49 @@ async def start_workers() -> None:
     except Exception as e:
         logger.error("replay_snapshots_cleanup_start_failed", error=str(e))
 
+    # Start account purge worker (deletes data after 30-day grace period)
+    try:
+        from heart.workers.account_purge_worker import run_account_purge_loop
+
+        stop_event = asyncio.Event()
+        _worker_stop_events.append(stop_event)
+        task = asyncio.create_task(
+            run_account_purge_loop(stop_event),
+            name="account_purge_worker",
+        )
+        _worker_tasks.append(task)
+        logger.info("account_purge_worker_started")
+    except Exception as e:
+        logger.error("account_purge_worker_start_failed", error=str(e))
+
+    # Start credit reconciliation worker
+    try:
+        from heart.workers.credit_reconciliation_worker import run_credit_reconciliation_loop
+
+        stop_event = asyncio.Event()
+        _worker_stop_events.append(stop_event)
+        task = asyncio.create_task(
+            run_credit_reconciliation_loop(stop_event),
+            name="credit_reconciliation_worker",
+        )
+        _worker_tasks.append(task)
+        logger.info("credit_reconciliation_worker_started")
+    except Exception as e:
+        logger.error("credit_reconciliation_worker_start_failed", error=str(e))
+
+    # Start OTP cleanup worker (delete expired codes)
+    try:
+        stop_event = asyncio.Event()
+        _worker_stop_events.append(stop_event)
+        task = asyncio.create_task(
+            _run_otp_cleanup_loop(stop_event),
+            name="otp_cleanup_worker",
+        )
+        _worker_tasks.append(task)
+        logger.info("otp_cleanup_worker_started")
+    except Exception as e:
+        logger.error("otp_cleanup_worker_start_failed", error=str(e))
+
 
 async def stop_workers() -> None:
     """Stop all background workers gracefully."""
@@ -178,13 +221,17 @@ async def _run_replay_cleanup_loop(stop_event: asyncio.Event) -> None:
         try:
             async with factory() as session:
                 result = await session.execute(
-                    text("DELETE FROM replay_snapshots WHERE created_at < NOW() - INTERVAL ':days days'"),
+                    text(
+                        "DELETE FROM replay_snapshots WHERE created_at < NOW() - INTERVAL ':days days'"
+                    ),
                     {"days": retention_days},
                 )
                 deleted = result.rowcount
                 await session.commit()
                 if deleted > 0:
-                    logger.info("replay_snapshots_cleaned", deleted=deleted, retention_days=retention_days)
+                    logger.info(
+                        "replay_snapshots_cleaned", deleted=deleted, retention_days=retention_days
+                    )
         except asyncio.CancelledError:
             break
         except Exception as e:
@@ -195,3 +242,35 @@ async def _run_replay_cleanup_loop(stop_event: asyncio.Event) -> None:
             break  # stop_event was set
         except asyncio.TimeoutError:
             continue  # timeout reached, run cleanup again
+
+
+async def _run_otp_cleanup_loop(stop_event: asyncio.Event) -> None:
+    """Delete expired OTP codes older than 1 day. Runs every 6 hours."""
+    from sqlalchemy import text
+
+    from heart.api.wiring import _get_session_factory
+
+    interval_s = int(os.getenv("HEART_OTP_CLEANUP_INTERVAL_S", "21600"))  # 6 hours
+    factory = _get_session_factory()
+    logger.info("otp_cleanup_started", interval_s=interval_s)
+
+    while not stop_event.is_set():
+        try:
+            async with factory() as session:
+                result = await session.execute(
+                    text("DELETE FROM email_otp_codes WHERE expires_at < NOW() - INTERVAL '1 day'")
+                )
+                deleted = result.rowcount
+                await session.commit()
+                if deleted > 0:
+                    logger.info("otp_codes_cleaned", deleted=deleted)
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            logger.error("otp_cleanup_failed", error=str(e))
+
+        try:
+            await asyncio.wait_for(stop_event.wait(), timeout=interval_s)
+            break
+        except asyncio.TimeoutError:
+            continue

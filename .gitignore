@@ -74,3 +74,8 @@ docs/mvp/cut_status.md
 *.swp
 *~
 .deepseek/
+
+# Test/agent scratch artifacts (never commit)
+.playwright-mcp/
+.codex_artifacts/
+create_test_token.py

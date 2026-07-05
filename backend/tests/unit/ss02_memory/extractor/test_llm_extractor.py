@@ -166,15 +166,17 @@ def _make_envelope_json(
     dropped_signals: list[dict] | None = None,
 ) -> str:
     """Build a valid envelope JSON string."""
-    return json.dumps({
-        "extractor_run_id": run_id,
-        "model": "fake-model",
-        "prompt_version": "1.0.0",
-        "schema_version": "1.0.0",
-        "window": {"turn_ids": window_turn_ids, "size": len(window_turn_ids)},
-        "candidates": candidates or [],
-        "dropped_signals": dropped_signals or [],
-    })
+    return json.dumps(
+        {
+            "extractor_run_id": run_id,
+            "model": "fake-model",
+            "prompt_version": "1.0.0",
+            "schema_version": "1.0.0",
+            "window": {"turn_ids": window_turn_ids, "size": len(window_turn_ids)},
+            "candidates": candidates or [],
+            "dropped_signals": dropped_signals or [],
+        }
+    )
 
 
 # ── 6 Canonical Scenarios (from few-shot examples) ────────────
@@ -188,18 +190,29 @@ class TestCanonicalScenarios:
         """Example 1: Fragmentation + Coreference — shared entity_ref, union of source_turns."""
         run_id = uuid4()
         envelope_json = _make_envelope_json(
-            str(run_id), [10, 11, 12],
+            str(run_id),
+            [10, 11, 12],
             candidates=[
                 {
-                    "entity_type": "pet", "attribute": "name", "value": "妙妙",
-                    "entity_ref": "cat#1", "source_turns": [10, 12],
-                    "confidence": 0.92, "kind": "disclosure", "operation": "create",
+                    "entity_type": "pet",
+                    "attribute": "name",
+                    "value": "妙妙",
+                    "entity_ref": "cat#1",
+                    "source_turns": [10, 12],
+                    "confidence": 0.92,
+                    "kind": "disclosure",
+                    "operation": "create",
                     "reasoning": "T10 引入这只猫，T12 给出名字'妙妙'",
                 },
                 {
-                    "entity_type": "pet", "attribute": "color", "value": "灰白色",
-                    "entity_ref": "cat#1", "source_turns": [10, 12],
-                    "confidence": 0.85, "kind": "disclosure", "operation": "create",
+                    "entity_type": "pet",
+                    "attribute": "color",
+                    "value": "灰白色",
+                    "entity_ref": "cat#1",
+                    "source_turns": [10, 12],
+                    "confidence": 0.85,
+                    "kind": "disclosure",
+                    "operation": "create",
                     "reasoning": "T12 描述同一只猫是灰白色",
                 },
             ],
@@ -221,13 +234,20 @@ class TestCanonicalScenarios:
         """Example 2: Rhetoric — kept as candidate, not dropped."""
         run_id = uuid4()
         envelope_json = _make_envelope_json(
-            str(run_id), [20, 21],
-            candidates=[{
-                "entity_type": "self", "attribute": "health_condition",
-                "value": "我有病了", "source_turns": [21], "confidence": 0.30,
-                "kind": "rhetoric", "operation": "create",
-                "reasoning": "T21 接'算了不说了'+尾随'哈哈'，自嘲非字面健康陈述",
-            }],
+            str(run_id),
+            [20, 21],
+            candidates=[
+                {
+                    "entity_type": "self",
+                    "attribute": "health_condition",
+                    "value": "我有病了",
+                    "source_turns": [21],
+                    "confidence": 0.30,
+                    "kind": "rhetoric",
+                    "operation": "create",
+                    "reasoning": "T21 接'算了不说了'+尾随'哈哈'，自嘲非字面健康陈述",
+                }
+            ],
         )
         provider = FakeProvider(envelope_json)
         router = FakeRouter(provider)
@@ -235,7 +255,12 @@ class TestCanonicalScenarios:
         item = make_queue_item(run_id=run_id)
         item.window = [
             TurnInput(turn_id=20, speaker="user", ts="2026-06-18T11:00:00Z", text="工作好累"),
-            TurnInput(turn_id=21, speaker="user", ts="2026-06-18T11:00:15Z", text="算了不说了，我有病了哈哈"),
+            TurnInput(
+                turn_id=21,
+                speaker="user",
+                ts="2026-06-18T11:00:15Z",
+                text="算了不说了，我有病了哈哈",
+            ),
         ]
 
         results = await extractor.run([item])
@@ -254,8 +279,12 @@ class TestCanonicalScenarios:
         extractor = LLMExtractor(router)
         item = make_queue_item(run_id=run_id)
         item.window = [
-            TurnInput(turn_id=30, speaker="user", ts="2026-06-18T12:00:00Z", text="你还记得我叫什么吗？"),
-            TurnInput(turn_id=31, speaker="assistant", ts="2026-06-18T12:00:05Z", text="（想了想）"),
+            TurnInput(
+                turn_id=30, speaker="user", ts="2026-06-18T12:00:00Z", text="你还记得我叫什么吗？"
+            ),
+            TurnInput(
+                turn_id=31, speaker="assistant", ts="2026-06-18T12:00:05Z", text="（想了想）"
+            ),
             TurnInput(turn_id=32, speaker="user", ts="2026-06-18T12:00:30Z", text="算啦"),
         ]
 
@@ -273,14 +302,22 @@ class TestCanonicalScenarios:
         run_id = uuid4()
         prior_id = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
         envelope_json = _make_envelope_json(
-            str(run_id), [40, 41],
-            candidates=[{
-                "entity_type": "pet", "attribute": "name", "value": "妙妙",
-                "entity_ref": "cat#1", "prior_value_id": prior_id,
-                "source_turns": [41], "confidence": 0.88,
-                "kind": "negation", "operation": "soft_delete",
-                "reasoning": "T41: 用户明确说'现在没有宠物了'，撤回 L3 中的猫 fact",
-            }],
+            str(run_id),
+            [40, 41],
+            candidates=[
+                {
+                    "entity_type": "pet",
+                    "attribute": "name",
+                    "value": "妙妙",
+                    "entity_ref": "cat#1",
+                    "prior_value_id": prior_id,
+                    "source_turns": [41],
+                    "confidence": 0.88,
+                    "kind": "negation",
+                    "operation": "soft_delete",
+                    "reasoning": "T41: 用户明确说'现在没有宠物了'，撤回 L3 中的猫 fact",
+                }
+            ],
         )
         provider = FakeProvider(envelope_json)
         router = FakeRouter(provider)
@@ -288,12 +325,21 @@ class TestCanonicalScenarios:
         item = make_queue_item(run_id=run_id)
         item.window = [
             TurnInput(turn_id=40, speaker="user", ts="2026-06-18T13:00:00Z", text="跟你说个事"),
-            TurnInput(turn_id=41, speaker="user", ts="2026-06-18T13:00:10Z", text="我现在没有宠物了，上个月送走了"),
+            TurnInput(
+                turn_id=41,
+                speaker="user",
+                ts="2026-06-18T13:00:10Z",
+                text="我现在没有宠物了，上个月送走了",
+            ),
         ]
         item.l3_snapshot = [
             L3FactSnapshot(
-                fact_id=prior_id, entity_type="pet", entity_ref="cat#1",
-                attribute="name", value="妙妙", confidence=0.92,
+                fact_id=prior_id,
+                entity_type="pet",
+                entity_ref="cat#1",
+                attribute="name",
+                value="妙妙",
+                confidence=0.92,
                 last_seen="2026-05-20",
             ),
         ]
@@ -313,28 +359,42 @@ class TestCanonicalScenarios:
         run_id = uuid4()
         prior_id = "dddddddd-dddd-4ddd-8ddd-dddddddddddd"
         envelope_json = _make_envelope_json(
-            str(run_id), [50, 51],
-            candidates=[{
-                "entity_type": "self", "attribute": "location_residence",
-                "value": "上海", "prior_value_id": prior_id,
-                "source_turns": [50, 51], "confidence": 0.90,
-                "kind": "disclosure", "operation": "supersede",
-                "reasoning": "T50 否定旧居住地'北京'，T51 给出新居住地'上海'",
-            }],
+            str(run_id),
+            [50, 51],
+            candidates=[
+                {
+                    "entity_type": "self",
+                    "attribute": "location_residence",
+                    "value": "上海",
+                    "prior_value_id": prior_id,
+                    "source_turns": [50, 51],
+                    "confidence": 0.90,
+                    "kind": "disclosure",
+                    "operation": "supersede",
+                    "reasoning": "T50 否定旧居住地'北京'，T51 给出新居住地'上海'",
+                }
+            ],
         )
         provider = FakeProvider(envelope_json)
         router = FakeRouter(provider)
         extractor = LLMExtractor(router)
         item = make_queue_item(run_id=run_id)
         item.window = [
-            TurnInput(turn_id=50, speaker="user", ts="2026-06-18T14:00:00Z", text="其实我现在不在北京了"),
-            TurnInput(turn_id=51, speaker="user", ts="2026-06-18T14:00:10Z", text="上个月搬到了上海"),
+            TurnInput(
+                turn_id=50, speaker="user", ts="2026-06-18T14:00:00Z", text="其实我现在不在北京了"
+            ),
+            TurnInput(
+                turn_id=51, speaker="user", ts="2026-06-18T14:00:10Z", text="上个月搬到了上海"
+            ),
         ]
         item.l3_snapshot = [
             L3FactSnapshot(
-                fact_id=prior_id, entity_type="self",
-                attribute="location_residence", value="北京",
-                confidence=0.90, last_seen="2026-03-01",
+                fact_id=prior_id,
+                entity_type="self",
+                attribute="location_residence",
+                value="北京",
+                confidence=0.90,
+                last_seen="2026-03-01",
             ),
         ]
 
@@ -349,11 +409,15 @@ class TestCanonicalScenarios:
         """Example 6: Correct rejection — empty candidates, dropped_signals populated."""
         run_id = uuid4()
         envelope_json = _make_envelope_json(
-            str(run_id), [60, 61],
-            dropped_signals=[{
-                "turn_id": 61, "raw_phrase": "跟我一样",
-                "reason": "ambiguous_reference",
-            }],
+            str(run_id),
+            [60, 61],
+            dropped_signals=[
+                {
+                    "turn_id": 61,
+                    "raw_phrase": "跟我一样",
+                    "reason": "ambiguous_reference",
+                }
+            ],
         )
         provider = FakeProvider(envelope_json)
         router = FakeRouter(provider)
@@ -384,10 +448,12 @@ class TestMalformedJsonRetry:
         run_id = uuid4()
         valid_envelope = _make_envelope_json(str(run_id), [10, 11, 12])
 
-        provider = FakeProviderSequence([
-            "I'm not sure what to extract from this conversation...",
-            valid_envelope,
-        ])
+        provider = FakeProviderSequence(
+            [
+                "I'm not sure what to extract from this conversation...",
+                valid_envelope,
+            ]
+        )
         router = FakeRouter(provider)
         extractor = LLMExtractor(router)
         item = make_queue_item(run_id=run_id)
@@ -401,10 +467,12 @@ class TestMalformedJsonRetry:
     @pytest.mark.asyncio
     async def test_malformed_twice_fails(self):
         """Both calls return malformed JSON → marked as failed."""
-        provider = FakeProviderSequence([
-            "not json at all",
-            "still not json",
-        ])
+        provider = FakeProviderSequence(
+            [
+                "not json at all",
+                "still not json",
+            ]
+        )
         router = FakeRouter(provider)
         extractor = LLMExtractor(router)
         item = make_queue_item(run_id=uuid4())
@@ -470,13 +538,20 @@ class TestSchemaValidationFailure:
         """Candidate source_turns references turn outside window → validation fails."""
         run_id = uuid4()
         envelope_json = _make_envelope_json(
-            str(run_id), [10, 11, 12],
-            candidates=[{
-                "entity_type": "self", "attribute": "name", "value": "test",
-                "source_turns": [10, 99],  # 99 not in window
-                "confidence": 0.9, "kind": "disclosure", "operation": "create",
-                "reasoning": "T10 says test",
-            }],
+            str(run_id),
+            [10, 11, 12],
+            candidates=[
+                {
+                    "entity_type": "self",
+                    "attribute": "name",
+                    "value": "test",
+                    "source_turns": [10, 99],  # 99 not in window
+                    "confidence": 0.9,
+                    "kind": "disclosure",
+                    "operation": "create",
+                    "reasoning": "T10 says test",
+                }
+            ],
         )
         provider = FakeProviderSequence([envelope_json, envelope_json])
         router = FakeRouter(provider)

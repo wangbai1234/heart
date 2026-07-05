@@ -21,9 +21,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from heart.api.rate_limit import limiter
 from heart.api.wiring import get_db, get_emotion_service, get_inner_state_service
 from heart.core.auth import TokenData, get_current_user
-from heart.api.rate_limit import limiter
 
 logger = structlog.get_logger(__name__)
 

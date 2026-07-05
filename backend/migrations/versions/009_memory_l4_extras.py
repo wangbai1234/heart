@@ -23,7 +23,9 @@ depends_on = None
 
 def upgrade() -> None:
     # fact_nodes: demotion tracking columns
-    op.add_column("fact_nodes", sa.Column("was_l4", Boolean, nullable=False, server_default="false"))
+    op.add_column(
+        "fact_nodes", sa.Column("was_l4", Boolean, nullable=False, server_default="false")
+    )
     op.add_column(
         "fact_nodes",
         sa.Column("previously_l4_id", PG_UUID(as_uuid=True), nullable=True),

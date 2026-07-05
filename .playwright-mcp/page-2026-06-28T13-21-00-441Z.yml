@@ -1,0 +1,54 @@
+- generic [ref=e3]:
+  - generic [ref=e4]:
+    - banner [ref=e5]:
+      - button [ref=e6]:
+        - img [ref=e7]
+      - heading "设置" [level=1] [ref=e9]
+    - main [ref=e10]:
+      - generic [ref=e11]:
+        - img "神无月 凛" [ref=e12]
+        - generic [ref=e13]:
+          - heading "神无月 凛" [level=3] [ref=e14]
+          - text: 会员 · 至 2026-12-31
+        - img [ref=e15]
+      - generic [ref=e17]:
+        - generic [ref=e18]:
+          - heading "我的会员" [level=4] [ref=e19]
+          - generic [ref=e20]:
+            - button "🎁 会员兑换" [ref=e21]:
+              - generic [ref=e22]:
+                - generic [ref=e23]: 🎁
+                - generic [ref=e24]: 会员兑换
+              - img [ref=e25]
+            - generic [ref=e27]:
+              - generic [ref=e28]:
+                - generic [ref=e29]: 📅
+                - generic [ref=e30]: 订阅状态
+              - generic [ref=e31]: 至 2026-12-31
+        - generic [ref=e32]:
+          - heading "外观" [level=4] [ref=e33]
+          - generic [ref=e34]:
+            - generic [ref=e35]:
+              - generic [ref=e36]:
+                - generic [ref=e37]: 🎨
+                - generic [ref=e38]: 主题
+              - generic [ref=e39]:
+                - button "浅色" [ref=e40]
+                - button "深色" [ref=e41]
+                - button "自动" [ref=e42]
+            - generic [ref=e44]:
+              - generic [ref=e45]: 🔤
+              - generic [ref=e46]: 字体大小
+  - generic [ref=e49]:
+    - button "首页" [ref=e50]:
+      - img [ref=e51]
+      - generic [ref=e53]: 首页
+    - button "聊天" [ref=e54]:
+      - img [ref=e55]
+      - generic [ref=e57]: 聊天
+    - button "角色" [ref=e58]:
+      - img [ref=e59]
+      - generic [ref=e61]: 角色
+    - button "设置" [ref=e62]:
+      - img [ref=e63]
+      - generic [ref=e65]: 设置

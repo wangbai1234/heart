@@ -101,12 +101,36 @@ class Settings(BaseSettings):
     user_daily_cost_limit: float = 10.0
     alert_cost_threshold: float = 5.0
 
-    # Security
+    # Security / Auth
     jwt_secret_key: str = "your-secret-key-here"
-    jwt_algorithm: str = "HS256"
+    jwt_algorithm: str = "RS256"
     jwt_private_key: str = ""  # PEM private key for RS256
-    jwt_public_key: str = ""   # PEM public key for RS256
-    access_token_expire_minutes: int = 43200
+    jwt_public_key: str = ""  # PEM public key for RS256
+    access_token_expire_minutes: int = 30
+    refresh_token_expire_days: int = 30
+
+    # OTP
+    otp_pepper: str = "change-me-otp-pepper-32chars-min"
+    otp_ttl_seconds: int = 300
+    otp_resend_cooldown_seconds: int = 60
+    otp_max_per_hour: int = 5
+    otp_max_attempts: int = 5
+
+    # Email (SMTP)
+    email_provider: str = "smtp"
+    smtp_host: str = ""
+    smtp_port: int = 465
+    smtp_username: str = ""
+    smtp_password: str = ""
+    email_from: str = "yuoyuo <no-reply@yuoyuo.app>"
+
+    # Credits / Billing
+    signup_grant_credits: int = 100
+    credits_per_text_turn: int = 1
+    credits_per_voice_turn: int = 5
+    afdian_user_id: str = ""
+    afdian_webhook_token: str = ""
+    afdian_sponsor_url: str = "https://afdian.com/a/yuoyuo"
 
     # Push Notifications (V1)
     fcm_credentials_path: str = ""
@@ -120,23 +144,32 @@ class Settings(BaseSettings):
     minimax_api_key: str | None = None
     minimax_group_id: str | None = None
     minimax_base_url: str = "https://api.minimax.io/v1"
+    minimax_rin_clone_voice_id: str | None = None
+    minimax_dorothy_voice_id: str | None = None
+    minimax_tts_model: str = "speech-2.8-hd"
+    minimax_language_boost: str | None = "Chinese"
+    voice_profiles: str | None = None
 
     # MiMo TTS (voiceclone v2.5)
     mimo_api_key: str | None = None
     mimo_base_url: str = "https://api.xiaomimimo.com/v1"
     mimo_reference_audio_path: str = "assets/reference_voices/rin.wav"
     mimo_model: str = "mimo-v2.5-tts-voiceclone"
-    voice_provider: str = "mimo"  # "mimo" | "minimax"
+    voice_provider: str = "minimax"  # "mimo" | "minimax"
     voice_fallback_enabled: bool = True
 
     @model_validator(mode="after")
     def validate_jwt_secret(self) -> "Settings":
-        """Fail-fast if JWT secret is weak (all environments)."""
-        if (
-            self.jwt_secret_key in {"your-secret-key-here", "", "change-me"}
-            or len(self.jwt_secret_key) < 32
-        ):
-            raise RuntimeError("JWT_SECRET_KEY must be set to a strong random value")
+        """Fail-fast if JWT config is weak (all environments)."""
+        if self.jwt_algorithm == "RS256":
+            if not self.jwt_private_key or not self.jwt_public_key:
+                raise RuntimeError("RS256 requires JWT_PRIVATE_KEY and JWT_PUBLIC_KEY")
+        else:
+            if (
+                self.jwt_secret_key in {"your-secret-key-here", "", "change-me"}
+                or len(self.jwt_secret_key) < 32
+            ):
+                raise RuntimeError("JWT_SECRET_KEY must be set to a strong random value")
         return self
 
 

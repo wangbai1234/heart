@@ -29,7 +29,6 @@ def _make_message(user_id=None, character_id="rin", hours_ago=0, seq=0):
 
 @pytest.mark.unit
 class TestProactiveQueueBound:
-
     def setup_method(self):
         """Clear queue before each test."""
         _proactive_messages.clear()
@@ -80,7 +79,6 @@ class TestProactiveQueueBound:
 
 @pytest.mark.unit
 class TestSingleSessionQuery:
-
     def test_single_query_returns_joined_data(self):
         """The tick query should be a single JOIN, not N separate queries."""
         # Read the source to verify single query pattern

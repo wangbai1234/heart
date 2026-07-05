@@ -1,0 +1,43 @@
+# SS02 Memory — L3→L4 Promoter configuration
+# See docs/design/memory_promoter_rules.md for rationale per threshold.
+
+thresholds:
+  K1_min_mentions: 3
+  K2_min_confidence_ewma: 0.80
+  K3_min_age_days: 1
+  K4_min_cross_session_count: 2
+  K5_contradiction_clear_days: 7
+
+limits:
+  batch_size: 200
+  per_user_l4_cap: 50
+
+blocklist:
+  exact_predicates:
+    - current_mood
+    - current_emotion
+    - current_location_temporary
+    - currently_doing
+    - today_plan
+    - tomorrow_plan
+    - recent_purchase
+    - current_weather_in_location
+    - last_meal
+    - recent_meal
+    - body_state_temporary
+    - wants_now
+    - arguing_with
+  glob_patterns:
+    - "current_*"
+    - "today_*"
+    - "tonight_*"
+    - "this_week_*"
+    - "temp_*"
+    - "temporary_*"
+    - "*_in_progress"
+    - "feeling_*"
+    - "recent_*"
+
+demotion:
+  contradiction_window_days: 14
+  min_contradictions: 2

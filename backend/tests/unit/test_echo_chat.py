@@ -20,17 +20,22 @@ def client():
 def auth_token():
     """Create a valid auth token for testing."""
     token = auth_manager.create_access_token(
-        user_id="test-user",
+        user_id="550e8400-e29b-41d4-a716-446655440000",
         email="test@example.com",
     )
     return token.access_token
 
 
 class TestAuthEndpoints:
-    """Tests for authentication endpoints."""
+    """Tests for authentication endpoints.
 
-    def test_login(self, client):
-        """Test user login endpoint."""
+    Note: /api/auth/login, /api/auth/verify, /api/auth/refresh are now
+    dev-only stubs (gated behind HEART_DEV_MODE=true). The real auth
+    endpoints are /api/auth/otp/request, /api/auth/otp/verify, etc.
+    """
+
+    def test_login_dev_only(self, client):
+        """Test that login stub is not available in production mode."""
         response = client.post(
             "/api/auth/login",
             json={
@@ -38,70 +43,30 @@ class TestAuthEndpoints:
                 "email": "newuser@example.com",
             },
         )
+        # Dev stub not registered without HEART_DEV_MODE
+        assert response.status_code == 404
 
-        assert response.status_code == 200
-        data = response.json()
-        assert "access_token" in data
-        assert data["token_type"] == "bearer"
-        assert data["expires_in"] > 0
-
-    def test_login_without_email(self, client):
-        """Test login without email."""
-        response = client.post(
-            "/api/auth/login",
-            json={"user_id": "user-no-email"},
-        )
-
-        assert response.status_code == 200
-        data = response.json()
-        assert "access_token" in data
-
-    def test_verify_valid_token(self, client, auth_token):
-        """Test token verification with valid token."""
+    def test_verify_endpoint_removed(self, client, auth_token):
+        """Test that /auth/verify endpoint is removed (replaced by /auth/me)."""
         response = client.get(
             "/api/auth/verify",
             headers={"Authorization": f"Bearer {auth_token}"},
         )
-
-        assert response.status_code == 200
-        data = response.json()
-        assert data["user_id"] == "test-user"
-        assert data["email"] == "test@example.com"
-        assert data["valid"] is True
-
-    def test_verify_invalid_token(self, client):
-        """Test token verification with invalid token."""
-        response = client.get(
-            "/api/auth/verify",
-            headers={"Authorization": "Bearer invalid-token"},
-        )
-
-        assert response.status_code == 401  # HTTPException from auth verification
+        assert response.status_code == 404
 
     def test_verify_missing_token(self, client):
-        """Test token verification without token."""
-        response = client.get("/api/auth/verify")
+        """Test auth endpoint without token returns 401."""
+        response = client.get("/api/auth/me")
+        assert response.status_code == 401
 
-        assert response.status_code == 403
-
-    def test_refresh_token(self, client, auth_token):
-        """Test token refresh endpoint."""
+    def test_refresh_requires_body(self, client, auth_token):
+        """Test that refresh endpoint requires refresh_token in body."""
         response = client.post(
             "/api/auth/refresh",
             headers={"Authorization": f"Bearer {auth_token}"},
         )
-
-        assert response.status_code == 200
-        data = response.json()
-        assert "access_token" in data
-        assert data["token_type"] == "bearer"
-        assert data["expires_in"] > 0
-        # Refreshed token is valid
-        verify_response = client.get(
-            "/api/auth/verify",
-            headers={"Authorization": f"Bearer {data['access_token']}"},
-        )
-        assert verify_response.status_code == 200
+        # 422 = missing required body field
+        assert response.status_code == 422
 
 
 class TestEchoChatEndpoint:
@@ -189,7 +154,7 @@ class TestEchoChatEndpoint:
             },
         )
 
-        assert response.status_code == 403
+        assert response.status_code == 401
 
     def test_echo_chat_multiple_user_messages(self, client, auth_token):
         """Test echo chat returns last user message."""

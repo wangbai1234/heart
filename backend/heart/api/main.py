@@ -20,13 +20,19 @@ from slowapi.util import get_remote_address
 from sqlalchemy import text
 from starlette.responses import Response
 
+from .routes import dev_auth_router, router
 from .routes import dev_router as profile_dev_router
-from .routes import router
+from .routes_account import router as account_router
+from .routes_auth import router as auth_router
+from .routes_characters import router as characters_router
 from .routes_chat_ws import router as chat_ws_router
+from .routes_credits import router as credits_router
 from .routes_proactive import router as proactive_router
+from .routes_profile import router as profile_router
 from .routes_state import dev_router, memory_router
 from .routes_state import router as state_router
 from .routes_voice import router as voice_router
+from .routes_webhooks import router as webhooks_router
 
 logger = structlog.get_logger()
 
@@ -80,6 +86,7 @@ async def lifespan(app: FastAPI):
     """FastAPI lifespan context manager (replaces deprecated on_event)."""
     await _startup()
     from heart.core.config import settings
+
     try:
         settings.validate_jwt_secret()
     except RuntimeError as e:
@@ -105,9 +112,7 @@ def create_app() -> FastAPI:
     from heart.core.config import settings
 
     cors_origins = [
-        o.strip()
-        for o in getattr(settings, "cors_allowed_origins", "").split(",")
-        if o.strip()
+        o.strip() for o in getattr(settings, "cors_allowed_origins", "").split(",") if o.strip()
     ] or ["http://localhost:3000"]
     app.add_middleware(
         CORSMiddleware,
@@ -205,17 +210,25 @@ def create_app() -> FastAPI:
 
     # Include API routes
     app.include_router(router)
+    app.include_router(auth_router)  # /api/auth/* (OTP, refresh, logout, me)
+    app.include_router(credits_router)  # /api/credits/* (balance, transactions, redeem, pricing)
+    app.include_router(webhooks_router)  # /api/webhooks/* (afdian)
+    app.include_router(profile_router)  # /api/profile/* (GET/PATCH profile, avatar)
+    app.include_router(account_router)  # /api/account/* (clear, delete, export)
+    app.include_router(characters_router)  # /api/characters/* (voice settings)
     app.include_router(proactive_router)
     app.include_router(state_router)
     app.include_router(memory_router)
     app.include_router(voice_router)
     app.include_router(chat_ws_router)
 
-    # Dev-only routes: gated behind HEART_DEV_MODE
+    # Dev-only routes: gated behind HEART_DEV_MODE (process env takes precedence over .env)
     import os
-    if os.getenv("HEART_DEV_MODE", "").lower() == "true":
+
+    if os.environ.get("HEART_DEV_MODE", "").lower() == "true":
         app.include_router(dev_router)  # /api/dev/*
         app.include_router(profile_dev_router, prefix="/api/profile")  # /api/profile/*
+        app.include_router(dev_auth_router)  # /api/auth/login (stub, dev only)
 
     # Rate limiting
     from .rate_limit import limiter
@@ -228,7 +241,7 @@ def create_app() -> FastAPI:
             content={"detail": f"Rate limit exceeded: {exc.detail}"},
         )
 
-    app.add_exception_handler(RateLimitExceeded, _rate_limit_handler)
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_handler)  # type: ignore[arg-type]
     app.add_middleware(SlowAPIMiddleware)
 
     # OpenTelemetry instrumentation

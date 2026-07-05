@@ -1,0 +1,37 @@
+- generic [ref=e3]:
+  - generic [ref=e4]:
+    - banner [ref=e5]:
+      - button [ref=e6]:
+        - img [ref=e7]
+      - heading "选择一位陪伴你的人" [level=1] [ref=e9]
+    - generic [ref=e15]: neutral
+    - main [ref=e16]:
+      - generic [ref=e18] [cursor=pointer]:
+        - img "神无月 凛" [ref=e19]
+        - generic [ref=e20]:
+          - generic [ref=e21]:
+            - heading "神无月 凛" [level=3] [ref=e22]
+            - generic [ref=e23]: 御姐型
+          - paragraph [ref=e24]: 失去时代的雷神。她的内核是稳定的，她一直在做自己。
+        - img [ref=e26]
+      - generic [ref=e29] [cursor=pointer]:
+        - img "桃乐丝" [ref=e30]
+        - generic [ref=e31]:
+          - generic [ref=e32]:
+            - heading "桃乐丝" [level=3] [ref=e33]
+            - generic [ref=e34]: 元气型
+          - paragraph [ref=e35]: 失去职责的冥界少女。所有的元气和腹黑，都是在疯狂续命。
+    - button "确认选择" [ref=e37]
+  - generic [ref=e38]:
+    - button "首页" [ref=e39]:
+      - img [ref=e40]
+      - generic [ref=e42]: 首页
+    - button "聊天" [ref=e43]:
+      - img [ref=e44]
+      - generic [ref=e46]: 聊天
+    - button "角色" [ref=e47]:
+      - img [ref=e48]
+      - generic [ref=e50]: 角色
+    - button "设置" [ref=e52]:
+      - img [ref=e53]
+      - generic [ref=e55]: 设置

@@ -801,19 +801,11 @@ class TestINVM11:
         # Verify NO L2/L3/L4 writes occurred via session.add()
         added_objects = mock_session.add.call_args_list
         l2_writes = [
-            call
-            for call in added_objects
-            if call[0] and isinstance(call[0][0], EpisodicMemory)
+            call for call in added_objects if call[0] and isinstance(call[0][0], EpisodicMemory)
         ]
-        l3_writes = [
-            call
-            for call in added_objects
-            if call[0] and isinstance(call[0][0], FactNode)
-        ]
+        l3_writes = [call for call in added_objects if call[0] and isinstance(call[0][0], FactNode)]
         l4_writes = [
-            call
-            for call in added_objects
-            if call[0] and isinstance(call[0][0], IdentityMemory)
+            call for call in added_objects if call[0] and isinstance(call[0][0], IdentityMemory)
         ]
 
         assert len(l2_writes) == 0, (
@@ -855,9 +847,7 @@ class TestINVM11:
 
         added_objects = mock_session.add.call_args_list
         l4_writes = [
-            call
-            for call in added_objects
-            if call[0] and isinstance(call[0][0], IdentityMemory)
+            call for call in added_objects if call[0] and isinstance(call[0][0], IdentityMemory)
         ]
         assert len(l4_writes) == 0, (
             f"INV-M-11 violation: encode_fast wrote {len(l4_writes)} IdentityMemory rows "
@@ -892,8 +882,6 @@ class TestINVM11:
 
         added_objects = mock_session.add.call_args_list
         l4_writes = [
-            call
-            for call in added_objects
-            if call[0] and isinstance(call[0][0], IdentityMemory)
+            call for call in added_objects if call[0] and isinstance(call[0][0], IdentityMemory)
         ]
         assert len(l4_writes) == 0

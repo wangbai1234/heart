@@ -1,0 +1,129 @@
+/* ─────────────────────────────────────────────────────────────────
+   yuoyuo Design System — Design Tokens (Tailwind v4 @theme)
+   Source: docs/ui_specs/ root + page-level 05_assets.md
+   ───────────────────────────────────────────────────────────────── */
+
+@theme {
+  /* ── Font Families ─────────────────────────────────────────────── */
+  --font-chinese: "PingFang SC", "HarmonyOS Sans SC", -apple-system, system-ui, sans-serif;
+  --font-latin:   "SF Pro Rounded", -apple-system, system-ui, sans-serif;
+
+  /* ── Colors — Brand ─────────────────────────────────────────────── */
+  --color-primary:   #FFB7C5;   /* cherry blossom pink              */
+  --color-secondary: #A7C7E7;   /* dreamy sky blue                  */
+  --color-accent:    #C8B6FF;   /* lavender mist                    */
+  --color-surface:   #FFF8F3;   /* warm cream                       */
+  --color-ink:       #3A3A4A;   /* soft charcoal                    */
+
+  /* ── Colors — Primary scale ─────────────────────────────────────── */
+  --color-primary-50:  #FFF0F4;
+  --color-primary-100: #FFE0E9;
+  --color-primary-200: #FFC5D3;
+  --color-primary-300: #FFB7C5;
+  --color-primary-400: #FF94AC;
+  --color-primary-500: #FF6E8A;
+  --color-primary-600: #E85577;
+  --color-primary-700: #CC3A5F;
+
+  /* ── Colors — Page / Surface ────────────────────────────────────── */
+  --color-bg-page:       #FFF0F3;                   /* Home light bg               */
+  --color-bg-page-dark:  #1A1A2E;                   /* dark mode base              */
+  --color-surface-card:  rgba(255, 255, 255, 0.95);  /* card surface               */
+  --color-bg-login:      #FFF8F3;                    /* Login page bottom           */
+
+  /* ── Colors — Glass tint layers ────────────────────────────────── */
+  --color-glass-35: rgba(255, 255, 255, 0.35);
+  --color-glass-55: rgba(255, 255, 255, 0.55);
+  --color-glass-65: rgba(255, 255, 255, 0.65);
+  --color-glass-75: rgba(255, 255, 255, 0.75);
+  --color-glass-90: rgba(255, 255, 255, 0.90);
+  --color-glass-card: rgba(255, 255, 255, 0.88);
+
+  /* ── Colors — Text ──────────────────────────────────────────────── */
+  --color-text-primary:   #3A3A4A;
+  --color-text-secondary: rgba(58, 58, 74, 0.60);
+  --color-text-muted:     #9B9BAE;
+  --color-text-brand:     #FFB7C5;
+  --color-text-placeholder: #B0A8B4;
+  --color-text-on-primary:  #FFFFFF;
+
+  /* ── Colors — Tab Bar ───────────────────────────────────────────── */
+  --color-tab-active:   #FFB7C5;
+  --color-tab-inactive: #8E8E9A;
+
+  /* ── Colors — Status / Semantic ─────────────────────────────────── */
+  --color-online:   #5FC8E8;
+  --color-success:  #7ECBA5;
+  --color-warning:  #FFD580;
+  --color-error:    #FF85A1;
+  --color-info:     #A7C7E7;
+  --color-danger:   #FF85A1;
+
+  /* ── Colors — CTA / Badge ───────────────────────────────────────── */
+  --color-cta-text:      #FF7A9A;
+  --color-unread-badge:  #FFB7C5;
+
+  /* ── Colors — Border / Divider ──────────────────────────────────── */
+  --color-border-subtle:    rgba(0, 0, 0, 0.04);
+  --color-divider:          rgba(0, 0, 0, 0.06);
+  --color-divider-inset:    rgba(229, 224, 234, 0.8);
+  --color-border-glass:     rgba(255, 255, 255, 0.60);
+
+  /* ── Colors — Control ───────────────────────────────────────────── */
+  --color-toggle-track-on:  linear-gradient(90deg, #FFB7C5, #FF85A1);
+  --color-toggle-track-off: rgba(200, 200, 210, 0.5);
+  --color-slider-track:     rgba(200, 200, 210, 0.6);
+  --color-slider-thumb:     #FFB7C5;
+  --color-segment-container: rgba(240, 235, 245, 0.8);
+  --color-chevron:          #C0C0CC;
+
+  /* ── Colors — Overlay ───────────────────────────────────────────── */
+  --color-overlay: rgba(0, 0, 0, 0.32);
+
+  /* ── Border Radius ──────────────────────────────────────────────── */
+  --radius-xs:   4px;
+  --radius-sm:   8px;
+  --radius-md:   12px;
+  --radius-lg:   16px;
+  --radius-xl:   20px;
+  --radius-2xl:  24px;
+  --radius-3xl:  32px;
+  --radius-pill: 9999px;
+  --radius-full: 9999px;
+
+  /* ── Shadows (Elevation) ────────────────────────────────────────── */
+  --shadow-none:    none;
+  --shadow-soft:    0 2px 6px  rgba(0, 0, 0, 0.04);
+  --shadow-card:    0 4px 12px rgba(0, 0, 0, 0.06);
+  --shadow-sheet:   0 8px 24px rgba(0, 0, 0, 0.08);
+  --shadow-modal:   0 12px 40px rgba(0, 0, 0, 0.10);
+  --shadow-hero:    0 4px 20px rgba(255, 183, 197, 0.15);
+  --shadow-btn:     0 8px 24px -4px rgba(255, 143, 171, 0.35);
+  --shadow-send:    0 4px 12px rgba(255, 183, 197, 0.30);
+  --shadow-avatar:  0 2px 6px rgba(58, 58, 74, 0.10);
+  --shadow-tab:     0 -2px 12px rgba(58, 58, 74, 0.08);
+
+  /* ── Blur ───────────────────────────────────────────────────────── */
+  --blur-glass-sm: 12px;
+  --blur-glass:    16px;
+  --blur-glass-md: 20px;
+  --blur-glass-lg: 24px;
+  --blur-glow:     60px;
+
+  /* ── Motion (per 05_motion_specification.md) ────────────────────── */
+  --duration-instant: 100ms;
+  --duration-fast:    150ms;
+  --duration-normal:  240ms;
+  --duration-base:    300ms;
+  --duration-slow:    400ms;
+  --duration-toast:   220ms;
+  --duration-sheet:   360ms;
+  --duration-dialog:  280ms;
+
+  --ease-standard:       cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-exit:           cubic-bezier(0.4, 0, 1, 1);
+  --ease-out-soft:       cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-soft:        cubic-bezier(0.4, 0, 1, 1);
+  --ease-in-out-soft:    cubic-bezier(0.45, 0, 0.55, 1);
+  --ease-bounce:         cubic-bezier(0.34, 1.56, 0.64, 1);
+}

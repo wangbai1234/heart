@@ -133,7 +133,9 @@ class TestRelationshipProgression:
         assert response.response == "Hello."
 
     @pytest.mark.asyncio
-    async def test_relationship_state_updates_on_multiple_turns(self, orchestrator, mock_relationship_service):
+    async def test_relationship_state_updates_on_multiple_turns(
+        self, orchestrator, mock_relationship_service
+    ):
         """Multiple turns should call relationship service multiple times."""
         user_id = uuid4()
         character_id = "rin"

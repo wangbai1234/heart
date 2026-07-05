@@ -27,6 +27,7 @@ from uuid import UUID, uuid4
 import structlog
 
 from heart.infra.invariants import invariant
+from heart.infra.partitions import ensure_monthly_partition
 
 import heart.infra.invariant_predicates  # noqa: F401, E402 isort:skip
 
@@ -197,12 +198,25 @@ class MemoryService:
         self._db = db_session
         self._redis = redis_client
         self._embedding = embedding_service
+        self._ensured_encoding_event_partitions: set[str] = set()
 
         # Lazily-initialized sub-components
         self._fast_encoder = None
         self._decay_engine = None
 
         logger.info("memory_service_initialized", has_db=db_session is not None)
+
+    async def _ensure_memory_encoding_partition(self, created_at: datetime) -> None:
+        """Ensure the monthly memory_encoding_events partition exists before flush."""
+        if self._db is None:
+            return
+        await ensure_monthly_partition(
+            self._db,
+            parent_table="memory_encoding_events",
+            partition_prefix="memory_encoding_events",
+            created_at=created_at,
+            cache=self._ensured_encoding_event_partitions,
+        )
 
     # ─────────── Read API ───────────
 
@@ -249,7 +263,7 @@ class MemoryService:
                 from heart.ss02_memory.retriever.orchestrator import RetrievalOrchestrator
 
                 orchestrator = RetrievalOrchestrator(self._db)
-                retriever_result = await orchestrator.retrieve(query_context, top_k)
+                retriever_result = await orchestrator.retrieve(query_context, top_k)  # type: ignore[arg-type]
 
                 # Convert retriever-layer ScoredMemory → service-layer RetrievedMemory
                 reconstructor = self._get_reconstructor(character_id)
@@ -257,32 +271,42 @@ class MemoryService:
                 for sm in retriever_result.memories:
                     try:
                         reconstructed = reconstructor.reconstruct(sm)
-                        voice_dna_applied = list(reconstructor.voice_dna) if hasattr(reconstructor, "voice_dna") else []
+                        voice_dna_applied = (
+                            list(reconstructor.voice_dna)
+                            if hasattr(reconstructor, "voice_dna")
+                            else []
+                        )
                     except Exception as e:
-                        logger.warning("reconstruct_failed_fallback", memory_id=str(sm.memory_id), error=str(e))
+                        logger.warning(
+                            "reconstruct_failed_fallback", memory_id=str(sm.memory_id), error=str(e)
+                        )
                         reconstructed = _fallback_text(sm.memory)
                         voice_dna_applied = []
 
                     state = getattr(sm.memory, "state", "vivid") or "vivid"
-                    retrieved.append(RetrievedMemory(
-                        memory_id=sm.memory_id,
-                        memory_type=sm.memory_type,
-                        state=state,
-                        reconstructed_text=reconstructed,
-                        raw_content=_fallback_text(sm.memory),
-                        score=sm.score,
-                        score_breakdown=sm.score_breakdown,
-                        uncertainty_level=_state_to_uncertainty(state),
-                        voice_dna_applied=voice_dna_applied,
-                        source_evidence=_fallback_text(sm.memory),
-                    ))
+                    retrieved.append(
+                        RetrievedMemory(
+                            memory_id=sm.memory_id,
+                            memory_type=sm.memory_type,
+                            state=state,
+                            reconstructed_text=reconstructed,
+                            raw_content=_fallback_text(sm.memory),
+                            score=sm.score,
+                            score_breakdown=sm.score_breakdown,
+                            uncertainty_level=_state_to_uncertainty(state),
+                            voice_dna_applied=voice_dna_applied,
+                            source_evidence=_fallback_text(sm.memory),
+                        )
+                    )
 
                 # Convert forgetting hints
                 forgetting_hints: list[ForgettingHint] = []
                 for h in retriever_result.recently_forgotten_hints:
                     hint_text = getattr(h, "hint_text", None) or getattr(h, "text", None) or str(h)
                     related_to = getattr(h, "related_to", "") or ""
-                    forgetting_hints.append(ForgettingHint(hint_text=hint_text, related_to=related_to))
+                    forgetting_hints.append(
+                        ForgettingHint(hint_text=hint_text, related_to=related_to)
+                    )
 
                 return MemoryRetrievalResult(
                     query_id=uuid4(),
@@ -601,6 +625,9 @@ class MemoryService:
         Spec: §7.2 写入者, §7.3 调用顺序 (T+50ms → T+5min worker)
         """
         if self._db is not None:
+            if event.created_at is None:
+                event.created_at = datetime.now(timezone.utc).replace(tzinfo=None)
+            await self._ensure_memory_encoding_partition(event.created_at)
             self._db.add(event)
             await self._db.flush()
             logger.debug("encoding_queued", event_id=str(event.event_id))
@@ -975,7 +1002,15 @@ class MemoryService:
 
 def _fallback_text(memory) -> str:
     """Best-effort raw text when Reconstructor fails."""
-    for attr in ("episode_summary", "summary", "literal_text", "raw_evidence", "identity_text", "key", "value"):
+    for attr in (
+        "episode_summary",
+        "summary",
+        "literal_text",
+        "raw_evidence",
+        "identity_text",
+        "key",
+        "value",
+    ):
         v = getattr(memory, attr, None)
         if v:
             return str(v)

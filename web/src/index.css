@@ -1,0 +1,145 @@
+@import "tailwindcss";
+@import "./styles/tokens.css";
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--color-surface);
+  color: var(--color-ink);
+  font-family: var(--font-chinese);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overscroll-behavior: none;
+}
+
+.scrollbar-hide {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* ── Safe Area Variables ─────────────────────────────────────── */
+:root {
+  --app-font-scale: 1;
+  --safe-top: env(safe-area-inset-top, 47px);
+  --safe-bottom: env(safe-area-inset-bottom, 34px);
+}
+
+.settings-scale-text {
+  font-size: inherit;
+}
+
+.text-\[10px\] { font-size: calc(10px * var(--app-font-scale)); }
+.text-\[12px\] { font-size: calc(12px * var(--app-font-scale)); }
+.text-\[13px\] { font-size: calc(13px * var(--app-font-scale)); }
+.text-\[14px\] { font-size: calc(14px * var(--app-font-scale)); }
+.text-\[15px\] { font-size: calc(15px * var(--app-font-scale)); }
+.text-\[16px\] { font-size: calc(16px * var(--app-font-scale)); }
+.text-\[17px\] { font-size: calc(17px * var(--app-font-scale)); }
+.text-\[18px\] { font-size: calc(18px * var(--app-font-scale)); }
+.text-\[20px\] { font-size: calc(20px * var(--app-font-scale)); }
+.text-\[22px\] { font-size: calc(22px * var(--app-font-scale)); }
+.text-\[28px\] { font-size: calc(28px * var(--app-font-scale)); }
+.text-\[36px\] { font-size: calc(36px * var(--app-font-scale)); }
+.text-\[40px\] { font-size: calc(40px * var(--app-font-scale)); }
+.text-xs { font-size: calc(0.75rem * var(--app-font-scale)); }
+.text-base { font-size: calc(1rem * var(--app-font-scale)); }
+
+/* ── Dark Theme Overrides ────────────────────────────────────── */
+[data-theme="dark"] {
+  --color-bg-page: #1A1A2E;
+  --color-surface: #12121A;
+  --color-surface-card: rgba(30, 30, 46, 0.88);
+  --color-ink: #E4E4E7;
+  --color-text-primary: #E4E4E7;
+  --color-text-secondary: rgba(228, 228, 231, 0.65);
+  --color-glass-35: rgba(30, 30, 46, 0.35);
+  --color-glass-55: rgba(30, 30, 46, 0.55);
+  --color-glass-65: rgba(30, 30, 46, 0.65);
+  --color-glass-75: rgba(30, 30, 46, 0.75);
+  --color-glass-90: rgba(30, 30, 46, 0.90);
+  --color-glass-card: rgba(30, 30, 46, 0.88);
+  --color-divider: rgba(255, 255, 255, 0.08);
+  --color-border-subtle: rgba(255, 255, 255, 0.06);
+  --color-bg-login: #12121A;
+}
+
+/* ── Animations ──────────────────────────────────────────────── */
+@keyframes shimmer {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+@keyframes breathe-dot {
+  0%, 100% { transform: scale(0.6); opacity: 0.5; }
+  50%      { transform: scale(1.0); opacity: 1.0; }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { opacity: 0.5; transform: scale(1); }
+  50%      { opacity: 0.8; transform: scale(1.03); }
+}
+
+@keyframes fade-in-up {
+  0%   { opacity: 0; transform: translateY(8px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fade-in {
+  0%   { opacity: 0; }
+  100% { opacity: 1; }
+}
+
+@keyframes slide-in-right {
+  0%   { transform: translateX(100%); }
+  100% { transform: translateX(0); }
+}
+
+@keyframes slide-out-right {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(100%); }
+}
+
+@keyframes slide-up-bottom {
+  0%   { transform: translateY(100%); }
+  100% { transform: translateY(0); }
+}
+
+@keyframes typing-dot {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-4px); }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0) scale(1.00); }
+  50%      { transform: translateY(-6px) scale(1.03); }
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25%      { transform: translateX(-4px); }
+  75%      { transform: translateX(4px); }
+}
+
+@keyframes dialog-enter {
+  0%   { opacity: 0; transform: scale(0.96); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+/* ── Font Utilities ──────────────────────────────────────────── */
+.font-brand {
+  font-family: "SF Pro Rounded", -apple-system, system-ui, sans-serif;
+}

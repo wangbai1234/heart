@@ -10,9 +10,10 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from heart.core.auth import TokenData, get_current_user
 from heart.api.rate_limit import limiter
+from heart.core.auth import TokenData, get_current_user
 
+from .deps import require_age_verified
 from .wiring import get_voice_service
 
 logger = structlog.get_logger()
@@ -31,7 +32,7 @@ class SynthesizeRequest(BaseModel):
 async def synthesize(
     request: Request,
     req: SynthesizeRequest,
-    current_user: TokenData = Depends(get_current_user),
+    current_user: TokenData = Depends(require_age_verified),
 ):
     """Synthesize speech from text."""
     voice_service = get_voice_service()

@@ -169,7 +169,9 @@ class TestDriftConvergence:
 
         # Simulate 100 hours of drift without new input
         for _ in range(100):
-            new_mood = drift_mood(state, soul_rin, hours_since_last=1.0, current_local_time=fixed_time)
+            new_mood = drift_mood(
+                state, soul_rin, hours_since_last=1.0, current_local_time=fixed_time
+            )
             state["mood"] = new_mood
 
         # Should converge toward Soul baseline (0.0, 0.3, 0.5)

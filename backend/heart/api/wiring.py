@@ -200,69 +200,86 @@ def get_safety_agent():
         return None
 
 
-@lru_cache
-def get_voice_service():
-    """Process singleton: VoiceService with primary provider + fallback.
-
-    Supports two TTS providers:
-    - MiMo (mimo-v2.5-tts-voicedesign): text-based voice customization
-    - MiniMax (speech-2.6-hd): preset voices
-
-    The active provider is selected via VOICE_PROVIDER env var ("mimo"|"minimax").
-    If fallback is enabled (VOICE_FALLBACK_ENABLED=true), MiniMax acts as
-    fallback when the primary provider fails.
-    """
-    primary_provider = None
-    fallback_provider = None
-
-    # Primary provider
-    if settings.voice_provider == "mimo" and settings.mimo_api_key:
-        try:
-            from heart.ss08_voice.mimo_provider import MiMoProvider
-
-            primary_provider = MiMoProvider(
-                api_key=settings.mimo_api_key,
-                base_url=settings.mimo_base_url,
-            )
-            logger.info("wiring_mimo_provider_initialized")
-        except Exception as e:
-            logger.warning("wiring_mimo_provider_init_failed", error=str(e))
-            primary_provider = None
-
-    if not primary_provider and settings.voice_provider == "minimax" and settings.minimax_api_key:
+def _build_primary_voice_provider() -> Any:
+    """Build the primary TTS provider: MiniMax first (clone voice_id), else MiMo."""
+    if settings.minimax_api_key:
         try:
             from heart.ss08_voice.minimax_provider import MiniMaxProvider
 
-            primary_provider = MiniMaxProvider(
+            provider = MiniMaxProvider(
                 api_key=settings.minimax_api_key,
                 group_id=settings.minimax_group_id or "",
                 base_url=settings.minimax_base_url,
             )
             logger.info("wiring_minimax_primary_initialized")
+            return provider
         except Exception as e:
             logger.warning("wiring_minimax_provider_init_failed", error=str(e))
-            primary_provider = None
 
-    # Fallback provider (MiniMax)
-    if settings.voice_fallback_enabled and settings.minimax_api_key:
+    if settings.mimo_api_key:
         try:
+            from heart.ss08_voice.mimo_provider import MiMoProvider
+
+            provider = MiMoProvider(
+                api_key=settings.mimo_api_key,
+                base_url=settings.mimo_base_url,
+            )
+            logger.info("wiring_mimo_provider_initialized")
+            return provider
+        except Exception as e:
+            logger.warning("wiring_mimo_provider_init_failed", error=str(e))
+
+    return None
+
+
+def _build_fallback_voice_provider(primary_provider: Any) -> Any:
+    """Build the fallback TTS provider. MiMo backs a MiniMax primary; else MiniMax."""
+    if not settings.voice_fallback_enabled:
+        return None
+    try:
+        if primary_provider and primary_provider.name == "minimax" and settings.mimo_api_key:
+            from heart.ss08_voice.mimo_provider import MiMoProvider
+
+            provider = MiMoProvider(
+                api_key=settings.mimo_api_key,
+                base_url=settings.mimo_base_url,
+            )
+            logger.info("wiring_mimo_fallback_initialized")
+            return provider
+        if settings.minimax_api_key:
             from heart.ss08_voice.minimax_provider import MiniMaxProvider
 
-            fallback_provider = MiniMaxProvider(
+            provider = MiniMaxProvider(
                 api_key=settings.minimax_api_key,
                 group_id=settings.minimax_group_id or "",
                 base_url=settings.minimax_base_url,
             )
             logger.info("wiring_minimax_fallback_initialized")
-        except Exception as e:
-            logger.warning("wiring_minimax_fallback_init_failed", error=str(e))
-            fallback_provider = None
+            return provider
+    except Exception as e:
+        logger.warning("wiring_voice_fallback_init_failed", error=str(e))
+    return None
 
+
+@lru_cache
+def get_voice_service():
+    """Process singleton: VoiceService with primary provider + fallback.
+
+    Supports two TTS providers:
+    - MiniMax: built-in voices or cloned voice_id
+    - MiMo: legacy fallback voice synthesis
+
+    The project now prefers MiniMax as primary whenever it is configured,
+    so cloned voices can be used directly in chat. MiMo remains fallback-only.
+    """
+    primary_provider = _build_primary_voice_provider()
     if not primary_provider:
         logger.warning(
             "wiring_no_voice_provider", hint="Set MIMO_API_KEY or MINIMAX_API_KEY in .env"
         )
         return None
+
+    fallback_provider = _build_fallback_voice_provider(primary_provider)
 
     try:
         from heart.ss08_voice.service import VoiceService

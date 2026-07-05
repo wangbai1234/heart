@@ -16,12 +16,12 @@ from starlette.testclient import TestClient
 @pytest.fixture
 def client():
     from heart.api.main import app
+
     return TestClient(app)
 
 
 @pytest.mark.integration
 class TestDevRoutesGated:
-
     def test_profile_records_default_404(self, client):
         """Without HEART_DEV_MODE=true, /api/profile/records should 404."""
         resp = client.get("/api/profile/records")

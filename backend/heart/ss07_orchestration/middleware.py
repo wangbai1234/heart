@@ -10,4 +10,3 @@ Author: Heart Platform
 from __future__ import annotations
 
 # orchestrate_with_invariants removed (dead code, zero callers)
-

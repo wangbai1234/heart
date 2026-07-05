@@ -41,12 +41,12 @@ USER_B = "00000000-0000-0000-0000-000000000002"
 @pytest.fixture
 def client():
     from heart.api.main import app
+
     return TestClient(app)
 
 
 @pytest.mark.integration
 class TestAuthCoverage:
-
     @pytest.mark.parametrize(
         "method,path_template",
         [

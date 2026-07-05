@@ -49,7 +49,9 @@ class TestEmotionProgression:
         )
 
     @pytest.mark.asyncio
-    async def test_emotion_valence_changes_on_vulnerability_message(self, orchestrator, emotion_service):
+    async def test_emotion_valence_changes_on_vulnerability_message(
+        self, orchestrator, emotion_service
+    ):
         """Sending a vulnerability message should update emotion state.
 
         This verifies the hot path calls emotion_service.process_turn.
@@ -154,12 +156,16 @@ class TestEmotionProgression:
 
         # Check final state
         final_state = await emotion_service.get_current_state(user_id, character_id)
-        assert len(final_state["active_stack"]) > 0, "Should have emotions after vulnerability messages"
+        assert len(final_state["active_stack"]) > 0, (
+            "Should have emotions after vulnerability messages"
+        )
         assert len(final_state["recent_vad_history"]) >= 2
 
         # Verify emotion intensities accumulated
         for emotion in final_state["active_stack"]:
-            assert emotion["intensity"] > 0, f"Emotion {emotion['emotion']} should have positive intensity"
+            assert emotion["intensity"] > 0, (
+                f"Emotion {emotion['emotion']} should have positive intensity"
+            )
 
     @pytest.mark.asyncio
     async def test_emotion_skipped_when_no_service(self):
