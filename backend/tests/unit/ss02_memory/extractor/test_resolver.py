@@ -27,6 +27,7 @@ from heart.ss02_memory.extractor.resolver import (
     Resolver,
     _compute_ewma,
     _values_match,
+    is_implausible_identity_value,
 )
 from heart.ss02_memory.extractor.types import (
     Attribute,
@@ -415,3 +416,60 @@ async def test_do_not_recall_fact_not_matched():
     decisions = await resolver.resolve(envelope)
 
     assert decisions[0].decision == DecisionType.CREATE
+
+
+# ── Defensive: implausible identity values (P0-3, "什么吗" bug) ──
+
+
+@pytest.mark.asyncio
+async def test_reject_disclosure_interrogative_name():
+    """An LLM-mis-tagged interrogative disclosure (name="什么吗") → REJECT, no CREATE."""
+    session = _mock_session_with_fact(None)  # no matching L3
+    resolver = Resolver(session, uuid4())
+    candidate = _make_candidate(
+        attribute=Attribute.NAME,
+        value="什么吗",
+        kind=Kind.DISCLOSURE,
+        reasoning="T0: LLM wrongly tagged '我叫什么吗' as a name disclosure",
+    )
+    envelope = _make_envelope([candidate])
+
+    decisions = await resolver.resolve(envelope)
+
+    assert decisions[0].decision == DecisionType.REJECT
+    assert "implausible identity value" in decisions[0].reason
+
+
+@pytest.mark.asyncio
+async def test_valid_name_still_creates():
+    """A legitimate name disclosure is unaffected by the guard → CREATE."""
+    session = _mock_session_with_fact(None)
+    resolver = Resolver(session, uuid4())
+    candidate = _make_candidate(
+        attribute=Attribute.NAME, value="张三", kind=Kind.DISCLOSURE, reasoning="T0: 我叫张三"
+    )
+    envelope = _make_envelope([candidate])
+
+    decisions = await resolver.resolve(envelope)
+
+    assert decisions[0].decision == DecisionType.CREATE
+
+
+def test_is_implausible_identity_value_flags_interrogatives():
+    assert is_implausible_identity_value(Attribute.NAME, "什么吗") is True
+    assert is_implausible_identity_value(Attribute.NAME, "谁") is True
+    assert is_implausible_identity_value(Attribute.NICKNAME, "啥呢") is True
+    assert is_implausible_identity_value(Attribute.NAME, "  ") is True
+    assert is_implausible_identity_value(Attribute.NAME, "我") is True
+
+
+def test_is_implausible_identity_value_allows_real_names():
+    assert is_implausible_identity_value(Attribute.NAME, "张三") is False
+    assert is_implausible_identity_value(Attribute.NICKNAME, "年糕") is False
+    assert is_implausible_identity_value(Attribute.NAME, "Alice") is False
+
+
+def test_is_implausible_identity_value_scoped_to_identity_attrs():
+    # Non-identity attributes are never flagged (a hobby/dislike can be anything).
+    assert is_implausible_identity_value(Attribute.HOBBY, "什么") is False
+    assert is_implausible_identity_value(Attribute.DISLIKE, "谁") is False
