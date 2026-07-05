@@ -130,6 +130,31 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
     const isAI = msg.role === 'assistant'
     const avatar = isAI ? profile.avatar : userAvatar
 
+    // Show breathing dots in bubble when message is empty during streaming
+    const isEmpty = msg.content === '' && isStreaming
+    if (isEmpty) {
+      return (
+        <div className={`flex items-start gap-2 ${isAI ? 'self-start' : 'self-end flex-row-reverse'}`}>
+          {showAvatar ? (
+            <Avatar src={avatar} size={40} className="shrink-0 mt-[2px]" />
+          ) : (
+            <div className="w-[40px] shrink-0" />
+          )}
+          <div className={`max-w-[67%] px-4 py-[14px] ${
+            isAI
+              ? isDark
+                ? 'bg-[rgba(255,255,255,0.06)] backdrop-blur-[16px] rounded-[20px_20px_20px_6px] border border-[rgba(255,255,255,0.06)]'
+                : 'bg-[var(--color-glass-75)] backdrop-blur-[16px] rounded-[20px_20px_20px_6px] border border-[var(--color-border-glass)]'
+              : isDark
+                ? 'bg-gradient-to-br from-[#4A5B8F] to-[#6C7DB5] rounded-[6px_20px_20px_20px]'
+                : 'bg-gradient-to-br from-[#A7C7E7] to-[#BFD7EE] rounded-[6px_20px_20px_20px]'
+          }`}>
+            <BreathingDots />
+          </div>
+        </div>
+      )
+    }
+
     // Voice message with audio
     if (msg.kind === 'voice' && msg.audioData) {
       return (
@@ -239,10 +264,6 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
           const showTime = shouldShowTimestamp(msg, prev)
           const showAvatar = !prev || prev.role !== msg.role || showTime
 
-          // Skip empty message bubbles during streaming (turn_start without text_delta yet)
-          const isLatestEmpty = msg.content === '' && isStreaming && index === messages.length - 1
-          if (isLatestEmpty) return null
-
           return (
             <div key={msg.id} className="flex flex-col">
               {showTime && (
@@ -263,17 +284,8 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
 
         {/* Streaming indicator */}
         {isStreaming && (
-          <div className={`flex items-end gap-2 self-start`}>
+          <div className="flex items-end gap-2 self-start">
             <Avatar src={profile.avatar} size={40} className="shrink-0 mt-[2px]" />
-            <div
-              className={`backdrop-blur-[16px] rounded-[20px_20px_20px_6px] px-5 py-3 ${
-                isDark
-                  ? 'bg-[rgba(255,255,255,0.06)] border border-[rgba(255,255,255,0.06)]'
-                  : 'bg-[var(--color-glass-75)] border border-[var(--color-border-glass)]'
-              }`}
-            >
-              <BreathingDots />
-            </div>
           </div>
         )}
       </div>
