@@ -43,10 +43,15 @@ class Settings(BaseSettings):
     main_llm_model: str = "deepseek-reasoner"
     cheap_llm_model: str = "deepseek-chat"
 
-    # Embedding Service
+    # Embedding Service (OpenAI-compatible hosted endpoint, e.g. SiliconFlow bge-m3)
     embedding_model: str = "BAAI/bge-m3"
     embedding_batch_size: int = 32
     embedding_cache_ttl: int = 86400
+    # When embedding_api_key is empty the EmbeddingService is disabled (build
+    # returns None) and memory falls back to recency/identity retrieval — no crash.
+    embedding_api_key: str = ""
+    embedding_base_url: str = "https://api.siliconflow.cn/v1"
+    embedding_dimensions: int = 1024  # bge-m3 native dim; must match the DB vector() column
 
     # S3 / Object Storage
     s3_endpoint_url: str = "http://localhost:9000"
