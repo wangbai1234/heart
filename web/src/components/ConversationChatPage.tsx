@@ -282,12 +282,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
           )
         })}
 
-        {/* Streaming indicator */}
-        {isStreaming && (
-          <div className="flex items-end gap-2 self-start">
-            <Avatar src={profile.avatar} size={40} className="shrink-0 mt-[2px]" />
-          </div>
-        )}
+        {/* Streaming indicator - avatar is already in the bubble via renderMessage */}
       </div>
 
       {/* Input bar */}
