@@ -111,6 +111,18 @@ def get_model_router():
 
 
 @lru_cache
+def get_embedding_service():
+    """Process singleton: EmbeddingService. Returns None if no EMBEDDING_API_KEY.
+
+    When None, memory writes skip semantic_vector and retrieval falls back to
+    recency/identity — i.e. exactly the pre-semantic-recall behaviour.
+    """
+    from heart.infra.embeddings import build_embedding_service
+
+    return build_embedding_service(settings)
+
+
+@lru_cache
 def get_replay_recorder():
     """Process singleton: ReplayRecorder. Returns None if HEART_DEV_MODE not true."""
     import os
@@ -368,7 +380,11 @@ async def get_memory_service(
         except Exception:
             pass
 
-        svc = MemoryService(db_session=db_session, redis_client=redis_client)
+        svc = MemoryService(
+            db_session=db_session,
+            redis_client=redis_client,
+            embedding_service=get_embedding_service(),
+        )
         return svc
     except Exception as e:
         logger.warning("wiring_memory_service_init_failed", error=str(e))

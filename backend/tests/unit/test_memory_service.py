@@ -171,6 +171,88 @@ class TestRetrieveAPI:
         reinforced_ids = svc.reinforce.await_args.args[0]
         assert sm.memory_id in reinforced_ids
 
+    @pytest.mark.asyncio
+    async def test_retrieve_computes_query_embedding(self, user_id, character_id):
+        """retrieve() embeds the query text so the VectorRetriever can run.
+
+        Previously query_embedding was always None → vector retrieval dead.
+        Uses the retriever-level QueryContext (mutable), as the composer does.
+        """
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        from heart.infra.embeddings import FakeEmbeddingService
+        from heart.ss02_memory.retriever.base import QueryContext as RQueryContext
+
+        svc = MemoryService(
+            db_session=AsyncMock(), embedding_service=FakeEmbeddingService(dimensions=8)
+        )
+        svc.reinforce = AsyncMock()
+        svc._get_reconstructor = MagicMock(return_value=None)
+
+        retriever_result = MagicMock()
+        retriever_result.memories = []
+        retriever_result.recently_forgotten_hints = []
+        retriever_result.total_candidates = 0
+        retriever_result.strategies_used = []
+        retriever_result.retrieval_time_ms = 1.0
+        retriever_result.l4_included = 0
+
+        orch = MagicMock()
+        orch.retrieve = AsyncMock(return_value=retriever_result)
+
+        qctx = RQueryContext(
+            query_text="你还记得我的猫吗", user_id=user_id, character_id=character_id
+        )
+        with patch(
+            "heart.ss02_memory.retriever.orchestrator.RetrievalOrchestrator",
+            return_value=orch,
+        ):
+            await svc.retrieve(
+                user_id=user_id, character_id=character_id, query_context=qctx, top_k=5
+            )
+
+        passed_ctx = orch.retrieve.await_args.args[0]
+        assert passed_ctx.query_embedding is not None
+        assert len(passed_ctx.query_embedding) == 8
+
+    @pytest.mark.asyncio
+    async def test_retrieve_without_embedding_service_leaves_query_embedding_none(
+        self, user_id, character_id
+    ):
+        """No embedding service → no query embedding computed (unchanged behaviour)."""
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        from heart.ss02_memory.retriever.base import QueryContext as RQueryContext
+
+        svc = MemoryService(db_session=AsyncMock())  # embedding_service=None
+        svc.reinforce = AsyncMock()
+        svc._get_reconstructor = MagicMock(return_value=None)
+
+        retriever_result = MagicMock()
+        retriever_result.memories = []
+        retriever_result.recently_forgotten_hints = []
+        retriever_result.total_candidates = 0
+        retriever_result.strategies_used = []
+        retriever_result.retrieval_time_ms = 1.0
+        retriever_result.l4_included = 0
+
+        orch = MagicMock()
+        orch.retrieve = AsyncMock(return_value=retriever_result)
+
+        qctx = RQueryContext(
+            query_text="你还记得我的猫吗", user_id=user_id, character_id=character_id
+        )
+        with patch(
+            "heart.ss02_memory.retriever.orchestrator.RetrievalOrchestrator",
+            return_value=orch,
+        ):
+            await svc.retrieve(
+                user_id=user_id, character_id=character_id, query_context=qctx, top_k=5
+            )
+
+        passed_ctx = orch.retrieve.await_args.args[0]
+        assert passed_ctx.query_embedding is None
+
 
 class TestGetL4:
     """Tests for get_l4() L4 identity memory read."""
