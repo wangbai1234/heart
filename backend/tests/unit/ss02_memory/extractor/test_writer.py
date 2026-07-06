@@ -164,6 +164,43 @@ async def test_create_writes_l2_l3_audit():
     assert l3_audits[0].new_value is not None
 
 
+@pytest.mark.asyncio
+async def test_create_sets_semantic_vector_when_embedding_present():
+    """CREATE with an embedding service populates the FactNode's semantic_vector."""
+    from heart.infra.embeddings import FakeEmbeddingService
+
+    session = _mock_session()
+    writer = Writer(
+        session, uuid4(), uuid4(), embedding_service=FakeEmbeddingService(dimensions=8)
+    )
+    candidate = _make_candidate(reasoning="T0: name disclosed")
+    envelope = _make_envelope([candidate])
+    decision = _make_decision(DecisionType.CREATE, candidate=candidate)
+
+    await writer.commit([decision], envelope)
+
+    added_objects = [call.args[0] for call in session.add.call_args_list]
+    fact = next(o for o in added_objects if isinstance(o, FactNode))
+    assert fact.semantic_vector is not None
+    assert len(fact.semantic_vector) == 8
+
+
+@pytest.mark.asyncio
+async def test_create_leaves_semantic_vector_none_without_embedding():
+    """No embedding service → semantic_vector stays None (unchanged behaviour)."""
+    session = _mock_session()
+    writer = Writer(session, uuid4(), uuid4())  # embedding_service=None
+    candidate = _make_candidate(reasoning="T0: name disclosed")
+    envelope = _make_envelope([candidate])
+    decision = _make_decision(DecisionType.CREATE, candidate=candidate)
+
+    await writer.commit([decision], envelope)
+
+    added_objects = [call.args[0] for call in session.add.call_args_list]
+    fact = next(o for o in added_objects if isinstance(o, FactNode))
+    assert fact.semantic_vector is None
+
+
 # ── REINFORCE tests ───────────────────────────────────────────
 
 

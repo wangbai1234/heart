@@ -53,10 +53,31 @@ class Writer:
     On exception: rollback, mark queue status="failed", enqueue to DLQ.
     """
 
-    def __init__(self, session: AsyncSession, user_id: UUID, session_id: UUID) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        user_id: UUID,
+        session_id: UUID,
+        embedding_service=None,
+    ) -> None:
         self._session = session
         self._user_id = user_id
         self._session_id = session_id
+        self._embedding = embedding_service
+
+    async def _embed_literal(self, literal_text: str):
+        """Embed an L3 fact's literal text, or None when unavailable.
+
+        Best-effort: None if no embedding service (no API key) or on failure,
+        leaving semantic_vector NULL (pre-semantic-recall behaviour).
+        """
+        if self._embedding is None:
+            return None
+        try:
+            return await self._embedding.embed_query(literal_text)
+        except Exception as e:
+            logger.warning("l3_embedding_failed", error=str(e))
+            return None
 
     async def commit(
         self,
@@ -86,7 +107,7 @@ class Writer:
             # ── Write L2 + L3 + audit for each decision ──
             for decision in decisions:
                 self._write_l2_episodic_audit(decision, envelope)
-                self._write_l3_and_audit(decision, envelope)
+                await self._write_l3_and_audit(decision, envelope)
 
             # ── Mark queue done ──
             await self._mark_queue_done(run_id)
@@ -166,7 +187,7 @@ class Writer:
 
     # ── L3 Writes + Audit ────────────────────────────────────────
 
-    def _write_l3_and_audit(
+    async def _write_l3_and_audit(
         self,
         decision: ResolverDecision,
         envelope: ExtractionEnvelope,
@@ -184,9 +205,9 @@ class Writer:
         }.get(decision.decision)
 
         if handler is not None:
-            handler(decision, envelope)
+            await handler(decision, envelope)
 
-    def _handle_create(
+    async def _handle_create(
         self,
         decision: ResolverDecision,
         envelope: ExtractionEnvelope,
@@ -199,6 +220,7 @@ class Writer:
         subject = cand.entity_ref or cand.entity_type.value
         predicate = cand.attribute.value
         literal_text = f"{subject}: {predicate} = {cand.value}"
+        semantic_vector = await self._embed_literal(literal_text)
 
         fact = FactNode(
             id=fact_id,
@@ -227,6 +249,7 @@ class Writer:
             confidence_ewma=cand.confidence,
             last_extractor_run_id=envelope.extractor_run_id,
             is_active=True,
+            semantic_vector=semantic_vector,
         )
         self._session.add(fact)
 
@@ -239,7 +262,7 @@ class Writer:
         )
         self._session.add(audit)
 
-    def _handle_reinforce(
+    async def _handle_reinforce(
         self,
         decision: ResolverDecision,
         envelope: ExtractionEnvelope,
@@ -271,7 +294,7 @@ class Writer:
         )
         self._session.add(audit)
 
-    def _handle_supersede(
+    async def _handle_supersede(
         self,
         decision: ResolverDecision,
         envelope: ExtractionEnvelope,
@@ -292,6 +315,7 @@ class Writer:
         subject = cand.entity_ref or cand.entity_type.value
         predicate = cand.attribute.value
         literal_text = f"{subject}: {predicate} = {cand.value}"
+        semantic_vector = await self._embed_literal(literal_text)
 
         new_fact = FactNode(
             id=new_fact_id,
@@ -320,6 +344,7 @@ class Writer:
             confidence_ewma=cand.confidence,
             last_extractor_run_id=envelope.extractor_run_id,
             is_active=True,
+            semantic_vector=semantic_vector,
         )
         self._session.add(new_fact)
 
@@ -339,7 +364,7 @@ class Writer:
         )
         self._session.add(audit_old)
 
-    def _handle_soft_delete(
+    async def _handle_soft_delete(
         self,
         decision: ResolverDecision,
         envelope: ExtractionEnvelope,
