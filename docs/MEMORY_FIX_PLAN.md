@@ -1,5 +1,15 @@
 # 记忆 / 上下文系统修复方案（供 Mimo 执行）
 
+> ## ✅ 已全部实现并合并 main（2026-07-06）——本文件为历史工单，勿再据此重做
+> PR1→**#87** · PR2→**#89** · PR3→**#90** · PR4→**#91/#92/#93/#94**。
+> 因此下文中所有"现在时"的坏状态断言均**已过时**（已修复），例如：
+> `retrieve() 从不调用 reinforce()`（已回写）、`semantic_vector 零命中/语义召回是死的`（已写入+已接线，
+> 本地已回填并实测 `vector` 策略生效）、`L2 情绪/重要性硬编码`（已用真实 VAD+多信号）、
+> `EmotionEvent 永不落库`（已持久化）、`RECENT_HISTORY_LIMIT=40`（已改 50）、`EmbeddingService 无实现`
+> （`backend/heart/infra/embeddings.py` 已存在）。
+> 仅 P2 项按计划保留为"设计如此/非 bug"。启用/操作见 [`docs/EXECUTION_MANUAL.md`](EXECUTION_MANUAL.md)。
+
+
 > 依据：`docs/TEST_RESULTS.md` 8 个问题 + 实际代码走查（非推断）。
 > 结论先行：**短期上下文（最近 40 条注入）是好的**（测试 1/3/5 通过）；
 > 8 个"问题"里，真正的 bug 集中在 **记忆召回链路** 和 **冷路径 L2 写入**，

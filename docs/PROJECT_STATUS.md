@@ -4,16 +4,42 @@
 >
 > 这份文件是当前真理。其它历史文件可以参考，但当与本文件冲突时，**以本文件为准**。
 
-**最后更新**：2026-06-21
-**当前 Phase**：✅ SS02 LLM Extractor 重构交付完结 — v1.0.3 live golden 47/49 (95.9%)
-**当前分支**：`feat/ss02-llm-extractor-v1.0.3`（PR #42, base=main）
+**最后更新**：2026-07-06
+**当前 Phase**：✅ 商业外壳 + 记忆系统修复 + 语义召回 全部合并 main，进入手机端（响应式 Web）全面测试
+**当前分支**：main（PR #86–#94 均已合并）
+
+> 📖 **启动/部署/手机端测试/启用语义召回，一律看 [`docs/EXECUTION_MANUAL.md`](EXECUTION_MANUAL.md)（单一操作手册）。**
 
 ---
 
-## 1. 一句话 TL;DR
+## 0. 近期进展（2026-07-06）— 记忆系统已修复，勿再当坏的
 
-> ✅ SS02 Memory LLM Extractor 重构交付完结。v1.0.3 达到 47/49 (95.9%) strict pass，PR #42 已开。P0 全清：migration 009 hotfix PR #45、分支拆解完成、PR 合规 2 open。<br>
-> 剩余：P1-A consolidator test / P1-B E2E race / P2-B encoder loop 已登记 issue #46/#47/#48。下一步：👤 HUMAN 前端栈决策 → Phase 9 Frontend MVP。
+> ⚠️ 给新会话：下面这些**已经修完并合并 main**。旧文档 `docs/TEST_RESULTS.md` / `docs/MEMORY_FIX_PLAN.md`
+> 描述的"记忆坏了/召回不触发/情绪硬编码/L4 脏数据"**都已修复**，那两份是历史工单，勿据其重做。
+
+- **#86** 商业外壳（Email OTP 登录、积分、Profile、聊天持久化、语音）+ fastapi<0.137 修复。
+- **#87** 记忆 PR1：召回回写 `recall_count` + L2 真实情绪/importance + 短期窗口 40→50。
+- **#88** CI 修复：前端 `vite build` 崩溃（rolldown 单平台 lockfile 缺 linux 原生二进制）。
+- **#89** 记忆 PR2：Resolver 拦截疑问句污染 L4（"什么吗"）+ `cleanup_dirty_l4.py`。
+- **#90** 记忆 PR3：`EmotionEvent` 持久化（此前从不落库）。
+- **#91–#94** 记忆 PR4：**语义召回端到端打通**——`EmbeddingService`（bge-m3 1024 维）、
+  `semantic_vector` 768→1024（迁移 017）、L2/L3 写向量、composer 算 query embedding、回填脚本。
+  **门控于 `EMBEDDING_API_KEY`**：不配则退回 recency/identity，系统正常。
+
+**本地 docker 环境已启用语义召回**（迁移 017 已跑、572 L2 + 196 L3 已回填、脏 L4 已清、实测 `vector` 策略生效）。
+staging/prod 需各自跑：`alembic upgrade heads` + `backfill_embeddings.py --apply` + 配 key（详见执行手册 §7）。
+
+**仍保留（设计如此/非 bug）**：scene_context 缺失、L2/L3 结构差异、`drifting` 关系态。
+
+**待办功能（未实现）**：`docs/upgrade/commercial/06_anonymous_email_delivery.md`（匿名邮件 OTP 投递，
+前置 `EmailSender` 抽象已就绪，可直接开发）；PWA "安装到桌面/主屏"（当前无 manifest/SW，见手册 §9）。
+
+---
+
+## 1. 一句话 TL;DR（历史，2026-06-21）
+
+> ✅ SS02 Memory LLM Extractor 重构交付完结。v1.0.3 达到 47/49 (95.9%) strict pass。
+> （注：其后已叠加 #86–#94，见上方 §0。）
 
 ---
 

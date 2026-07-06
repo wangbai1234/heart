@@ -80,11 +80,13 @@ LLM_PROVIDER=deepseek DEEPSEEK_API_KEY=sk-... pytest tests/e2e -m e2e -v  # real
 - **CI is minimal**: `scripts/ci.sh` is the only pipeline. Old Gitee Go workflows are archived.
 - **JWT secret**: `JWT_ALGORITHM=RS256` (in `.env`). Generate key with `openssl rand -hex 32`.
 
-## Project status snapshot (2026-06-04)
+## Project status snapshot (2026-07-06)
 
-- Phase 7 verification completed — all 7 phases passed.
-- SS03-07 merged to main (PR #17), governance merged (PR #16).
-- Safety wiring verified: real SafetyAgent + CarePathHandler + 14 templates + _routing.yaml.
-- Remaining blocker: #4 dual LLM provider tree.
-- Next: Phase 7 implementation (integration test pyramid + soul drift regression).
+- 权威状态见 `docs/PROJECT_STATUS.md` §0 + 操作手册 `docs/EXECUTION_MANUAL.md`（本快照仅摘要）。
+- 商业外壳（#86）+ 记忆系统修复（#87–#90）+ 语义召回端到端（#91–#94）**均已合并 main**。
+- 语义召回门控于 `EMBEDDING_API_KEY`；本地 docker 已启用（迁移 017 + 已回填）。
+- 待实现：模块 06 匿名邮件 OTP（`docs/upgrade/commercial/06_anonymous_email_delivery.md`）；PWA 安装到桌面。
+- JWT 默认 **RS256**（需 `JWT_PRIVATE_KEY`+`JWT_PUBLIC_KEY`；也可切 HS256+强 secret）。以 `core/config.py` 校验为准。
 - Current active branch: `main`.
+
+> 历史快照（2026-06-04）：Phase 7 验证完成，SS03–07 合并（PR #17），governance（PR #16）。
