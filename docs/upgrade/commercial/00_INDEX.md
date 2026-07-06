@@ -1,6 +1,13 @@
 # yuoyuo · 商用化升级执行方案（Execution Plan for Mimo）
 
 > 产品名对外统一 **yuoyuo**（全小写）。`心屿 / Heart` 仅内部代号，任何用户可见文案禁止出现。
+
+> ⚠️ **2026-07-06 状态订正**（§1 "现状真相"部分条目已过时，以此为准）：
+> 短期窗口 40→**50 条**；最新迁移不再是 010，而是 **017**（`semantic_vector` 768→1024）；
+> 语义召回已端到端实现并合并（#91–#94，门控于 `EMBEDDING_API_KEY`），记忆引擎已被本轮显著修改
+> （非"基本不改"）。JWT 默认 **RS256**（以 `core/config.py` 校验为准）。
+> 模块 06（匿名邮件 OTP）仍待实现。完整现状/操作见 [`../../EXECUTION_MANUAL.md`](../../EXECUTION_MANUAL.md)
+> 与 [`../../PROJECT_STATUS.md`](../../PROJECT_STATUS.md) §0。
 > 本目录是一份「工程设计级」执行方案，面向 AI Coding Agent（Mimo）逐模块落地。
 > **不含最终代码实现**；每个模块文件末尾都有一段「⚙️ Mimo 执行 Prompt」可直接复制交付。
 

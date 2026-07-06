@@ -141,7 +141,7 @@ orchestrator = RetrievalOrchestrator(session)
 # Build query context
 query_context = QueryContext(
     query_text="我的猫叫什么名字？",
-    query_embedding=embedding,  # 768-dim
+    query_embedding=embedding,  # 1024-dim (BAAI/bge-m3)
     keywords=["猫", "名字"],
     current_emotion={"valence": 0.3, "arousal": 0.4},
     current_time=datetime.now(timezone.utc),
@@ -318,7 +318,7 @@ SELECT id, distance FROM activated
 
 ### Vector Dimensions
 
-- OpenAI embeddings: **768-dim** (not 1536)
+- Semantic embeddings: **1024-dim** (BAAI/bge-m3, migration 017；此前为 768)
 - Emotional vectors: **256-dim**
 - HNSW index: `m=16, ef_construction=64`
 
