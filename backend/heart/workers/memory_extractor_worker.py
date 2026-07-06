@@ -191,7 +191,14 @@ class MemoryExtractorWorker:
             from heart.ss02_memory.extractor.writer import Writer
 
             async with self.db_session_factory() as session:
-                writer = Writer(session, user_id, item["session_id"])
+                from heart.api.wiring import get_embedding_service
+
+                writer = Writer(
+                    session,
+                    user_id,
+                    item["session_id"],
+                    embedding_service=get_embedding_service(),
+                )
                 await writer.commit(decisions, envelope)
 
             elapsed = time.monotonic() - start
