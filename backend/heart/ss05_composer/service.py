@@ -142,6 +142,8 @@ class CompositionContext:
     character_id: str
     turn_id: UUID
     session_id: Optional[UUID] = None
+    # Current user message — used as the semantic-recall query text.
+    user_message: str = ""
     anchor: AnchorContextBlock = field(default_factory=AnchorContextBlock)
     memory: MemoryContextBlock = field(default_factory=MemoryContextBlock)
     emotion: EmotionContextBlock = field(default_factory=EmotionContextBlock)
@@ -541,7 +543,7 @@ class ComposerService:
             from heart.ss02_memory.retriever.base import QueryContext
 
             qctx = QueryContext(
-                query_text="",
+                query_text=ctx.user_message or "",
                 user_id=ctx.user_id,
                 character_id=ctx.character_id,
             )

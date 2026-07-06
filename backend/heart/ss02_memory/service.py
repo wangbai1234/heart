@@ -220,6 +220,31 @@ class MemoryService:
 
     # ─────────── Read API ───────────
 
+    async def _ensure_query_embedding(self, query_context) -> None:
+        """Populate query_context.query_embedding from its text, best-effort.
+
+        Tolerant of both the retriever-level QueryContext (query_text) and the
+        service-level one (current_message). No-op without an embedding service;
+        never raises (falls back to recency/identity retrieval on failure).
+        """
+        query_text = getattr(query_context, "query_text", "") or getattr(
+            query_context, "current_message", ""
+        )
+        if (
+            self._embedding is None
+            or getattr(query_context, "query_embedding", None) is not None
+            or not query_text
+        ):
+            return
+        try:
+            embedding = await self._embedding.embed_query(query_text)
+            try:
+                query_context.query_embedding = embedding
+            except Exception:
+                pass  # frozen/unsupported context — skip silently
+        except Exception as e:
+            logger.warning("query_embedding_failed", error=str(e))
+
     async def retrieve(
         self,
         user_id: UUID,
@@ -261,6 +286,10 @@ class MemoryService:
             try:
                 from heart.ss02_memory.retriever.base import ScoredMemory
                 from heart.ss02_memory.retriever.orchestrator import RetrievalOrchestrator
+
+                # Compute a query embedding so the VectorRetriever can run
+                # (it early-returns when query_embedding is None).
+                await self._ensure_query_embedding(query_context)
 
                 orchestrator = RetrievalOrchestrator(self._db)
                 retriever_result = await orchestrator.retrieve(query_context, top_k)  # type: ignore[arg-type]

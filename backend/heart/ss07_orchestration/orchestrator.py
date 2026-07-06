@@ -79,6 +79,23 @@ def _message_sentiment(user_id: UUID, character_id: str, text: str) -> float:
         return 0.0
 
 
+async def _embed_episode_summary(text: str) -> Any:
+    """Embed an L2 episode summary, or None when unavailable.
+
+    Best-effort: returns None if no embedding service is configured (no API key)
+    or on any failure, leaving semantic_vector NULL (pre-semantic-recall behaviour).
+    """
+    try:
+        from heart.api.wiring import get_embedding_service
+
+        embedder = get_embedding_service()
+        if embedder is not None:
+            return await embedder.embed_query(text)
+    except Exception as e:
+        logger.warning("l2_embedding_failed", error=str(e))
+    return None
+
+
 # ── Orchestrator ────────────────────────────────────────────────────
 
 
@@ -340,6 +357,7 @@ class Orchestrator:
             character_id=req.character_id,
             turn_id=req.trace_id,
             session_id=session_id,
+            user_message=req.user_message,
             max_tokens=2000,
         )
 
@@ -687,6 +705,7 @@ class Orchestrator:
                 character_id=req.character_id,
                 turn_id=req.trace_id,
                 session_id=session_id,
+                user_message=req.user_message,
                 max_tokens=2000,
             )
             result = await composer.compose(
@@ -858,11 +877,18 @@ class Orchestrator:
 
                 if not trivial:
                     now = datetime.now(timezone.utc).replace(tzinfo=None)
+                    summary = user_message[:200]
+
+                    # Semantic embedding so this episode is recallable by meaning,
+                    # not just recency. None when no embedding service (no API key)
+                    # or on failure → column stays NULL as before.
+                    semantic_vector = await _embed_episode_summary(summary)
+
                     episode = EpisodicMemory(
                         id=uuid4(),
                         user_id=user_id,
                         character_id=character_id,
-                        episode_summary=user_message[:200],
+                        episode_summary=summary,
                         episode_raw_turn_ids=[],
                         episode_start_at=now,
                         episode_end_at=now,
@@ -878,6 +904,7 @@ class Orchestrator:
                         decay_immunity=importance,
                         state="vivid",
                         recall_count=0,
+                        semantic_vector=semantic_vector,
                         created_at=now,
                         updated_at=now,
                     )
