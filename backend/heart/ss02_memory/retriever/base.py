@@ -204,6 +204,18 @@ def combine_scores(
     return candidates
 
 
+# High-confidence L3 facts (explicit stored facts like "has_pet 年糕") must not be
+# out-ranked out of the injected window by episodic chatter, which caused the recall
+# bug where a confidence=1 fact was answered wrong. We force-include them like L4.
+L3_CONFIDENCE_FLOOR = 0.9
+MAX_FORCED_L3 = 2
+
+
+def _fact_rank(m: ScoredMemory) -> tuple[float, float]:
+    """Rank key for choosing which duplicate L3 fact to keep: confidence, then score."""
+    return (float(getattr(m.memory, "confidence", 0.0) or 0.0), m.score)
+
+
 def select_top_k(
     candidates: List[ScoredMemory],
     k: int = 5,
@@ -211,21 +223,24 @@ def select_top_k(
     dedup_threshold: float = 0.9,
 ) -> List[ScoredMemory]:
     """
-    Select top-K memories with L4 force-inclusion and deduplication.
+    Select top-K memories with L4 + high-confidence-L3 force-inclusion and dedup.
 
     Rules (§10.4.2 + §3.5):
-    - L4 memories with score > 0.1 are forced included (max 2)
-    - Deduplication removes highly similar memories (threshold=0.9)
+    - L4 memories with score > 0.1 are force-included (max 2)
+    - High-confidence L3 facts (confidence >= L3_CONFIDENCE_FLOOR, score > 0.1) are
+      force-included (max MAX_FORCED_L3) so explicit facts beat episodic chatter
+    - Duplicate L3 facts (same subject+predicate) are collapsed, keeping the
+      highest-confidence one
     - Top-K includes at least 1 L4 if relevant
 
     Args:
         candidates: Scored memories (must have .score computed)
         k: Top-K limit (default 5, per INV-M-9)
         must_include_l4: Force include L4 if relevant
-        dedup_threshold: Similarity threshold for deduplication
+        dedup_threshold: Reserved for future semantic dedup
 
     Returns:
-        Top-K scored memories
+        Top-K scored memories (ordered: L4, forced L3, then by score)
     """
     # Sort by score descending
     candidates = sorted(candidates, key=lambda c: c.score, reverse=True)
@@ -234,23 +249,43 @@ def select_top_k(
     l4_candidates = [c for c in candidates if c.memory_type == "L4" and c.score > 0.1]
     others = [c for c in candidates if c.memory_type != "L4"]
 
-    # Deduplicate others (simple version: check text similarity)
-    # TODO: Implement proper deduplication in future # TODO(#issue-69)
-    # For now, just take top-N
+    # Deduplicate (collapses duplicate L3 fact triples)
     others = deduplicate_memories(others, threshold=dedup_threshold)
 
-    # Build final list
-    final = []
+    # High-confidence L3 facts to force-include (already dedup'd, still score-sorted).
+    forced_l3 = [
+        c
+        for c in others
+        if c.memory_type == "L3"
+        and float(getattr(c.memory, "confidence", 0.0) or 0.0) >= L3_CONFIDENCE_FLOOR
+        and c.score > 0.1
+    ][:MAX_FORCED_L3]
+
+    final: List[ScoredMemory] = []
+    chosen_ids: set[str] = set()
+
+    def _add(mem: ScoredMemory) -> None:
+        mid = str(mem.memory_id)
+        if mid not in chosen_ids:
+            final.append(mem)
+            chosen_ids.add(mid)
 
     # Force include up to 2 L4
     if must_include_l4:
-        final.extend(l4_candidates[:2])
+        for c in l4_candidates[:2]:
+            _add(c)
 
-    # Fill remaining slots with others
-    remaining = k - len(final)
-    final.extend(others[:remaining])
+    # Force include high-confidence L3 facts
+    for c in forced_l3:
+        _add(c)
 
-    return final
+    # Fill remaining slots with the rest (score order), skipping already-included
+    for c in others:
+        if len(final) >= k:
+            break
+        _add(c)
+
+    return final[:k]
 
 
 def deduplicate_memories(
@@ -258,15 +293,28 @@ def deduplicate_memories(
     threshold: float = 0.9,
 ) -> List[ScoredMemory]:
     """
-    Remove highly similar memories (placeholder implementation).
+    Collapse duplicate L3 fact triples (same subject+predicate), keeping the
+    highest-confidence variant. Competing/duplicate facts about the same subject
+    otherwise dilute the injected window and let a stale/low-confidence value win.
 
-    TODO: Implement proper deduplication using:
-    - Text similarity (embedding cosine)
-    - Same source turn
-    - Same fact triple
-
-    For now, just return as-is (no deduplication).
+    Non-L3 memories (and L3 facts lacking subject/predicate) pass through unchanged.
+    `threshold` is reserved for future semantic (embedding-cosine) dedup.
     """
-    # TODO(#issue-69)
-    # Placeholder: no deduplication yet
-    return memories
+    seen_facts: Dict[tuple, int] = {}  # (subject, predicate) -> index in result
+    result: List[ScoredMemory] = []
+
+    for m in memories:
+        if m.memory_type == "L3":
+            subject = getattr(m.memory, "subject", None)
+            predicate = getattr(m.memory, "predicate", None)
+            if subject is not None and predicate is not None:
+                key = (subject, predicate)
+                if key in seen_facts:
+                    idx = seen_facts[key]
+                    if _fact_rank(m) > _fact_rank(result[idx]):
+                        result[idx] = m  # keep the higher-confidence duplicate
+                    continue
+                seen_facts[key] = len(result)
+        result.append(m)
+
+    return result
