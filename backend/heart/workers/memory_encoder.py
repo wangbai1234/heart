@@ -34,6 +34,31 @@ from heart.ss02_memory.models import FactNode, MemoryEncodingEvent
 logger = structlog.get_logger()
 
 
+async def _embed_fact_text(text: str) -> Optional[list[float]]:
+    """Embed an L3 fact's literal text, best-effort.
+
+    Returns None when no embedding service is configured (no EMBEDDING_API_KEY)
+    or on any failure, leaving semantic_vector NULL (recall then falls back to
+    recency/identity). Populating this is REQUIRED for the fact to be reachable
+    by the VectorRetriever, which filters `semantic_vector IS NOT NULL` and is the
+    only working L3 retrieval path in the hot loop.
+    """
+    try:
+        from heart.api.wiring import get_embedding_service
+
+        embedder = get_embedding_service()
+    except Exception as e:  # pragma: no cover - defensive
+        logger.warning("embedding_service_unavailable", error=str(e))
+        return None
+    if embedder is None:
+        return None
+    try:
+        return await embedder.embed_query(text)
+    except Exception as e:
+        logger.warning("l3_embedding_failed", error=str(e))
+        return None
+
+
 # ============================================================
 # Configuration
 # ============================================================
@@ -223,6 +248,11 @@ async def write_facts_to_l3(
             existing_fact.confidence = max(existing_fact.confidence, fact["confidence"])
             existing_fact.last_confirmed_at = datetime.now(timezone.utc).replace(tzinfo=None)
 
+            # Backfill a missing embedding so pre-fix facts become retrievable
+            # once they are next mentioned (no separate migration needed for these).
+            if existing_fact.semantic_vector is None:
+                existing_fact.semantic_vector = await _embed_fact_text(existing_fact.literal_text)
+
             # Add this turn to source_turn_ids
             if event.source_turn_id not in existing_fact.source_turn_ids:
                 existing_fact.source_turn_ids.append(event.source_turn_id)
@@ -238,6 +268,12 @@ async def write_facts_to_l3(
             created_fact_ids.append(existing_fact.id)
         else:
             # Create new fact
+            literal_text = f"{fact['subject']} {fact['predicate']} {fact['object']}"
+            # Embed on write so the fact is reachable by the VectorRetriever
+            # (which requires semantic_vector IS NOT NULL). Prior to this the
+            # worker left it NULL, so every new fact was invisible to recall
+            # until a one-off backfill ran — the "面试担忧召回失败" root cause.
+            semantic_vector = await _embed_fact_text(literal_text)
             fact_node = FactNode(
                 id=uuid4(),
                 user_id=event.user_id,
@@ -245,7 +281,7 @@ async def write_facts_to_l3(
                 predicate=fact["predicate"],
                 subject=fact["subject"],
                 object=fact["object"],
-                literal_text=f"{fact['subject']} {fact['predicate']} {fact['object']}",
+                literal_text=literal_text,
                 raw_evidence=fact["source_text"],
                 source_turn_ids=[event.source_turn_id],
                 confidence=fact["confidence"],
@@ -254,6 +290,7 @@ async def write_facts_to_l3(
                 importance=extraction["importance_estimate"],
                 is_identity_level=fact.get("sacred_signal", False) or extraction["contains_sacred"],
                 state="active",
+                semantic_vector=semantic_vector,
                 created_at=datetime.now(timezone.utc).replace(tzinfo=None),
                 updated_at=datetime.now(timezone.utc).replace(tzinfo=None),
             )

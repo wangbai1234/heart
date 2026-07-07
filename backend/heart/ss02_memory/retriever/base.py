@@ -293,28 +293,45 @@ def deduplicate_memories(
     threshold: float = 0.9,
 ) -> List[ScoredMemory]:
     """
-    Collapse duplicate L3 fact triples (same subject+predicate), keeping the
-    highest-confidence variant. Competing/duplicate facts about the same subject
-    otherwise dilute the injected window and let a stale/low-confidence value win.
+    Collapse duplicate L3 facts, keeping the highest-confidence variant.
 
-    Non-L3 memories (and L3 facts lacking subject/predicate) pass through unchanged.
-    `threshold` is reserved for future semantic (embedding-cosine) dedup.
+    Two facts collapse when they share either:
+    - the same (subject, predicate)  — a re-extracted/updated value, or
+    - the same (subject, object)     — the SAME information under near-synonym
+      predicates, e.g. `worries_about`/`concerned_about` → "自我介绍". Left
+      un-collapsed these both consume injected slots and can crowd out other
+      facts (TEST_BUGS #3).
+
+    Competing/duplicate facts about the same subject otherwise dilute the injected
+    window and let a stale/low-confidence value win. Non-L3 memories (and L3 facts
+    lacking subject) pass through unchanged. `threshold` is reserved for future
+    semantic (embedding-cosine) dedup.
     """
-    seen_facts: Dict[tuple, int] = {}  # (subject, predicate) -> index in result
+    seen_keys: Dict[tuple, int] = {}  # (kind, subject, value) -> index in result
     result: List[ScoredMemory] = []
 
     for m in memories:
         if m.memory_type == "L3":
             subject = getattr(m.memory, "subject", None)
             predicate = getattr(m.memory, "predicate", None)
+            obj = getattr(m.memory, "object", None)
+            keys = []
             if subject is not None and predicate is not None:
-                key = (subject, predicate)
-                if key in seen_facts:
-                    idx = seen_facts[key]
-                    if _fact_rank(m) > _fact_rank(result[idx]):
-                        result[idx] = m  # keep the higher-confidence duplicate
+                keys.append(("sp", subject, predicate))
+            if subject is not None and obj is not None:
+                keys.append(("so", subject, obj))
+
+            if keys:
+                hit_idx = next((seen_keys[k] for k in keys if k in seen_keys), None)
+                if hit_idx is not None:
+                    if _fact_rank(m) > _fact_rank(result[hit_idx]):
+                        # Keep the higher-confidence variant; register its keys too.
+                        result[hit_idx] = m
+                        for k in keys:
+                            seen_keys[k] = hit_idx
                     continue
-                seen_facts[key] = len(result)
+                for k in keys:
+                    seen_keys[k] = len(result)
         result.append(m)
 
     return result

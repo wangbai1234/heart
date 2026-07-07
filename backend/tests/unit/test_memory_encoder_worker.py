@@ -390,6 +390,92 @@ class TestFactWriting:
         assert sample_encoding_event.source_turn_id in existing_fact.source_turn_ids
 
 
+class TestFactEmbeddingOnWrite:
+    """New facts must be embedded on write, else they're invisible to recall.
+
+    Regression guard for TEST_BUGS #1/#2: write_facts_to_l3 left semantic_vector
+    NULL, so the VectorRetriever (WHERE semantic_vector IS NOT NULL) never returned
+    the fact and the model hallucinated on follow-up questions.
+    """
+
+    @pytest.mark.asyncio
+    async def test_new_fact_gets_semantic_vector(
+        self, mock_db_session, sample_encoding_event, valid_extraction_output
+    ):
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none = MagicMock(return_value=None)
+        mock_db_session.execute = AsyncMock(return_value=mock_result)
+
+        fake_embedder = MagicMock()
+        fake_embedder.embed_query = AsyncMock(return_value=[0.1] * 1024)
+
+        with patch("heart.api.wiring.get_embedding_service", return_value=fake_embedder):
+            await write_facts_to_l3(
+                mock_db_session, sample_encoding_event, valid_extraction_output
+            )
+
+        added = [c.args[0] for c in mock_db_session.add.call_args_list]
+        assert added, "no facts were added"
+        assert all(f.semantic_vector == [0.1] * 1024 for f in added)
+        # One embed call per created fact (2 in valid_extraction_output).
+        assert fake_embedder.embed_query.await_count == 2
+
+    @pytest.mark.asyncio
+    async def test_no_embedding_service_leaves_vector_null(
+        self, mock_db_session, sample_encoding_event, valid_extraction_output
+    ):
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none = MagicMock(return_value=None)
+        mock_db_session.execute = AsyncMock(return_value=mock_result)
+
+        with patch("heart.api.wiring.get_embedding_service", return_value=None):
+            await write_facts_to_l3(
+                mock_db_session, sample_encoding_event, valid_extraction_output
+            )
+
+        added = [c.args[0] for c in mock_db_session.add.call_args_list]
+        assert added
+        assert all(f.semantic_vector is None for f in added)
+
+    @pytest.mark.asyncio
+    async def test_reinforce_backfills_missing_vector(
+        self, mock_db_session, sample_encoding_event, valid_extraction_output
+    ):
+        existing_fact = FactNode(
+            id=uuid4(),
+            user_id=sample_encoding_event.user_id,
+            character_id=sample_encoding_event.character_id,
+            predicate="has_pet",
+            subject="user",
+            object="猫",
+            literal_text="user has_pet 猫",
+            raw_evidence="之前说的",
+            source_turn_ids=[uuid4()],
+            confidence=0.8,
+            emotional_charge=0.0,
+            importance=0.5,
+            state="active",
+            confirmation_count=1,
+            last_confirmed_at=datetime.now(timezone.utc),
+            semantic_vector=None,  # pre-fix fact with no embedding
+        )
+        mock_result_1 = MagicMock()
+        mock_result_1.scalar_one_or_none = MagicMock(return_value=existing_fact)
+        mock_result_2 = MagicMock()
+        mock_result_2.scalar_one_or_none = MagicMock(return_value=None)
+        mock_db_session.execute = AsyncMock(side_effect=[mock_result_1, mock_result_2])
+
+        fake_embedder = MagicMock()
+        fake_embedder.embed_query = AsyncMock(return_value=[0.2] * 1024)
+
+        with patch("heart.api.wiring.get_embedding_service", return_value=fake_embedder):
+            await write_facts_to_l3(
+                mock_db_session, sample_encoding_event, valid_extraction_output
+            )
+
+        assert existing_fact.semantic_vector == [0.2] * 1024
+
+
 # ============================================================
 # Worker Tests
 # ============================================================
