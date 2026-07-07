@@ -328,6 +328,28 @@ class MemoryService:
                         )
                     )
 
+                # P0-1 diagnostic trace: log every retrieved memory
+                # with its layer, score breakdown, and the text that
+                # will be injected into the prompt.  Controlled by
+                # log level DEBUG so it's silent in production.
+                for rm in retrieved:
+                    logger.debug(
+                        "memory_retrieval_trace",
+                        memory_id=str(rm.memory_id),
+                        memory_type=rm.memory_type,
+                        score=round(rm.score, 4),
+                        score_breakdown={
+                            k: round(v, 4)
+                            for k, v in rm.score_breakdown.items()
+                            if not k.startswith("_")
+                        },
+                        reconstructed_text=rm.reconstructed_text[:200],
+                        raw_content=rm.raw_content[:200],
+                        state=rm.state,
+                        user_id=str(user_id),
+                        character_id=character_id,
+                    )
+
                 # Convert forgetting hints
                 forgetting_hints: list[ForgettingHint] = []
                 for h in retriever_result.recently_forgotten_hints:
