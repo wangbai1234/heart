@@ -4,8 +4,22 @@ Heart API Main Application
 FastAPI application entry point with health endpoints and middleware.
 """
 
+import os
+import sys
 import time
 from contextlib import asynccontextmanager
+from pathlib import Path
+
+from dotenv import load_dotenv
+
+# Load .env into os.environ for the real server process only, so raw os.getenv
+# flags that are NOT pydantic Settings fields (HEART_DEV_MODE, HEART_WORKERS_ENABLED,
+# HEART_INNER_LOOP_ENABLED, ...) take effect from .env. Skipped under pytest so the
+# test process never inherits dev-only flags (e.g. HEART_DEV_MODE=true would register
+# the dev auth/login stub). override=False keeps real process env authoritative.
+_env_path = Path(__file__).resolve().parent.parent.parent.parent / ".env"
+if _env_path.exists() and "pytest" not in sys.modules:
+    load_dotenv(_env_path, override=False)
 
 import structlog
 from fastapi import FastAPI, Request
@@ -223,8 +237,6 @@ def create_app() -> FastAPI:
     app.include_router(chat_ws_router)
 
     # Dev-only routes: gated behind HEART_DEV_MODE (process env takes precedence over .env)
-    import os
-
     if os.environ.get("HEART_DEV_MODE", "").lower() == "true":
         app.include_router(dev_router)  # /api/dev/*
         app.include_router(profile_dev_router, prefix="/api/profile")  # /api/profile/*
