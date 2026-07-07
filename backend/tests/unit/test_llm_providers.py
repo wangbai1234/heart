@@ -313,12 +313,17 @@ class TestProviderRegistry:
             assert registry.get_provider("deepseek-v4-pro") is not None
             assert registry.get_provider("deepseek-v4-flash") is not None
 
-            # Verify model mappings
+            # Model mappings now resolve to a PooledLLMProvider wrapping the right
+            # underlying provider class (one member per key; single key = pool of one).
+            from heart.infra.llm_providers.pool import PooledLLMProvider
+
             pro_provider = registry.get_provider_for_model("deepseek-reasoner")
-            assert isinstance(pro_provider, DeepSeekV4ProProvider)
+            assert isinstance(pro_provider, PooledLLMProvider)
+            assert isinstance(pro_provider._members[0], DeepSeekV4ProProvider)
 
             flash_provider = registry.get_provider_for_model("deepseek-chat")
-            assert isinstance(flash_provider, DeepSeekV4FlashProvider)
+            assert isinstance(flash_provider, PooledLLMProvider)
+            assert isinstance(flash_provider._members[0], DeepSeekV4FlashProvider)
 
     def test_initialize_registry_without_api_key(self):
         """Test registry initialization fails without API key."""

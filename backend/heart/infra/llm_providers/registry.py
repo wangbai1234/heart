@@ -14,6 +14,24 @@ from typing import Dict, Optional, Type
 from heart.infra.llm_providers.base import CircuitBreakerInterface, LLMProvider
 from heart.infra.llm_providers.deepseek import DeepSeekV4FlashProvider
 from heart.infra.llm_providers.deepseek_pro import DeepSeekV4ProProvider
+from heart.infra.llm_providers.pool import ConcurrencyGate, PooledLLMProvider
+
+
+def _parse_keys(primary: Optional[str], extra: Optional[str]) -> list[str]:
+    """Merge a primary key with an optional comma-separated extra list, de-duped."""
+    keys: list[str] = []
+    if primary:
+        keys.append(primary.strip())
+    if extra:
+        keys.extend(k.strip() for k in extra.split(",") if k.strip())
+    # Preserve order, drop duplicates and empties.
+    seen: set[str] = set()
+    result: list[str] = []
+    for k in keys:
+        if k and k not in seen:
+            seen.add(k)
+            result.append(k)
+    return result
 
 
 class ProviderRegistry:
@@ -60,6 +78,18 @@ class ProviderRegistry:
         self._providers[provider_name] = provider
 
         # Register model mappings
+        if models:
+            for model in models:
+                self._model_to_provider[model] = provider_name
+
+    def register_provider_instance(
+        self,
+        provider_name: str,
+        provider: LLMProvider,
+        models: Optional[list[str]] = None,
+    ) -> None:
+        """Register a pre-built provider instance (e.g. a PooledLLMProvider)."""
+        self._providers[provider_name] = provider
         if models:
             for model in models:
                 self._model_to_provider[model] = provider_name
@@ -135,30 +165,56 @@ def initialize_registry(
 
     # Get configuration from environment
     deepseek_api_key = os.getenv("DEEPSEEK_API_KEY")
+    deepseek_api_keys = os.getenv("DEEPSEEK_API_KEYS")  # optional comma-separated extras
     deepseek_base_url = os.getenv("DEEPSEEK_BASE_URL")
     main_model = os.getenv("MAIN_LLM_MODEL", "deepseek-chat")
     cheap_model = os.getenv("CHEAP_LLM_MODEL", "deepseek-chat")
 
-    if not deepseek_api_key:
+    keys = _parse_keys(deepseek_api_key, deepseek_api_keys)
+    if not keys:
         raise ValueError(
             "DEEPSEEK_API_KEY environment variable not set. Please check your .env file."
         )
 
-    # Register DeepSeek V4-pro (main model)
-    registry.register_provider(
+    # Shared gate: one semaphore + per-key cooldown across BOTH model pools, because the
+    # vendor concurrency limit is per-account (per-key), spanning models.
+    try:
+        max_concurrency = int(os.getenv("LLM_MAX_CONCURRENCY", "8"))
+    except ValueError:
+        max_concurrency = 8
+    try:
+        max_retries = int(os.getenv("LLM_MAX_RETRIES", "2"))
+    except ValueError:
+        max_retries = 2
+    try:
+        cooldown = float(os.getenv("LLM_KEY_COOLDOWN_SECONDS", "15"))
+    except ValueError:
+        cooldown = 15.0
+    gate = ConcurrencyGate(max_concurrency=max_concurrency, cooldown_seconds=cooldown)
+
+    # DeepSeek V4-pro (main model) — one underlying provider per key, wrapped in a pool.
+    pro_members: list[LLMProvider] = [
+        DeepSeekV4ProProvider(
+            api_key=k, base_url=deepseek_base_url, circuit_breaker=circuit_breaker
+        )
+        for k in keys
+    ]
+    registry.register_provider_instance(
         provider_name="deepseek-v4-pro",
-        provider_class=DeepSeekV4ProProvider,
-        api_key=deepseek_api_key,
-        base_url=deepseek_base_url,
+        provider=PooledLLMProvider(pro_members, gate=gate, max_retries=max_retries),
         models=[main_model, "deepseek-reasoner"],
     )
 
-    # Register DeepSeek V4-flash (cheap model)
-    registry.register_provider(
+    # DeepSeek V4-flash (cheap model)
+    flash_members: list[LLMProvider] = [
+        DeepSeekV4FlashProvider(
+            api_key=k, base_url=deepseek_base_url, circuit_breaker=circuit_breaker
+        )
+        for k in keys
+    ]
+    registry.register_provider_instance(
         provider_name="deepseek-v4-flash",
-        provider_class=DeepSeekV4FlashProvider,
-        api_key=deepseek_api_key,
-        base_url=deepseek_base_url,
+        provider=PooledLLMProvider(flash_members, gate=gate, max_retries=max_retries),
         models=[cheap_model, "deepseek-chat"],
     )
 

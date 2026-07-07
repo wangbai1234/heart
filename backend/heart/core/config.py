@@ -37,7 +37,15 @@ class Settings(BaseSettings):
 
     # LLM Providers - DeepSeek
     deepseek_api_key: str = ""
+    # Optional comma-separated list of additional DeepSeek keys for the outbound pool.
+    # Empty → fall back to the single deepseek_api_key (single-key behavior unchanged).
+    deepseek_api_keys: str = ""
     deepseek_base_url: str = "https://api.deepseek.com"
+
+    # Outbound LLM concurrency / failover (process-global; see llm_providers/pool.py)
+    llm_max_concurrency: int = 8
+    llm_max_retries: int = 2
+    llm_key_cooldown_seconds: float = 15.0
 
     # LLM Model Configuration
     main_llm_model: str = "deepseek-chat"
@@ -151,6 +159,11 @@ class Settings(BaseSettings):
     # MiniMax TTS
     minimax_api_key: str | None = None
     minimax_group_id: str | None = None
+    # Optional comma-separated pools for multi-key TTS rotation. When set, each entry in
+    # minimax_api_keys is paired positionally with minimax_group_ids (missing group_ids
+    # fall back to minimax_group_id). Empty → single-key behavior unchanged.
+    minimax_api_keys: str | None = None
+    minimax_group_ids: str | None = None
     minimax_base_url: str = "https://api.minimax.io/v1"
     minimax_rin_clone_voice_id: str | None = None
     minimax_dorothy_voice_id: str | None = None
@@ -165,6 +178,12 @@ class Settings(BaseSettings):
     mimo_model: str = "mimo-v2.5-tts-voiceclone"
     voice_provider: str = "minimax"  # "mimo" | "minimax"
     voice_fallback_enabled: bool = True
+
+    # Outbound TTS concurrency / failover (process-global; see ss08_voice/pooled_provider.py).
+    # MiniMax account concurrency caps are typically single-digit → keep conservative.
+    tts_max_concurrency: int = 4
+    tts_max_retries: int = 1
+    tts_key_cooldown_seconds: float = 20.0
 
     @model_validator(mode="after")
     def validate_jwt_secret(self) -> "Settings":

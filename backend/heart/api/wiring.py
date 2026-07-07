@@ -94,13 +94,22 @@ def get_model_router():
 
         from heart.infra.llm_providers import ModelRouter, initialize_registry
 
-        # Ensure env var is set (settings reads from same source)
+        # Bridge settings → env (registry.initialize_registry reads os.getenv).
+        # setdefault means an explicitly-exported env var still wins.
         os.environ.setdefault("DEEPSEEK_API_KEY", settings.deepseek_api_key)
+        if settings.deepseek_api_keys:
+            os.environ.setdefault("DEEPSEEK_API_KEYS", settings.deepseek_api_keys)
         if settings.deepseek_base_url:
             os.environ.setdefault("DEEPSEEK_BASE_URL", settings.deepseek_base_url)
+        # Make config.py the source of truth for model + concurrency defaults.
+        os.environ.setdefault("MAIN_LLM_MODEL", settings.main_llm_model)
+        os.environ.setdefault("CHEAP_LLM_MODEL", settings.cheap_llm_model)
+        os.environ.setdefault("LLM_MAX_CONCURRENCY", str(settings.llm_max_concurrency))
+        os.environ.setdefault("LLM_MAX_RETRIES", str(settings.llm_max_retries))
+        os.environ.setdefault("LLM_KEY_COOLDOWN_SECONDS", str(settings.llm_key_cooldown_seconds))
 
         registry = initialize_registry()
-        main_model = os.getenv("MAIN_LLM_MODEL", "deepseek-reasoner")
+        main_model = os.getenv("MAIN_LLM_MODEL", "deepseek-chat")
         cheap_model = os.getenv("CHEAP_LLM_MODEL", "deepseek-chat")
         router = ModelRouter(registry, main_model, cheap_model)
         logger.info("wiring_model_router_initialized")
@@ -218,19 +227,56 @@ def get_safety_agent():
         return None
 
 
-def _build_primary_voice_provider() -> Any:
-    """Build the primary TTS provider: MiniMax first (clone voice_id), else MiMo."""
-    if settings.minimax_api_key:
-        try:
-            from heart.ss08_voice.minimax_provider import MiniMaxProvider
+def _build_minimax_members() -> list:
+    """Build one MiniMaxProvider per configured key (primary + optional pool extras)."""
+    from heart.ss08_voice.minimax_provider import MiniMaxProvider
 
-            provider = MiniMaxProvider(
-                api_key=settings.minimax_api_key,
-                group_id=settings.minimax_group_id or "",
-                base_url=settings.minimax_base_url,
-            )
-            logger.info("wiring_minimax_primary_initialized")
-            return provider
+    keys: list[str] = []
+    if settings.minimax_api_key:
+        keys.append(settings.minimax_api_key.strip())
+    if settings.minimax_api_keys:
+        keys.extend(k.strip() for k in settings.minimax_api_keys.split(",") if k.strip())
+    # De-dup while preserving order.
+    seen: set[str] = set()
+    deduped: list[str] = []
+    for k in keys:
+        if k and k not in seen:
+            seen.add(k)
+            deduped.append(k)
+    keys = deduped
+
+    group_ids = [g.strip() for g in (settings.minimax_group_ids or "").split(",") if g.strip()]
+    default_group = settings.minimax_group_id or ""
+
+    members = []
+    for idx, key in enumerate(keys):
+        group_id = group_ids[idx] if idx < len(group_ids) else default_group
+        members.append(
+            MiniMaxProvider(api_key=key, group_id=group_id, base_url=settings.minimax_base_url)
+        )
+    return members
+
+
+def _build_primary_voice_provider() -> Any:
+    """Build the primary TTS provider: MiniMax first (clone voice_id), else MiMo.
+
+    When any MiniMax key is configured, providers are wrapped in a PooledTTSProvider that
+    caps outbound concurrency and rotates/fails-over across keys (transparent for 1 key).
+    """
+    if settings.minimax_api_key or settings.minimax_api_keys:
+        try:
+            from heart.ss08_voice.pooled_provider import PooledTTSProvider
+
+            members = _build_minimax_members()
+            if members:
+                provider = PooledTTSProvider(
+                    members,
+                    max_concurrency=settings.tts_max_concurrency,
+                    max_retries=settings.tts_max_retries,
+                    cooldown_seconds=settings.tts_key_cooldown_seconds,
+                )
+                logger.info("wiring_minimax_primary_initialized", keys=len(members))
+                return provider
         except Exception as e:
             logger.warning("wiring_minimax_provider_init_failed", error=str(e))
 
