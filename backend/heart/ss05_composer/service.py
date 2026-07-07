@@ -552,6 +552,19 @@ class ComposerService:
                 character_id=ctx.character_id,
                 query_context=qctx,
             )
+
+            # P0-1 diagnostic trace: log what the composer sees
+            for m in result.memories:
+                logger.debug(
+                    "composer_memory_trace",
+                    memory_id=str(m.memory_id),
+                    memory_type=m.memory_type,
+                    score=round(m.score, 4),
+                    injected_text=m.reconstructed_text[:200],
+                    user_id=str(ctx.user_id),
+                    character_id=ctx.character_id,
+                )
+
             return (
                 MemoryContextBlock(
                     retrieved_memories=[
