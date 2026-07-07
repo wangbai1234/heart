@@ -578,3 +578,104 @@ class TestMemoryEncoderWorker:
 
             with pytest.raises(TimeoutError, match="timed out"):
                 await worker._process_event(sample_encoding_event)
+
+
+# ============================================================
+# Batch Extraction Tests (#102 follow-up)
+# ============================================================
+
+
+def _make_event(user_id, character_id, user_text="我养了一只猫叫年糕"):
+    return MemoryEncodingEvent(
+        event_id=uuid4(),
+        user_id=user_id,
+        character_id=character_id,
+        source_turn_id=uuid4(),
+        source_user_text=user_text,
+        source_assistant_text="嗯。",
+        recent_context=None,
+        status="llm_pending",
+        retry_count=0,
+        created_at=datetime.now(timezone.utc),
+    )
+
+
+class TestBatchExtraction:
+    """Coalescing same-(user,character) turns into one extraction LLM call."""
+
+    def test_group_events_by_user_and_character(self, mock_session_factory, user_id):
+        worker = MemoryEncoderWorker(mock_session_factory)
+        other_user = uuid4()
+        events = [
+            _make_event(user_id, "rin"),
+            _make_event(user_id, "rin"),
+            _make_event(other_user, "rin"),
+            _make_event(user_id, "dorothy"),
+        ]
+        groups = worker._group_events(events)
+        # (user_id,rin) x2, (other,rin) x1, (user_id,dorothy) x1
+        assert len(groups) == 3
+        assert len(groups[0]) == 2
+        assert {(e.user_id, e.character_id) for e in groups[0]} == {(user_id, "rin")}
+
+    def test_group_capped_at_batch_turns(self, mock_session_factory, user_id):
+        worker = MemoryEncoderWorker(mock_session_factory)
+        events = [_make_event(user_id, "rin") for _ in range(10)]
+        with patch("heart.workers.memory_encoder.settings") as s:
+            s.memory_extractor_batch_turns = 3
+            groups = worker._group_events(events)
+        assert len(groups) == 1
+        assert len(groups[0]) == 3  # capped; overflow handled next cycle
+
+    @pytest.mark.asyncio
+    async def test_group_uses_single_llm_call(
+        self, mock_session_factory, mock_db_session, user_id, character_id, valid_extraction_output
+    ):
+        worker = MemoryEncoderWorker(mock_session_factory)
+        e1 = _make_event(user_id, character_id, "我养了一只猫叫年糕")
+        e2 = _make_event(user_id, character_id, "我在苏州工作")
+
+        reload_result = MagicMock()
+        reload_result.scalars.return_value.all = MagicMock(return_value=[e1, e2])
+        fact_result = MagicMock()
+        fact_result.scalar_one_or_none = MagicMock(return_value=None)
+        # reload + one query per extracted fact (2 facts in the fixture)
+        mock_db_session.execute = AsyncMock(
+            side_effect=[reload_result, fact_result, fact_result]
+        )
+
+        with patch("heart.workers.memory_encoder.get_model_router") as mock_router:
+            call_cheap = AsyncMock(return_value=json.dumps(valid_extraction_output))
+            mock_router.return_value.call_cheap = call_cheap
+
+            await worker._process_event_group([e1, e2])
+
+        # Two turns → exactly ONE extraction LLM call.
+        assert call_cheap.await_count == 1
+        assert e1.status == "llm_done"
+        assert e2.status == "llm_done"
+        assert e1.llm_extraction == valid_extraction_output
+
+    @pytest.mark.asyncio
+    async def test_single_event_group_uses_per_event_path(
+        self, mock_session_factory, mock_db_session, user_id, character_id, valid_extraction_output
+    ):
+        worker = MemoryEncoderWorker(mock_session_factory)
+        e1 = _make_event(user_id, character_id)
+
+        reload_result = MagicMock()
+        reload_result.scalar_one_or_none = MagicMock(return_value=e1)
+        fact_result = MagicMock()
+        fact_result.scalar_one_or_none = MagicMock(return_value=None)
+        mock_db_session.execute = AsyncMock(
+            side_effect=[reload_result, fact_result, fact_result]
+        )
+
+        with patch("heart.workers.memory_encoder.get_model_router") as mock_router:
+            call_cheap = AsyncMock(return_value=json.dumps(valid_extraction_output))
+            mock_router.return_value.call_cheap = call_cheap
+
+            await worker._process_event_group([e1])
+
+        assert call_cheap.await_count == 1
+        assert e1.status == "llm_done"
