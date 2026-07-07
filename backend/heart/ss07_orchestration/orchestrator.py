@@ -96,6 +96,54 @@ async def _embed_episode_summary(text: str) -> Any:
     return None
 
 
+async def _create_l2_episode(
+    session,
+    user_id: UUID,
+    character_id: str,
+    user_message: str,
+    valence: float,
+    arousal: float,
+    intensity: float,
+    importance: float,
+) -> None:
+    """Create L2 episode from user message (extracted for complexity reduction)."""
+    from heart.ss02_memory.models import EpisodicMemory
+
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    summary = user_message[:200]
+
+    # Semantic embedding so this episode is recallable by meaning,
+    # not just recency. None when no embedding service (no API key)
+    # or on failure → column stays NULL as before.
+    semantic_vector = await _embed_episode_summary(summary)
+
+    episode = EpisodicMemory(
+        id=uuid4(),
+        user_id=user_id,
+        character_id=character_id,
+        episode_summary=summary,
+        episode_raw_turn_ids=[],
+        episode_start_at=now,
+        episode_end_at=now,
+        emotional_peak={
+            "valence": valence,
+            "arousal": arousal,
+            "label": "user_message",
+        },
+        emotional_end={"valence": valence, "arousal": arousal},
+        emotional_significance=intensity,
+        importance_score=importance,
+        initial_importance=importance,
+        decay_immunity=importance,
+        state="vivid",
+        recall_count=0,
+        semantic_vector=semantic_vector,
+        created_at=now,
+        updated_at=now,
+    )
+    session.add(episode)
+
+
 # ── Orchestrator ────────────────────────────────────────────────────
 
 
@@ -818,8 +866,22 @@ class Orchestrator:
             svc = MemoryService(db_session=cold_db_session, redis_client=redis_client)
             signals = await svc.encode_fast(mem_turn)
 
+            # Derive importance and trivial flag BEFORE queueing (P1-3 cost control)
+            has_hint = bool(signals.detected_keywords)
+            valence, arousal, intensity = await self._compute_vad(signals, user_id, character_id)
+
+            # Denoise: skip ultra-trivial acknowledgements
+            trivial = (
+                len(user_message.strip()) < 6
+                and not has_hint
+                and abs(valence) < 0.15
+                and arousal < 0.4
+            )
+
             # Queue LLM encoding for L3 fact extraction
-            if cold_db_session is not None:
+            # P1-3: only queue when message has hints or is non-trivial
+            # (skips "嗯", "好的", "哈哈" etc. that have no extractable facts)
+            if cold_db_session is not None and not trivial:
                 event = MemoryEncodingEvent(
                     event_id=uuid4(),
                     user_id=user_id,
@@ -833,27 +895,17 @@ class Orchestrator:
                     status="llm_pending",
                 )
                 await svc.queue_llm_encoding(event)
+            elif trivial:
+                logger.debug(
+                    "llm_encoding_skipped_trivial",
+                    user_id=str(user_id),
+                    message_len=len(user_message),
+                    has_hint=has_hint,
+                )
 
-                # Create L2 episode from the user message (bypass consolidation).
-                # Use the REAL emotion state (updated earlier this turn by
-                # _update_emotion) for the episode's emotional peak instead of a
-                # hardcoded arousal, and derive importance from multiple signals.
+            # Create L2 episode from the user message (bypass consolidation).
+            if cold_db_session is not None:
                 from heart.ss02_memory.models import EpisodicMemory
-
-                vad: dict[str, Any] = {}
-                try:
-                    if self._emotion_service is not None:
-                        ecb = await self._emotion_service.get_context_block(
-                            user_id=user_id, character_id=character_id
-                        )
-                        vad = ecb.get("vad") or {}
-                except Exception:
-                    vad = {}
-
-                valence = float(vad.get("valence", signals.sentiment))
-                arousal = float(vad.get("arousal", min(1.0, 0.3 + 0.4 * abs(signals.sentiment))))
-                has_hint = bool(signals.detected_keywords)
-                intensity = max(abs(valence), arousal)
 
                 # Multi-signal importance (was hardcoded max(0.3, |sentiment|)):
                 # emotional intensity + presence of a fact/identity hint + length.
@@ -865,50 +917,17 @@ class Orchestrator:
                     + min(0.2, len(user_message) / 200.0 * 0.2),
                 )
 
-                # Denoise: skip only ultra-trivial acknowledgements (very short,
-                # neutral, no fact hint) so they don't crowd out substantive
-                # episodes in recency retrieval. Factual disclosures are kept.
-                trivial = (
-                    len(user_message.strip()) < 6
-                    and not has_hint
-                    and abs(valence) < 0.15
-                    and arousal < 0.4
-                )
-
                 if not trivial:
-                    now = datetime.now(timezone.utc).replace(tzinfo=None)
-                    summary = user_message[:200]
-
-                    # Semantic embedding so this episode is recallable by meaning,
-                    # not just recency. None when no embedding service (no API key)
-                    # or on failure → column stays NULL as before.
-                    semantic_vector = await _embed_episode_summary(summary)
-
-                    episode = EpisodicMemory(
-                        id=uuid4(),
+                    await _create_l2_episode(
+                        cold_db_session,
                         user_id=user_id,
                         character_id=character_id,
-                        episode_summary=summary,
-                        episode_raw_turn_ids=[],
-                        episode_start_at=now,
-                        episode_end_at=now,
-                        emotional_peak={
-                            "valence": valence,
-                            "arousal": arousal,
-                            "label": "user_message",
-                        },
-                        emotional_end={"valence": valence, "arousal": arousal},
-                        emotional_significance=intensity,
-                        importance_score=importance,
-                        initial_importance=importance,
-                        decay_immunity=importance,
-                        state="vivid",
-                        recall_count=0,
-                        semantic_vector=semantic_vector,
-                        created_at=now,
-                        updated_at=now,
+                        user_message=user_message,
+                        valence=valence,
+                        arousal=arousal,
+                        intensity=intensity,
+                        importance=importance,
                     )
-                    cold_db_session.add(episode)
 
                 await cold_db_session.commit()
                 logger.debug(
@@ -955,6 +974,28 @@ class Orchestrator:
             )
 
     # ── Private: Helpers ─────────────────────────────────────────────
+
+    async def _compute_vad(
+        self,
+        signals,
+        user_id: UUID,
+        character_id: str,
+    ) -> tuple[float, float, float]:
+        """Compute VAD (valence, arousal, intensity) from emotion service and signals."""
+        vad: dict[str, Any] = {}
+        try:
+            if self._emotion_service is not None:
+                ecb = await self._emotion_service.get_context_block(
+                    user_id=user_id, character_id=character_id
+                )
+                vad = ecb.get("vad") or {}
+        except Exception:
+            vad = {}
+
+        valence = float(vad.get("valence", signals.sentiment))
+        arousal = float(vad.get("arousal", min(1.0, 0.3 + 0.4 * abs(signals.sentiment))))
+        intensity = max(abs(valence), arousal)
+        return valence, arousal, intensity
 
     def _fallback_message(self, character_id: str) -> str:
         """Return a Soul-flavored fallback message when composer is unavailable."""
