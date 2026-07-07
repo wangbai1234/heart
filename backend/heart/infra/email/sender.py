@@ -9,6 +9,12 @@ import structlog
 logger = structlog.get_logger(__name__)
 
 
+class EmailSendError(Exception):
+    """Raised when email sending fails."""
+
+    pass
+
+
 class EmailSender(Protocol):
     """Protocol for email sending."""
 
