@@ -26,6 +26,7 @@ import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from heart.core.config import settings
 from heart.infra.llm_providers import get_model_router
 from heart.prompts.memory_extraction import MEMORY_EXTRACTION_PROMPT
 from heart.ss02_memory.models import FactNode, MemoryEncodingEvent
@@ -317,16 +318,19 @@ class MemoryEncoderWorker:
                     await asyncio.sleep(POLL_INTERVAL_SECONDS)
                     continue
 
-                # Process events
-                logger.info("processing_batch", count=len(events))
+                # Group same-(user,character) events so each group needs one LLM call.
+                groups = self._group_events(events)
+                logger.info("processing_batch", count=len(events), groups=len(groups))
 
-                for event in events:
+                for group in groups:
                     try:
-                        await self._process_event(event)
+                        await self._process_event_group(group)
                     except Exception as e:
                         logger.error(
-                            "event_processing_failed",
-                            event_id=str(event.event_id),
+                            "event_group_processing_failed",
+                            user_id=str(group[0].user_id),
+                            character_id=group[0].character_id,
+                            count=len(group),
                             error=str(e),
                         )
 
@@ -364,6 +368,80 @@ class MemoryEncoderWorker:
         events = result.scalars().all()
 
         return list(events)
+
+    def _group_events(self, events: list[MemoryEncodingEvent]) -> list[list[MemoryEncodingEvent]]:
+        """Group pending events by (user_id, character_id), preserving first-seen order.
+
+        Each group is capped at memory_extractor_batch_turns so a large backlog does not
+        build one enormous extraction prompt; the overflow is picked up next cycle.
+        """
+        cap = max(1, settings.memory_extractor_batch_turns)
+        order: list[tuple] = []
+        buckets: dict[tuple, list[MemoryEncodingEvent]] = {}
+        for e in events:
+            key = (e.user_id, e.character_id)
+            if key not in buckets:
+                buckets[key] = []
+                order.append(key)
+            buckets[key].append(e)
+        return [buckets[k][:cap] for k in order]
+
+    async def _process_event_group(self, events: list[MemoryEncodingEvent]):
+        """Process a group of same-(user,character) events.
+
+        A single-event group (or batching disabled) uses the per-event path unchanged.
+        Multi-event groups combine the turns into ONE extraction LLM call and mark every
+        event in the group done with the shared result.
+        """
+        if len(events) == 1 or not settings.memory_batch_extraction_enabled:
+            for event in events:
+                await self._process_event(event)
+            return
+
+        event_ids = [e.event_id for e in events]
+        async with self.db_session_factory() as session:
+            stmt = select(MemoryEncodingEvent).where(MemoryEncodingEvent.event_id.in_(event_ids))
+            result = await session.execute(stmt)
+            current = [e for e in result.scalars().all() if e.status != "llm_done"]
+            if not current:
+                return
+            # Keep chronological order so the representative event is the latest turn.
+            current.sort(key=lambda e: e.created_at)
+
+            started = datetime.now(timezone.utc).replace(tzinfo=None)
+            for e in current:
+                e.llm_started_at = started
+            await session.commit()
+
+            try:
+                extraction = await self._call_llm_extraction_batch(current)
+                representative = current[-1]
+                fact_ids = await write_facts_to_l3(session, representative, extraction)
+
+                completed = datetime.now(timezone.utc).replace(tzinfo=None)
+                for e in current:
+                    e.status = "llm_done"
+                    e.llm_extraction = extraction
+                    e.llm_completed_at = completed
+                await session.commit()
+
+                logger.info(
+                    "event_group_processed",
+                    user_id=str(representative.user_id),
+                    character_id=representative.character_id,
+                    events=len(current),
+                    facts_created=len(fact_ids),
+                )
+            except Exception as e:
+                for ev in current:
+                    ev.retry_count += 1
+                    if ev.retry_count >= MAX_RETRIES:
+                        ev.status = "failed"
+                        ev.failed_at = datetime.now(timezone.utc).replace(tzinfo=None)
+                        ev.failure_reason = str(e)
+                    # else: stays llm_pending for retry next cycle
+                await session.commit()
+                logger.error("event_group_failed", events=len(current), error=str(e))
 
     async def _process_event(self, event: MemoryEncodingEvent):
         """Process a single encoding event.
@@ -467,8 +545,30 @@ class MemoryEncoderWorker:
             character_id=event.character_id,
             recent_context=event.recent_context,
         )
+        return await self._run_extraction(prompt)
 
-        # Call LLM with timeout
+    async def _call_llm_extraction_batch(self, events: list[MemoryEncodingEvent]) -> dict:
+        """Extract facts from a group of turns in ONE LLM call.
+
+        The user/assistant texts of each turn are concatenated; facts are turn-agnostic,
+        so the extraction schema is unchanged. recent_context comes from the earliest turn.
+        """
+        user_text = "\n".join(
+            (e.source_user_text or "").strip() for e in events if e.source_user_text
+        )
+        assistant_text = "\n".join(
+            (e.source_assistant_text or "").strip() for e in events if e.source_assistant_text
+        )
+        prompt = build_extraction_prompt(
+            user_text=user_text,
+            assistant_text=assistant_text,
+            character_id=events[0].character_id,
+            recent_context=events[0].recent_context,
+        )
+        return await self._run_extraction(prompt)
+
+    async def _run_extraction(self, prompt: str) -> dict:
+        """Send an extraction prompt to the cheap model and validate the JSON result."""
         router = await get_model_router()
 
         messages = [

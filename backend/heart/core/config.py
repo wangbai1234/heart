@@ -92,6 +92,9 @@ class Settings(BaseSettings):
     memory_extractor_llm_model: str = "deepseek-chat"
     memory_extractor_batch_turns: int = 6
     memory_extractor_idle_secs: int = 30
+    # Coalesce same-(user,character) pending encode events per poll cycle into ONE
+    # extraction LLM call (was 1 call/turn). memory_extractor_batch_turns caps group size.
+    memory_batch_extraction_enabled: bool = True
     memory_extractor_cost_cap_usd: float = 0.05
     memory_promoter_interval_secs: int = 300
     memory_promoter_min_mentions: int = 3
