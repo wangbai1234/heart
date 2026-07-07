@@ -800,8 +800,7 @@ class Orchestrator:
 
         try:
             asyncio.create_task(
-                asyncio.to_thread(
-                    self._cold_path_inner_tick,
+                self._cold_path_inner_tick(
                     req.user_id,
                     req.character_id,
                     days_since_last,
@@ -951,7 +950,7 @@ class Orchestrator:
                 error=str(e),
             )
 
-    def _cold_path_inner_tick(
+    async def _cold_path_inner_tick(
         self,
         user_id: UUID,
         character_id: str,
@@ -962,7 +961,7 @@ class Orchestrator:
             from heart.ss06_inner_state.service import InnerStateService
 
             svc = InnerStateService()
-            svc.tick(
+            await svc.tick(
                 user_id=user_id,
                 character_id=character_id,
                 days_since_last_interaction=days_since_last_interaction,

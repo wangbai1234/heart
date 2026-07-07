@@ -150,15 +150,23 @@ class InnerLoopWorker:
                 except Exception:
                     is_anniversary = False
 
+                # Load lightweight context for LLM-generated proactive content
+                # (best-effort; empty strings just yield a less-personalized message).
+                recent_context, user_facts = await self._load_proactive_context(
+                    user_id, character_id
+                )
+
                 # Tick (outside session to avoid holding connection)
                 try:
-                    msg = self.inner_state_service.tick(
+                    msg = await self.inner_state_service.tick(
                         user_id=user_id,
                         character_id=character_id,
                         relationship_stage=relationship_stage,
                         intimacy=intimacy,
                         days_since_last_interaction=days_since_last,
                         is_anniversary=is_anniversary,
+                        recent_context=recent_context,
+                        user_facts=user_facts,
                     )
 
                     if msg is not None:
@@ -189,6 +197,47 @@ class InnerLoopWorker:
 
         except Exception as e:
             logger.error("inner_loop_fetch_users_failed", error=str(e))
+
+    async def _load_proactive_context(
+        self,
+        user_id: UUID,
+        character_id: str,
+    ) -> tuple[str, str]:
+        """Load recent episodes + top facts to personalize proactive content.
+
+        Best-effort: returns ("", "") on any failure so a proactive message can
+        still be generated (or fall back to a template) without the context.
+        """
+        recent_context = ""
+        user_facts = ""
+        try:
+            async with self.db_session_factory() as session:
+                episodes = await session.execute(
+                    text(
+                        "SELECT episode_summary FROM episodic_memories "
+                        "WHERE user_id = :user_id AND character_id = :character_id "
+                        "AND do_not_recall = false "
+                        "ORDER BY episode_end_at DESC LIMIT 5"
+                    ),
+                    {"user_id": str(user_id), "character_id": character_id},
+                )
+                summaries = [r[0] for r in episodes.fetchall() if r[0]]
+                recent_context = "\n".join(f"- {s}" for s in reversed(summaries))
+
+                facts = await session.execute(
+                    text(
+                        "SELECT literal_text FROM fact_nodes "
+                        "WHERE user_id = :user_id AND character_id = :character_id "
+                        "AND do_not_recall = false AND is_active = true "
+                        "ORDER BY importance DESC, confidence DESC LIMIT 5"
+                    ),
+                    {"user_id": str(user_id), "character_id": character_id},
+                )
+                fact_lines = [r[0] for r in facts.fetchall() if r[0]]
+                user_facts = "\n".join(f"- {f}" for f in fact_lines)
+        except Exception as e:
+            logger.debug("proactive_context_load_failed", error=str(e))
+        return recent_context, user_facts
 
     async def _check_anniversary(
         self,

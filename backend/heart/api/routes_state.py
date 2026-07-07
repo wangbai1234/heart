@@ -405,7 +405,7 @@ async def dev_sleep(
         from heart.ss06_inner_state.service import InnerStateService
 
         svc = InnerStateService()
-        svc.tick(
+        await svc.tick(
             user_id=user_id,
             character_id=character_id,
             days_since_last_interaction=hours / 24.0,
