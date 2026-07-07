@@ -797,7 +797,7 @@ class ComposerService:
         # Layer 6: Memory Context
         if memory.retrieved_memories:
             mem_lines = []
-            for mem in memory.retrieved_memories[:3]:
+            for mem in memory.retrieved_memories[:5]:
                 text = mem.get("text", "")
                 if text:
                     mem_lines.append(f"- {text}")
@@ -1001,7 +1001,7 @@ class ComposerService:
         # Memory (SS02)
         mem_parts = []
         if memory.retrieved_memories:
-            for mem in memory.retrieved_memories[:3]:
+            for mem in memory.retrieved_memories[:5]:
                 text = mem.get("text", "")
                 if text:
                     mem_parts.append(
