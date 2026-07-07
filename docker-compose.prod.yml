@@ -1,0 +1,133 @@
+# Production Docker Compose for Heart/yuoyuo
+# Usage: docker compose -f docker-compose.prod.yml up -d
+#
+# Prerequisites:
+# 1. Create .env.prod with production secrets (see .env.prod.example)
+# 2. Run: cd web && npm run build (generates web/dist)
+# 3. Run: docker compose -f docker-compose.prod.yml up -d
+# 4. Run: docker compose -f docker-compose.prod.yml exec api alembic upgrade heads
+
+version: '3.8'
+
+services:
+  # PostgreSQL 15+ with pgvector extension
+  postgres:
+    image: pgvector/pgvector:pg15
+    container_name: heart-postgres-prod
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-heart}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-heart}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-heart}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - heart-network
+
+  # Redis 7+ for cache and event bus
+  redis:
+    image: redis:7-alpine
+    container_name: heart-redis-prod
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - heart-network
+
+  # Heart API (main backend)
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: heart-api-prod
+    env_file:
+      - .env.prod
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-heart}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-heart}
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8000/health/ready')"]
+      interval: 30s
+      timeout: 10s
+      start_period: 15s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - heart-network
+
+  # Encoder Worker — L2/L3 vector encoding
+  encoder-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: heart-encoder-worker-prod
+    command: ["uvicorn", "heart.api.main:app", "--host", "0.0.0.0", "--port", "8080"]
+    env_file:
+      - .env.prod
+    environment:
+      - HEART_WORKERS_ENABLED=true
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-heart}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-heart}
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; httpx.get('http://localhost:8080/health/ready')"]
+      interval: 30s
+      timeout: 10s
+      start_period: 15s
+      retries: 3
+    restart: unless-stopped
+    networks:
+      - heart-network
+
+  # Caddy — reverse proxy + TLS + static files
+  caddy:
+    image: caddy:2-alpine
+    container_name: heart-caddy-prod
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./web/dist:/srv/web:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - heart-network
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  caddy_data:
+    driver: local
+  caddy_config:
+    driver: local
+
+networks:
+  heart-network:
+    driver: bridge
