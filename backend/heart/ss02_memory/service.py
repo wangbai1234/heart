@@ -359,26 +359,8 @@ class MemoryService:
                         ForgettingHint(hint_text=hint_text, related_to=related_to)
                     )
 
-                # INV-M-4: recall tracking. Reinforce L2 episodic hits so
-                # recall_count / last_recalled_at reflect actual usage
-                # (previously never updated → stuck at 0 / null). boost=0.0
-                # tracks the recall without inflating importance_score, which
-                # would otherwise create a recall→importance→recall feedback
-                # loop. Best-effort: a failure here must not break the turn.
-                l2_hit_ids = [m.memory_id for m in retrieved if m.memory_type == "L2"]
-                if l2_hit_ids:
-                    try:
-                        await self.reinforce(
-                            l2_hit_ids,
-                            ReinforcementTrigger(
-                                trigger_type="recall_no_objection",
-                                context="auto_recall",
-                                boost=0.0,
-                            ),
-                        )
-                        await self._db.commit()
-                    except Exception as e:
-                        logger.warning("auto_reinforce_failed", error=str(e))
+                # INV-M-4: recall tracking for L2 + L3 hits (best-effort).
+                await self._track_recall(retrieved)
 
                 return MemoryRetrievalResult(
                     query_id=uuid4(),
@@ -404,6 +386,53 @@ class MemoryService:
             retrieval_latency_ms=0,
             l4_included=False,
         )
+
+    async def _track_recall(self, retrieved: list) -> None:
+        """INV-M-4: mark recalled memories so recall_count / last_recalled_at
+        reflect actual usage. Best-effort — a failure here must not break the turn.
+
+        L2 episodic hits are reinforced with boost=0.0 (tracks recall without the
+        recall→importance→recall feedback loop). L3 facts get a direct counter bump
+        (not full reinforce, to avoid promotion side-effects); previously L3 was
+        never tracked, so recall_count stayed 0 even when a fact WAS injected —
+        which made it a misleading triage signal (TEST_BUGS #2).
+        """
+        if self._db is None:
+            return
+
+        l2_hit_ids = [m.memory_id for m in retrieved if m.memory_type == "L2"]
+        if l2_hit_ids:
+            try:
+                await self.reinforce(
+                    l2_hit_ids,
+                    ReinforcementTrigger(
+                        trigger_type="recall_no_objection",
+                        context="auto_recall",
+                        boost=0.0,
+                    ),
+                )
+                await self._db.commit()
+            except Exception as e:
+                logger.warning("auto_reinforce_failed", error=str(e))
+
+        l3_hit_ids = [m.memory_id for m in retrieved if m.memory_type == "L3"]
+        if l3_hit_ids:
+            try:
+                from sqlalchemy import update
+
+                from heart.ss02_memory.models import FactNode
+
+                await self._db.execute(
+                    update(FactNode)
+                    .where(FactNode.id.in_(l3_hit_ids))
+                    .values(
+                        recall_count=FactNode.recall_count + 1,
+                        last_recalled_at=datetime.now(timezone.utc),
+                    )
+                )
+                await self._db.commit()
+            except Exception as e:
+                logger.warning("l3_recall_tracking_failed", error=str(e))
 
     def _get_reconstructor(self, character_id: str):
         """Lazily initialize and cache a Reconstructor for the given character."""
