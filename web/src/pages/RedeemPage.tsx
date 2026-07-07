@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useThemeStore } from '../stores/themeStore'
+import { useCreditsStore } from '../stores/creditsStore'
+import { redeemCode } from '../services/api'
 import { OTPInput } from '../components/ui/OTPInput'
 import { Button } from '../components/ui/Button'
 import { Toast } from '../components/ui/Toast'
@@ -9,6 +11,7 @@ import { Dialog } from '../components/ui/Dialog'
 export function RedeemPage() {
   const navigate = useNavigate()
   const { resolvedTheme } = useThemeStore()
+  const creditsStore = useCreditsStore()
   const [code, setCode] = useState('')
   const [loading, setLoading] = useState(false)
   const [toast, setToast] = useState({ visible: false, message: '' })
@@ -25,10 +28,18 @@ export function RedeemPage() {
     if (!isCodeComplete) return
     setLoading(true)
     try {
-      await new Promise((r) => setTimeout(r, 1500))
+      const res = await redeemCode(code.replace(/[^a-zA-Z0-9]/g, '').toUpperCase())
+      creditsStore.setBalance(res.balance)
       setShowSuccess(true)
-    } catch {
-      setToast({ visible: true, message: '激活失败，请重试' })
+    } catch (err: unknown) {
+      const msg = (err as { message?: string })?.message || ''
+      if (msg.includes('expired')) {
+        setToast({ visible: true, message: '兑换码已过期，请检查或联系客服' })
+      } else if (msg.includes('already') || msg.includes('used') || msg.includes('redeemed')) {
+        setToast({ visible: true, message: '该兑换码已被使用' })
+      } else {
+        setToast({ visible: true, message: '兑换码无效，请检查后重试' })
+      }
     } finally {
       setLoading(false)
     }
@@ -155,12 +166,12 @@ export function RedeemPage() {
       </div>
 
       {/* Success Dialog */}
-      <Dialog open={showSuccess} onClose={() => { setShowSuccess(false); navigate('/login', { replace: true }) }} title="激活成功">
-        <p>你的会员已成功激活，尽情享受吧！</p>
+      <Dialog open={showSuccess} onClose={() => { setShowSuccess(false); navigate(-1) }} title="激活成功">
+        <p>兑换成功！当前余额 {creditsStore.balance} 积分，尽情享受吧！</p>
         <Button
           variant="primary"
           size="sm"
-          onClick={() => { setShowSuccess(false); navigate('/login', { replace: true }) }}
+          onClick={() => { setShowSuccess(false); navigate(-1) }}
           className="mt-4 w-full"
         >
           好的
