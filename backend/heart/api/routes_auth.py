@@ -26,9 +26,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from heart.core.auth import TokenData, auth_manager, get_current_user
 from heart.core.config import settings
+from heart.infra.email import get_email_sender
 from heart.infra.email.sender import (
     OTP_SUBJECT,
-    SMTPEmailSender,
     render_otp_email,
 )
 
@@ -38,25 +38,6 @@ from .wiring import get_db
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
-
-# ── Email sender singleton ──────────────────────────────────────────
-
-_email_sender: SMTPEmailSender | None = None
-
-
-def _get_email_sender() -> SMTPEmailSender:
-    global _email_sender
-    if _email_sender is None:
-        _email_sender = SMTPEmailSender(
-            host=settings.smtp_host,
-            port=settings.smtp_port,
-            username=settings.smtp_username,
-            password=settings.smtp_password,
-            from_addr=settings.email_from,
-            use_tls=settings.smtp_port == 465,
-        )
-    return _email_sender
-
 
 # ── OTP helpers ─────────────────────────────────────────────────────
 
@@ -213,7 +194,7 @@ async def request_otp(
 
     # Send email (fire-and-log, don't leak existence)
     try:
-        sender = _get_email_sender()
+        sender = get_email_sender()
         subject = OTP_SUBJECT.format(code=code)
         plain, html = render_otp_email(code)
         await sender.send(to=email, subject=subject, body=plain, html=html)

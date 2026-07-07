@@ -16,8 +16,7 @@ from heart.api.rate_limit import limiter
 from heart.core.auth import Token, TokenData, auth_manager, get_current_user
 from heart.core.config import settings
 
-from .deps import require_age_verified
-from .wiring import get_db, get_orchestrator
+from .wiring import get_db
 
 logger = structlog.get_logger()
 
@@ -125,67 +124,6 @@ async def echo_chat(
         response=response_text,
         character_id=request.character_id,
         message_id=message_id,
-    )
-
-
-# ── /api/chat — orchestrator-backed hot path ─────────────────────────
-
-
-def _last_user_message(messages: list[ChatMessage]) -> Optional[str]:
-    """Extract the last user message from the message list."""
-    for msg in reversed(messages):
-        if msg.role == "user":
-            return msg.content
-    return None
-
-
-def _coerce_uuid(uid: str) -> _UUID:
-    """Parse a string to UUID, falling back to UUID5 if not a valid UUID."""
-    try:
-        return _UUID(uid)
-    except ValueError:
-        return _uuid_mod.uuid5(_uuid_mod.NAMESPACE_DNS, uid)
-
-
-@router.post("/chat", response_model=ChatResponse)
-@limiter.limit("30/minute")
-async def chat(
-    request: Request,
-    chat_req: ChatRequest,
-    current_user: TokenData = Depends(require_age_verified),
-    db_session: AsyncSession = Depends(get_db),
-    orchestrator=Depends(get_orchestrator),
-) -> ChatResponse:
-    """Real chat endpoint — delegates to Orchestrator.
-
-    Pipeline (in Orchestrator):
-      1. SessionManager.get_or_create_session
-      2. SafetyAgent.classify (PURPLE → care path)
-      3. ComposerService.compose (fail-soft fallback)
-      4. MemoryService.encode_fast + InnerStateService.tick (fire-and-forget)
-    """
-    last = _last_user_message(chat_req.messages)
-    if not last:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "No user message found")
-
-    user_uuid = _coerce_uuid(str(current_user.user_id))
-    history = [{"role": m.role, "content": m.content} for m in chat_req.messages[:-1]]
-    trace_id = _uuid_mod.uuid4()
-
-    from heart.ss07_orchestration.models import TurnRequest
-
-    turn_req = TurnRequest(
-        user_id=user_uuid,
-        character_id=chat_req.character_id,
-        user_message=last,
-        history=history,
-        trace_id=trace_id,
-    )
-    turn_resp = await orchestrator.handle_turn(turn_req, db_session=db_session)
-    return ChatResponse(
-        response=turn_resp.response,
-        character_id=turn_resp.character_id,
-        message_id=str(turn_resp.trace_id),
     )
 
 

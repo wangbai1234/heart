@@ -107,8 +107,7 @@ class TestAgeGateEndpointRegistration:
             if dependant is not None and _uses_gate(dependant):
                 gated_paths.add(route.path)
 
-        # These should be gated
-        assert "/api/chat" in gated_paths, f"REST /api/chat not gated. Gated: {gated_paths}"
+        # These should be gated (REST /api/chat was removed; WS chat uses its own age gate)
         assert "/api/voice/synthesize" in gated_paths, f"Voice synthesize not gated. Gated: {gated_paths}"
         assert "/api/credits/redeem" in gated_paths, f"Redeem not gated. Gated: {gated_paths}"
 

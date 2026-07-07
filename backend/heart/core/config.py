@@ -121,13 +121,16 @@ class Settings(BaseSettings):
     otp_max_per_hour: int = 5
     otp_max_attempts: int = 5
 
-    # Email (SMTP)
-    email_provider: str = "smtp"
+    # Email (SMTP / API)
+    email_provider: str = "smtp"  # smtp | resend | brevo | fallback
+    email_from: str = "noreply@mail.yuoyuo.app"
+    email_from_name: str = "yuoyuo"
+    resend_api_key: str = ""
+    brevo_api_key: str = ""
     smtp_host: str = ""
     smtp_port: int = 465
     smtp_username: str = ""
     smtp_password: str = ""
-    email_from: str = "yuoyuo <no-reply@yuoyuo.app>"
 
     # Credits / Billing
     signup_grant_credits: int = 100
