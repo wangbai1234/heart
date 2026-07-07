@@ -23,6 +23,7 @@ from uuid import uuid4
 import pytest
 
 from heart.ss02_memory.models import FactNode, MemoryEncodingEvent
+from heart.ss02_memory.predicate_vocab import build_embedding_text
 from heart.workers.memory_encoder import (
     MemoryEncoderWorker,
     build_extraction_prompt,
@@ -765,3 +766,213 @@ class TestBatchExtraction:
 
         assert call_cheap.await_count == 1
         assert e1.status == "llm_done"
+
+
+# ============================================================
+# Predicate Normalisation Tests (MEM-03)
+# ============================================================
+
+
+class TestPredicateNormalisation:
+    """concerned_about must converge to worries_about row (no new row created)."""
+
+    @pytest.mark.asyncio
+    async def test_synonym_predicate_reinforces_existing_row(
+        self, mock_db_session, sample_encoding_event
+    ):
+        """Writing concerned_about when worries_about already exists → REINFORCE."""
+        existing_fact = FactNode(
+            id=uuid4(),
+            user_id=sample_encoding_event.user_id,
+            character_id=sample_encoding_event.character_id,
+            predicate="worries_about",
+            subject="user",
+            object="面试中的自我介绍",
+            literal_text="user worries_about 面试中的自我介绍",
+            raw_evidence="之前说的",
+            source_turn_ids=[uuid4()],
+            confidence=0.8,
+            emotional_charge=0.0,
+            importance=0.5,
+            state="active",
+            confirmation_count=1,
+            last_confirmed_at=datetime.now(timezone.utc),
+            semantic_vector=None,
+        )
+
+        extraction = {
+            "facts": [
+                {
+                    "predicate": "concerned_about",  # synonym — should normalise
+                    "subject": "user",
+                    "object": "面试中的自我介绍",
+                    "source_text": "我很担心面试",
+                    "confidence": 0.9,
+                    "emotional_charge": 0.5,
+                    "emotional_label": "anxious",
+                    "sacred_signal": False,
+                }
+            ],
+            "emotion_peak": {"valence": -0.3, "arousal": 0.6, "label": "anxious"},
+            "importance_estimate": 0.7,
+            "contains_sacred": False,
+            "contains_promise": False,
+            "contains_first_event": False,
+        }
+
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none = MagicMock(return_value=existing_fact)
+        mock_db_session.execute = AsyncMock(return_value=mock_result)
+
+        with patch("heart.api.wiring.get_embedding_service", return_value=None):
+            fact_ids = await write_facts_to_l3(mock_db_session, sample_encoding_event, extraction)
+
+        # Must reinforce the existing row, not create a new one
+        assert len(fact_ids) == 1
+        assert fact_ids[0] == existing_fact.id
+        # No new FactNode should have been added
+        assert mock_db_session.add.call_count == 0
+        # Confirmation count incremented
+        assert existing_fact.confirmation_count == 2
+
+    @pytest.mark.asyncio
+    async def test_new_synonym_predicate_stored_as_canonical(
+        self, mock_db_session, sample_encoding_event
+    ):
+        """When no existing row, concerned_about is stored as worries_about."""
+        extraction = {
+            "facts": [
+                {
+                    "predicate": "concerned_about",
+                    "subject": "user",
+                    "object": "明天的考试",
+                    "source_text": "我很担心明天的考试",
+                    "confidence": 0.85,
+                    "emotional_charge": 0.4,
+                    "emotional_label": "anxious",
+                    "sacred_signal": False,
+                }
+            ],
+            "emotion_peak": {"valence": -0.2, "arousal": 0.5, "label": "anxious"},
+            "importance_estimate": 0.6,
+            "contains_sacred": False,
+            "contains_promise": False,
+            "contains_first_event": False,
+        }
+
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none = MagicMock(return_value=None)
+        mock_db_session.execute = AsyncMock(return_value=mock_result)
+
+        with patch("heart.api.wiring.get_embedding_service", return_value=None):
+            fact_ids = await write_facts_to_l3(mock_db_session, sample_encoding_event, extraction)
+
+        assert len(fact_ids) == 1
+        added = [c.args[0] for c in mock_db_session.add.call_args_list]
+        assert len(added) == 1
+        assert added[0].predicate == "worries_about"  # canonical, not raw
+
+
+# ============================================================
+# Chinese-Aligned Embedding Text Tests (MEM-01)
+# ============================================================
+
+
+class TestChineseEmbeddingText:
+    """CREATE and REINFORCE must embed Chinese-gloss text, not raw literal_text."""
+
+    @pytest.mark.asyncio
+    async def test_create_embeds_chinese_text(
+        self, mock_db_session, sample_encoding_event
+    ):
+        """Embedder receives build_embedding_text output (contains Chinese gloss)."""
+        extraction = {
+            "facts": [
+                {
+                    "predicate": "has_pet",
+                    "subject": "user",
+                    "object": "一只叫年糕的猫",
+                    "source_text": "我养了一只叫年糕的猫",
+                    "confidence": 0.95,
+                    "emotional_charge": 0.4,
+                    "emotional_label": "fond",
+                    "sacred_signal": False,
+                }
+            ],
+            "emotion_peak": {"valence": 0.5, "arousal": 0.3, "label": "happy"},
+            "importance_estimate": 0.6,
+            "contains_sacred": False,
+            "contains_promise": False,
+            "contains_first_event": False,
+        }
+
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none = MagicMock(return_value=None)
+        mock_db_session.execute = AsyncMock(return_value=mock_result)
+
+        embedded_texts: list[str] = []
+
+        async def capture_embed(text: str):
+            embedded_texts.append(text)
+            return [0.1] * 1024
+
+        fake_embedder = MagicMock()
+        fake_embedder.embed_query = AsyncMock(side_effect=capture_embed)
+
+        with patch("heart.api.wiring.get_embedding_service", return_value=fake_embedder):
+            await write_facts_to_l3(mock_db_session, sample_encoding_event, extraction)
+
+        assert embedded_texts, "embedder was never called"
+        embed_text = embedded_texts[0]
+        expected = build_embedding_text("user", "has_pet", "一只叫年糕的猫")
+        assert embed_text == expected
+        assert "养了宠物" in embed_text
+        assert "has_pet" not in embed_text
+
+    @pytest.mark.asyncio
+    async def test_reinforce_backfill_embeds_chinese_text(
+        self, mock_db_session, sample_encoding_event, valid_extraction_output
+    ):
+        """REINFORCE path backfills semantic_vector using Chinese-aligned text."""
+        existing_fact = FactNode(
+            id=uuid4(),
+            user_id=sample_encoding_event.user_id,
+            character_id=sample_encoding_event.character_id,
+            predicate="has_pet",
+            subject="user",
+            object="一只叫老铁的黑猫",
+            literal_text="user has_pet 一只叫老铁的黑猫",
+            raw_evidence="之前说的",
+            source_turn_ids=[uuid4()],
+            confidence=0.8,
+            emotional_charge=0.0,
+            importance=0.5,
+            state="active",
+            confirmation_count=1,
+            last_confirmed_at=datetime.now(timezone.utc),
+            semantic_vector=None,
+        )
+
+        mock_result_1 = MagicMock()
+        mock_result_1.scalar_one_or_none = MagicMock(return_value=existing_fact)
+        mock_result_2 = MagicMock()
+        mock_result_2.scalar_one_or_none = MagicMock(return_value=None)
+        mock_db_session.execute = AsyncMock(side_effect=[mock_result_1, mock_result_2])
+
+        embedded_texts: list[str] = []
+
+        async def capture_embed(text: str):
+            embedded_texts.append(text)
+            return [0.2] * 1024
+
+        fake_embedder = MagicMock()
+        fake_embedder.embed_query = AsyncMock(side_effect=capture_embed)
+
+        with patch("heart.api.wiring.get_embedding_service", return_value=fake_embedder):
+            await write_facts_to_l3(mock_db_session, sample_encoding_event, valid_extraction_output)
+
+        assert embedded_texts, "embedder was never called"
+        expected = build_embedding_text("user", "has_pet", "一只叫老铁的黑猫")
+        assert embedded_texts[0] == expected
+        assert "养了宠物" in embedded_texts[0]
+        assert existing_fact.semantic_vector == [0.2] * 1024
