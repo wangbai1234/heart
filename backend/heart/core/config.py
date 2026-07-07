@@ -40,7 +40,7 @@ class Settings(BaseSettings):
     deepseek_base_url: str = "https://api.deepseek.com"
 
     # LLM Model Configuration
-    main_llm_model: str = "deepseek-reasoner"
+    main_llm_model: str = "deepseek-chat"
     cheap_llm_model: str = "deepseek-chat"
 
     # Embedding Service (OpenAI-compatible hosted endpoint, e.g. SiliconFlow bge-m3)

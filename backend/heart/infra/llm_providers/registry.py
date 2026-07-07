@@ -136,7 +136,7 @@ def initialize_registry(
     # Get configuration from environment
     deepseek_api_key = os.getenv("DEEPSEEK_API_KEY")
     deepseek_base_url = os.getenv("DEEPSEEK_BASE_URL")
-    main_model = os.getenv("MAIN_LLM_MODEL", "deepseek-reasoner")
+    main_model = os.getenv("MAIN_LLM_MODEL", "deepseek-chat")
     cheap_model = os.getenv("CHEAP_LLM_MODEL", "deepseek-chat")
 
     if not deepseek_api_key:
