@@ -3,7 +3,8 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useAppStore } from '../stores/appStore'
 import { useChatStore, type Message } from '../stores/chatStore'
 import { useAuthStore } from '../stores/authStore'
-import { CHARACTER_PROFILES, shouldShowTimestamp, formatChatTime, formatTextByDisplayWidth, type CharacterId } from '../data/uiContent'
+import { CHARACTER_PROFILES, resolveCharacterProfile, shouldShowTimestamp, formatChatTime, formatTextByDisplayWidth, type CharacterId } from '../data/uiContent'
+import { useCharactersStore } from '../stores/charactersStore'
 import { useWebSocket } from '../hooks/useWebSocket'
 import { useProactiveStore } from '../stores/proactiveStore'
 import { getChatHistory, ackProactive } from '../services/api'
@@ -30,9 +31,16 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
   const userAvatar = useAuthStore((s) => s.user?.avatar_url ?? null)
   const setActiveCharacter = useChatStore((s) => s.setActiveCharacter)
+  const serverCharacters = useCharactersStore((s) => s.characters)
+  const catalogLoaded = useCharactersStore((s) => s.loaded)
 
+  // Known ids = built-ins (always, for cold-load direct links) ∪ server catalog.
+  const knownIds = new Set<string>([
+    ...Object.keys(CHARACTER_PROFILES),
+    ...serverCharacters.map((c) => c.id),
+  ])
   const routeCharacterId = params.characterId
-  const isValidCharacterId = routeCharacterId === 'rin' || routeCharacterId === 'dorothy'
+  const isValidCharacterId = !!routeCharacterId && knownIds.has(routeCharacterId)
   const currentCharacterId = (isValidCharacterId ? routeCharacterId : storedCharacterId) as CharacterId
 
   const messages = useChatStore((s) => s.messages[currentCharacterId as CharacterId] ?? [])
@@ -47,14 +55,17 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
 
   const { sendMessage, interrupt } = useWebSocket()
 
-  const profile = CHARACTER_PROFILES[currentCharacterId]
+  const displayName = serverCharacters.find((c) => c.id === currentCharacterId)?.display_name
+  const profile = resolveCharacterProfile(currentCharacterId, displayName)
   const pageBg = isDark
     ? '/assets/backgrounds/暗色聊天背景图.png'
     : '/assets/backgrounds/聊天背景图.png'
 
   // Set character ID in chat store
   useEffect(() => {
-    if (routeCharacterId && !isValidCharacterId) {
+    // Only redirect an unknown id once the catalog is loaded — otherwise a direct
+    // link to a valid (UGC) character would be bounced during the async fetch.
+    if (routeCharacterId && !isValidCharacterId && catalogLoaded) {
       navigate('/chat', { replace: true })
       return
     }
@@ -63,7 +74,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
     }
     setActiveCharacter(currentCharacterId)
     setCharacterId(currentCharacterId)
-  }, [currentCharacterId, isValidCharacterId, navigate, routeCharacterId, setActiveCharacter, setCharacter, setCharacterId, storedCharacterId])
+  }, [currentCharacterId, isValidCharacterId, catalogLoaded, navigate, routeCharacterId, setActiveCharacter, setCharacter, setCharacterId, storedCharacterId])
 
   // Load chat history from API on mount / character change
   const prevCharRef = useRef(currentCharacterId)

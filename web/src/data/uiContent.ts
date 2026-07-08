@@ -1,4 +1,7 @@
-export type CharacterId = 'rin' | 'dorothy'
+// A character id is a free-text key (UGC refactor C4). The set of *valid* ids is
+// no longer a compile-time union — it comes from the server catalog at runtime
+// (see stores/charactersStore). This alias stays for readability at call sites.
+export type CharacterId = string
 
 export interface CharacterProfile {
   id: CharacterId
@@ -64,7 +67,15 @@ export const LOGIN_HERO = {
   dark: '/assets/backgrounds/暗色风格background_login_hero.webp.png',
 } as const
 
-export const CHARACTER_PROFILES: Record<CharacterId, CharacterProfile> = {
+/**
+ * Visual/asset registry keyed by character id. This is NOT the catalog — the
+ * authoritative "which characters exist" list lives on the server
+ * (GET /api/characters). This map only supplies frontend-only presentation
+ * (avatar image, tag colors, mock preview) for the characters we ship assets
+ * for. Unknown ids fall back to DEFAULT_CHARACTER_PROFILE via
+ * resolveCharacterProfile.
+ */
+export const CHARACTER_PROFILES: Record<string, CharacterProfile> = {
   rin: {
     id: 'rin',
     name: '神无月凛',
@@ -93,10 +104,43 @@ export const CHARACTER_PROFILES: Record<CharacterId, CharacterProfile> = {
   },
 }
 
+/** Neutral profile used for characters we have no bundled assets for (e.g. a new
+ * server-side / UGC character). Display name is overridden by the server. */
+export const DEFAULT_CHARACTER_PROFILE: Omit<CharacterProfile, 'id' | 'name' | 'shortName'> = {
+  statusLabel: '在线',
+  moodLabel: '在线',
+  avatar: '/assets/characters/character_shenwuyue_avatar.png',
+  tag: '角色',
+  tagColor: '#8B5CF6',
+  tagBg: 'rgba(200,182,255,0.3)',
+  summary: '',
+  homeIntro: '',
+}
+
+/**
+ * Resolve a full presentation profile for a character id, merging the
+ * server-authoritative display name (when known) over the local visual assets,
+ * and falling back to a neutral profile for ids we ship no assets for. Never
+ * returns undefined — safe to index into for avatar / name / statusLabel.
+ */
+export function resolveCharacterProfile(id: string, displayName?: string): CharacterProfile {
+  const base = CHARACTER_PROFILES[id]
+  if (base) {
+    return displayName ? { ...base, name: displayName } : base
+  }
+  const name = displayName || id
+  return {
+    ...DEFAULT_CHARACTER_PROFILE,
+    id,
+    name,
+    shortName: name,
+  }
+}
+
 const now = Date.now()
 const minutes = (value: number) => now - value * 60 * 1000
 
-export const CONVERSATION_THREADS: Record<CharacterId, ConversationMessage[]> = {
+export const CONVERSATION_THREADS: Record<string, ConversationMessage[]> = {
   rin: [
     {
       id: 'rin-1',

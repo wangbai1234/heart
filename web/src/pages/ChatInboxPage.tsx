@@ -7,12 +7,14 @@ import { useThemeStore } from '../stores/themeStore'
 import { useAppStore } from '../stores/appStore'
 import { useChatStore } from '../stores/chatStore'
 import { useProactiveStore } from '../stores/proactiveStore'
+import { useCharactersStore } from '../stores/charactersStore'
 import {
   CHARACTER_PROFILES,
   CONVERSATION_THREADS,
   formatConversationTime,
   getMessagePreview,
   getUnreadMessageCount,
+  resolveCharacterProfile,
   type CharacterId,
 } from '../data/uiContent'
 
@@ -90,13 +92,20 @@ export function ChatInboxPage() {
   const setActiveCharacter = useChatStore((s) => s.setActiveCharacter)
   const clearThread = useChatStore((s) => s.clearThread)
   const clearMessages = useChatStore((s) => s.clearMessages)
+  const serverCharacters = useCharactersStore((s) => s.characters)
   const [deleteTarget, setDeleteTarget] = useState<CharacterId | null>(null)
 
   const pageBg = resolvedTheme === 'dark'
     ? '/assets/backgrounds/暗色聊天背景图.png'
     : '/assets/backgrounds/聊天背景图.png'
 
-  const allConversations = (Object.keys(CHARACTER_PROFILES) as CharacterId[]).map((characterId) => {
+  // Catalog: server list when loaded, built-in profiles as fallback.
+  const catalog: Array<{ id: string; displayName?: string }> =
+    serverCharacters.length > 0
+      ? serverCharacters.map((c) => ({ id: c.id, displayName: c.display_name }))
+      : Object.keys(CHARACTER_PROFILES).map((id) => ({ id }))
+
+  const allConversations = catalog.map(({ id: characterId, displayName }) => {
     const liveMessages = messages[characterId] ?? []
     const threadMessages = threads[characterId] ?? []
     const isCleared = clearedCharacters.has(characterId)
@@ -120,7 +129,7 @@ export function ChatInboxPage() {
     const unreadCount = getUnreadMessageCount(timeline) + pending.length
 
     return {
-      profile: CHARACTER_PROFILES[characterId],
+      profile: resolveCharacterProfile(characterId, displayName),
       characterId,
       preview,
       updatedAt: lastTimestamp ? formatConversationTime(lastTimestamp) : '',

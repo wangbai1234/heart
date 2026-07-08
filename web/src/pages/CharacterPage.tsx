@@ -5,23 +5,32 @@ import { useAppStore } from '../stores/appStore'
 import { useChatStore } from '../stores/chatStore'
 import { Toast } from '../components/ui/Toast'
 import { TabBar } from '../components/ui/TabBar'
-import { CHARACTER_PROFILES } from '../data/uiContent'
+import { CHARACTER_PROFILES, resolveCharacterProfile, type CharacterProfile } from '../data/uiContent'
+import { useCharactersStore } from '../stores/charactersStore'
 
 export function CharacterPage() {
   const navigate = useNavigate()
   const { resolvedTheme } = useThemeStore()
   const { currentCharacterId, setCharacter } = useAppStore()
   const setActiveCharacter = useChatStore((s) => s.setActiveCharacter)
+  const serverCharacters = useCharactersStore((s) => s.characters)
   const [selected, setSelected] = useState(currentCharacterId)
   const [toast, setToast] = useState({ visible: false, message: '' })
+
+  // Cards come from the server catalog (resolved to local visual assets), with
+  // the built-in profiles as a fallback before the catalog loads.
+  const characters: CharacterProfile[] =
+    serverCharacters.length > 0
+      ? serverCharacters.map((c) => resolveCharacterProfile(c.id, c.display_name))
+      : Object.values(CHARACTER_PROFILES)
 
   const pageBg = resolvedTheme === 'dark'
     ? '/assets/backgrounds/暗色聊天背景图.png'
     : '/assets/backgrounds/聊天背景图.png'
 
   const handleConfirm = () => {
-    setCharacter(selected as 'rin' | 'dorothy')
-    setActiveCharacter(selected as 'rin' | 'dorothy')
+    setCharacter(selected)
+    setActiveCharacter(selected)
     setToast({ visible: true, message: '已切换角色，去查看消息' })
     setTimeout(() => navigate(`/chat/${selected}`), 700)
   }
@@ -50,7 +59,7 @@ export function CharacterPage() {
         {/* Character Cards */}
         <div className="relative z-10 flex-1 overflow-y-auto px-4 pt-3 pb-[120px]">
           <div className="flex flex-col gap-3">
-            {(Object.values(CHARACTER_PROFILES)).map((char) => {
+            {characters.map((char) => {
               const isSelected = selected === char.id
               return (
                 <button
@@ -67,7 +76,7 @@ export function CharacterPage() {
                     <div className="relative shrink-0">
                       <div
                         className="w-[80px] h-[80px] rounded-full p-[3px]"
-                        style={{ background: `linear-gradient(135deg, ${char.id === 'rin' ? 'rgba(200,182,255,0.5)' : 'rgba(167,199,231,0.5)'}, transparent)` }}
+                        style={{ background: `linear-gradient(135deg, ${char.tagBg}, transparent)` }}
                       >
                         <img src={char.avatar} alt={char.name} className="w-full h-full rounded-full object-cover" />
                       </div>

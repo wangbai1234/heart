@@ -257,6 +257,25 @@ export async function getChatHistory(
   return request(`/chat/history?${params}`)
 }
 
+// ── Character Catalog API ──────────────────────────────────────────
+
+/**
+ * A character as returned by the server catalog (UGC refactor C2).
+ * `display_name` is authoritative (derived from the Soul Spec); visual assets
+ * (avatar / colors) remain a frontend concern — see resolveCharacterProfile.
+ */
+export interface CharacterDTO {
+  id: string
+  display_name: string
+  visibility: string
+  is_builtin: boolean
+  is_owner: boolean
+}
+
+export async function getCharacters(): Promise<{ characters: CharacterDTO[] }> {
+  return request('/characters')
+}
+
 // ── Character Settings API ─────────────────────────────────────────
 
 export async function getCharacterSettings(characterId: string): Promise<{ voice_enabled: boolean }> {
