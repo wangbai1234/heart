@@ -5,7 +5,8 @@ import { useChatStore, type Message } from '../stores/chatStore'
 import { useAuthStore } from '../stores/authStore'
 import { CHARACTER_PROFILES, shouldShowTimestamp, formatChatTime, formatTextByDisplayWidth, type CharacterId } from '../data/uiContent'
 import { useWebSocket } from '../hooks/useWebSocket'
-import { getChatHistory } from '../services/api'
+import { useProactiveStore } from '../stores/proactiveStore'
+import { getChatHistory, ackProactive } from '../services/api'
 import { BreathingDots } from './ui/BreathingDots'
 import { Dialog } from './ui/Dialog'
 import { Button } from './ui/Button'
@@ -113,6 +114,30 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
         setHistoryLoaded(true)
       })
   }, [currentCharacterId, isAuthenticated, isCleared])
+
+  // Surface any pending proactive messages (SS06) once history has loaded, then
+  // ack them so they are not re-served. Injected after history to preserve order
+  // and to avoid suppressing the history load (which only runs when empty).
+  useEffect(() => {
+    if (!historyLoaded) return
+    const pending = useProactiveStore.getState().drain(currentCharacterId)
+    if (pending.length === 0) return
+    for (const m of pending) {
+      const proactiveMsg = {
+        id: m.id,
+        role: 'assistant' as const,
+        content: m.content,
+        timestamp: new Date(m.created_at).getTime(),
+        kind: 'text' as const,
+      }
+      addMessage(currentCharacterId, proactiveMsg)
+      appendMessage(currentCharacterId, proactiveMsg)
+    }
+    const { user } = useAuthStore.getState()
+    if (user?.id) {
+      void ackProactive(user.id, pending.map((m) => m.id)).catch(() => {})
+    }
+  }, [historyLoaded, currentCharacterId, addMessage, appendMessage])
 
   // Auto-scroll on new messages
   useEffect(() => {

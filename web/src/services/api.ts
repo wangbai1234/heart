@@ -278,3 +278,33 @@ export async function clearCharacterConversations(characterId: string): Promise<
     method: 'POST',
   })
 }
+
+// --- Proactive messages (SS06 Inner Loop) ---
+
+export interface ProactiveMessageDTO {
+  id: string
+  character_id: string
+  content: string
+  trigger_type: string
+  created_at: string
+}
+
+export async function getPendingProactive(
+  userId: string,
+  characterId?: string,
+): Promise<{ user_id: string; character_id: string | null; count: number; messages: ProactiveMessageDTO[] }> {
+  const params = new URLSearchParams({ user_id: userId })
+  if (characterId) params.set('character_id', characterId)
+  return request(`/proactive/pending?${params.toString()}`)
+}
+
+export async function ackProactive(
+  userId: string,
+  messageIds: string[],
+): Promise<{ acknowledged: number }> {
+  const params = new URLSearchParams({ user_id: userId })
+  return request(`/proactive/ack?${params.toString()}`, {
+    method: 'POST',
+    body: JSON.stringify({ message_ids: messageIds }),
+  })
+}
