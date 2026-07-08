@@ -8,8 +8,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import List
-from uuid import UUID
+from typing import List, Optional
+from uuid import UUID, uuid4
 
 
 @dataclass
@@ -37,6 +37,8 @@ class ProactiveMessage:
     user_id: UUID
     character_id: str
     content: str
-    trigger_type: str  # scheduled, event_driven, anniversary, reunion
+    trigger_type: str  # scheduled, event_driven, anniversary, ritual_morning, ritual_night
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     delivered: bool = False
+    id: UUID = field(default_factory=uuid4)
+    delivered_at: Optional[datetime] = None
