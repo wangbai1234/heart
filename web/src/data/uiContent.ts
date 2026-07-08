@@ -32,6 +32,23 @@ export interface HomeAnnouncement {
   tag: string
 }
 
+/**
+ * User-facing feedback copy for failures that were previously swallowed
+ * silently (SUG-1). Centralized here for consistency and future i18n.
+ * Distinguish permanent failures (provider key invalid → suggest text) from
+ * transient ones (network/timeout → retry).
+ */
+export const FEEDBACK_COPY = {
+  /** Permanent: TTS provider unavailable (e.g. key expired / 401). */
+  voiceUnavailable: '语音服务暂时不可用，先用文字陪你',
+  /** Transient: audio failed to load; a retry may succeed. */
+  voiceLoadFailed: '语音加载失败了，点一下再试试',
+  /** Transient: playback failed to start. */
+  voiceRetry: '语音没能播放，请稍后再试',
+  /** Generic stream/turn error surfaced from the WebSocket layer. */
+  streamError: 'yuoyuo 宇宙偷偷偏离了轨道，正在修复…',
+} as const
+
 export const HERO_BANNER = {
   light: '/assets/backgrounds/background_login_hero.webp',
   dark: '/assets/backgrounds/暗色风格background_login_hero.webp.png',
