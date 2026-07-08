@@ -14,19 +14,26 @@ import asyncio
 import collections
 import os
 from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Optional
+from typing import List, Optional
 from uuid import UUID
 
 import structlog
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from heart.ss06_inner_state import proactive_repo
 from heart.ss06_inner_state.models import ProactiveMessage
 from heart.ss06_inner_state.service import InnerStateService
 
 logger = structlog.get_logger(__name__)
 
-# Bounded in-memory store for proactive messages (max 1000, FIFO eviction)
+# Daily proactive quota per (user, character), mirrors InnerStateService Gate I-5.
+DAILY_PROACTIVE_QUOTA = 3
+
+# Bounded in-memory mirror of recently generated messages. Retained for one
+# release as a fallback/diagnostic; the source of truth is the
+# proactive_messages table. TODO(sunset 2026-09): remove once the DB-backed
+# /pending path has soaked in production.
 _proactive_messages: collections.deque[ProactiveMessage] = collections.deque(maxlen=1000)
 
 
@@ -35,15 +42,17 @@ def get_pending_proactive_messages(
     character_id: Optional[str] = None,
     since: Optional[timedelta] = None,
 ) -> List[ProactiveMessage]:
-    """Get pending proactive messages for a user.
+    """Read the in-memory mirror of generated proactive messages.
+
+    NOTE: the authoritative source is now the ``proactive_messages`` table,
+    which the ``/api/proactive/pending`` route reads directly (survives restart
+    and supports delivered/ack). This helper remains for the in-memory
+    diagnostic mirror and existing tests.
 
     Args:
         user_id: User UUID
         character_id: Optional character filter
         since: Optional time window (default: 7 days)
-
-    Returns:
-        List of pending ProactiveMessage
     """
     if since is None:
         since = timedelta(days=7)
@@ -170,6 +179,7 @@ class InnerLoopWorker:
                     )
 
                     if msg is not None:
+                        await self._persist(msg)
                         _proactive_messages.append(msg)
                         logger.info(
                             "proactive_message_generated",
@@ -185,6 +195,7 @@ class InnerLoopWorker:
                             user_id, character_id, ritual_session
                         )
                     if ritual_msg is not None:
+                        await self._persist(ritual_msg)
                         _proactive_messages.append(ritual_msg)
 
                 except Exception as e:
@@ -197,6 +208,25 @@ class InnerLoopWorker:
 
         except Exception as e:
             logger.error("inner_loop_fetch_users_failed", error=str(e))
+
+    async def _persist(self, msg: ProactiveMessage) -> None:
+        """Persist a generated proactive message to the proactive_messages table.
+
+        Best-effort: a persistence failure is logged but does not abort the tick
+        (the message still reaches the in-memory mirror). It is NOT swallowed
+        silently — unlike the previous dedup path, the error is surfaced.
+        """
+        try:
+            async with self.db_session_factory() as session:
+                await proactive_repo.insert_message(session, msg)
+        except Exception as e:
+            logger.error(
+                "proactive_message_persist_failed",
+                user_id=str(msg.user_id),
+                character_id=msg.character_id,
+                trigger_type=msg.trigger_type,
+                error=str(e),
+            )
 
     async def _load_proactive_context(
         self,
@@ -282,14 +312,15 @@ class InnerLoopWorker:
         user_id: UUID,
         character_id: str,
         session: AsyncSession,
+        now: Optional[datetime] = None,
     ) -> Optional[ProactiveMessage]:
         """Check for ritual triggers (morning/night greetings).
 
-        Returns a ProactiveMessage if a ritual should be triggered.
+        Returns a ProactiveMessage if a ritual should be triggered. ``now`` is
+        injectable for testing; defaults to the current UTC time.
         """
-        from datetime import datetime, timezone
-
-        now = datetime.now(timezone.utc)
+        if now is None:
+            now = datetime.now(timezone.utc)
         hour = now.hour
 
         # Morning ritual: 6-10 AM
@@ -309,27 +340,29 @@ class InnerLoopWorker:
         else:
             return None
 
-        # Check if already sent today
-        try:
-            result = await session.execute(
-                text(
-                    "SELECT COUNT(*) FROM proactive_messages "
-                    "WHERE user_id = :user_id AND character_id = :character_id "
-                    "AND trigger_type = :trigger_type "
-                    "AND created_at::date = CURRENT_DATE"
-                ),
-                {
-                    "user_id": str(user_id),
-                    "character_id": character_id,
-                    "trigger_type": f"ritual_{ritual_type}",
-                },
+        trigger_type = f"ritual_{ritual_type}"
+
+        # Dedup: at most one of this ritual per day. Persisting every proactive
+        # message (see _persist) is what makes this count meaningful — before,
+        # nothing was written so this always returned 0. Errors are NOT swallowed:
+        # a missing table now surfaces instead of silently spamming every tick.
+        already_sent = await proactive_repo.count_today(
+            session, user_id, character_id, trigger_type
+        )
+        if already_sent > 0:
+            return None
+
+        # Daily quota: rituals count toward the same max-per-day budget as
+        # tick()-generated proactives (Gate I-5), which they previously bypassed.
+        sent_today = await proactive_repo.count_all_today(session, user_id, character_id)
+        if sent_today >= DAILY_PROACTIVE_QUOTA:
+            logger.info(
+                "ritual_suppressed_daily_quota",
+                user_id=str(user_id),
+                character_id=character_id,
+                sent_today=sent_today,
             )
-            count = result.scalar()
-            if count and count > 0:
-                return None
-        except Exception:
-            # Table might not exist, proceed anyway
-            pass
+            return None
 
         # Generate ritual message
         content = templates.get(character_id, templates.get("rin", "早安。"))
@@ -338,7 +371,7 @@ class InnerLoopWorker:
             user_id=user_id,
             character_id=character_id,
             content=content,
-            trigger_type=f"ritual_{ritual_type}",
+            trigger_type=trigger_type,
             created_at=now,
         )
 
