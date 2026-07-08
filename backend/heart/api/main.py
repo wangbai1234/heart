@@ -105,6 +105,26 @@ async def lifespan(app: FastAPI):
         settings.validate_jwt_secret()
     except RuntimeError as e:
         logger.warning("jwt_secret_invalid", error=str(e))
+
+    # Warm DB-sourced UGC soul specs on top of file-loaded builtins.
+    # Uses a short-lived connection so the pool is not held during the full
+    # lifespan.  Failure is non-fatal: the service starts with file specs only.
+    try:
+        from heart.api.wiring import _get_engine
+        from heart.ss01_soul.registry import get_soul_registry
+        from heart.ss01_soul.spec_store import fetch_active_specs
+
+        async with _get_engine().connect() as conn:
+            rows = await fetch_active_specs(conn)
+        report = get_soul_registry().load_db_overlay(rows)
+        logger.info(
+            "soul_spec_db_overlay_warm",
+            loaded=len(report.loaded),
+            skipped=len(report.skipped),
+        )
+    except Exception as _exc:
+        logger.warning("soul_spec_db_overlay_warm_failed", error=str(_exc))
+
     yield
     await _shutdown()
 

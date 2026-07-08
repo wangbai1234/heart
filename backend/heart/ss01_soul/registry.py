@@ -8,8 +8,11 @@ Author: 心屿团队
 Created: 2026-05-17
 """
 
+from __future__ import annotations
+
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import structlog
 import yaml
@@ -18,6 +21,14 @@ from pydantic import ValidationError
 from .schema_validator import SoulSpec, validate_soul_spec_yaml
 
 logger = structlog.get_logger()
+
+
+@dataclass
+class LoadReport:
+    """Summary returned by load_db_overlay."""
+
+    loaded: List[str] = field(default_factory=list)
+    skipped: List[dict[str, Any]] = field(default_factory=list)
 
 
 class SoulRegistry:
@@ -60,6 +71,8 @@ class SoulRegistry:
         self.soul_specs_dir = Path(soul_specs_dir)
         self._registry: Dict[str, Dict[str, SoulSpec]] = {}
         # Structure: {character_id: {version: SoulSpec}}
+        self._file_ids: set[str] = set()  # ids loaded from YAML files (always win over DB)
+        self.generation: int = 0  # incremented on every cache mutation
 
         logger.info(
             "soul_registry_init",
@@ -120,6 +133,7 @@ class SoulRegistry:
                         self._registry[character_id] = {}
 
                     self._registry[character_id][spec.spec_version] = spec
+                    self._file_ids.add(character_id)
                     loaded_count += 1
 
                     logger.info(
@@ -150,6 +164,7 @@ class SoulRegistry:
                 error_msg += f"  - {spec['file']}: {spec['error']}\n"
             raise RuntimeError(error_msg)
 
+        self.generation += 1
         logger.info(
             "soul_registry_load_complete",
             total_specs=loaded_count,
@@ -267,6 +282,70 @@ class SoulRegistry:
             This returns the internal registry. Do NOT modify.
         """
         return self._registry
+
+    def register_spec(self, spec: SoulSpec, source: str = "ugc") -> None:
+        """Upsert a single spec into the in-memory cache and bump generation.
+
+        File-loaded (builtin) ids cannot be overwritten by a DB/UGC spec.
+        """
+        cid = spec.character_id
+        if cid in self._file_ids:
+            logger.warning("soul_registry_register_skip_builtin", character_id=cid)
+            return
+        if cid not in self._registry:
+            self._registry[cid] = {}
+        self._registry[cid][spec.spec_version] = spec
+        self.generation += 1
+        logger.info(
+            "soul_registry_registered", character_id=cid, version=spec.spec_version, source=source
+        )
+
+    def invalidate(self, character_id: str) -> None:
+        """Remove a character from the in-memory cache and bump generation.
+
+        Builtin (file-loaded) ids are protected and will not be removed.
+        """
+        if character_id in self._file_ids:
+            logger.warning("soul_registry_invalidate_skip_builtin", character_id=character_id)
+            return
+        if character_id in self._registry:
+            del self._registry[character_id]
+            self.generation += 1
+            logger.info("soul_registry_invalidated", character_id=character_id)
+
+    def load_db_overlay(self, rows: list[dict[str, Any]]) -> LoadReport:
+        """Overlay DB-sourced specs on top of file-loaded specs.
+
+        Rules:
+        - File-loaded (builtin) ids always win; same-id DB rows are silently skipped.
+        - Each row is validated independently; a bad row is recorded in report.skipped.
+        - Returns a LoadReport with the lists of loaded / skipped character_ids.
+        """
+        report = LoadReport()
+        for row in rows:
+            cid = row.get("character_id", "<unknown>")
+            try:
+                if cid in self._file_ids:
+                    logger.debug("soul_registry_db_skip_builtin", character_id=cid)
+                    continue
+                spec_data: Any = row["spec"]
+                # spec column is JSONB → already a dict from asyncpg/psycopg
+                if isinstance(spec_data, str):
+                    import json
+
+                    spec_data = json.loads(spec_data)
+                spec = SoulSpec.model_validate(spec_data)
+                if cid not in self._registry:
+                    self._registry[cid] = {}
+                self._registry[cid][spec.spec_version] = spec
+                report.loaded.append(cid)
+                logger.info("soul_registry_db_loaded", character_id=cid, version=spec.spec_version)
+            except Exception as exc:
+                report.skipped.append({"character_id": cid, "error": str(exc)})
+                logger.error("soul_registry_db_skip_invalid", character_id=cid, error=str(exc))
+        if report.loaded:
+            self.generation += 1
+        return report
 
 
 # Singleton instance (lazy-initialized)

@@ -138,3 +138,12 @@ def get_display_name(character_id: str) -> str:
         # Registry not loaded / character not registered — fall back below.
         pass
     return character_id
+
+
+def invalidate(character_id: str) -> None:
+    """Evict a UGC character from the in-process content cache.
+
+    The static CHARACTER_CONTENT (rin/dorothy) is never evicted.
+    C5a will extend this with a real DB-backed overlay cache; until then
+    this is a no-op that reload.py can call unconditionally.
+    """

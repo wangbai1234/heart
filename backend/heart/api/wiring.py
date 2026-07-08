@@ -68,19 +68,17 @@ async def get_db() -> AsyncSession:
 
 @lru_cache
 def get_soul_registry():
-    """Process singleton: SoulRegistry with all character specs."""
-    from heart.ss01_soul.registry import SoulRegistry
+    """Process singleton: delegates to the module-level registry singleton.
 
-    registry = SoulRegistry()
-    try:
-        registry.load_all()
-        logger.info(
-            "wiring_soul_registry_loaded",
-            characters=list(registry._registry.keys()),
-        )
-    except Exception as e:
-        logger.warning("wiring_soul_registry_load_failed", error=str(e))
-    return registry
+    Previously this built its own SoulRegistry instance, causing a dual-singleton
+    hazard where the wiring layer and the rest of the codebase saw different
+    character sets.  Now it simply returns the shared module singleton so there is
+    exactly one registry in the process.  cache_clear() is kept as a belt-and-
+    suspenders hook called by reload.py on hot-reload.
+    """
+    from heart.ss01_soul.registry import get_soul_registry as _module_registry
+
+    return _module_registry()
 
 
 @lru_cache
@@ -169,6 +167,13 @@ def get_emotion_service():
         return None
 
 
+# Generation-keyed memo for the spec map passed to RelationshipService.
+# Rebuilt only when the registry generation advances (i.e. a new UGC character
+# was registered or invalidated), so the O(N) model_dump() loop runs at most
+# once per registry mutation rather than on every request.
+_spec_map_cache: dict[str, Any] = {"generation": -1, "soul_specs": {}}
+
+
 async def get_relationship_service(
     db_session: AsyncSession = None,
 ) -> Any:
@@ -181,10 +186,15 @@ async def get_relationship_service(
         return None
     try:
         registry = get_soul_registry()
-        soul_specs = {}
-        for char_id in registry.list_characters():
-            spec = registry.get_soul(char_id)
-            soul_specs[char_id] = spec.model_dump()
+        gen = registry.generation
+        if _spec_map_cache["generation"] != gen:
+            soul_specs = {}
+            for char_id in registry.list_characters():
+                spec = registry.get_soul(char_id)
+                soul_specs[char_id] = spec.model_dump()
+            _spec_map_cache["generation"] = gen
+            _spec_map_cache["soul_specs"] = soul_specs
+        soul_specs = _spec_map_cache["soul_specs"]
 
         from heart.ss04_relationship.service import RelationshipService
 
