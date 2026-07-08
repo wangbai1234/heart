@@ -11,10 +11,12 @@ import json
 from typing import Any
 
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncConnection
+from sqlalchemy.ext.asyncio import AsyncConnection, AsyncSession
+
+_AnyDB = AsyncConnection | AsyncSession
 
 
-async def fetch_active_specs(db: AsyncConnection) -> list[dict[str, Any]]:
+async def fetch_active_specs(db: _AnyDB) -> list[dict[str, Any]]:
     """Return all rows where status='active', ordered by created_at."""
     result = await db.execute(
         text(
@@ -26,7 +28,7 @@ async def fetch_active_specs(db: AsyncConnection) -> list[dict[str, Any]]:
     return [dict(row._mapping) for row in result.fetchall()]
 
 
-async def fetch_active_spec(db: AsyncConnection, character_id: str) -> dict[str, Any] | None:
+async def fetch_active_spec(db: _AnyDB, character_id: str) -> dict[str, Any] | None:
     """Return the single active spec row for a character, or None."""
     result = await db.execute(
         text(
@@ -42,7 +44,7 @@ async def fetch_active_spec(db: AsyncConnection, character_id: str) -> dict[str,
 
 
 async def insert_spec(
-    db: AsyncConnection,
+    db: _AnyDB,
     *,
     character_id: str,
     spec_version: str,
@@ -67,7 +69,7 @@ async def insert_spec(
     )
 
 
-async def supersede_active(db: AsyncConnection, character_id: str) -> None:
+async def supersede_active(db: _AnyDB, character_id: str) -> None:
     """Mark all active rows for a character as superseded."""
     await db.execute(
         text(
@@ -79,7 +81,7 @@ async def supersede_active(db: AsyncConnection, character_id: str) -> None:
 
 
 async def set_spec_status(
-    db: AsyncConnection,
+    db: _AnyDB,
     character_id: str,
     spec_version: str,
     status: str,
