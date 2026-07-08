@@ -100,7 +100,7 @@ export const useChatStore = create<ChatState>((set) => ({
       return {
         threads: {
           ...state.threads,
-          [characterId]: [...state.threads[characterId], message],
+          [characterId]: [...(state.threads[characterId] ?? []), message],
         },
         clearedCharacters: cleared,
       }
@@ -121,14 +121,14 @@ export const useChatStore = create<ChatState>((set) => ({
       return {
         messages: {
           ...s.messages,
-          [characterId]: [...s.messages[characterId], msg],
+          [characterId]: [...(s.messages[characterId] ?? []), msg],
         },
         clearedCharacters: cleared,
       }
     }),
   appendToLast: (characterId, delta) =>
     set((s) => {
-      const msgs = [...s.messages[characterId]]
+      const msgs = [...(s.messages[characterId] ?? [])]
       const last = msgs[msgs.length - 1]
       if (last && last.role === 'assistant') {
         msgs[msgs.length - 1] = { ...last, content: last.content + delta }
@@ -139,7 +139,7 @@ export const useChatStore = create<ChatState>((set) => ({
     set((s) => ({
       messages: {
         ...s.messages,
-        [characterId]: s.messages[characterId].map(m =>
+        [characterId]: (s.messages[characterId] ?? []).map(m =>
           m.id === turnId
             ? { ...m, audioData, audioDuration: duration, audioFormat: format }
             : m
@@ -150,7 +150,7 @@ export const useChatStore = create<ChatState>((set) => ({
     set((s) => ({
       messages: {
         ...s.messages,
-        [characterId]: s.messages[characterId].map(m => {
+        [characterId]: (s.messages[characterId] ?? []).map(m => {
           if (m.id !== turnId) return m
           const chunks = m.audioChunks ? [...m.audioChunks] : []
           chunks.push({ dataB64, durationMs, seq, format })
@@ -163,7 +163,7 @@ export const useChatStore = create<ChatState>((set) => ({
     set((s) => ({
       messages: {
         ...s.messages,
-        [characterId]: s.messages[characterId].map(m => {
+        [characterId]: (s.messages[characterId] ?? []).map(m => {
           if (m.id !== turnId || !m.audioChunks || m.audioChunks.length === 0) return m
           const format = m.audioChunks[0].format
           const { dataB64, durationMs } = concatAudioBase64(m.audioChunks, format)

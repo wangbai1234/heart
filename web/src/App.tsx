@@ -21,6 +21,8 @@ import { ToastContainer } from './components/ui/ToastContainer'
 import { useProactivePolling } from './hooks/useProactivePolling'
 import { useThemeStore } from './stores/themeStore'
 import { useAppStore } from './stores/appStore'
+import { useAuthStore } from './stores/authStore'
+import { useCharactersStore } from './stores/charactersStore'
 
 function ChatConversationRouter() {
   const { resolvedTheme } = useThemeStore()
@@ -29,8 +31,15 @@ function ChatConversationRouter() {
 
 export function App() {
   const { fontScale } = useAppStore()
+  const accessToken = useAuthStore((s) => s.accessToken)
+  const loadCharacters = useCharactersStore((s) => s.load)
 
   useProactivePolling()
+
+  // Load the server character catalog once the user is authenticated (UGC C4).
+  useEffect(() => {
+    if (accessToken) void loadCharacters()
+  }, [accessToken, loadCharacters])
 
   useEffect(() => {
     const nextScale = (0.92 + fontScale * 0.0016).toFixed(3)

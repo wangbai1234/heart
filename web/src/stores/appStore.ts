@@ -1,7 +1,8 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
-type CharacterId = 'rin' | 'dorothy'
+// Free-text id; the valid set is the server catalog (UGC refactor C4).
+type CharacterId = string
 
 interface AppState {
   isFirstLaunch: boolean

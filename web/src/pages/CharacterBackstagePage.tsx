@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { useAppStore } from '../stores/appStore'
 import { useChatStore } from '../stores/chatStore'
 import { useThemeStore } from '../stores/themeStore'
-import { CHARACTER_PROFILES } from '../data/uiContent'
+import { resolveCharacterProfile } from '../data/uiContent'
+import { useCharactersStore } from '../stores/charactersStore'
 import { Dialog } from '../components/ui/Dialog'
 import { Switch } from '../components/ui/Switch'
 import { getCharacterSettings, updateCharacterSettings } from '../services/api'
@@ -12,13 +13,14 @@ export function CharacterBackstagePage() {
   const navigate = useNavigate()
   const { resolvedTheme } = useThemeStore()
   const currentCharacterId = useAppStore((s) => s.currentCharacterId)
-  const voiceChatEnabled = useAppStore((s) => s.voiceChatEnabled[currentCharacterId])
+  const voiceChatEnabled = useAppStore((s) => s.voiceChatEnabled[currentCharacterId] ?? false)
   const setVoiceChatEnabled = useAppStore((s) => s.setVoiceChatEnabled)
   const clearThread = useChatStore((s) => s.clearThread)
   const clearMessages = useChatStore((s) => s.clearMessages)
+  const displayName = useCharactersStore((s) => s.characters.find((c) => c.id === currentCharacterId)?.display_name)
   const [confirmOpen, setConfirmOpen] = useState(false)
 
-  const profile = CHARACTER_PROFILES[currentCharacterId]
+  const profile = resolveCharacterProfile(currentCharacterId, displayName)
 
   // Hydrate voice setting from backend on mount
   useEffect(() => {
