@@ -35,6 +35,7 @@ from heart.ss02_memory.models import (
     MemoryExtractionDLQ,
     MemoryExtractionQueue,
 )
+from heart.ss02_memory.predicate_vocab import build_embedding_text
 
 from .resolver import DecisionType, ResolverDecision
 from .types import ExtractionCandidate, ExtractionEnvelope
@@ -220,7 +221,9 @@ class Writer:
         subject = cand.entity_ref or cand.entity_type.value
         predicate = cand.attribute.value
         literal_text = f"{subject}: {predicate} = {cand.value}"
-        semantic_vector = await self._embed_literal(literal_text)
+        semantic_vector = await self._embed_literal(
+            build_embedding_text(subject, predicate, cand.value)
+        )
 
         fact = FactNode(
             id=fact_id,
@@ -315,7 +318,9 @@ class Writer:
         subject = cand.entity_ref or cand.entity_type.value
         predicate = cand.attribute.value
         literal_text = f"{subject}: {predicate} = {cand.value}"
-        semantic_vector = await self._embed_literal(literal_text)
+        semantic_vector = await self._embed_literal(
+            build_embedding_text(subject, predicate, cand.value)
+        )
 
         new_fact = FactNode(
             id=new_fact_id,

@@ -30,6 +30,7 @@ from heart.core.config import settings
 from heart.infra.llm_providers import get_model_router
 from heart.prompts.memory_extraction import MEMORY_EXTRACTION_PROMPT
 from heart.ss02_memory.models import FactNode, MemoryEncodingEvent
+from heart.ss02_memory.predicate_vocab import build_embedding_text, normalize_predicate
 
 logger = structlog.get_logger()
 
@@ -229,12 +230,14 @@ async def write_facts_to_l3(
             )
             continue
 
-        # Check for duplicates (same predicate + subject for this user)
-        # NOTE: This is a simple check - production would need more sophisticated dedup
+        # Canonicalise the predicate before dedup so synonym predicates
+        # (e.g. concerned_about / worries_about) converge to the same row.
+        canonical_pred = normalize_predicate(fact["predicate"])
+
         existing_stmt = select(FactNode).where(
             FactNode.user_id == event.user_id,
             FactNode.character_id == event.character_id,
-            FactNode.predicate == fact["predicate"],
+            FactNode.predicate == canonical_pred,
             FactNode.subject == fact["subject"],
             ~FactNode.do_not_recall,
         )
@@ -248,10 +251,13 @@ async def write_facts_to_l3(
             existing_fact.confidence = max(existing_fact.confidence, fact["confidence"])
             existing_fact.last_confirmed_at = datetime.now(timezone.utc).replace(tzinfo=None)
 
-            # Backfill a missing embedding so pre-fix facts become retrievable
-            # once they are next mentioned (no separate migration needed for these).
+            # Backfill / refresh embedding with aligned Chinese text so the
+            # fact is reachable by Chinese recall queries.
             if existing_fact.semantic_vector is None:
-                existing_fact.semantic_vector = await _embed_fact_text(existing_fact.literal_text)
+                embed_text = build_embedding_text(
+                    existing_fact.subject, existing_fact.predicate, existing_fact.object
+                )
+                existing_fact.semantic_vector = await _embed_fact_text(embed_text)
 
             # Add this turn to source_turn_ids
             if event.source_turn_id not in existing_fact.source_turn_ids:
@@ -261,24 +267,25 @@ async def write_facts_to_l3(
                 "reinforced_existing_fact",
                 event_id=str(event.event_id),
                 fact_id=str(existing_fact.id),
-                predicate=fact["predicate"],
+                predicate=canonical_pred,
                 confirmation_count=existing_fact.confirmation_count,
             )
 
             created_fact_ids.append(existing_fact.id)
         else:
-            # Create new fact
-            literal_text = f"{fact['subject']} {fact['predicate']} {fact['object']}"
-            # Embed on write so the fact is reachable by the VectorRetriever
-            # (which requires semantic_vector IS NOT NULL). Prior to this the
-            # worker left it NULL, so every new fact was invisible to recall
-            # until a one-off backfill ran — the "面试担忧召回失败" root cause.
-            semantic_vector = await _embed_fact_text(literal_text)
+            # Create new fact — store canonical predicate in the DB.
+            # literal_text uses the canonical predicate (display is unaffected).
+            literal_text = f"{fact['subject']} {canonical_pred} {fact['object']}"
+            # Embed Chinese-aligned text so the VectorRetriever can match
+            # Chinese recall queries against this fact.
+            semantic_vector = await _embed_fact_text(
+                build_embedding_text(fact["subject"], canonical_pred, fact["object"])
+            )
             fact_node = FactNode(
                 id=uuid4(),
                 user_id=event.user_id,
                 character_id=event.character_id,
-                predicate=fact["predicate"],
+                predicate=canonical_pred,
                 subject=fact["subject"],
                 object=fact["object"],
                 literal_text=literal_text,

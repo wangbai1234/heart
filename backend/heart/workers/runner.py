@@ -3,6 +3,7 @@ Worker Runner — starts background workers at app startup.
 
 Registers:
 - MemoryEncoderWorker: polls memory_encoding_events for LLM fact extraction
+- MemoryExtractorWorker: polls memory_extraction_queue for slow-path extraction
 - MemoryConsolidatorWorker: daily consolidation (decay, clustering, L4 promotion)
 
 Controlled by HEART_WORKERS_ENABLED=true (default: false to avoid test interference).
@@ -23,7 +24,7 @@ _worker_tasks: list[asyncio.Task] = []
 _worker_stop_events: list[asyncio.Event] = []
 
 
-async def start_workers() -> None:
+async def start_workers() -> None:  # noqa: C901 — pre-existing complexity, tracked in branch debt
     """Start all background workers if HEART_WORKERS_ENABLED=true."""
     if os.getenv("HEART_WORKERS_ENABLED", "false").lower() != "true":
         logger.info("workers_disabled", hint="Set HEART_WORKERS_ENABLED=true to enable")
@@ -49,6 +50,24 @@ async def start_workers() -> None:
         logger.info("memory_encoder_worker_started")
     except Exception as e:
         logger.error("memory_encoder_worker_start_failed", error=str(e))
+
+    # Start memory extractor worker (slow-path LLM extraction → embedding)
+    try:
+        from heart.workers.memory_extractor_worker import MemoryExtractorWorker
+
+        factory = _get_session_factory()
+        extractor = MemoryExtractorWorker(db_session_factory=factory)
+        stop_event = asyncio.Event()
+        _worker_stop_events.append(stop_event)
+
+        task = asyncio.create_task(
+            _run_until_stopped(extractor.start, stop_event),
+            name="memory_extractor_worker",
+        )
+        _worker_tasks.append(task)
+        logger.info("memory_extractor_worker_started")
+    except Exception as e:
+        logger.error("memory_extractor_worker_start_failed", error=str(e))
 
     # Start consolidator worker (daily at 03:00 or configurable interval)
     try:
