@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from dataclasses import asdict
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException
@@ -12,6 +13,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from heart.api.wiring import get_db
 from heart.core.auth import TokenData, get_current_user
+from heart.ss01_soul.character_catalog import (
+    CharacterRow,
+    build_catalog_entries,
+    is_known_character,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -22,6 +28,46 @@ class VoiceSettingUpdate(BaseModel):
     voice_enabled: bool
 
 
+def _require_known_character(character_id: str) -> None:
+    """Reject a ``character_id`` that has no loaded Soul Spec (boundary guard)."""
+    if not is_known_character(character_id):
+        raise HTTPException(status_code=404, detail=f"未知角色: {character_id}")
+
+
+@router.get("")
+async def list_characters(
+    current_user: TokenData = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """List characters visible to the current user (built-ins + own UGC).
+
+    Display names are derived from the Soul Spec, not stored on the row.
+    """
+    uid = uuid.UUID(current_user.user_id)
+    result = await db.execute(
+        text(
+            """
+            SELECT id, owner_user_id, visibility, status
+            FROM characters
+            WHERE status = 'active'
+              AND (visibility = 'public' OR owner_user_id = :uid)
+            """
+        ),
+        {"uid": uid},
+    )
+    rows = [
+        CharacterRow(
+            id=row.id,
+            owner_user_id=row.owner_user_id,
+            visibility=row.visibility,
+            status=row.status,
+        )
+        for row in result
+    ]
+    entries = build_catalog_entries(rows, uid)
+    return {"characters": [asdict(e) for e in entries]}
+
+
 @router.get("/{character_id}/settings")
 async def get_character_settings(
     character_id: str,
@@ -29,6 +75,7 @@ async def get_character_settings(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """Get per-character settings (voice toggle)."""
+    _require_known_character(character_id)
     uid = uuid.UUID(current_user.user_id)
     result = await db.execute(
         text("""
@@ -49,6 +96,7 @@ async def update_character_settings(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """Update per-character voice toggle (upsert)."""
+    _require_known_character(character_id)
     uid = uuid.UUID(current_user.user_id)
     await db.execute(
         text("""
@@ -76,6 +124,7 @@ async def clear_character_conversations(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """Clear persisted chat messages for one character only."""
+    _require_known_character(character_id)
     uid = uuid.UUID(current_user.user_id)
 
     try:

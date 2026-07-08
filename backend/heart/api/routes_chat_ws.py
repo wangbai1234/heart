@@ -18,6 +18,7 @@ from sqlalchemy import text as sql_text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from heart.core.auth import TokenData, auth_manager, get_current_user
+from heart.ss01_soul.character_catalog import is_known_character
 
 from .wiring import _get_engine, get_db, get_orchestrator, get_voice_service
 
@@ -388,6 +389,12 @@ async def _handle_chat_message(
 
     if not user_text:
         await ws.send_json({"type": "error", "msg": "Missing text"})
+        return
+
+    # Boundary guard: reject ids with no loaded Soul Spec (in-memory, no DB hit)
+    # before they reach billing / orchestrator / persistence.
+    if not is_known_character(character_id):
+        await ws.send_json({"type": "error", "msg": f"未知角色: {character_id}"})
         return
 
     user_uuid = uuid.UUID(user_id)
