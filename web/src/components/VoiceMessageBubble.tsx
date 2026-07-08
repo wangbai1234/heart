@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useChatStore } from '../stores/chatStore'
 import { useAuthStore } from '../stores/authStore'
+import { useToastStore } from '../stores/toastStore'
+import { FEEDBACK_COPY } from '../data/uiContent'
 
 interface VoiceMessageBubbleProps {
   audioData: string
@@ -25,6 +27,8 @@ export default function VoiceMessageBubble({
   const [isPlaying, setIsPlaying] = useState(false)
   const [audioUrl, setAudioUrl] = useState<string | null>(null)
   const [frameIndex, setFrameIndex] = useState(0)
+  const [loadFailed, setLoadFailed] = useState(false)
+  const [retryTick, setRetryTick] = useState(0)
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const setGlobalPlaying = useChatStore((s) => s.setPlaying)
 
@@ -32,6 +36,7 @@ export default function VoiceMessageBubble({
     if (!audioData) return
     let cancelled = false
     let blobUrl: string | null = null
+    setLoadFailed(false)
 
     if (audioData.startsWith('http') || audioData.startsWith('blob:')) {
       setAudioUrl(audioData)
@@ -52,7 +57,16 @@ export default function VoiceMessageBubble({
           blobUrl = URL.createObjectURL(blob)
           setAudioUrl(blobUrl)
         })
-        .catch(() => {})
+        .catch((err) => {
+          if (cancelled) return
+          // Previously swallowed silently (SUG-1). 401/403 → provider/auth
+          // failure (treat as unavailable); otherwise transient → retryable.
+          setLoadFailed(true)
+          const permanent = /\b(401|403)\b/.test(String(err?.message ?? ''))
+          useToastStore
+            .getState()
+            .show(permanent ? FEEDBACK_COPY.voiceUnavailable : FEEDBACK_COPY.voiceLoadFailed, 'error')
+        })
       return () => {
         cancelled = true
         if (blobUrl) URL.revokeObjectURL(blobUrl)
@@ -78,7 +92,7 @@ export default function VoiceMessageBubble({
     return () => {
       URL.revokeObjectURL(url)
     }
-  }, [audioData, format])
+  }, [audioData, format, retryTick])
 
   useEffect(() => {
     setGlobalPlaying(isPlaying)
@@ -134,6 +148,11 @@ export default function VoiceMessageBubble({
   }, [stopPlayback])
 
   const handlePlayPause = useCallback(() => {
+    // Failed to load earlier → tapping retries the fetch instead of a dead no-op.
+    if (loadFailed) {
+      setRetryTick((t) => t + 1)
+      return
+    }
     if (!audioUrl) return
 
     if (isPlaying) {
@@ -144,18 +163,27 @@ export default function VoiceMessageBubble({
     const audio = new Audio(audioUrl)
     audioRef.current = audio
     audio.onended = () => stopPlayback()
-    audio.onerror = () => stopPlayback()
+    audio.onerror = () => {
+      stopPlayback()
+      useToastStore.getState().show(FEEDBACK_COPY.voiceRetry, 'error')
+    }
     audio
       .play()
       .then(() => setIsPlaying(true))
-      .catch(() => stopPlayback())
-  }, [audioUrl, isPlaying, stopPlayback])
+      .catch(() => {
+        stopPlayback()
+        useToastStore.getState().show(FEEDBACK_COPY.voiceRetry, 'error')
+      })
+  }, [audioUrl, isPlaying, loadFailed, stopPlayback])
 
   const durationSeconds = Math.max(1, Math.ceil(duration / 1000))
   const durationLabel = `${durationSeconds}''`
   const bubbleWidth = Math.min(196, Math.max(152, 110 + durationSeconds * 7))
   const bars = isPlaying ? PLAYING_LEVELS[frameIndex] : [8, 12, 16]
-  const label = useMemo(() => (isPlaying ? '播放中' : '点击收听'), [isPlaying])
+  const label = useMemo(
+    () => (loadFailed ? '加载失败 · 点此重试' : isPlaying ? '播放中' : '点击收听'),
+    [isPlaying, loadFailed],
+  )
 
   return (
     <button

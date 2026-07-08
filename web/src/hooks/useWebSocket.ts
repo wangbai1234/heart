@@ -3,7 +3,8 @@ import { useChatStore } from '../stores/chatStore'
 import { useAppStore } from '../stores/appStore'
 import { useAuthStore } from '../stores/authStore'
 import { wrapPCM16AsWAV } from '../services/audioPlayer'
-import type { CharacterId } from '../data/uiContent'
+import { FEEDBACK_COPY, type CharacterId } from '../data/uiContent'
+import { useToastStore } from '../stores/toastStore'
 
 const WS_BASE = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/api/chat/ws`
 
@@ -202,6 +203,8 @@ export function useWebSocket() {
           setStreaming(false)
           setPlaying(false)
           pendingVoiceTurnRef.current = false
+          // Previously swallowed silently (SUG-1) — surface a friendly toast.
+          useToastStore.getState().show(FEEDBACK_COPY.streamError, 'error')
           break
       }
     }
