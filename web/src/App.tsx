@@ -17,6 +17,7 @@ import { RedeemPage } from './pages/RedeemPage'
 import { AgeGatePage } from './pages/AgeGatePage'
 import { LegalPage } from './pages/LegalPage'
 import { UIStatePreviewPage } from './pages/UIStatePreviewPage'
+import { ToastContainer } from './components/ui/ToastContainer'
 import { useThemeStore } from './stores/themeStore'
 import { useAppStore } from './stores/appStore'
 
@@ -35,6 +36,7 @@ export function App() {
 
   return (
     <AuthGuard>
+      <ToastContainer />
       <Routes>
         <Route path="/" element={<Navigate to="/splash" replace />} />
         <Route path="/splash" element={<SplashPage />} />
