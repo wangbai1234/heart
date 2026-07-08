@@ -41,7 +41,7 @@ staging/prod 需各自跑：`alembic upgrade heads` + `backfill_embeddings.py --
   - **C1 消灭硬编码** ✅ 已合并 → PR #118：live 路径的 `{"rin","dorothy"}` 硬编码收敛到 `ss01_soul/character_content.py` 单一来源（persona/templates/ritual），角色名从 Soul Spec 派生。rin/dorothy 行为不变。
   - **C2 characters 表 + 列表 API** ✅ 已合并 → PR #119：迁移 019 建 `characters` 目录表（回填 rin/dorothy 内置角色，零数据迁移）；`GET /api/characters`（display_name 从 Soul Spec 派生）；`is_known_character` 边界校验接入 `routes_characters` + chat WS。
   - **C3 Soul Spec 改 DB 来源 + 热加载** ⏳ 待拍板（高风险：触及记忆/情绪/关系全链路 character_id 语义与 Soul Spec 不可变契约，需专门评审）。
-  - **C4 前端动态化**（消费 `GET /api/characters`，替换硬编码 `CharacterId` 联合类型）⏳ 未开始（低-中风险，可先于 C3）。
+  - **C4 前端动态化** ✅ 已合并 → PR #121：前端角色列表改为运行时消费 `GET /api/characters`（新增 `charactersStore` + `getCharacters()`），`CharacterId` 联合类型降为 `string`，`CHARACTER_PROFILES` 退化为「视觉资源表」并新增 `resolveCharacterProfile` 兜底；catalog 失败/冷启回退内置角色，rin/dorothy 行为不变。纯前端、零后端改动、零数据迁移。
   - **C5 创作 UI + 审核流** ⏳ 未开始（独立大 epic）。
 
 ---
