@@ -18,6 +18,7 @@ import { AgeGatePage } from './pages/AgeGatePage'
 import { LegalPage } from './pages/LegalPage'
 import { UIStatePreviewPage } from './pages/UIStatePreviewPage'
 import { ToastContainer } from './components/ui/ToastContainer'
+import { useProactivePolling } from './hooks/useProactivePolling'
 import { useThemeStore } from './stores/themeStore'
 import { useAppStore } from './stores/appStore'
 
@@ -28,6 +29,8 @@ function ChatConversationRouter() {
 
 export function App() {
   const { fontScale } = useAppStore()
+
+  useProactivePolling()
 
   useEffect(() => {
     const nextScale = (0.92 + fontScale * 0.0016).toFixed(3)

@@ -6,6 +6,7 @@ import { Dialog } from '../components/ui/Dialog'
 import { useThemeStore } from '../stores/themeStore'
 import { useAppStore } from '../stores/appStore'
 import { useChatStore } from '../stores/chatStore'
+import { useProactiveStore } from '../stores/proactiveStore'
 import {
   CHARACTER_PROFILES,
   CONVERSATION_THREADS,
@@ -84,6 +85,7 @@ export function ChatInboxPage() {
   const setCharacter = useAppStore((s) => s.setCharacter)
   const threads = useChatStore((s) => s.threads)
   const messages = useChatStore((s) => s.messages)
+  const pendingByChar = useProactiveStore((s) => s.pendingByChar)
   const clearedCharacters = useChatStore((s) => s.clearedCharacters)
   const setActiveCharacter = useChatStore((s) => s.setActiveCharacter)
   const clearThread = useChatStore((s) => s.clearThread)
@@ -106,20 +108,29 @@ export function ChatInboxPage() {
       audioDuration: item.audioDuration,
     }))
     const lastMessage = timeline[timeline.length - 1]
-    const unreadCount = getUnreadMessageCount(timeline)
+
+    // Proactive messages (SS06) not yet opened: count as unread and, when newest,
+    // drive the preview so the user knows the character reached out.
+    const pending = pendingByChar[characterId] ?? []
+    const latestPending = pending[pending.length - 1]
+    const lastTimestamp = latestPending
+      ? Math.max(lastMessage?.timestamp ?? 0, new Date(latestPending.created_at).getTime())
+      : lastMessage?.timestamp ?? 0
+    const preview = latestPending ? latestPending.content : getMessagePreview(previewTimeline)
+    const unreadCount = getUnreadMessageCount(timeline) + pending.length
 
     return {
       profile: CHARACTER_PROFILES[characterId],
       characterId,
-      preview: getMessagePreview(previewTimeline),
-      updatedAt: lastMessage ? formatConversationTime(lastMessage.timestamp) : '',
+      preview,
+      updatedAt: lastTimestamp ? formatConversationTime(lastTimestamp) : '',
       unreadCount,
       isSelected: currentCharacterId === characterId,
-      totalMessages: timeline.length,
+      totalMessages: timeline.length + pending.length,
     }
   })
 
-  // Filter out characters with no messages
+  // Filter out characters with neither history nor a pending proactive message
   const conversations = allConversations.filter((c) => c.totalMessages > 0)
 
   const handleDelete = async (characterId: CharacterId) => {
