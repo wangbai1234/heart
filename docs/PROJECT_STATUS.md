@@ -34,6 +34,11 @@ staging/prod 需各自跑：`alembic upgrade heads` + `backfill_embeddings.py --
 **待办功能（未实现）**：`docs/upgrade/commercial/06_anonymous_email_delivery.md`（匿名邮件 OTP 投递，
 前置 `EmailSender` 抽象已就绪，可直接开发）；PWA "安装到桌面/主屏"（当前无 manifest/SW，见手册 §9）。
 
+### 2026-07-08 第二轮全功能测试（`docs/TEST_REPORT_2026-07-08.md`：34 PASS / 0 FAIL / 29 BLOCKED）
+- **BUG-4（P0）已修复** → PR #112：`proactive_messages` 表缺失致 ritual dedup 静默失败、每分钟堆积早安消息；rituals 亦绕过每日配额。修复＝新建表（迁移 018）+ 持久化 tick/ritual + 真实 dedup + 纳入配额 + `/pending` 读库 + 新增 `/ack`。
+- **前端规划（SUG-1/SUG-2）** → `docs/design/proactive_frontend_plan.md`：全局 Toast → 语音失败友好提示 → 主动消息轮询/展示。待拍板。
+- **角色 UGC 重构规划（SUG-3/BUG-3）** → `docs/design/ugc_character_refactor_plan.md`：C1 消灭硬编码 → C2 characters 表+列表 API → C3 Soul Spec 改 DB 来源 → C4 前端动态化 → C5 创作 UI+审核。待拍板。
+
 ---
 
 ## 1. 一句话 TL;DR（历史，2026-06-21）
