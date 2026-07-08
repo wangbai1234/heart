@@ -36,7 +36,7 @@ staging/prod 需各自跑：`alembic upgrade heads` + `backfill_embeddings.py --
 
 ### 2026-07-08 第二轮全功能测试（`docs/TEST_REPORT_2026-07-08.md`：34 PASS / 0 FAIL / 29 BLOCKED）
 - **BUG-4（P0）已修复** → PR #112：`proactive_messages` 表缺失致 ritual dedup 静默失败、每分钟堆积早安消息；rituals 亦绕过每日配额。修复＝新建表（迁移 018）+ 持久化 tick/ritual + 真实 dedup + 纳入配额 + `/pending` 读库 + 新增 `/ack`。
-- **前端规划（SUG-1/SUG-2）** → `docs/design/proactive_frontend_plan.md`：全局 Toast → 语音失败友好提示 → 主动消息轮询/展示。待拍板。
+- **前端 SUG-1/SUG-2 已实现**（规划见 `docs/design/proactive_frontend_plan.md`）→ PR #114（全局 Toast store）+ #115（语音/TTS 失败友好提示，SUG-1）+ #116（主动消息轮询/展示，SUG-2）。已解锁测试项 PROA-02~06。**遗留（另案）**：主动消息目前仅本 session 展示，写入服务端聊天历史以跨刷新存续属后续后端改动。
 - **角色 UGC 重构规划（SUG-3/BUG-3）** → `docs/design/ugc_character_refactor_plan.md`：C1 消灭硬编码 → C2 characters 表+列表 API → C3 Soul Spec 改 DB 来源 → C4 前端动态化 → C5 创作 UI+审核。待拍板。
 
 ---
