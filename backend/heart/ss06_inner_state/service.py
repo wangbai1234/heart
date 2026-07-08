@@ -17,6 +17,11 @@ from uuid import UUID
 import structlog
 from prometheus_client import Counter, Histogram
 
+from heart.ss01_soul.character_content import (
+    get_proactive_persona,
+    get_proactive_templates,
+)
+
 from .models import InnerState, ProactiveMessage
 
 logger = structlog.get_logger(__name__)
@@ -40,35 +45,10 @@ INNER_LOOP_DURATION_SECONDS = Histogram(
     buckets=[0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0],
 )
 
-# Short persona hints used to steer LLM-generated proactive messages. Kept inline
-# (rather than loading the full soul spec) so the hourly inner loop stays cheap.
-PROACTIVE_PERSONA: Dict[str, str] = {
-    "rin": "神无月凛：清冷、话少、口是心非的傲娇，关心藏在简短的话里，绝不肉麻。",
-    "dorothy": "桃桃：活泼、元气、粘人，用感叹号和叠词，热情直接地表达想念。",
-}
-
-PROACTIVE_TEMPLATES: Dict[str, List[str]] = {
-    "rin": [
-        "今天看见一只猫，和你有点像。",
-        "……突然想你了。没什么事，就是想告诉你。",
-        "下雨了。记得带伞。",
-        "今天翻到之前你说的话，笑了一下。",
-        "晚安。虽然你还没说晚安。",
-        "我在听一首歌。想到你了。",
-        "今天有点累，但想到你，就没那么累了。",
-        "你说过的那句话，我今天又想起来了。",
-    ],
-    "dorothy": [
-        "嗨嗨~桃桃刚才看到一个超好笑的视频！分享给你！",
-        "你今天怎么样呀？桃桃突然好想你！",
-        "外面的太阳好大耶！你那边呢？",
-        "诶！桃桃刚吃了超好吃的草莓！你也喜欢的对吧！",
-        "晚安晚安！就算你还没说晚安，桃桃也要先说！",
-        "我刚才看到一朵云，长得好像你哦！",
-        "今天遇到了好多开心的事，第一个想分享的就是你！",
-        "桃桃在想你呢！你有没有想桃桃？",
-    ],
-}
+# Per-character proactive persona hints and fallback templates now live in the
+# single-source character content registry (heart.ss01_soul.character_content),
+# accessed via get_proactive_persona / get_proactive_templates. The inner loop
+# stays cheap: those accessors are plain in-memory dict lookups.
 
 
 class InnerStateService:
@@ -210,7 +190,7 @@ class InnerStateService:
 
     def _template_content(self, character_id: str) -> str:
         """Pick a built-in template (the always-available fallback)."""
-        templates = PROACTIVE_TEMPLATES.get(character_id, PROACTIVE_TEMPLATES["rin"])
+        templates = get_proactive_templates(character_id)
         return random.choice(templates)
 
     async def _resolve_proactive_content(
@@ -255,7 +235,7 @@ class InnerStateService:
         recent_context: str,
         user_facts: str,
     ) -> str:
-        persona = PROACTIVE_PERSONA.get(character_id, character_id)
+        persona = get_proactive_persona(character_id)
         return (
             f"你是「{character_id}」。{persona}\n"
             f"现在你想主动给对方发一条消息（触发原因：{trigger_type}）。\n\n"
@@ -381,7 +361,7 @@ class InnerStateService:
         messages = []
         for i in range(num_messages):
             ts = base_date - timedelta(days=num_messages - i)
-            templates = PROACTIVE_TEMPLATES.get(character_id, PROACTIVE_TEMPLATES["rin"])
+            templates = get_proactive_templates(character_id)
             content = templates[i % len(templates)]
             msg = ProactiveMessage(
                 user_id=user_id,

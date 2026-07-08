@@ -14,10 +14,8 @@ from uuid import uuid4
 import pytest
 
 from heart.core.config import settings
-from heart.ss06_inner_state.service import (
-    PROACTIVE_TEMPLATES,
-    InnerStateService,
-)
+from heart.ss01_soul.character_content import get_proactive_templates
+from heart.ss06_inner_state.service import InnerStateService
 
 
 def _mock_router(content: str) -> MagicMock:
@@ -95,7 +93,7 @@ async def test_resolve_falls_back_to_template_on_llm_error():
             recent_context="",
             user_facts="",
         )
-    assert content in PROACTIVE_TEMPLATES["rin"]
+    assert content in get_proactive_templates("rin")
 
 
 @pytest.mark.asyncio
@@ -115,7 +113,7 @@ async def test_resolve_uses_template_when_disabled():
             recent_context="",
             user_facts="",
         )
-    assert content in PROACTIVE_TEMPLATES["rin"]
+    assert content in get_proactive_templates("rin")
     router.call_cheap.assert_not_awaited()
 
 

@@ -21,6 +21,7 @@ import structlog
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from heart.ss01_soul.character_content import get_ritual_greeting
 from heart.ss06_inner_state import proactive_repo
 from heart.ss06_inner_state.models import ProactiveMessage
 from heart.ss06_inner_state.service import InnerStateService
@@ -326,17 +327,9 @@ class InnerLoopWorker:
         # Morning ritual: 6-10 AM
         if 6 <= hour <= 10:
             ritual_type = "morning"
-            templates = {
-                "rin": "早安。",
-                "dorothy": "早安早安！新的一天开始啦！",
-            }
         # Night ritual: 9 PM - 1 AM
         elif 21 <= hour or hour <= 1:
             ritual_type = "night"
-            templates = {
-                "rin": "晚安。明天见。",
-                "dorothy": "晚安晚安！做个好梦哦！",
-            }
         else:
             return None
 
@@ -364,8 +357,8 @@ class InnerLoopWorker:
             )
             return None
 
-        # Generate ritual message
-        content = templates.get(character_id, templates.get("rin", "早安。"))
+        # Generate ritual message — per-character greeting from the content registry.
+        content = get_ritual_greeting(character_id, ritual_type)
 
         msg = ProactiveMessage(
             user_id=user_id,
