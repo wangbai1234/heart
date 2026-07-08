@@ -83,13 +83,34 @@ CHARACTER_CONTENT: Dict[str, CharacterContent] = {
 }
 
 
+# Process-level overlay for UGC characters (populated at startup + reload).
+# Built-in ids (rin/dorothy) are never stored here — the static map always wins.
+_content_overlay: Dict[str, CharacterContent] = {}
+
+
+def register_content(character_id: str, content: CharacterContent) -> None:
+    """Register UGC content into the in-process overlay.
+
+    Called by the startup warm and by reload_character after a create/edit.
+    Built-in ids are silently ignored — their content stays in CHARACTER_CONTENT.
+    """
+    if character_id in CHARACTER_CONTENT:
+        return
+    _content_overlay[character_id] = content
+
+
+def _resolve(character_id: str) -> CharacterContent | None:
+    """Return content for character_id: overlay > static > None."""
+    return _content_overlay.get(character_id) or CHARACTER_CONTENT.get(character_id)
+
+
 def get_proactive_persona(character_id: str) -> str:
     """Return the short persona hint for LLM-generated proactive messages.
 
     Preserves the previous ``PROACTIVE_PERSONA.get(character_id, character_id)``
     semantics: an unknown character falls back to its own id.
     """
-    entry = CHARACTER_CONTENT.get(character_id)
+    entry = _resolve(character_id)
     if entry is None:
         return character_id
     return entry["proactive_persona"]
@@ -102,7 +123,7 @@ def get_proactive_templates(character_id: str) -> List[str]:
     semantics: an unknown character falls back to the fallback character's list.
     Returns a copy so callers cannot mutate the source of truth.
     """
-    entry = CHARACTER_CONTENT.get(character_id) or CHARACTER_CONTENT[FALLBACK_CHARACTER_ID]
+    entry = _resolve(character_id) or CHARACTER_CONTENT[FALLBACK_CHARACTER_ID]
     return list(entry["proactive_templates"])
 
 
@@ -112,7 +133,7 @@ def get_ritual_greeting(character_id: str, window: str) -> str:
     Preserves the previous inline ``templates.get(character_id, templates.get("rin"))``
     semantics: an unknown character falls back to the fallback character's greeting.
     """
-    entry = CHARACTER_CONTENT.get(character_id) or CHARACTER_CONTENT[FALLBACK_CHARACTER_ID]
+    entry = _resolve(character_id) or CHARACTER_CONTENT[FALLBACK_CHARACTER_ID]
     if window == "morning":
         return entry["ritual_morning"]
     return entry["ritual_night"]
@@ -143,7 +164,6 @@ def get_display_name(character_id: str) -> str:
 def invalidate(character_id: str) -> None:
     """Evict a UGC character from the in-process content cache.
 
-    The static CHARACTER_CONTENT (rin/dorothy) is never evicted.
-    C5a will extend this with a real DB-backed overlay cache; until then
-    this is a no-op that reload.py can call unconditionally.
+    Built-in ids (rin/dorothy) are never evicted.
     """
+    _content_overlay.pop(character_id, None)

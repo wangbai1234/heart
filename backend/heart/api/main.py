@@ -106,24 +106,46 @@ async def lifespan(app: FastAPI):
     except RuntimeError as e:
         logger.warning("jwt_secret_invalid", error=str(e))
 
-    # Warm DB-sourced UGC soul specs on top of file-loaded builtins.
+    # Warm DB-sourced UGC soul specs and character content overlays.
     # Uses a short-lived connection so the pool is not held during the full
     # lifespan.  Failure is non-fatal: the service starts with file specs only.
     try:
         from heart.api.wiring import _get_engine
+        from heart.ss01_soul.character_content import CharacterContent, register_content
+        from heart.ss01_soul.content_store import fetch_all_content
         from heart.ss01_soul.registry import get_soul_registry
         from heart.ss01_soul.spec_store import fetch_active_specs
 
         async with _get_engine().connect() as conn:
-            rows = await fetch_active_specs(conn)
-        report = get_soul_registry().load_db_overlay(rows)
+            spec_rows = await fetch_active_specs(conn)
+            content_rows = await fetch_all_content(conn)
+
+        report = get_soul_registry().load_db_overlay(spec_rows)
         logger.info(
             "soul_spec_db_overlay_warm",
             loaded=len(report.loaded),
             skipped=len(report.skipped),
         )
+
+        for crow in content_rows:
+            cid = crow["character_id"]
+            templates = crow["proactive_templates"]
+            if isinstance(templates, str):
+                import json as _json
+
+                templates = _json.loads(templates)
+            register_content(
+                cid,
+                CharacterContent(
+                    proactive_persona=crow["proactive_persona"] or "",
+                    proactive_templates=templates or [],
+                    ritual_morning=crow["ritual_morning"] or "",
+                    ritual_night=crow["ritual_night"] or "",
+                ),
+            )
+        logger.info("character_content_overlay_warm", count=len(content_rows))
     except Exception as _exc:
-        logger.warning("soul_spec_db_overlay_warm_failed", error=str(_exc))
+        logger.warning("db_overlay_warm_failed", error=str(_exc))
 
     yield
     await _shutdown()
