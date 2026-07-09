@@ -17,6 +17,8 @@ import { RedeemPage } from './pages/RedeemPage'
 import { AgeGatePage } from './pages/AgeGatePage'
 import { LegalPage } from './pages/LegalPage'
 import { UIStatePreviewPage } from './pages/UIStatePreviewPage'
+import { CreateCharacterPage } from './pages/CreateCharacterPage'
+import { MyCharactersPage } from './pages/MyCharactersPage'
 import { ToastContainer } from './components/ui/ToastContainer'
 import { useProactivePolling } from './hooks/useProactivePolling'
 import { useThemeStore } from './stores/themeStore'
@@ -66,6 +68,8 @@ export function App() {
         <Route path="/age-gate" element={<AgeGatePage />} />
         <Route path="/legal/:type" element={<LegalPage />} />
         <Route path="/qa/states" element={<UIStatePreviewPage />} />
+        <Route path="/characters/new" element={<CreateCharacterPage />} />
+        <Route path="/my-characters" element={<MyCharactersPage />} />
         <Route path="*" element={<Navigate to="/splash" replace />} />
       </Routes>
     </AuthGuard>

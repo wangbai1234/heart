@@ -276,6 +276,57 @@ export async function getCharacters(): Promise<{ characters: CharacterDTO[] }> {
   return request('/characters')
 }
 
+// ── UGC Character CRUD ─────────────────────────────────────────────
+
+/** Mirrors backend CharacterDraft (heart/ss01_soul/draft.py). */
+export interface CharacterDraftDTO {
+  display_name: { zh?: string; ja?: string; en?: string }
+  persona: string
+  greeting_style: 'warm' | 'cool' | 'playful' | 'reserved' | 'intense'
+  speech_samples?: string[]
+  sliders: {
+    warmth: number
+    talkativeness: number
+    directness: number
+    humor: number
+    playfulness: number
+    steadiness: number
+  }
+  locale?: string
+}
+
+export async function createCharacter(draft: CharacterDraftDTO): Promise<{
+  id: string
+  display_name: string
+  spec_version: string
+  visibility: string
+}> {
+  return request('/characters', { method: 'POST', body: JSON.stringify(draft) })
+}
+
+export async function updateCharacter(
+  characterId: string,
+  draft: CharacterDraftDTO,
+): Promise<{ id: string; spec_version: string }> {
+  return request(`/characters/${characterId}`, { method: 'PATCH', body: JSON.stringify(draft) })
+}
+
+export async function setCharacterVisibility(
+  characterId: string,
+  visibility: 'public' | 'unlisted' | 'private',
+): Promise<{ id: string; visibility: string }> {
+  return request(`/characters/${characterId}/visibility`, {
+    method: 'PATCH',
+    body: JSON.stringify({ visibility }),
+  })
+}
+
+export async function disableCharacter(
+  characterId: string,
+): Promise<{ id: string; status: string }> {
+  return request(`/characters/${characterId}/disable`, { method: 'POST' })
+}
+
 // ── Character Settings API ─────────────────────────────────────────
 
 export async function getCharacterSettings(characterId: string): Promise<{ voice_enabled: boolean }> {
