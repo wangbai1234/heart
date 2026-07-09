@@ -14,6 +14,8 @@ import { Button } from './ui/Button'
 import { Avatar } from './ui/Avatar'
 import VoiceMessageBubble from './VoiceMessageBubble'
 
+const EMPTY_MESSAGES: Message[] = []
+
 interface ConversationChatPageProps {
   isDark: boolean
 }
@@ -43,7 +45,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
   const isValidCharacterId = !!routeCharacterId && knownIds.has(routeCharacterId)
   const currentCharacterId = (isValidCharacterId ? routeCharacterId : storedCharacterId) as CharacterId
 
-  const messages = useChatStore((s) => s.messages[currentCharacterId as CharacterId] ?? [])
+  const messages = useChatStore((s) => s.messages[currentCharacterId as CharacterId] ?? EMPTY_MESSAGES)
   const isCleared = useChatStore((s) => s.clearedCharacters.has(currentCharacterId as CharacterId))
   const isStreaming = useChatStore((s) => s.isStreaming)
   const isPlaying = useChatStore((s) => s.isPlaying)
