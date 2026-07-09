@@ -156,9 +156,9 @@ export function HomePage() {
           {/* Backdrop */}
           <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" />
 
-          {/* Sheet */}
+          {/* Sheet — fixed height so body is always scrollable */}
           <div
-            className="relative w-full max-h-[80vh] bg-[var(--color-bg-card,_#FFFFFF)] rounded-t-[28px] overflow-hidden flex flex-col shadow-[0_-8px_40px_rgba(0,0,0,0.18)]"
+            className="relative w-full h-[62vh] bg-[var(--color-bg-card,_#FFFFFF)] rounded-t-[28px] flex flex-col shadow-[0_-8px_40px_rgba(0,0,0,0.18)]"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Handle */}
@@ -182,8 +182,11 @@ export function HomePage() {
               </button>
             </div>
 
-            {/* Scrollable body */}
-            <div className="overflow-y-auto px-5 py-4 flex-1" style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 20px), 24px)' }}>
+            {/* Scrollable body — grows to fill remaining sheet height */}
+            <div
+              className="overflow-y-auto px-5 py-4 flex-1 min-h-0"
+              style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 16px), 20px)' }}
+            >
               <h2 className="text-[18px] font-bold text-[var(--color-ink)] leading-[1.4] mb-3">
                 {activeAnnouncement.title}
               </h2>

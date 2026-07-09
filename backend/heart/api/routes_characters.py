@@ -168,9 +168,11 @@ async def clear_character_conversations(
 
 
 def _mint_character_id(display_name: str | None, uid: uuid.UUID) -> str:
-    """Mint a unique character_id: slug derived from display name + short uuid suffix."""
+    """Mint a unique character_id: slug + 8-char random hex (unique per call)."""
     raw = re.sub(r"[^a-z0-9]+", "_", (display_name or "char").lower()).strip("_")[:12]
-    suffix = uid.hex[:6]
+    # Use a fresh uuid4 so each call produces a different suffix regardless of
+    # the display name or user id (Chinese names always reduce raw to empty).
+    suffix = uuid.uuid4().hex[:8]
     cid = f"{raw or 'char'}_{suffix}"
     # Must satisfy ^[a-z][a-z0-9_]*$
     if not _CID_RE.match(cid):
