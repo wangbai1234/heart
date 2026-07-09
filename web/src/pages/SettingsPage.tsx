@@ -201,8 +201,12 @@ export function SettingsPage() {
         {/* 隐私与数据 */}
         <SectionLabel>隐私与数据</SectionLabel>
         <GroupCard>
+          <SettingRow icon={<LogoutIcon />} label="退出登录" onClick={() => setShowLogoutDialog(true)} />
+          <Divider />
           <SettingRow icon={<TrashIcon />} label="清除聊天缓存" onClick={() => setShowClearDialog(true)} />
+          <Divider />
           <SettingRow icon={<DownloadIcon />} label="导出我的数据" onClick={handleExportData} />
+          <Divider />
           <SettingRow icon={<WarningIcon />} label="注销账号" danger onClick={() => { setDeleteStep(1); setDeleteConfirmText(''); setShowDeleteDialog(true) }} />
         </GroupCard>
 
@@ -401,6 +405,9 @@ function ScaledText({ as: Component, children, className = '' }: ScaledTextProps
 }
 
 /* ── Icons ─────────────────────────────────────────────────────── */
+function LogoutIcon() {
+  return <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--color-primary)" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16,17 21,12 16,7" /><line x1="21" y1="12" x2="9" y2="12" /></svg>
+}
 function GiftIcon() {
   return <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--color-primary)" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="9" width="20" height="13" rx="2" /><path d="M2 9h20v4H2V9Z" /><line x1="12" y1="9" x2="12" y2="22" /><path d="M12 9C12 9 9 7 9 5C9 3.3 10.3 2 12 2C13.7 2 15 3.3 15 5C15 7 12 9 12 9Z" /><path d="M12 9C12 9 15 7 15 5C15 3.3 13.7 2 12 2C10.3 2 9 3.3 9 5C9 7 12 9 12 9Z" /></svg>
 }

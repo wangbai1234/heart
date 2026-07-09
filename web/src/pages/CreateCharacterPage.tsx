@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useCharactersStore } from '../stores/charactersStore'
 import { useToastStore } from '../stores/toastStore'
-import { ApiError, type CharacterDraftDTO } from '../services/api'
+import { ApiError, uploadCharacterAvatar, type CharacterDraftDTO } from '../services/api'
 
 function useToast() {
   return useToastStore((s) => s.show)
@@ -47,9 +47,10 @@ function toApiSlider(v: number): number {
   return Math.round(v) / 100
 }
 
-function buildDraft(fields: FormFields): CharacterDraftDTO {
+function buildDraft(fields: FormFields, avatarUrl?: string): CharacterDraftDTO {
   return {
     display_name: { zh: fields.nameZh.trim() || undefined },
+    avatar_url: avatarUrl || undefined,
     persona: fields.persona.trim(),
     greeting_style: fields.greetingStyle,
     speech_samples: fields.samples.map((s) => s.trim()).filter(Boolean),
@@ -170,6 +171,9 @@ export function CreateCharacterPage() {
   const [form, setForm] = useState<FormFields>(defaultForm)
   const [submitting, setSubmitting] = useState(false)
   const [step, setStep] = useState<1 | 2>(1) // step 1: basic info, step 2: personality
+  const [avatarUrl, setAvatarUrl] = useState<string>('')
+  const [avatarUploading, setAvatarUploading] = useState(false)
+  const avatarInputRef = useRef<HTMLInputElement>(null)
 
   // If editing, populate form from catalog's existing character data
   // (draft fields not stored client-side; user sees defaults + can re-fill)
@@ -181,6 +185,25 @@ export function CreateCharacterPage() {
       }
     }
   }, [editId, characters])
+
+  async function handleAvatarFile(file: File) {
+    if (!file.type.startsWith('image/')) {
+      showToast('请选择图片文件', 'error')
+      return
+    }
+    setAvatarUploading(true)
+    try {
+      const { avatar_url } = await uploadCharacterAvatar(file)
+      setAvatarUrl(avatar_url)
+    } catch {
+      // fallback: use local object URL as preview + data URL for upload
+      const reader = new FileReader()
+      reader.onload = (e) => setAvatarUrl(e.target?.result as string)
+      reader.readAsDataURL(file)
+    } finally {
+      setAvatarUploading(false)
+    }
+  }
 
   function setSlider(key: keyof FormFields['sliders'], v: number) {
     setForm((prev) => ({ ...prev, sliders: { ...prev.sliders, [key]: v } }))
@@ -203,7 +226,7 @@ export function CreateCharacterPage() {
 
     setSubmitting(true)
     try {
-      const draft = buildDraft(form)
+      const draft = buildDraft(form, avatarUrl || undefined)
       if (editId) {
         await updateCharacter(editId, draft)
         showToast('角色已更新', 'success')
@@ -279,6 +302,62 @@ export function CreateCharacterPage() {
                 <br />描述她的性格与故事。
               </p>
             </div>
+
+            {/* Avatar */}
+            <SectionTitle>角色头像（选填）</SectionTitle>
+            <div className="flex justify-center mb-2">
+              <div className="relative">
+                {/* Avatar preview */}
+                <button
+                  type="button"
+                  onClick={() => avatarInputRef.current?.click()}
+                  className="w-[88px] h-[88px] rounded-full overflow-hidden flex items-center justify-center active:scale-[0.96] transition-transform"
+                  style={{
+                    background: avatarUrl
+                      ? 'transparent'
+                      : 'linear-gradient(135deg, #FFB7C5 0%, #C8B6FF 100%)',
+                  }}
+                >
+                  {avatarUrl ? (
+                    <img src={avatarUrl} alt="头像" className="w-full h-full object-cover" />
+                  ) : avatarUploading ? (
+                    <svg className="animate-spin w-8 h-8 text-white" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                  ) : form.nameZh.trim() ? (
+                    <span className="text-[34px] font-bold text-white leading-none select-none">
+                      {form.nameZh.trim().slice(-1)}
+                    </span>
+                  ) : (
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="8" r="4" />
+                      <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
+                    </svg>
+                  )}
+                </button>
+                {/* Edit badge */}
+                <div className="absolute bottom-0 right-0 w-[26px] h-[26px] rounded-full bg-[#FFB7C5] border-2 border-white flex items-center justify-center pointer-events-none">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                  </svg>
+                </div>
+                <input
+                  ref={avatarInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    if (file) handleAvatarFile(file)
+                  }}
+                />
+              </div>
+            </div>
+            <p className="text-center text-[12px] text-[var(--color-text-muted)] mb-2">
+              {avatarUrl ? '点击头像更换' : '不上传则使用角色名最后一个字作为头像'}
+            </p>
 
             {/* Name */}
             <SectionTitle>角色名字</SectionTitle>
@@ -403,10 +482,22 @@ export function CreateCharacterPage() {
             <SectionTitle>预览</SectionTitle>
             <GlassCard className="px-5 py-4">
               <div className="flex items-start gap-4">
-                <div className="w-[52px] h-[52px] rounded-full bg-gradient-to-br from-[#FFB7C5] to-[#C8B6FF] flex items-center justify-center shrink-0 shadow-[0_4px_12px_rgba(255,183,197,0.30)]">
-                  <span className="text-[22px]">
-                    {GREETING_STYLES.find((s) => s.value === form.greetingStyle)?.emoji ?? '✨'}
-                  </span>
+                <div className="w-[52px] h-[52px] rounded-full shrink-0 shadow-[0_4px_12px_rgba(255,183,197,0.30)] overflow-hidden">
+                  {avatarUrl ? (
+                    <img src={avatarUrl} alt="头像" className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full bg-gradient-to-br from-[#FFB7C5] to-[#C8B6FF] flex items-center justify-center">
+                      {form.nameZh.trim() ? (
+                        <span className="text-[22px] font-bold text-white leading-none">
+                          {form.nameZh.trim().slice(-1)}
+                        </span>
+                      ) : (
+                        <span className="text-[22px]">
+                          {GREETING_STYLES.find((s) => s.value === form.greetingStyle)?.emoji ?? '✨'}
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-[16px] font-semibold text-[var(--color-ink)] truncate">

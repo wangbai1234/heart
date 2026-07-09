@@ -29,7 +29,7 @@ class _StubAgent:
     def __init__(self, severity: SeverityLevel = SeverityLevel.GREEN) -> None:
         self._severity = severity
 
-    async def classify(self, *, user_id: str, session_id: str, message: str) -> ClassificationResult:
+    async def classify(self, *, user_id: str, character_id: str, message: str, **_: Any) -> ClassificationResult:
         return ClassificationResult(
             severity=self._severity,
             reason="stub",

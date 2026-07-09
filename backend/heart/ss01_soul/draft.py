@@ -59,7 +59,7 @@ class CharacterDraft(BaseModel, extra="forbid"):
     """
 
     display_name: DisplayNameDraft
-    avatar_url: Optional[str] = Field(None, max_length=2048)
+    avatar_url: Optional[str] = Field(None, max_length=200000)
     persona: Annotated[str, Field(min_length=20, max_length=1500)]
     greeting_style: GreetingStyle = GreetingStyle.warm
     speech_samples: Annotated[list[str], Field(min_length=0, max_length=5)] = Field(

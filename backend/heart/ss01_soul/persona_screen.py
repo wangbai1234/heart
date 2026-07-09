@@ -82,7 +82,7 @@ async def screen_persona(
         # Full safety pipeline
         result = await safety_agent.classify(
             user_id=user_id,
-            session_id=f"ugc-screen-{character_id}",
+            character_id=character_id,
             message=text,
         )
         if result.severity in _REJECT_LEVELS:

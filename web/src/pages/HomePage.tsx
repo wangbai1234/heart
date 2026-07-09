@@ -1,16 +1,18 @@
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useThemeStore } from '../stores/themeStore'
 import { useAuthStore } from '../stores/authStore'
 import { Avatar } from '../components/ui/Avatar'
 import { TabBar } from '../components/ui/TabBar'
 import { Skeleton } from '../components/ui/Skeleton'
-import { HOME_ANNOUNCEMENTS, getHeroBanner } from '../data/uiContent'
+import { HOME_ANNOUNCEMENTS, getHeroBanner, type HomeAnnouncement } from '../data/uiContent'
 
 export function HomePage() {
   const navigate = useNavigate()
   const { resolvedTheme } = useThemeStore()
   const userAvatar = useAuthStore((s) => s.user?.avatar_url ?? null)
   const loading = false
+  const [activeAnnouncement, setActiveAnnouncement] = useState<HomeAnnouncement | null>(null)
   const pageBg = resolvedTheme === 'dark'
     ? '/assets/backgrounds/暗色聊天背景图.png'
     : '/assets/backgrounds/聊天背景图.png'
@@ -91,9 +93,10 @@ export function HomePage() {
 
                 <div className="bg-[var(--color-glass-35)] backdrop-blur-[12px] rounded-[20px] border border-[var(--color-border-glass)] overflow-hidden">
                   {latestAnnouncements.map((announcement, index) => (
-                    <div
+                    <button
                       key={announcement.id}
-                      className="px-4 py-4"
+                      onClick={() => setActiveAnnouncement(announcement)}
+                      className="w-full text-left px-4 py-4 active:bg-[rgba(255,183,197,0.10)] transition-colors"
                     >
                       <div className="flex items-start gap-3">
                         <div className="w-[44px] h-[44px] rounded-[16px] bg-[rgba(255,183,197,0.18)] flex items-center justify-center shrink-0">
@@ -121,11 +124,16 @@ export function HomePage() {
                             {announcement.summary}
                           </p>
                         </div>
+                        <div className="shrink-0 pl-1 flex items-center self-center">
+                          <svg width="7" height="12" viewBox="0 0 7 12" fill="none" stroke="var(--color-chevron)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="1,1 6,6 1,11" />
+                          </svg>
+                        </div>
                       </div>
                       {index < latestAnnouncements.length - 1 && (
                         <div className="mt-4 h-px bg-[var(--color-divider)]" />
                       )}
-                    </div>
+                    </button>
                   ))}
                 </div>
               </div>
@@ -138,6 +146,64 @@ export function HomePage() {
         {/* TabBar */}
         <TabBar />
       </div>
+
+      {/* Announcement Detail Modal */}
+      {activeAnnouncement && (
+        <div
+          className="absolute inset-0 z-50 flex items-end"
+          onClick={() => setActiveAnnouncement(null)}
+        >
+          {/* Backdrop */}
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" />
+
+          {/* Sheet */}
+          <div
+            className="relative w-full max-h-[80vh] bg-[var(--color-bg-card,_#FFFFFF)] rounded-t-[28px] overflow-hidden flex flex-col shadow-[0_-8px_40px_rgba(0,0,0,0.18)]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Handle */}
+            <div className="flex justify-center pt-3 pb-1 shrink-0">
+              <div className="w-[40px] h-[4px] rounded-full bg-[rgba(0,0,0,0.15)]" />
+            </div>
+
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 pb-3 shrink-0 border-b border-[var(--color-divider)]">
+              <span className="inline-flex h-[22px] items-center rounded-full bg-[rgba(255,183,197,0.20)] px-2.5 text-[12px] font-medium text-[var(--color-primary)]">
+                {activeAnnouncement.tag}
+              </span>
+              <button
+                onClick={() => setActiveAnnouncement(null)}
+                className="w-[32px] h-[32px] rounded-full bg-[rgba(0,0,0,0.06)] flex items-center justify-center"
+              >
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="var(--color-ink)" strokeWidth="2" strokeLinecap="round">
+                  <line x1="1" y1="1" x2="13" y2="13" />
+                  <line x1="13" y1="1" x2="1" y2="13" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Scrollable body */}
+            <div className="overflow-y-auto px-5 py-4 flex-1" style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 20px), 24px)' }}>
+              <h2 className="text-[18px] font-bold text-[var(--color-ink)] leading-[1.4] mb-3">
+                {activeAnnouncement.title}
+              </h2>
+              <p className="text-[12px] text-[var(--color-text-muted)] mb-4">
+                {new Intl.DateTimeFormat('zh-CN', {
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  hour12: false,
+                }).format(new Date(activeAnnouncement.publishedAt))}
+              </p>
+              <div className="text-[15px] leading-[1.75] text-[var(--color-ink)] whitespace-pre-line">
+                {activeAnnouncement.content || activeAnnouncement.summary}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

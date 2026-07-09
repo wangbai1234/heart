@@ -7,7 +7,7 @@ import uuid
 from dataclasses import asdict
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -228,6 +228,43 @@ def _derive_content(
 
 class VisibilityUpdate(BaseModel):
     visibility: str  # public | unlisted | private
+
+
+@router.post("/avatar")
+async def upload_character_avatar(
+    request: Request,
+    file: UploadFile = File(...),
+    current_user: TokenData = Depends(get_current_user),
+) -> dict:
+    """Upload a character avatar image. Returns an avatar_url for use in CharacterDraft."""
+    uid = uuid.UUID(current_user.user_id)
+
+    if file.content_type not in ("image/jpeg", "image/png", "image/webp"):
+        raise HTTPException(status_code=400, detail="仅支持 jpg/png/webp 格式")
+
+    data = await file.read()
+    if len(data) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="文件不能超过 5MB")
+
+    from heart.infra.storage import is_s3_configured
+    from heart.infra.storage import upload_avatar as s3_upload
+
+    if is_s3_configured():
+        try:
+            avatar_url = await s3_upload(f"character-{uid.hex[:8]}", data, file.content_type)
+        except Exception as exc:
+            logger.warning("character_avatar_s3_failed", error=str(exc))
+            import base64
+
+            b64 = base64.b64encode(data).decode()
+            avatar_url = f"data:{file.content_type};base64,{b64}"
+    else:
+        import base64
+
+        b64 = base64.b64encode(data).decode()
+        avatar_url = f"data:{file.content_type};base64,{b64}"
+
+    return {"avatar_url": avatar_url}
 
 
 @router.post("")

@@ -281,6 +281,7 @@ export async function getCharacters(): Promise<{ characters: CharacterDTO[] }> {
 /** Mirrors backend CharacterDraft (heart/ss01_soul/draft.py). */
 export interface CharacterDraftDTO {
   display_name: { zh?: string; ja?: string; en?: string }
+  avatar_url?: string
   persona: string
   greeting_style: 'warm' | 'cool' | 'playful' | 'reserved' | 'intense'
   speech_samples?: string[]
@@ -293,6 +294,21 @@ export interface CharacterDraftDTO {
     steadiness: number
   }
   locale?: string
+}
+
+export async function uploadCharacterAvatar(file: File): Promise<{ avatar_url: string }> {
+  const formData = new FormData()
+  formData.append('file', file)
+  const { accessToken } = (await import('../stores/authStore')).useAuthStore.getState()
+  if (!accessToken) throw new Error('未登录')
+  const res = await fetch('/api/characters/avatar', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: formData,
+  })
+  const data = await res.json().catch(() => null)
+  if (!res.ok || !data) throw new Error(data?.detail || `上传失败 (${res.status})`)
+  return data
 }
 
 export async function createCharacter(draft: CharacterDraftDTO): Promise<{
