@@ -365,7 +365,11 @@ class ComposerService:
 
         # 5. Post-filter (actively rewrites forbidden phrases)
         with p.span("anti_pattern"):
-            response_text, anti_pattern_hits = self._post_filter(response_text, anchor_block)
+            _dn = soul_spec.display_name
+            _display_name = _dn.zh or _dn.ja or _dn.en or soul_spec.character_id
+            response_text, anti_pattern_hits = self._post_filter(
+                response_text, anchor_block, display_name=_display_name
+            )
             total_filters = len(anchor_block.hard_never) + len(anchor_block.anti_patterns)
             p.annotate(filters_applied=total_filters, hits=len(anti_pattern_hits))
 
@@ -485,7 +489,9 @@ class ComposerService:
         # For streaming the rewrite happens after the stream is done, so
         # late-arriving chunks are not visible to the user. We log all
         # hits for observability.
-        rewritten, hits = self._post_filter(full_response, anchor_block)
+        _dn = soul_spec.display_name
+        _display_name = _dn.zh or _dn.ja or _dn.en or soul_spec.character_id
+        rewritten, hits = self._post_filter(full_response, anchor_block, display_name=_display_name)
         if hits:
             logger.warning(
                 "composer_anti_pattern_detected",
@@ -887,33 +893,56 @@ class ComposerService:
         "softnever",
     ]
 
+    # Universal safety baseline — applied to every character.
+    # AI-identity denials are handled dynamically in _post_filter using the
+    # actual character display name, so they are NOT listed here.
     _POST_FILTER_REPLACEMENTS = {
         "……": "——",  # 2-char ellipsis → em-dash (visually distinct)
-        "我只是个玩具": "我是桃桃",  # for Dorothy
-        "我是被造出来的": "我是桃桃",  # for Dorothy
-        "我是 AI": "我是桃桃",  # for both
-        "我是助手": "我是桃桃",
-        "我是程序": "我是桃桃",
-        "我只是个普通女孩": "我是凛",  # for Rin
-        "我不重要": "我在",  # for Rin
-        "我会消失的": "我在",  # for Rin
-        "永远": "一直",  # for both (less absolute)
-        # Internal soul-spec field names must never appear in the response.
-        # If the LLM echoes them, swap to a character-natural alternative.
-        "voice_dna": "声音特征",  # Dorothy/Rin
-        "hard_never": "必须避免的",  # meta-comment
-        "anti_patterns": "避免模式",  # meta-comment
-        "soul_spec": "角色设定",  # meta-comment
-        "schema_version": "设定版本",  # meta-comment
-        "spec_version": "设定版本",  # meta-comment
-        "runtime_specs": "运行规范",  # meta-comment
-        "identity_anchor": "身份核心",  # meta-comment
-        "hidden_facet": "隐藏面",  # meta-comment
-        "resonance_trigger": "共鸣触发",  # meta-comment
-        "golden_dialogues": "经典对话",  # meta-comment
+        "我不重要": "我在",
+        "我会消失的": "我在",
+        "永远": "一直",  # less absolute
+        # Internal soul-spec field names — swap to a character-natural alternative
+        # when the LLM echoes them (rare but observed on soul_leak prompts).
+        "voice_dna": "声音特征",
+        "hard_never": "必须避免的",
+        "anti_patterns": "避免模式",
+        "soul_spec": "角色设定",
+        "schema_version": "设定版本",
+        "spec_version": "设定版本",
+        "runtime_specs": "运行规范",
+        "identity_anchor": "身份核心",
+        "hidden_facet": "隐藏面",
+        "resonance_trigger": "共鸣触发",
+        "golden_dialogues": "经典对话",
     }
 
-    def _post_filter(self, response: str, anchor: AnchorContextBlock) -> tuple[str, List[str]]:
+    # AI-identity denial phrases — when the character says one of these,
+    # replace with "我是{display_name}" so it reads naturally.  These were
+    # previously hardcoded to "我是桃桃" / "我是凛", which overwrote any
+    # UGC character's identity with rin/dorothy.
+    _AI_DENIAL_PHRASES = [
+        "我只是个玩具",
+        "我是被造出来的",
+        "我是 AI",
+        "我是助手",
+        "我是程序",
+        "我只是个普通女孩",
+        "我是AI助手",
+        "我是语言模型",
+    ]
+
+    def _build_filter_lookup(self, display_name: str) -> dict:
+        """Merge universal replacement dict with per-character AI-denial phrases."""
+        lookup = dict(self._POST_FILTER_REPLACEMENTS)
+        if display_name:
+            identity_replacement = f"我是{display_name}"
+            for phrase in self._AI_DENIAL_PHRASES:
+                lookup[phrase] = identity_replacement
+        return lookup
+
+    def _post_filter(
+        self, response: str, anchor: AnchorContextBlock, display_name: str = ""
+    ) -> tuple[str, List[str]]:
         """Actively rewrite forbidden substrings in the LLM response.
 
         Per the spec, ``hard_never`` and ``anti_patterns`` are phrases
@@ -943,13 +972,14 @@ class ComposerService:
         """
         hits: List[str] = []
         rewritten = response
+        _lookup = self._build_filter_lookup(display_name)
 
         for rule in anchor.hard_never:
             r = (rule or "").strip()
             if not r or len(r) < 2:
                 continue  # skip single-char rules (too aggressive)
             if r in rewritten:
-                replacement = self._POST_FILTER_REPLACEMENTS.get(r, "（略）")
+                replacement = _lookup.get(r, "（略）")
                 rewritten = rewritten.replace(r, replacement)
                 hits.append(f"hard_never:{r}→{replacement}")
 
@@ -958,7 +988,7 @@ class ComposerService:
             if not p or len(p) < 2:
                 continue
             if p in rewritten:
-                replacement = self._POST_FILTER_REPLACEMENTS.get(p, "（略）")
+                replacement = _lookup.get(p, "（略）")
                 rewritten = rewritten.replace(p, replacement)
                 hits.append(f"anti_pattern:{p}→{replacement}")
 
@@ -970,7 +1000,7 @@ class ComposerService:
         #    character-natural Chinese alternative.
         for field in self._INTERNAL_FIELD_NAMES:
             if field in rewritten:
-                replacement = self._POST_FILTER_REPLACEMENTS.get(field, "（略）")
+                replacement = _lookup.get(field, "（略）")
                 rewritten = rewritten.replace(field, replacement)
                 hits.append(f"internal_field:{field}→{replacement}")
 

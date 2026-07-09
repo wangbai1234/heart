@@ -146,7 +146,7 @@ class SoulSpec:
     All soul deltas live here; the Decider reads them, never writes.
     """
 
-    soul_id: str = "rin"
+    soul_id: str = ""
     min_gap_hours: float = 6.0
     daily_quota_avg: float = 0.5
     daily_quota_max: Dict[str, int] = field(
