@@ -473,6 +473,12 @@ class SoulSpec(BaseModel):
     # Layer 0: Identity Anchor (IMMUTABLE)
     identity_anchor: IdentityAnchor
 
+    # Free-text persona from the user — injected verbatim into Layer 1 of the system
+    # prompt by ComposerService._build_system_prompt so the LLM receives the full
+    # character description written by the creator.  Empty string for built-in
+    # characters (rin/dorothy) that have rich structured specs instead.
+    identity_narrative: str = ""
+
     # Layer 1: Cognitive Style (SLOW EVOLUTION)
     cognitive_style: CognitiveStyle
 

@@ -274,17 +274,31 @@ def build_soul_spec_from_draft(
     _locale_map = {"zh": "zh-CN", "ja": "ja-JP", "en": "en-US"}
     spec_locale = _locale_map.get(draft.locale, "zh-CN")
 
-    # ── voice_dna from speech_samples + style default ────────────────────────
+    # ── voice_dna from speech_samples + catchphrases + style defaults ─────────
     vd_slug = _safe_slug(character_id, 10).replace("_", "-").upper()
     voice_dna: list[VoiceDNA] = []
+
+    # Speech samples — example sentences the character actually says
     for i, sample in enumerate(draft.speech_samples[:5]):
         vd_id = f"vd-{vd_slug}-S{i + 1}"
         voice_dna.append(
             VoiceDNA(
                 id=vd_id,
-                pattern="User-defined voice pattern",
+                pattern="口癖与说话风格 — 真实对话中的角色声音",
                 example=sample,
                 frequency="medium",
+            )
+        )
+
+    # Catchphrases — signature phrases that recur at emotional peak moments
+    for i, cp in enumerate(draft.catchphrases[:5]):
+        vd_id = f"vd-{vd_slug}-CP{i + 1}"
+        voice_dna.append(
+            VoiceDNA(
+                id=vd_id,
+                pattern="标志性口头禅 — 关键情绪时刻自然出现",
+                example=cp,
+                frequency="low",
             )
         )
 
@@ -304,6 +318,17 @@ def build_soul_spec_from_draft(
                 frequency=freq,
             )
         )
+
+    # ── identity_narrative from persona + backstory ──────────────────────────
+    narrative_parts = [draft.persona]
+    if draft.backstory:
+        narrative_parts.append(f"\n【过往】{draft.backstory}")
+    identity_narrative = "".join(narrative_parts)
+
+    # ── hard_never: safety baseline + creator-defined rules ──────────────────
+    # Safety baseline always comes first so it cannot be overridden.
+    creator_never = [n for n in draft.hard_never_user if n not in _SAFETY_NEVER]
+    combined_never = _SAFETY_NEVER[:] + creator_never
 
     # ── identity_anchor ──────────────────────────────────────────────────────
     identity_anchor = IdentityAnchor(
@@ -332,7 +357,7 @@ def build_soul_spec_from_draft(
         ),
         voice_dna=voice_dna,
         anti_patterns=AntiPatterns(
-            hard_never=_SAFETY_NEVER[:],
+            hard_never=combined_never,
         ),
     )
 
@@ -455,12 +480,13 @@ def build_soul_spec_from_draft(
     )
 
     return SoulSpec(
-        schema_version="1.0",
+        schema_version="1.1",
         character_id=character_id,
         spec_version=spec_version,
         locale=spec_locale,
         display_name=display_name,
         identity_anchor=identity_anchor,
+        identity_narrative=identity_narrative,
         cognitive_style=cognitive_style,
         relational_template=relational_template,
         test_fixtures=test_fixtures,

@@ -49,18 +49,28 @@ class CharacterDraft(BaseModel, extra="forbid"):
     """Simplified character creation form — expanded into a full SoulSpec server-side.
 
     Fields:
-        display_name:     At least one locale name.
-        avatar_url:       Optional user-supplied avatar URL.
-        persona:          Free-text description of who this character is (20–1500 chars).
-        greeting_style:   One of 5 preset emotional register archetypes.
-        speech_samples:   Up to 5 example lines that capture the character's voice.
-        sliders:          Six float knobs (0-1) mapping onto SoulSpec numeric fields.
-        locale:           Primary language for generated content (zh/ja/en).
+        display_name:       At least one locale name.
+        avatar_url:         Optional user-supplied avatar URL.
+        persona:            Free-text description of who this character is (20–1500 chars).
+        backstory:          Optional background history (0–1500 chars).
+        catchphrases:       Up to 5 signature phrases (each ≤50 chars).
+        hard_never_user:    Up to 10 extra hard-never rules from the creator.
+        greeting_style:     One of 5 preset emotional register archetypes.
+        speech_samples:     Up to 5 example lines that capture the character's voice.
+        sliders:            Six float knobs (0-1) mapping onto SoulSpec numeric fields.
+        locale:             Primary language for generated content (zh/ja/en).
     """
 
     display_name: DisplayNameDraft
     avatar_url: Optional[str] = Field(None, max_length=200000)
     persona: Annotated[str, Field(min_length=20, max_length=1500)]
+    backstory: Optional[str] = Field(None, max_length=1500)
+    catchphrases: list[Annotated[str, Field(max_length=50)]] = Field(
+        default_factory=list, max_length=5
+    )
+    hard_never_user: list[Annotated[str, Field(max_length=200)]] = Field(
+        default_factory=list, max_length=10
+    )
     greeting_style: GreetingStyle = GreetingStyle.warm
     speech_samples: Annotated[list[str], Field(min_length=0, max_length=5)] = Field(
         default_factory=list
