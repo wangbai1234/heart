@@ -145,6 +145,13 @@ export function SettingsPage() {
           <SettingRow icon={<CrownIcon />} label="积分余额" value={`${balance}`} onClick={() => navigate('/credits/transactions')} chevron />
         </GroupCard>
 
+        {/* 角色创作 */}
+        <SectionLabel>角色创作</SectionLabel>
+        <GroupCard>
+          <SettingRow icon={<PencilSparkleIcon />} label="我的自创角色" chevron onClick={() => navigate('/my-characters')} />
+          <SettingRow icon={<PlusCircleIcon />} label="创建新角色" chevron onClick={() => navigate('/characters/new')} />
+        </GroupCard>
+
         {/* 外观 */}
         <SectionLabel>外观</SectionLabel>
         <GroupCard>
@@ -443,4 +450,10 @@ function DocIcon() {
 }
 function MailIcon() {
   return <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--color-primary)" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="4" width="20" height="16" rx="2" /><polyline points="22,4 12,13 2,4" /></svg>
+}
+function PencilSparkleIcon() {
+  return <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--color-primary)" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" /></svg>
+}
+function PlusCircleIcon() {
+  return <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--color-primary)" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="16" /><line x1="8" y1="12" x2="16" y2="12" /></svg>
 }

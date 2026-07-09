@@ -97,10 +97,12 @@ class Reconstructor:
         self.voice_dna = soul_spec.get("voice_dna", [])
         self.anti_patterns = soul_spec.get("anti_patterns", {})
 
-        # Load character-specific templates
+        # Load character-specific templates, fall back to generic for UGC characters
         template_path = TEMPLATES_DIR / f"{character_id}.yaml"
         if not template_path.exists():
-            raise FileNotFoundError(f"Reconstruction templates not found: {template_path}")
+            template_path = TEMPLATES_DIR / "_generic.yaml"
+        if not template_path.exists():
+            raise FileNotFoundError(f"Reconstruction templates not found for: {character_id}")
 
         with open(template_path) as f:
             self.templates = yaml.safe_load(f)

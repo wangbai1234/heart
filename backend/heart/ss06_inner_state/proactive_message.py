@@ -39,6 +39,30 @@ from heart.ss06_inner_state.initiative_decider import (
 )
 
 # ============================================================
+# Helpers
+# ============================================================
+
+
+def _resolve_soul_display_name(character_id: str, soul: Optional[SoulSpec]) -> str:
+    """Return the human-readable display name for a character.
+
+    Reads soul.display_name.zh (preferred) → .en → .ja for UGC characters;
+    falls back to the hardcoded lookup for built-in ones, then the raw id.
+    """
+    builtin_names = {"rin": "凛", "dorothy": "桃乐丝"}
+    if soul is not None and hasattr(soul, "display_name"):
+        dn = soul.display_name
+        if hasattr(dn, "zh") and dn.zh:
+            return dn.zh
+        if hasattr(dn, "en") and dn.en:
+            return dn.en
+        if hasattr(dn, "ja") and dn.ja:
+            return dn.ja
+    cid = soul.soul_id if (soul and hasattr(soul, "soul_id")) else character_id
+    return builtin_names.get(cid.lower(), cid)
+
+
+# ============================================================
 # Data structures
 # ============================================================
 
@@ -466,7 +490,7 @@ class ProactiveMessageGenerator:
         else:
             cid = character_id
 
-        guides = {
+        builtin_guides = {
             "rin": (
                 "凛的风格：短句、克制、不直接表达关心、用间接的方式。"
                 "喜欢用省略号、反问句。不说'我想你'、'我爱你'、'亲亲'这类直接表达。"
@@ -478,7 +502,27 @@ class ProactiveMessageGenerator:
                 "例：'诶嘿嘿，今天是大日子！生日快乐~' '诶？怎么不见你啦~'"
             ),
         }
-        return guides.get(cid.lower(), "")
+        builtin = builtin_guides.get(cid.lower())
+        if builtin:
+            return builtin
+
+        # UGC character: derive minimal style guide from voice_dna speech samples
+        if soul and hasattr(soul, "voice_dna") and soul.voice_dna:
+            samples = []
+            for vd in soul.voice_dna:
+                for ex in getattr(vd, "examples", []):
+                    text = getattr(ex, "example", None)
+                    if text:
+                        samples.append(f"'{text}'")
+                    if len(samples) >= 2:
+                        break
+                if len(samples) >= 2:
+                    break
+            name = _resolve_soul_display_name(character_id, soul)
+            if samples:
+                return f"{name}的说话方式：保持角色一致、语气自然。参考口吻：{' '.join(samples)}"
+            return f"{name}的说话方式：保持角色一致，语气自然真实，不要解释或说明。"
+        return ""
 
     # ── LLM message assembly ────────────────────────────────────
 
@@ -507,12 +551,7 @@ class ProactiveMessageGenerator:
     @staticmethod
     def _resolve_character_name(character_id: str, soul: Optional[SoulSpec]) -> str:
         """Resolve the display name for the character."""
-        if soul and hasattr(soul, "soul_id"):
-            cid = soul.soul_id
-        else:
-            cid = character_id
-        names = {"rin": "凛", "dorothy": "桃乐丝"}
-        return names.get(cid.lower(), cid)
+        return _resolve_soul_display_name(character_id, soul)
 
     # ── Post-processing ─────────────────────────────────────────
 

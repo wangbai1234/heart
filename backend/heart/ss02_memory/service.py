@@ -435,7 +435,13 @@ class MemoryService:
                 logger.warning("l3_recall_tracking_failed", error=str(e))
 
     def _get_reconstructor(self, character_id: str):
-        """Lazily initialize and cache a Reconstructor for the given character."""
+        """Lazily initialize and cache a Reconstructor for the given character.
+
+        Load order:
+        1. File-based spec (soul_specs/<id>/v1.0.0.yaml) — built-in characters.
+        2. Registry spec (DB-loaded at startup) — UGC characters.
+        3. None — unknown character, caller falls back to _fallback_text.
+        """
         if not hasattr(self, "_reconstructor_cache"):
             self._reconstructor_cache: dict = {}
         if character_id not in self._reconstructor_cache:
@@ -445,14 +451,32 @@ class MemoryService:
 
             from heart.ss02_memory.reconstructor import Reconstructor
 
+            soul_spec: dict | None = None
+
+            # 1. Try filesystem (built-in characters)
             specs_dir = Path(__file__).parent.parent.parent.parent / "soul_specs"
             spec_file = specs_dir / character_id / "v1.0.0.yaml"
             if spec_file.exists():
                 with open(spec_file) as f:
                     soul_spec = yaml.safe_load(f)
+            else:
+                # 2. Try registry (UGC characters loaded from DB)
+                try:
+                    from heart.ss01_soul.registry import get_soul_registry
+
+                    registry = get_soul_registry()
+                    soul_obj = registry.get_soul(character_id)
+                    soul_spec = soul_obj.model_dump()
+                except (KeyError, Exception) as exc:
+                    logger.warning(
+                        "reconstructor_spec_not_found",
+                        character_id=character_id,
+                        error=str(exc),
+                    )
+
+            if soul_spec is not None:
                 self._reconstructor_cache[character_id] = Reconstructor(character_id, soul_spec)
             else:
-                logger.warning("reconstructor_spec_not_found", character_id=character_id)
                 self._reconstructor_cache[character_id] = None
         return self._reconstructor_cache[character_id]
 

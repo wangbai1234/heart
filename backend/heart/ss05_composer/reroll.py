@@ -355,7 +355,15 @@ class RerollHandler:
             logger.warning(
                 f"No fallback library for character '{character_id}', using generic fallback."
             )
-            return "……"
+            # UGC character: use a generic Chinese response instead of a bare ellipsis
+            _generic_fallbacks = {
+                "casual_thinking": ["嗯……让我想想。", "稍等一下。"],
+                "avoiding_topic": ["……换个话题吧。", "嗯，先聊点别的。"],
+                "cant_compute": ["……我不太确定。", "你能再说清楚一些吗？"],
+                "apologetic": ["抱歉，我刚才有点走神。", "嗯……不好意思。"],
+            }
+            candidates = _generic_fallbacks.get(category, _generic_fallbacks["apologetic"])
+            return random.choice(candidates)
 
         candidates = char_lib.get(category)
         if not candidates:
