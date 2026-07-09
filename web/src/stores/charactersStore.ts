@@ -1,5 +1,13 @@
 import { create } from 'zustand'
-import { getCharacters, type CharacterDTO } from '../services/api'
+import {
+  getCharacters,
+  createCharacter as apiCreateCharacter,
+  updateCharacter as apiUpdateCharacter,
+  setCharacterVisibility as apiSetVisibility,
+  disableCharacter as apiDisableCharacter,
+  type CharacterDTO,
+  type CharacterDraftDTO,
+} from '../services/api'
 import { CHARACTER_PROFILES } from '../data/uiContent'
 
 /**
@@ -13,12 +21,21 @@ import { CHARACTER_PROFILES } from '../data/uiContent'
  * Fallback: until the catalog loads (or if the request fails), consumers fall
  * back to the built-in profiles so cold-start / offline never yields an empty
  * character list.
+ *
+ * C5b extension: UGC CRUD actions (createCharacter, updateCharacter,
+ * setVisibility, disableCharacter) mutate the catalog and re-fetch in one step.
  */
 interface CharactersState {
   characters: CharacterDTO[]
   loaded: boolean
   loading: boolean
   load: (force?: boolean) => Promise<void>
+
+  // UGC actions — each calls the API and then force-reloads the catalog.
+  createCharacter: (draft: CharacterDraftDTO) => Promise<{ id: string; display_name: string }>
+  updateCharacter: (id: string, draft: CharacterDraftDTO) => Promise<void>
+  setVisibility: (id: string, visibility: 'public' | 'unlisted' | 'private') => Promise<void>
+  disableCharacter: (id: string) => Promise<void>
 }
 
 // Deduplicate concurrent / repeated loads across the app.
@@ -46,6 +63,27 @@ export const useCharactersStore = create<CharactersState>((set, get) => ({
         inflight = null
       })
     return inflight
+  },
+
+  createCharacter: async (draft) => {
+    const result = await apiCreateCharacter(draft)
+    await get().load(true)
+    return { id: result.id, display_name: result.display_name }
+  },
+
+  updateCharacter: async (id, draft) => {
+    await apiUpdateCharacter(id, draft)
+    await get().load(true)
+  },
+
+  setVisibility: async (id, visibility) => {
+    await apiSetVisibility(id, visibility)
+    await get().load(true)
+  },
+
+  disableCharacter: async (id) => {
+    await apiDisableCharacter(id)
+    await get().load(true)
   },
 }))
 
