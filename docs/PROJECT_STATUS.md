@@ -43,7 +43,7 @@ staging/prod 需各自跑：`alembic upgrade heads` + `backfill_embeddings.py --
   - **C3 Soul Spec 改 DB 来源 + 热加载（C3a）** ✅ 已合并 → PR #123：`soul_specs` 表（迁移 020）、`spec_store.py` DB 层、registry `load_db_overlay` + `register_spec` + `invalidate` + `generation` memo、`reload.py` 权威失效入口、wiring 双单例折叠、main.py 启动预热；内置 rin/dorothy 文件路径零改动。
   - **C4 前端动态化** ✅ 已合并 → PR #121：前端角色列表改为运行时消费 `GET /api/characters`（新增 `charactersStore` + `getCharacters()`），`CharacterId` 联合类型降为 `string`，`CHARACTER_PROFILES` 退化为「视觉资源表」并新增 `resolveCharacterProfile` 兜底；catalog 失败/冷启回退内置角色，rin/dorothy 行为不变。纯前端、零后端改动、零数据迁移。
   - **C5 UGC 角色创作后端（C5a）** ✅ 已合并 → PR #124：`draft.py`（CharacterDraft）、`spec_builder.py`（确定性 SoulSpec 展开器，无 LLM）、`persona_screen.py`（创建时阻塞安全审核）、`content_store.py` + 迁移 021（运营文案表）、`character_content.py` 进程内覆盖缓存、`routes_characters.py` POST/PATCH/DELETE UGC CRUD 端点；36 个 spec_builder 单元测试 + 6 个 persona_screen 单元测试。
-  - **C5 UGC 角色创作前端（C5b）** ⏳ 待开始：`CreateCharacterForm` + `MyCharactersPanel` + `charactersStore` 扩展。
+  - **C5 UGC 角色创作前端（C5b）** ✅ 已合并 → PR #125：`CreateCharacterPage`（/characters/new，2 步表单：名字/人设/口癖/风格 → 6 个性格滑块 + 预览；支持 ?edit= 编辑模式）、`MyCharactersPage`（/my-characters，可见范围/停用管理）；`api.ts` 新增 UGC CRUD 函数；`charactersStore` 扩展 `createCharacter/updateCharacter/setVisibility/disableCharacter`。
 
 ---
 
