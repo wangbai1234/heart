@@ -311,8 +311,8 @@ async def create_character(
     spec = build_soul_spec_from_draft(draft, character_id=character_id)
 
     # Persist — single transaction
-    spec_dict = spec.model_dump()
-    draft_dict = draft.model_dump()
+    spec_dict = spec.model_dump(mode="json")
+    draft_dict = draft.model_dump(mode="json")
     content = _derive_content(draft, character_id)
 
     await db.execute(
@@ -384,8 +384,8 @@ async def update_character(
         new_ver = "1.1.0"
 
     spec = build_soul_spec_from_draft(draft, character_id=character_id, spec_version=new_ver)
-    spec_dict = spec.model_dump()
-    draft_dict = draft.model_dump()
+    spec_dict = spec.model_dump(mode="json")
+    draft_dict = draft.model_dump(mode="json")
     content = _derive_content(draft, character_id)
 
     await supersede_active(db, character_id)

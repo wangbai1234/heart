@@ -5,6 +5,7 @@ Raw SQL helpers following the same pattern as spec_store.py.
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from sqlalchemy import text
@@ -38,7 +39,7 @@ async def upsert_content(
         text(
             "INSERT INTO character_content"
             " (character_id, proactive_persona, proactive_templates, ritual_morning, ritual_night)"
-            " VALUES (:cid, :persona, :templates, :morning, :night)"
+            " VALUES (:cid, :persona, CAST(:templates AS jsonb), :morning, :night)"
             " ON CONFLICT (character_id) DO UPDATE SET"
             "  proactive_persona = EXCLUDED.proactive_persona,"
             "  proactive_templates = EXCLUDED.proactive_templates,"
@@ -49,7 +50,7 @@ async def upsert_content(
         {
             "cid": character_id,
             "persona": proactive_persona,
-            "templates": proactive_templates or [],
+            "templates": json.dumps(proactive_templates or []),
             "morning": ritual_morning,
             "night": ritual_night,
         },
