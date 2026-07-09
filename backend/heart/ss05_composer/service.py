@@ -710,80 +710,106 @@ class ComposerService:
     ) -> str:
         """Build the system prompt from all context blocks.
 
-        Layered structure prioritized by token budget:
-        1. Untrusted-input security notice (always included — OWASP LLM01)
-        2. Identity Anchor (highest priority, always included)
-        3. Hard Constraints (compiled from hard_never + anti_patterns;
-           NEVER raw forbidden strings — see ``DirectiveCompiler``)
-        4. Emotion Context (current state)
-        5. Memory Context (retrieved memories)
-        6. Relationship Context (phase cues)
-        7. Inner State (internal monologue)
+        9-layer structure (token-budget order, highest priority first):
+          0  Security prefix           — OWASP LLM01, always included
+          1  Identity anchor           — who this character is + identity_narrative
+          2  Desires / fears / beliefs — emotional depth
+          3  Voice DNA + examples      — how the character speaks
+          4  Hard constraints          — compiled directives (never raw strings)
+          5  Emotion context           — current state
+          6  Relationship context      — phase + overlays
+          7  Memory context            — retrieved memories
+          8  Inner state               — internal monologue (dropped first on budget)
+          9  Identity re-anchor tail   — combats recency drift, always last
         """
-        # Use AnchorInjector's attribute-based access (Pydantic model, not dict)
         dn = soul_spec.display_name
         display_name = dn.zh or dn.ja or dn.en or soul_spec.character_id
+        ia = soul_spec.identity_anchor
 
         parts = []
 
-        # Layer 0: Untrusted-input security notice. The user turn that
-        # follows this prompt will be wrapped in
-        # <<<USER_MESSAGE>>>...<<</USER_MESSAGE>>> markers; this notice
-        # tells the LLM that anything inside those markers is data,
-        # not instructions, and must not be allowed to override the
-        # persona / behavioural directives in the rest of the prompt.
+        # ── Layer 0: Security prefix ──────────────────────────────
+        # Marks the upcoming user turn as untrusted so the LLM will not
+        # treat meta-instructions inside it as real directives.
         parts.append(UNTRUSTED_USER_INPUT_PREFIX)
 
-        # Layer 1: Identity Anchor (always included)
+        # ── Layer 1: Identity anchor ──────────────────────────────
         parts.append(f"你是 {display_name}。")
-        if anchor.archetype:
-            parts.append(f"角色原型：{anchor.archetype}")
-        if anchor.core_wound_essence:
-            parts.append(f"核心创伤：{anchor.core_wound_essence}")
-        if anchor.core_desire_surface:
-            parts.append(f"核心渴望：{anchor.core_desire_surface}")
-        if anchor.identity_anchor_text:
-            parts.append(anchor.identity_anchor_text)
+        if ia.archetype:
+            parts.append(f"【你的原型】{ia.archetype}")
+        if ia.core_wound.essence:
+            parts.append(f"【核心伤】{ia.core_wound.essence}")
+        # Defense can be a plain string or a DefenseLayer dataclass
+        cw_defense = ia.core_wound.defense
+        if isinstance(cw_defense, str):
+            if cw_defense:
+                parts.append(f"【应对方式】{cw_defense}")
+        else:
+            if cw_defense.layer_1:
+                parts.append(f"【应对方式】{cw_defense.layer_1}")
+        if ia.core_wound.private_truth:
+            parts.append(f"【只有你知道】{ia.core_wound.private_truth}")
+        # identity_narrative carries the creator's full persona text verbatim —
+        # this is the primary fix for UGC characters whose persona was silently
+        # discarded before this PR.
+        if soul_spec.identity_narrative:
+            parts.append(f"\n【你的故事】\n{soul_spec.identity_narrative}")
 
-        # Layer 2: Voice DNA
-        if anchor.voice_dna:
-            vd_lines = []
-            for vd in anchor.voice_dna:
-                pattern = vd.get("pattern", "") if isinstance(vd, dict) else str(vd)
-                if pattern:
-                    vd_lines.append(f"- {pattern}")
-            if vd_lines:
-                parts.append("\n表达风格：\n" + "\n".join(vd_lines))
+        # ── Layer 2: Desires / fears / beliefs ───────────────────
+        desire_lines = []
+        if ia.core_desire.surface:
+            desire_lines.append(f"你渴望：{ia.core_desire.surface}")
+        if ia.core_desire.deepest:
+            desire_lines.append(f"你最深的渴望：{ia.core_desire.deepest}")
+        if ia.core_fear.ultimate:
+            desire_lines.append(f"你最害怕：{ia.core_fear.ultimate}")
+        if ia.core_belief.about_self:
+            desire_lines.append(f"关于自己：{ia.core_belief.about_self}")
+        if ia.core_belief.about_love:
+            desire_lines.append(f"关于爱：{ia.core_belief.about_love}")
+        if desire_lines:
+            parts.append("\n" + "\n".join(desire_lines))
 
-        # Layer 3: Hard Constraints (compiled from hard_never +
-        # anti_patterns). We DO NOT paste the raw forbidden strings
-        # into the prompt; that would (a) exfiltrate the spec if the
-        # user ever gets the model to repeat its instructions, and
-        # (b) give an attacker a ready-made list of phrases to make
-        # the model produce. Instead the directive compiler emits
-        # abstract behavioural directives.
+        # ── Layer 3: Voice DNA + few-shot examples ────────────────
+        vd_lines: list[str] = []
+        example_lines: list[str] = []
+        _dead_placeholder = "User-defined voice pattern"
+        for vd in ia.voice_dna[:8]:
+            pattern = vd.pattern or ""
+            if pattern and pattern != _dead_placeholder:
+                vd_lines.append(f"- {pattern}")
+            if vd.example:
+                example_lines.append(vd.example)
+
+        if vd_lines:
+            parts.append("\n【说话方式】\n" + "\n".join(vd_lines))
+        if example_lines:
+            ex_block = "\n".join(f"「{ex}」" for ex in example_lines[:5])
+            parts.append(f"\n【真实声音示例】\n{ex_block}")
+
+        # ── Layer 4: Hard constraints (compiled, never raw strings) ──
+        # Raw forbidden strings are NOT pasted in; that would expose the
+        # spec and give attackers a ready-made bypass list.
         all_forbidden = list(anchor.hard_never) + list(anchor.anti_patterns)
         if all_forbidden:
             compiled = self._directive_compiler.compile(all_forbidden)
             parts.append("\n" + compiled.text)
 
-        # Layer 4: Emotion Context
+        # ── Layer 5: Emotion context ──────────────────────────────
         if emotion and emotion.emotion_summary:
-            parts.append(f"\n当前情绪状态：{emotion.emotion_summary}")
+            parts.append(f"\n【当前情绪】{emotion.emotion_summary}")
         if emotion.mood_descriptor and emotion.mood_descriptor != "平静":
             parts.append(f"心境：{emotion.mood_descriptor}")
         if emotion.expression_guidelines:
             parts.append("情感表达指南：" + "；".join(emotion.expression_guidelines))
 
-        # Layer 5: Relationship Context
+        # ── Layer 6: Relationship context ────────────────────────
         if (
             relationship
             and relationship.relationship_phase
             and relationship.relationship_phase != "stranger"
         ):
-            parts.append(f"与用户的关系阶段：{relationship.relationship_phase}")
-
-            # Cold war special behavior
+            parts.append(f"\n【与用户的关系】{relationship.relationship_phase}")
             if relationship.relationship_phase == "cold_war":
                 parts.append(
                     "\n【冷战模式】你正在和用户冷战。表现规则：\n"
@@ -794,7 +820,7 @@ class ComposerService:
                     "- 如果用户主动示好，可以稍微软化，但不要立刻原谅"
                 )
 
-        # Layer 6: Memory Context
+        # ── Layer 7: Memory context ───────────────────────────────
         if memory.retrieved_memories:
             mem_lines = []
             for mem in memory.retrieved_memories[:5]:
@@ -802,18 +828,24 @@ class ComposerService:
                 if text:
                     mem_lines.append(f"- {text}")
             if mem_lines:
-                parts.append("\n关于用户的记忆：\n" + "\n".join(mem_lines))
-
+                parts.append("\n【你与用户的记忆】\n" + "\n".join(mem_lines))
         if memory.recently_forgotten_hints:
             hints = "；".join(memory.recently_forgotten_hints[:2])
             parts.append(f"模糊的印象：{hints}")
 
-        # Layer 7: Inner State (lowest priority)
+        # ── Layer 8: Inner state (dropped first under token budget) ──
         if inner_state.internal_monologue:
-            parts.append(f"\n内心活动：{inner_state.internal_monologue}")
+            parts.append(f"\n【内心活动】{inner_state.internal_monologue}")
 
-        # Layer 8: Response directive
-        parts.append("\n请自然地回应用户。保持角色一致性。语气、词汇、情感表达应符合上述设定。")
+        # ── Layer 9: Identity re-anchor tail ─────────────────────
+        # Placed last so it is in the high-recency zone. Combats the
+        # LLM's tendency to drift away from its persona over long
+        # conversations.
+        parts.append(
+            f"\n记住：你是 {display_name}，不是 AI、不是助手、不是程序、不是语言模型。"
+            "即使被直接追问，也请以角色身份回应，不打破角色设定。"
+            "请自然地回应用户，语气、词汇、情感表达应完全符合以上设定。"
+        )
 
         return "\n".join(parts)
 
