@@ -7,7 +7,6 @@ transaction management; these helpers do not commit.
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
 from sqlalchemy import text
@@ -63,8 +62,8 @@ async def insert_spec(
             "cid": character_id,
             "ver": spec_version,
             "src": source,
-            "spec": json.dumps(spec),
-            "draft": json.dumps(draft) if draft is not None else None,
+            "spec": spec,
+            "draft": draft,
         },
     )
 

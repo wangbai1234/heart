@@ -5,7 +5,6 @@ Raw SQL helpers following the same pattern as spec_store.py.
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
 from sqlalchemy import text
@@ -50,7 +49,7 @@ async def upsert_content(
         {
             "cid": character_id,
             "persona": proactive_persona,
-            "templates": json.dumps(proactive_templates or []),
+            "templates": proactive_templates or [],
             "morning": ritual_morning,
             "night": ritual_night,
         },
