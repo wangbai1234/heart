@@ -40,7 +40,7 @@ _FALLBACK_MESSAGES: dict[str, str] = {
     "dorothy": "Dorothy: I heard what you said. Can you tell me more?",
 }
 
-_DEFAULT_FALLBACK = "I heard what you said. Can you tell me more?"
+_DEFAULT_FALLBACK = "……我听到你说的了。能多说一些吗？"
 
 DEFAULT_CARE_RESPONSE = (
     "I'm here for you. What you're feeling matters, and you don't have to go through it alone. "

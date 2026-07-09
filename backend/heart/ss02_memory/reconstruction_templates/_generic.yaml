@@ -1,0 +1,46 @@
+# Generic Reconstruction Template — used for UGC characters without a bespoke template
+# Falls back gracefully: no character-specific transforms, neutral Chinese hedges.
+
+character_id: _generic
+
+# Neutral Chinese hedges (no personality markers)
+hedge_overrides:
+  fading:
+    - "好像"
+    - "我记得"
+    - "似乎"
+  faint:
+    - "……记不太清了"
+    - "好像是"
+  dormant:
+    - "……等等，我想起来了。"
+    - "……对了，"
+  archived:
+    - "我好像，想起什么了。"
+    - "等等……"
+
+# No structure overrides — use STATE_TEMPLATES defaults
+structure_overrides: {}
+
+# Minimal voice transforms: none enabled by default for UGC
+# The voice_dna from the SoulSpec will supply character-specific transforms
+# when speech_samples are present, but we don't force extra patterns.
+voice_transforms:
+  ellipsis_insertion:
+    enabled: false
+  rhetorical_reshape:
+    enabled: false
+  time_precision:
+    enabled: false
+    fallback: vague
+  avoid_we:
+    enabled: false
+  short_past_sentences:
+    enabled: false
+  third_person_self:
+    enabled: false
+  onomatopoeia_mood:
+    enabled: false
+    required: false
+  time_vagueness:
+    enabled: false
