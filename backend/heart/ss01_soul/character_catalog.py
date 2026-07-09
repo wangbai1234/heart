@@ -43,6 +43,7 @@ class CharacterEntry:
     visibility: str
     is_builtin: bool
     is_owner: bool
+    avatar_url: Optional[str] = None
 
 
 def visible_to(row: CharacterRow, viewer_id: UUID) -> bool:
@@ -59,12 +60,21 @@ def visible_to(row: CharacterRow, viewer_id: UUID) -> bool:
     return row.owner_user_id is not None and row.owner_user_id == viewer_id
 
 
-def build_catalog_entries(rows: Sequence[CharacterRow], viewer_id: UUID) -> list[CharacterEntry]:
+def build_catalog_entries(
+    rows: Sequence[CharacterRow],
+    viewer_id: UUID,
+    avatar_urls: dict[str, str | None] | None = None,
+) -> list[CharacterEntry]:
     """Shape visible rows into API entries, built-ins first then by id.
 
     Display names are derived from the Soul Spec (single source of truth for
     identity) rather than stored on the row.
+
+    Args:
+        avatar_urls: Optional mapping of character_id → avatar_url (from draft).
+            Built-in characters don't have UGC avatars; they're resolved client-side.
     """
+    avatar_urls = avatar_urls or {}
     entries = [
         CharacterEntry(
             id=row.id,
@@ -72,6 +82,7 @@ def build_catalog_entries(rows: Sequence[CharacterRow], viewer_id: UUID) -> list
             visibility=row.visibility,
             is_builtin=row.owner_user_id is None,
             is_owner=row.owner_user_id is not None and row.owner_user_id == viewer_id,
+            avatar_url=avatar_urls.get(row.id),
         )
         for row in rows
         if visible_to(row, viewer_id)

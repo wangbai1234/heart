@@ -270,6 +270,7 @@ export interface CharacterDTO {
   visibility: string
   is_builtin: boolean
   is_owner: boolean
+  avatar_url?: string | null
 }
 
 export async function getCharacters(): Promise<{ characters: CharacterDTO[] }> {

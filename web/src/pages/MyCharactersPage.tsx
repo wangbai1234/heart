@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
+import { useThemeStore } from '../stores/themeStore'
 import { useCharactersStore } from '../stores/charactersStore'
 import { useToastStore } from '../stores/toastStore'
 import { resolveCharacterProfile } from '../data/uiContent'
@@ -28,13 +30,15 @@ interface CharacterCardProps {
 }
 
 function CharacterCard({ char, onEdit, onVisibility, onDisable }: CharacterCardProps) {
-  const profile = resolveCharacterProfile(char.id, char.display_name)
+  const profile = resolveCharacterProfile(char.id, char.display_name, char.avatar_url)
   const vis = VIS_LABELS[char.visibility] ?? VIS_LABELS.private
   const [menuOpen, setMenuOpen] = useState(false)
   const [visMenuOpen, setVisMenuOpen] = useState(false)
+  const { resolvedTheme } = useThemeStore()
+  const isDark = resolvedTheme === 'dark'
 
   return (
-    <div className="relative bg-[rgba(255,255,255,0.78)] backdrop-blur-[18px] rounded-[20px] border border-[rgba(255,255,255,0.65)] shadow-[0_4px_16px_rgba(255,183,197,0.10)] overflow-visible">
+    <div className={`relative backdrop-blur-[18px] rounded-[20px] shadow-[0_4px_16px_rgba(255,183,197,0.10)] overflow-visible ${menuOpen ? 'z-50' : ''} ${isDark ? 'bg-[var(--color-surface-card)] border border-[var(--color-border-subtle)]' : 'bg-[rgba(255,255,255,0.78)] border border-[rgba(255,255,255,0.65)]'}`}>
       <div className="flex items-center gap-4 px-5 py-4">
         {/* Avatar */}
         <div className="w-[52px] h-[52px] rounded-full overflow-hidden border-[2px] border-[rgba(255,255,255,0.85)] shadow-[0_2px_8px_rgba(255,183,197,0.20)] shrink-0">
@@ -78,14 +82,14 @@ function CharacterCard({ char, onEdit, onVisibility, onDisable }: CharacterCardP
       </div>
 
       {/* Action menu (absolute dropdown) */}
-      {menuOpen && (
+      {menuOpen && createPortal(
         <>
           {/* backdrop */}
           <div
-            className="fixed inset-0 z-40"
+            className="fixed inset-0 z-[100]"
             onClick={() => { setMenuOpen(false); setVisMenuOpen(false) }}
           />
-          <div className="absolute right-4 top-[62px] z-50 bg-white/90 backdrop-blur-[16px] rounded-[14px] border border-[rgba(255,255,255,0.70)] shadow-[0_8px_24px_rgba(0,0,0,0.10)] overflow-hidden min-w-[160px]">
+          <div className={`fixed right-4 top-[62px] z-[101] backdrop-blur-[16px] rounded-[14px] shadow-[0_8px_24px_rgba(0,0,0,0.10)] overflow-hidden min-w-[160px] ${isDark ? 'bg-[var(--color-surface-card)] border border-[var(--color-border-subtle)]' : 'bg-white/90 border border-[rgba(255,255,255,0.70)]'}`}>
             <MenuButton
               label="编辑角色"
               icon={<EditIcon />}
@@ -99,7 +103,7 @@ function CharacterCard({ char, onEdit, onVisibility, onDisable }: CharacterCardP
               chevron
             />
             {visMenuOpen && (
-              <div className="bg-[rgba(255,248,243,0.95)] border-t border-[var(--color-divider)]">
+              <div className={`border-t border-[var(--color-divider)] ${isDark ? 'bg-[var(--color-surface)]' : 'bg-[rgba(255,248,243,0.95)]'}`}>
                 {(['private', 'unlisted', 'public'] as const).map((v) => {
                   const info = VIS_LABELS[v]
                   return (
@@ -122,7 +126,8 @@ function CharacterCard({ char, onEdit, onVisibility, onDisable }: CharacterCardP
               onClick={() => { setMenuOpen(false); onDisable() }}
             />
           </div>
-        </>
+        </>,
+        document.body
       )}
     </div>
   )
@@ -172,6 +177,8 @@ export function MyCharactersPage() {
   const navigate = useNavigate()
   const { characters, loaded, load, setVisibility, disableCharacter } = useCharactersStore()
   const showToast = useToast()
+  const { resolvedTheme } = useThemeStore()
+  const isDark = resolvedTheme === 'dark'
 
   const [disableTarget, setDisableTarget] = useState<CharacterDTO | null>(null)
   const [disabling, setDisabling] = useState(false)
@@ -210,10 +217,10 @@ export function MyCharactersPage() {
   return (
     <div
       className="relative w-full min-h-full flex flex-col"
-      style={{ background: 'linear-gradient(160deg, #FFF0F3 0%, #FFF8F3 40%, #F7F0FF 100%)' }}
+      style={{ background: isDark ? 'var(--color-bg-page)' : 'linear-gradient(160deg, #FFF0F3 0%, #FFF8F3 40%, #F7F0FF 100%)' }}
     >
       {/* Ambient glow */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[280px] h-[180px] rounded-full bg-[rgba(255,183,197,0.18)] blur-[60px] pointer-events-none" />
+      <div className={`absolute top-0 left-1/2 -translate-x-1/2 w-[280px] h-[180px] rounded-full blur-[60px] pointer-events-none ${isDark ? 'bg-[rgba(255,183,197,0.06)]' : 'bg-[rgba(255,183,197,0.18)]'}`} />
 
       {/* Safe area */}
       <div style={{ height: 'env(safe-area-inset-top, 47px)' }} />
@@ -259,12 +266,12 @@ export function MyCharactersPage() {
       </div>
 
       {/* Bottom create button */}
-      {myChars.length < 5 && (
+      {myChars.length > 0 && myChars.length < 5 && (
         <div
           className="fixed bottom-0 left-0 right-0 z-30 px-4 pt-3"
           style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 34px), 20px)' }}
         >
-          <div className="bg-[rgba(255,255,255,0.82)] backdrop-blur-[20px] rounded-[20px] border border-[rgba(255,255,255,0.70)] shadow-[0_-4px_20px_rgba(255,183,197,0.12)] px-4 py-3">
+          <div className={`backdrop-blur-[20px] rounded-[20px] px-4 py-3 ${isDark ? 'bg-[var(--color-surface-card)] border border-[var(--color-border-subtle)] shadow-[0_-4px_20px_rgba(0,0,0,0.15)]' : 'bg-[rgba(255,255,255,0.82)] border border-[rgba(255,255,255,0.70)] shadow-[0_-4px_20px_rgba(255,183,197,0.12)]'}`}>
             <button
               onClick={() => navigate('/characters/new')}
               className="w-full h-[52px] rounded-[14px] bg-gradient-to-r from-[#FFB7C5] to-[#FF8FAB] text-white text-[17px] font-semibold shadow-[0_8px_24px_-4px_rgba(255,143,171,0.40)] active:scale-[0.98] transition-transform"
@@ -287,7 +294,7 @@ export function MyCharactersPage() {
         <div className="flex gap-3 mt-4">
           <button
             onClick={() => setDisableTarget(null)}
-            className="flex-1 h-[44px] rounded-full bg-[rgba(255,255,255,0.75)] text-[var(--color-ink)] text-[15px] font-medium active:bg-[rgba(0,0,0,0.04)]"
+            className={`flex-1 h-[44px] rounded-full text-[var(--color-ink)] text-[15px] font-medium active:bg-[rgba(0,0,0,0.04)] ${isDark ? 'bg-[var(--color-glass-55)]' : 'bg-[rgba(255,255,255,0.75)]'}`}
           >
             取消
           </button>
@@ -312,10 +319,13 @@ export function MyCharactersPage() {
 // ── Empty state ────────────────────────────────────────────────────
 
 function EmptyState({ onCreateClick }: { onCreateClick: () => void }) {
+  const { resolvedTheme } = useThemeStore()
+  const isDark = resolvedTheme === 'dark'
+
   return (
     <div className="flex flex-col items-center justify-center pt-20 pb-12 px-6 text-center">
       {/* Illustration bubble */}
-      <div className="w-[88px] h-[88px] rounded-full bg-gradient-to-br from-[rgba(255,183,197,0.28)] to-[rgba(200,182,255,0.20)] border border-[rgba(255,255,255,0.70)] shadow-[0_8px_24px_rgba(255,183,197,0.18)] flex items-center justify-center mb-6">
+      <div className={`w-[88px] h-[88px] rounded-full bg-gradient-to-br from-[rgba(255,183,197,0.28)] to-[rgba(200,182,255,0.20)] flex items-center justify-center mb-6 ${isDark ? 'border border-[var(--color-border-subtle)] shadow-[0_8px_24px_rgba(0,0,0,0.20)]' : 'border border-[rgba(255,255,255,0.70)] shadow-[0_8px_24px_rgba(255,183,197,0.18)]'}`}>
         <span className="text-[40px]">✨</span>
       </div>
       <h2 className="text-[20px] font-semibold text-[var(--color-ink)] mb-2">还没有自创角色</h2>

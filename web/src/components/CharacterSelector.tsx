@@ -23,7 +23,7 @@ export function CharacterSelector() {
   const characters: CharacterOption[] =
     serverCharacters.length > 0
       ? serverCharacters.map((c) => {
-          const profile = resolveCharacterProfile(c.id, c.display_name)
+          const profile = resolveCharacterProfile(c.id, c.display_name, c.avatar_url)
           return { id: c.id, name: c.display_name, description: profile.tag }
         })
       : FALLBACK

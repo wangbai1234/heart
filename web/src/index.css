@@ -74,6 +74,7 @@ body {
   --color-glass-card: rgba(30, 30, 46, 0.88);
   --color-divider: rgba(255, 255, 255, 0.08);
   --color-border-subtle: rgba(255, 255, 255, 0.06);
+  --color-slider-track: rgba(255, 255, 255, 0.12);
   --color-bg-login: #12121A;
 }
 

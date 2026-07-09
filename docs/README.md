@@ -20,27 +20,47 @@
 
 | 文件 | 主题 |
 |------|------|
+| `composer_wiring_plan.md` | Composer 接线方案 |
 | `consolidator_implementation_summary.md` | Memory consolidator |
+| `data_integrity_decisions_2026-06-22.md` | 数据完整性决策 |
 | `decay_engine_implementation.md` | Memory decay |
 | `forgetting_affect_implementation_summary.md` | 遗忘 × 情感 |
 | `integration_test_pyramid.md` | Phase 7 集成测试金字塔 |
+| `memory_extractor_prompt.md` | Memory extractor prompt |
+| `memory_extractor_schema.md` | Memory extractor schema |
+| `memory_golden_set_design.md` | Memory golden set 设计 |
+| `memory_promoter_rules.md` | Memory promoter 规则 |
+| `orchestrator_min_viable.md` | Orchestrator 最小可行方案 |
+| `proactive_frontend_plan.md` | 主动消息前端方案 |
 | `reconstructor_design.md` | Memory reconstructor 设计 |
 | `reconstructor_implementation_summary.md` | Reconstructor 实现总结 |
 | `repair_mechanic.md` | Relationship 修复机制 |
 | `retriever_implementation.md` | Memory retriever |
+| `safety_overhaul.md` | Safety 大修 |
 | `soul_drift_regression.md` | Soul drift 回归套件 |
+| `ss04_special_states_implementation_choice.md` | SS04 特殊状态实现选择 |
+| `state_invariants.md` | 状态不变量 |
+| `ugc_character_refactor_plan.md` | UGC 角色重构方案 |
 
-## 3. Runbooks（`docs/runbooks/`）
+## 3. 执行文档（`docs/execution/`）
+
+| 文件 | 主题 |
+|------|------|
+| `BACKEND_HARDENING_PLAN_2026-06-22.md` | 后端加固方案 |
+| `MEMORY_EXTRACTOR_V1_0_3_FINAL.md` | Memory extractor v1.0.3 最终迭代 |
+| `MEMORY_LLM_EXTRACTOR_REFACTOR.md` | SS02 Memory LLM Extractor 重构执行手册 |
+
+## 4. Runbooks（`docs/runbooks/`）
 
 待补，Phase 11.5。
 
-## 4. Vision / PRD（`docs/vision/`）
+## 5. Vision / PRD（`docs/vision/`）
 
 | 文件 | 用途 |
 |------|------|
 | `PRD_v1.0_overseas.md` | 海外版产品需求文档 v1.0 |
 
-## 5. 其它顶层目录
+## 6. 其它顶层目录
 
 | 路径 | 说明 |
 |------|------|

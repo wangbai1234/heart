@@ -18,7 +18,7 @@ export function CharacterPage() {
 
   const characters: CharacterProfile[] =
     serverCharacters.length > 0
-      ? serverCharacters.map((c) => resolveCharacterProfile(c.id, c.display_name))
+      ? serverCharacters.map((c) => resolveCharacterProfile(c.id, c.display_name, c.avatar_url))
       : Object.values(CHARACTER_PROFILES)
 
   const pageBg = resolvedTheme === 'dark'

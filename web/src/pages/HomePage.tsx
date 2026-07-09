@@ -158,12 +158,12 @@ export function HomePage() {
 
           {/* Sheet — fixed height so body is always scrollable */}
           <div
-            className="relative w-full h-[62vh] bg-[var(--color-bg-card,_#FFFFFF)] rounded-t-[28px] flex flex-col shadow-[0_-8px_40px_rgba(0,0,0,0.18)]"
+            className="relative w-full h-[62vh] bg-[var(--color-surface-card)] rounded-t-[28px] flex flex-col shadow-[0_-8px_40px_rgba(0,0,0,0.18)]"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Handle */}
             <div className="flex justify-center pt-3 pb-1 shrink-0">
-              <div className="w-[40px] h-[4px] rounded-full bg-[rgba(0,0,0,0.15)]" />
+              <div className="w-[40px] h-[4px] rounded-full bg-[var(--color-divider)]" />
             </div>
 
             {/* Header */}
@@ -173,7 +173,7 @@ export function HomePage() {
               </span>
               <button
                 onClick={() => setActiveAnnouncement(null)}
-                className="w-[32px] h-[32px] rounded-full bg-[rgba(0,0,0,0.06)] flex items-center justify-center"
+                className="w-[32px] h-[32px] rounded-full bg-[var(--color-glass-35)] flex items-center justify-center"
               >
                 <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="var(--color-ink)" strokeWidth="2" strokeLinecap="round">
                   <line x1="1" y1="1" x2="13" y2="13" />

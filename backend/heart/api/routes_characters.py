@@ -51,6 +51,7 @@ async def list_characters(
     """List characters visible to the current user (built-ins + own UGC).
 
     Display names are derived from the Soul Spec, not stored on the row.
+    Avatar URLs are extracted from the draft stored in soul_specs for UGC characters.
     """
     uid = uuid.UUID(current_user.user_id)
     result = await db.execute(
@@ -73,7 +74,26 @@ async def list_characters(
         )
         for row in result
     ]
-    entries = build_catalog_entries(rows, uid)
+
+    # Fetch avatar_url from soul_specs.draft for UGC characters
+    avatar_urls: dict[str, str | None] = {}
+    ugc_ids = [row.id for row in rows if row.owner_user_id is not None]
+    if ugc_ids:
+        avatar_result = await db.execute(
+            text(
+                """
+                SELECT character_id, draft->>'avatar_url' AS avatar_url
+                FROM soul_specs
+                WHERE character_id = ANY(:ids) AND status = 'active'
+                """
+            ),
+            {"ids": ugc_ids},
+        )
+        for row in avatar_result:
+            if row.avatar_url:
+                avatar_urls[row.character_id] = row.avatar_url
+
+    entries = build_catalog_entries(rows, uid, avatar_urls)
     return {"characters": [asdict(e) for e in entries]}
 
 

@@ -123,8 +123,13 @@ export const DEFAULT_CHARACTER_PROFILE: Omit<CharacterProfile, 'id' | 'name' | '
  * server-authoritative display name (when known) over the local visual assets,
  * and falling back to a neutral profile for ids we ship no assets for. Never
  * returns undefined — safe to index into for avatar / name / statusLabel.
+ *
+ * @param id          Character id
+ * @param displayName Server-provided display name (optional)
+ * @param avatarUrl   Server-provided avatar URL for UGC characters (optional).
+ *                    When provided, overrides the default fallback avatar.
  */
-export function resolveCharacterProfile(id: string, displayName?: string): CharacterProfile {
+export function resolveCharacterProfile(id: string, displayName?: string, avatarUrl?: string | null): CharacterProfile {
   const base = CHARACTER_PROFILES[id]
   if (base) {
     return displayName ? { ...base, name: displayName } : base
@@ -135,6 +140,7 @@ export function resolveCharacterProfile(id: string, displayName?: string): Chara
     id,
     name,
     shortName: name,
+    avatar: avatarUrl || DEFAULT_CHARACTER_PROFILE.avatar,
   }
 }
 

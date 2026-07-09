@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useThemeStore } from '../stores/themeStore'
 import { useCharactersStore } from '../stores/charactersStore'
 import { useToastStore } from '../stores/toastStore'
 import { ApiError, uploadCharacterAvatar, type CharacterDraftDTO } from '../services/api'
@@ -109,8 +110,11 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 }
 
 function GlassCard({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+  const { resolvedTheme } = useThemeStore()
+  const isDark = resolvedTheme === 'dark'
+
   return (
-    <div className={`bg-[rgba(255,255,255,0.72)] backdrop-blur-[18px] rounded-[20px] border border-[rgba(255,255,255,0.60)] shadow-[0_4px_16px_rgba(255,183,197,0.10)] ${className}`}>
+    <div className={`backdrop-blur-[18px] rounded-[20px] shadow-[0_4px_16px_rgba(255,183,197,0.10)] ${isDark ? 'bg-[var(--color-surface-card)] border border-[var(--color-border-subtle)]' : 'bg-[rgba(255,255,255,0.72)] border border-[rgba(255,255,255,0.60)]'} ${className}`}>
       {children}
     </div>
   )
@@ -161,6 +165,8 @@ function SliderRow({ field, value, onChange }: SliderRowProps) {
 export function CreateCharacterPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
+  const { resolvedTheme } = useThemeStore()
+  const isDark = resolvedTheme === 'dark'
 
   // edit mode: ?edit=<characterId>
   const editId = searchParams.get('edit') ?? undefined
@@ -253,11 +259,11 @@ export function CreateCharacterPage() {
   return (
     <div
       className="relative w-full min-h-full flex flex-col overflow-hidden"
-      style={{ background: 'linear-gradient(160deg, #FFF0F3 0%, #FFF8F3 40%, #F7F0FF 100%)' }}
+      style={{ background: isDark ? 'var(--color-bg-page)' : 'linear-gradient(160deg, #FFF0F3 0%, #FFF8F3 40%, #F7F0FF 100%)' }}
     >
       {/* Soft ambient glow top */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[320px] h-[200px] rounded-full bg-[rgba(255,183,197,0.18)] blur-[60px] pointer-events-none" />
-      <div className="absolute top-[120px] right-[-40px] w-[200px] h-[200px] rounded-full bg-[rgba(200,182,255,0.12)] blur-[60px] pointer-events-none" />
+      <div className={`absolute top-0 left-1/2 -translate-x-1/2 w-[320px] h-[200px] rounded-full blur-[60px] pointer-events-none ${isDark ? 'bg-[rgba(255,183,197,0.06)]' : 'bg-[rgba(255,183,197,0.18)]'}`} />
+      <div className={`absolute top-[120px] right-[-40px] w-[200px] h-[200px] rounded-full blur-[60px] pointer-events-none ${isDark ? 'bg-[rgba(200,182,255,0.04)]' : 'bg-[rgba(200,182,255,0.12)]'}`} />
 
       {/* Safe area */}
       <div style={{ height: 'env(safe-area-inset-top, 47px)' }} />
@@ -430,6 +436,8 @@ export function CreateCharacterPage() {
                     className={`w-full text-left px-5 py-4 rounded-[16px] border transition-all duration-[180ms] active:scale-[0.98] ${
                       active
                         ? 'bg-[rgba(255,183,197,0.22)] border-[rgba(255,183,197,0.55)] shadow-[0_2px_12px_rgba(255,143,171,0.15)]'
+                        : isDark
+                        ? 'bg-[var(--color-surface-card)] border-[var(--color-border-subtle)] shadow-[0_2px_8px_rgba(0,0,0,0.15)]'
                         : 'bg-[rgba(255,255,255,0.72)] border-[rgba(255,255,255,0.60)] shadow-[0_2px_8px_rgba(0,0,0,0.04)]'
                     } backdrop-blur-[12px]`}
                   >
@@ -523,7 +531,7 @@ export function CreateCharacterPage() {
         className="fixed bottom-0 left-0 right-0 z-30 px-4 pt-3"
         style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 34px), 20px)' }}
       >
-        <div className="bg-[rgba(255,255,255,0.82)] backdrop-blur-[20px] rounded-[20px] border border-[rgba(255,255,255,0.70)] shadow-[0_-4px_20px_rgba(255,183,197,0.12)] px-4 py-3">
+        <div className={`backdrop-blur-[20px] rounded-[20px] px-4 py-3 ${isDark ? 'bg-[var(--color-surface-card)] border border-[var(--color-border-subtle)] shadow-[0_-4px_20px_rgba(0,0,0,0.15)]' : 'bg-[rgba(255,255,255,0.82)] border border-[rgba(255,255,255,0.70)] shadow-[0_-4px_20px_rgba(255,183,197,0.12)]'}`}>
           {step === 1 ? (
             <button
               onClick={() => {

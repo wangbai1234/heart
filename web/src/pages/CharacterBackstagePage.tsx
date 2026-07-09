@@ -17,10 +17,12 @@ export function CharacterBackstagePage() {
   const setVoiceChatEnabled = useAppStore((s) => s.setVoiceChatEnabled)
   const clearThread = useChatStore((s) => s.clearThread)
   const clearMessages = useChatStore((s) => s.clearMessages)
-  const displayName = useCharactersStore((s) => s.characters.find((c) => c.id === currentCharacterId)?.display_name)
+  const currentCharacter = useCharactersStore((s) => s.characters.find((c) => c.id === currentCharacterId))
+  const displayName = currentCharacter?.display_name
+  const avatarUrl = currentCharacter?.avatar_url
   const [confirmOpen, setConfirmOpen] = useState(false)
 
-  const profile = resolveCharacterProfile(currentCharacterId, displayName)
+  const profile = resolveCharacterProfile(currentCharacterId, displayName, avatarUrl)
 
   // Hydrate voice setting from backend on mount
   useEffect(() => {

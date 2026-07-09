@@ -100,12 +100,12 @@ export function ChatInboxPage() {
     : '/assets/backgrounds/聊天背景图.png'
 
   // Catalog: server list when loaded, built-in profiles as fallback.
-  const catalog: Array<{ id: string; displayName?: string }> =
+  const catalog: Array<{ id: string; displayName?: string; avatarUrl?: string | null }> =
     serverCharacters.length > 0
-      ? serverCharacters.map((c) => ({ id: c.id, displayName: c.display_name }))
+      ? serverCharacters.map((c) => ({ id: c.id, displayName: c.display_name, avatarUrl: c.avatar_url }))
       : Object.keys(CHARACTER_PROFILES).map((id) => ({ id }))
 
-  const allConversations = catalog.map(({ id: characterId, displayName }) => {
+  const allConversations = catalog.map(({ id: characterId, displayName, avatarUrl }) => {
     const liveMessages = messages[characterId] ?? []
     const threadMessages = threads[characterId] ?? []
     const isCleared = clearedCharacters.has(characterId)
@@ -129,7 +129,7 @@ export function ChatInboxPage() {
     const unreadCount = getUnreadMessageCount(timeline) + pending.length
 
     return {
-      profile: resolveCharacterProfile(characterId, displayName),
+      profile: resolveCharacterProfile(characterId, displayName, avatarUrl),
       characterId,
       preview,
       updatedAt: lastTimestamp ? formatConversationTime(lastTimestamp) : '',
