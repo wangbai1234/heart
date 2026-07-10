@@ -1,4 +1,5 @@
 import { useAuthStore } from '../stores/authStore'
+import { authNavigate } from './navigation'
 
 const BASE_URL = '/api'
 
@@ -64,7 +65,7 @@ async function request<T>(
       res = await fetch(`${BASE_URL}${path}`, { ...options, headers })
     } catch {
       clearSession()
-      window.location.href = '/login'
+      authNavigate('/login')
       throw new Error('Session expired')
     }
   }

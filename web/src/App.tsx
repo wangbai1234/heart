@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { Routes, Route, Navigate, useNavigate } from 'react-router-dom'
+import { setNavigate } from './services/navigation'
 import { AuthGuard } from './components/AuthGuard'
 import { SplashPage } from './pages/SplashPage'
 import { OnboardingPage } from './pages/OnboardingPage'
@@ -35,6 +36,13 @@ export function App() {
   const { fontScale } = useAppStore()
   const accessToken = useAuthStore((s) => s.accessToken)
   const loadCharacters = useCharactersStore((s) => s.load)
+  const navigate = useNavigate()
+
+  // Wire module-level navigate so api.ts / useWebSocket.ts can redirect
+  // without a hard page reload (preserves React state and bfcache).
+  useEffect(() => {
+    setNavigate(navigate)
+  }, [navigate])
 
   useProactivePolling()
 

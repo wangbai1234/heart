@@ -8,34 +8,93 @@ import { Toast } from '../components/ui/Toast'
 import { requestOtp, verifyOtp } from '../services/api'
 import { useVisualViewport } from '../hooks/useVisualViewport'
 
+const SESSION_KEY = 'yuoyuo-login-flow'
+
+interface LoginFlowSnapshot {
+  step: Step
+  email: string
+  cooldownEndAt: number
+}
+
+function readSnapshot(): LoginFlowSnapshot | null {
+  try {
+    const raw = sessionStorage.getItem(SESSION_KEY)
+    return raw ? (JSON.parse(raw) as LoginFlowSnapshot) : null
+  } catch {
+    return null
+  }
+}
+
+function writeSnapshot(snap: LoginFlowSnapshot) {
+  try {
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify(snap))
+  } catch {
+    // sessionStorage unavailable (e.g. private browsing limit) — ignore
+  }
+}
+
+function clearSnapshot() {
+  sessionStorage.removeItem(SESSION_KEY)
+}
+
 type Step = 'email' | 'code'
 
 export function LoginPage() {
-  const [step, setStep] = useState<Step>('email')
-  const [email, setEmail] = useState('')
+  const snap = readSnapshot()
+  const now = Date.now()
+
+  const [step, setStep] = useState<Step>(snap?.step ?? 'email')
+  const [email, setEmail] = useState(snap?.email ?? '')
   const [loading, setLoading] = useState(false)
   const [toast, setToast] = useState({ visible: false, message: '' })
-  const [cooldown, setCooldown] = useState(0)
+  // cooldown is derived from wall-clock; -1 means "not counting"
+  const [cooldownEndAt, setCooldownEndAt] = useState<number>(
+    snap && snap.cooldownEndAt > now ? snap.cooldownEndAt : 0
+  )
   const navigate = useNavigate()
   const setSession = useAuthStore((s) => s.setSession)
   const acceptLegalVersion = useAuthStore((s) => s.acceptLegalVersion)
   const { keyboardOpen } = useVisualViewport()
 
-  const isValidEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+  // Derived cooldown seconds — always from wall-clock, immune to background throttle
+  const [, forceRender] = useState(0)
+  const cooldown = Math.max(0, Math.ceil((cooldownEndAt - Date.now()) / 1000))
 
-  // Cooldown timer
+  // Tick every second to update displayed cooldown
   useEffect(() => {
-    if (cooldown <= 0) return
-    const t = setInterval(() => setCooldown((c) => c - 1), 1000)
+    if (cooldownEndAt <= Date.now()) return
+    const t = setInterval(() => forceRender((n) => n + 1), 1000)
     return () => clearInterval(t)
-  }, [cooldown])
+  }, [cooldownEndAt])
+
+  // Persist flow state to sessionStorage whenever it changes
+  useEffect(() => {
+    if (step === 'email' && !email && !cooldownEndAt) return
+    writeSnapshot({ step, email, cooldownEndAt })
+  }, [step, email, cooldownEndAt])
+
+  // Restore state on bfcache restore (iOS Safari back navigation)
+  useEffect(() => {
+    const handlePageShow = (e: PageTransitionEvent) => {
+      if (!e.persisted) return
+      const restored = readSnapshot()
+      if (!restored) return
+      setStep(restored.step)
+      setEmail(restored.email)
+      setCooldownEndAt(restored.cooldownEndAt)
+    }
+    window.addEventListener('pageshow', handlePageShow)
+    return () => window.removeEventListener('pageshow', handlePageShow)
+  }, [])
+
+  const isValidEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
 
   const handleSendOtp = useCallback(async () => {
     if (!isValidEmail || loading) return
     setLoading(true)
     try {
       const res = await requestOtp(email.trim().toLowerCase())
-      setCooldown(res.cooldown)
+      setCooldownEndAt(Date.now() + res.cooldown * 1000)
       setStep('code')
     } catch {
       setToast({ visible: true, message: '发送失败，请重试' })
@@ -55,6 +114,7 @@ export function LoginPage() {
         user: res.user,
       })
       acceptLegalVersion('v1.0')
+      clearSnapshot()
       if (res.needs_profile) {
         navigate('/settings/profile', { replace: true })
       } else {
@@ -73,7 +133,7 @@ export function LoginPage() {
     setLoading(true)
     try {
       const res = await requestOtp(email.trim().toLowerCase())
-      setCooldown(res.cooldown)
+      setCooldownEndAt(Date.now() + res.cooldown * 1000)
       setToast({ visible: true, message: '验证码已重新发送' })
     } catch {
       setToast({ visible: true, message: '发送失败，请重试' })
@@ -152,7 +212,7 @@ export function LoginPage() {
               </div>
               <div className="flex items-center justify-between">
                 <button
-                  onClick={() => { setStep('email'); setCooldown(0) }}
+                  onClick={() => { setStep('email'); setCooldownEndAt(0) }}
                   className="text-[13px] text-[var(--color-primary)]"
                 >
                   换邮箱
