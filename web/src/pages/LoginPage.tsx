@@ -6,6 +6,7 @@ import { Input } from '../components/ui/Input'
 import { OTPInput } from '../components/ui/OTPInput'
 import { Toast } from '../components/ui/Toast'
 import { requestOtp, verifyOtp } from '../services/api'
+import { useVisualViewport } from '../hooks/useVisualViewport'
 
 type Step = 'email' | 'code'
 
@@ -18,6 +19,7 @@ export function LoginPage() {
   const navigate = useNavigate()
   const setSession = useAuthStore((s) => s.setSession)
   const acceptLegalVersion = useAuthStore((s) => s.acceptLegalVersion)
+  const { keyboardOpen } = useVisualViewport()
 
   const isValidEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
 
@@ -82,12 +84,15 @@ export function LoginPage() {
 
   return (
     <div className="relative w-full h-full flex flex-col bg-[var(--color-bg-login)] overflow-hidden">
-      {/* Hero illustration */}
-      <div className="relative w-full shrink-0" style={{ height: '45%' }}>
+      {/* Hero illustration — collapses when keyboard is open */}
+      <div
+        className="relative w-full shrink-0 overflow-hidden transition-[height] duration-200 ease-out"
+        style={{ height: keyboardOpen ? '80px' : '45%' }}
+      >
         <img
           src="/assets/backgrounds/background_login_hero.webp"
           alt="yuoyuo"
-          className="w-full h-full object-cover"
+          className="w-full h-full object-cover object-top"
         />
         <div className="absolute bottom-0 left-0 right-0 h-[80px] bg-gradient-to-t from-[var(--color-bg-login)] to-transparent" />
       </div>

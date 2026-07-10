@@ -39,6 +39,7 @@ export function Button({
         transition-all duration-[var(--duration-instant)]
         active:scale-[0.97]
         disabled:opacity-40 disabled:pointer-events-none
+        touch-manipulation
         ${variants[variant]}
         ${sizes[size]}
         ${className}

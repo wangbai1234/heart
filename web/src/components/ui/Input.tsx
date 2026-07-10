@@ -18,7 +18,7 @@ export function Input({ icon, placeholder, value, onChange, type = 'text', class
         value={value}
         onChange={(e) => onChange?.(e.target.value)}
         placeholder={placeholder}
-        className="flex-1 bg-transparent outline-none text-[var(--color-ink)] placeholder-[var(--color-text-placeholder)] text-base"
+        className="flex-1 bg-transparent outline-none text-[var(--color-ink)] placeholder-[var(--color-text-placeholder)] text-base touch-manipulation"
       />
     </div>
   )
