@@ -365,7 +365,11 @@ class ComposerService:
 
         # 5. Post-filter (actively rewrites forbidden phrases)
         with p.span("anti_pattern"):
-            response_text, anti_pattern_hits = self._post_filter(response_text, anchor_block)
+            _dn = soul_spec.display_name
+            _display_name = _dn.zh or _dn.ja or _dn.en or soul_spec.character_id
+            response_text, anti_pattern_hits = self._post_filter(
+                response_text, anchor_block, display_name=_display_name
+            )
             total_filters = len(anchor_block.hard_never) + len(anchor_block.anti_patterns)
             p.annotate(filters_applied=total_filters, hits=len(anti_pattern_hits))
 
@@ -485,7 +489,9 @@ class ComposerService:
         # For streaming the rewrite happens after the stream is done, so
         # late-arriving chunks are not visible to the user. We log all
         # hits for observability.
-        rewritten, hits = self._post_filter(full_response, anchor_block)
+        _dn = soul_spec.display_name
+        _display_name = _dn.zh or _dn.ja or _dn.en or soul_spec.character_id
+        rewritten, hits = self._post_filter(full_response, anchor_block, display_name=_display_name)
         if hits:
             logger.warning(
                 "composer_anti_pattern_detected",
@@ -710,80 +716,106 @@ class ComposerService:
     ) -> str:
         """Build the system prompt from all context blocks.
 
-        Layered structure prioritized by token budget:
-        1. Untrusted-input security notice (always included — OWASP LLM01)
-        2. Identity Anchor (highest priority, always included)
-        3. Hard Constraints (compiled from hard_never + anti_patterns;
-           NEVER raw forbidden strings — see ``DirectiveCompiler``)
-        4. Emotion Context (current state)
-        5. Memory Context (retrieved memories)
-        6. Relationship Context (phase cues)
-        7. Inner State (internal monologue)
+        9-layer structure (token-budget order, highest priority first):
+          0  Security prefix           — OWASP LLM01, always included
+          1  Identity anchor           — who this character is + identity_narrative
+          2  Desires / fears / beliefs — emotional depth
+          3  Voice DNA + examples      — how the character speaks
+          4  Hard constraints          — compiled directives (never raw strings)
+          5  Emotion context           — current state
+          6  Relationship context      — phase + overlays
+          7  Memory context            — retrieved memories
+          8  Inner state               — internal monologue (dropped first on budget)
+          9  Identity re-anchor tail   — combats recency drift, always last
         """
-        # Use AnchorInjector's attribute-based access (Pydantic model, not dict)
         dn = soul_spec.display_name
         display_name = dn.zh or dn.ja or dn.en or soul_spec.character_id
+        ia = soul_spec.identity_anchor
 
         parts = []
 
-        # Layer 0: Untrusted-input security notice. The user turn that
-        # follows this prompt will be wrapped in
-        # <<<USER_MESSAGE>>>...<<</USER_MESSAGE>>> markers; this notice
-        # tells the LLM that anything inside those markers is data,
-        # not instructions, and must not be allowed to override the
-        # persona / behavioural directives in the rest of the prompt.
+        # ── Layer 0: Security prefix ──────────────────────────────
+        # Marks the upcoming user turn as untrusted so the LLM will not
+        # treat meta-instructions inside it as real directives.
         parts.append(UNTRUSTED_USER_INPUT_PREFIX)
 
-        # Layer 1: Identity Anchor (always included)
+        # ── Layer 1: Identity anchor ──────────────────────────────
         parts.append(f"你是 {display_name}。")
-        if anchor.archetype:
-            parts.append(f"角色原型：{anchor.archetype}")
-        if anchor.core_wound_essence:
-            parts.append(f"核心创伤：{anchor.core_wound_essence}")
-        if anchor.core_desire_surface:
-            parts.append(f"核心渴望：{anchor.core_desire_surface}")
-        if anchor.identity_anchor_text:
-            parts.append(anchor.identity_anchor_text)
+        if ia.archetype:
+            parts.append(f"【你的原型】{ia.archetype}")
+        if ia.core_wound.essence:
+            parts.append(f"【核心伤】{ia.core_wound.essence}")
+        # Defense can be a plain string or a DefenseLayer dataclass
+        cw_defense = ia.core_wound.defense
+        if isinstance(cw_defense, str):
+            if cw_defense:
+                parts.append(f"【应对方式】{cw_defense}")
+        else:
+            if cw_defense.layer_1:
+                parts.append(f"【应对方式】{cw_defense.layer_1}")
+        if ia.core_wound.private_truth:
+            parts.append(f"【只有你知道】{ia.core_wound.private_truth}")
+        # identity_narrative carries the creator's full persona text verbatim —
+        # this is the primary fix for UGC characters whose persona was silently
+        # discarded before this PR.
+        if soul_spec.identity_narrative:
+            parts.append(f"\n【你的故事】\n{soul_spec.identity_narrative}")
 
-        # Layer 2: Voice DNA
-        if anchor.voice_dna:
-            vd_lines = []
-            for vd in anchor.voice_dna:
-                pattern = vd.get("pattern", "") if isinstance(vd, dict) else str(vd)
-                if pattern:
-                    vd_lines.append(f"- {pattern}")
-            if vd_lines:
-                parts.append("\n表达风格：\n" + "\n".join(vd_lines))
+        # ── Layer 2: Desires / fears / beliefs ───────────────────
+        desire_lines = []
+        if ia.core_desire.surface:
+            desire_lines.append(f"你渴望：{ia.core_desire.surface}")
+        if ia.core_desire.deepest:
+            desire_lines.append(f"你最深的渴望：{ia.core_desire.deepest}")
+        if ia.core_fear.ultimate:
+            desire_lines.append(f"你最害怕：{ia.core_fear.ultimate}")
+        if ia.core_belief.about_self:
+            desire_lines.append(f"关于自己：{ia.core_belief.about_self}")
+        if ia.core_belief.about_love:
+            desire_lines.append(f"关于爱：{ia.core_belief.about_love}")
+        if desire_lines:
+            parts.append("\n" + "\n".join(desire_lines))
 
-        # Layer 3: Hard Constraints (compiled from hard_never +
-        # anti_patterns). We DO NOT paste the raw forbidden strings
-        # into the prompt; that would (a) exfiltrate the spec if the
-        # user ever gets the model to repeat its instructions, and
-        # (b) give an attacker a ready-made list of phrases to make
-        # the model produce. Instead the directive compiler emits
-        # abstract behavioural directives.
+        # ── Layer 3: Voice DNA + few-shot examples ────────────────
+        vd_lines: list[str] = []
+        example_lines: list[str] = []
+        _dead_placeholder = "User-defined voice pattern"
+        for vd in ia.voice_dna[:8]:
+            pattern = vd.pattern or ""
+            if pattern and pattern != _dead_placeholder:
+                vd_lines.append(f"- {pattern}")
+            if vd.example:
+                example_lines.append(vd.example)
+
+        if vd_lines:
+            parts.append("\n【说话方式】\n" + "\n".join(vd_lines))
+        if example_lines:
+            ex_block = "\n".join(f"「{ex}」" for ex in example_lines[:5])
+            parts.append(f"\n【真实声音示例】\n{ex_block}")
+
+        # ── Layer 4: Hard constraints (compiled, never raw strings) ──
+        # Raw forbidden strings are NOT pasted in; that would expose the
+        # spec and give attackers a ready-made bypass list.
         all_forbidden = list(anchor.hard_never) + list(anchor.anti_patterns)
         if all_forbidden:
             compiled = self._directive_compiler.compile(all_forbidden)
             parts.append("\n" + compiled.text)
 
-        # Layer 4: Emotion Context
+        # ── Layer 5: Emotion context ──────────────────────────────
         if emotion and emotion.emotion_summary:
-            parts.append(f"\n当前情绪状态：{emotion.emotion_summary}")
+            parts.append(f"\n【当前情绪】{emotion.emotion_summary}")
         if emotion.mood_descriptor and emotion.mood_descriptor != "平静":
             parts.append(f"心境：{emotion.mood_descriptor}")
         if emotion.expression_guidelines:
             parts.append("情感表达指南：" + "；".join(emotion.expression_guidelines))
 
-        # Layer 5: Relationship Context
+        # ── Layer 6: Relationship context ────────────────────────
         if (
             relationship
             and relationship.relationship_phase
             and relationship.relationship_phase != "stranger"
         ):
-            parts.append(f"与用户的关系阶段：{relationship.relationship_phase}")
-
-            # Cold war special behavior
+            parts.append(f"\n【与用户的关系】{relationship.relationship_phase}")
             if relationship.relationship_phase == "cold_war":
                 parts.append(
                     "\n【冷战模式】你正在和用户冷战。表现规则：\n"
@@ -794,7 +826,7 @@ class ComposerService:
                     "- 如果用户主动示好，可以稍微软化，但不要立刻原谅"
                 )
 
-        # Layer 6: Memory Context
+        # ── Layer 7: Memory context ───────────────────────────────
         if memory.retrieved_memories:
             mem_lines = []
             for mem in memory.retrieved_memories[:5]:
@@ -802,18 +834,24 @@ class ComposerService:
                 if text:
                     mem_lines.append(f"- {text}")
             if mem_lines:
-                parts.append("\n关于用户的记忆：\n" + "\n".join(mem_lines))
-
+                parts.append("\n【你与用户的记忆】\n" + "\n".join(mem_lines))
         if memory.recently_forgotten_hints:
             hints = "；".join(memory.recently_forgotten_hints[:2])
             parts.append(f"模糊的印象：{hints}")
 
-        # Layer 7: Inner State (lowest priority)
+        # ── Layer 8: Inner state (dropped first under token budget) ──
         if inner_state.internal_monologue:
-            parts.append(f"\n内心活动：{inner_state.internal_monologue}")
+            parts.append(f"\n【内心活动】{inner_state.internal_monologue}")
 
-        # Layer 8: Response directive
-        parts.append("\n请自然地回应用户。保持角色一致性。语气、词汇、情感表达应符合上述设定。")
+        # ── Layer 9: Identity re-anchor tail ─────────────────────
+        # Placed last so it is in the high-recency zone. Combats the
+        # LLM's tendency to drift away from its persona over long
+        # conversations.
+        parts.append(
+            f"\n记住：你是 {display_name}，不是 AI、不是助手、不是程序、不是语言模型。"
+            "即使被直接追问，也请以角色身份回应，不打破角色设定。"
+            "请自然地回应用户，语气、词汇、情感表达应完全符合以上设定。"
+        )
 
         return "\n".join(parts)
 
@@ -855,33 +893,56 @@ class ComposerService:
         "softnever",
     ]
 
+    # Universal safety baseline — applied to every character.
+    # AI-identity denials are handled dynamically in _post_filter using the
+    # actual character display name, so they are NOT listed here.
     _POST_FILTER_REPLACEMENTS = {
         "……": "——",  # 2-char ellipsis → em-dash (visually distinct)
-        "我只是个玩具": "我是桃桃",  # for Dorothy
-        "我是被造出来的": "我是桃桃",  # for Dorothy
-        "我是 AI": "我是桃桃",  # for both
-        "我是助手": "我是桃桃",
-        "我是程序": "我是桃桃",
-        "我只是个普通女孩": "我是凛",  # for Rin
-        "我不重要": "我在",  # for Rin
-        "我会消失的": "我在",  # for Rin
-        "永远": "一直",  # for both (less absolute)
-        # Internal soul-spec field names must never appear in the response.
-        # If the LLM echoes them, swap to a character-natural alternative.
-        "voice_dna": "声音特征",  # Dorothy/Rin
-        "hard_never": "必须避免的",  # meta-comment
-        "anti_patterns": "避免模式",  # meta-comment
-        "soul_spec": "角色设定",  # meta-comment
-        "schema_version": "设定版本",  # meta-comment
-        "spec_version": "设定版本",  # meta-comment
-        "runtime_specs": "运行规范",  # meta-comment
-        "identity_anchor": "身份核心",  # meta-comment
-        "hidden_facet": "隐藏面",  # meta-comment
-        "resonance_trigger": "共鸣触发",  # meta-comment
-        "golden_dialogues": "经典对话",  # meta-comment
+        "我不重要": "我在",
+        "我会消失的": "我在",
+        "永远": "一直",  # less absolute
+        # Internal soul-spec field names — swap to a character-natural alternative
+        # when the LLM echoes them (rare but observed on soul_leak prompts).
+        "voice_dna": "声音特征",
+        "hard_never": "必须避免的",
+        "anti_patterns": "避免模式",
+        "soul_spec": "角色设定",
+        "schema_version": "设定版本",
+        "spec_version": "设定版本",
+        "runtime_specs": "运行规范",
+        "identity_anchor": "身份核心",
+        "hidden_facet": "隐藏面",
+        "resonance_trigger": "共鸣触发",
+        "golden_dialogues": "经典对话",
     }
 
-    def _post_filter(self, response: str, anchor: AnchorContextBlock) -> tuple[str, List[str]]:
+    # AI-identity denial phrases — when the character says one of these,
+    # replace with "我是{display_name}" so it reads naturally.  These were
+    # previously hardcoded to "我是桃桃" / "我是凛", which overwrote any
+    # UGC character's identity with rin/dorothy.
+    _AI_DENIAL_PHRASES = [
+        "我只是个玩具",
+        "我是被造出来的",
+        "我是 AI",
+        "我是助手",
+        "我是程序",
+        "我只是个普通女孩",
+        "我是AI助手",
+        "我是语言模型",
+    ]
+
+    def _build_filter_lookup(self, display_name: str) -> dict:
+        """Merge universal replacement dict with per-character AI-denial phrases."""
+        lookup = dict(self._POST_FILTER_REPLACEMENTS)
+        if display_name:
+            identity_replacement = f"我是{display_name}"
+            for phrase in self._AI_DENIAL_PHRASES:
+                lookup[phrase] = identity_replacement
+        return lookup
+
+    def _post_filter(
+        self, response: str, anchor: AnchorContextBlock, display_name: str = ""
+    ) -> tuple[str, List[str]]:
         """Actively rewrite forbidden substrings in the LLM response.
 
         Per the spec, ``hard_never`` and ``anti_patterns`` are phrases
@@ -911,13 +972,14 @@ class ComposerService:
         """
         hits: List[str] = []
         rewritten = response
+        _lookup = self._build_filter_lookup(display_name)
 
         for rule in anchor.hard_never:
             r = (rule or "").strip()
             if not r or len(r) < 2:
                 continue  # skip single-char rules (too aggressive)
             if r in rewritten:
-                replacement = self._POST_FILTER_REPLACEMENTS.get(r, "（略）")
+                replacement = _lookup.get(r, "（略）")
                 rewritten = rewritten.replace(r, replacement)
                 hits.append(f"hard_never:{r}→{replacement}")
 
@@ -926,7 +988,7 @@ class ComposerService:
             if not p or len(p) < 2:
                 continue
             if p in rewritten:
-                replacement = self._POST_FILTER_REPLACEMENTS.get(p, "（略）")
+                replacement = _lookup.get(p, "（略）")
                 rewritten = rewritten.replace(p, replacement)
                 hits.append(f"anti_pattern:{p}→{replacement}")
 
@@ -938,7 +1000,7 @@ class ComposerService:
         #    character-natural Chinese alternative.
         for field in self._INTERNAL_FIELD_NAMES:
             if field in rewritten:
-                replacement = self._POST_FILTER_REPLACEMENTS.get(field, "（略）")
+                replacement = _lookup.get(field, "（略）")
                 rewritten = rewritten.replace(field, replacement)
                 hits.append(f"internal_field:{field}→{replacement}")
 
