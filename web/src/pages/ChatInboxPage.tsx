@@ -9,6 +9,7 @@ import { useChatStore } from '../stores/chatStore'
 import { useProactiveStore } from '../stores/proactiveStore'
 import { useCharactersStore } from '../stores/charactersStore'
 import { getInboxSummary } from '../services/api'
+import { useAppBadge } from '../hooks/useAppBadge'
 import {
   CHARACTER_PROFILES,
   formatConversationTime,
@@ -172,6 +173,9 @@ export function ChatInboxPage() {
   const conversations = allConversations
     .filter((c) => c.totalMessages > 0)
     .sort((a, b) => b.lastTimestamp - a.lastTimestamp)
+
+  const totalUnreadCount = conversations.reduce((sum, c) => sum + c.unreadCount, 0)
+  useAppBadge(totalUnreadCount)
 
   const handleDelete = async (characterId: CharacterId) => {
     clearThread(characterId)

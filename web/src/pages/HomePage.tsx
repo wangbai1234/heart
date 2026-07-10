@@ -6,10 +6,13 @@ import { Avatar } from '../components/ui/Avatar'
 import { TabBar } from '../components/ui/TabBar'
 import { Skeleton } from '../components/ui/Skeleton'
 import { HOME_ANNOUNCEMENTS, getHeroBanner, type HomeAnnouncement } from '../data/uiContent'
+import { useSwipeNavigation } from '../hooks/useSwipeNavigation'
 
 export function HomePage() {
   const navigate = useNavigate()
   const { resolvedTheme } = useThemeStore()
+  // Block right-swipe on home page — no previous route to go back to
+  useSwipeNavigation({ onRightSwipe: null })
   const userAvatar = useAuthStore((s) => s.user?.avatar_url ?? null)
   const loading = false
   const [activeAnnouncement, setActiveAnnouncement] = useState<HomeAnnouncement | null>(null)
