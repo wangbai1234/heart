@@ -64,6 +64,7 @@ export function useWebSocket() {
   const setStreaming = useChatStore(s => s.setStreaming)
   const setPlaying = useChatStore(s => s.setPlaying)
   const setCurrentTurnId = useChatStore(s => s.setCurrentTurnId)
+  const setPendingAssistantTurnId = useChatStore(s => s.setPendingAssistantTurnId)
   const setVad = useChatStore(s => s.setVad)
   const appendMessageAudio = useChatStore(s => s.appendMessageAudio)
   const finalizeMessageAudio = useChatStore(s => s.finalizeMessageAudio)
@@ -97,6 +98,7 @@ export function useWebSocket() {
       switch (msg.type) {
         case 'turn_start':
           seenChunks.current.clear()
+          setPendingAssistantTurnId(null)
           setCurrentTurnId(msg.turn_id ?? null)
           addMessage(cid, {
             id: msg.turn_id ?? crypto.randomUUID(),
@@ -185,6 +187,7 @@ export function useWebSocket() {
           setStreaming(false)
           setPlaying(false)
           setCurrentTurnId(null)
+          setPendingAssistantTurnId(null)
           // Sync last assistant message to threads for HomePage
           {
             const msgs = useChatStore.getState().messages[cid] ?? []
@@ -213,6 +216,7 @@ export function useWebSocket() {
           setStreaming(false)
           setPlaying(false)
           setCurrentTurnId(null)
+          setPendingAssistantTurnId(null)
           pendingVoiceTurnRef.current = false
           {
             const { setInsufficientCredits } = useChatStore.getState()
@@ -223,11 +227,13 @@ export function useWebSocket() {
           setStreaming(false)
           setPlaying(false)
           setCurrentTurnId(null)
+          setPendingAssistantTurnId(null)
           pendingVoiceTurnRef.current = false
           break
         case 'error':
           setStreaming(false)
           setPlaying(false)
+          setPendingAssistantTurnId(null)
           pendingVoiceTurnRef.current = false
           // Previously swallowed silently (SUG-1) — surface a friendly toast.
           useToastStore.getState().show(FEEDBACK_COPY.streamError, 'error')
@@ -268,7 +274,7 @@ export function useWebSocket() {
     ws.onerror = (err) => {
       console.error('[ws] error', err)
     }
-  }, [addMessage, appendMessageAudio, appendToLast, finalizeMessageAudio, setStreaming, setPlaying, setCurrentTurnId, setVad])
+  }, [addMessage, appendMessageAudio, appendToLast, finalizeMessageAudio, setStreaming, setPlaying, setCurrentTurnId, setPendingAssistantTurnId, setVad])
 
   useEffect(() => {
     connectRef.current = connect
@@ -304,6 +310,7 @@ export function useWebSocket() {
         })
       }
       setStreaming(true)
+      setPendingAssistantTurnId(turnId)
 
       wsRef.current.send(
         JSON.stringify({
@@ -315,7 +322,7 @@ export function useWebSocket() {
         }),
       )
     },
-    [addMessage, setStreaming, isStreaming],
+    [addMessage, setStreaming, setPendingAssistantTurnId, isStreaming],
   )
 
   const interrupt = useCallback(() => {

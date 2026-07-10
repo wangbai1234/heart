@@ -35,6 +35,7 @@ interface ChatState {
   isStreaming: boolean
   isPlaying: boolean
   currentTurnId: string | null
+  pendingAssistantTurnId: string | null
   vad: VadState
   characterId: string
   insufficientCredits: { needed: number; balance: number } | null
@@ -61,6 +62,7 @@ interface ChatState {
   setStreaming: (v: boolean) => void
   setPlaying: (v: boolean) => void
   setCurrentTurnId: (id: string | null) => void
+  setPendingAssistantTurnId: (id: string | null) => void
   setVad: (v: VadState) => void
   setCharacterId: (id: string) => void
   setInsufficientCredits: (needed: number, balance: number) => void
@@ -86,6 +88,7 @@ export const useChatStore = create<ChatState>((set) => ({
   isStreaming: false,
   isPlaying: false,
   currentTurnId: null,
+  pendingAssistantTurnId: null,
   vad: { energy: 0, mood: 'neutral', intimacy: 0 },
   characterId: 'rin',
   insufficientCredits: null,
@@ -174,6 +177,7 @@ export const useChatStore = create<ChatState>((set) => ({
   setStreaming: (v) => set({ isStreaming: v }),
   setPlaying: (v) => set({ isPlaying: v }),
   setCurrentTurnId: (id) => set({ currentTurnId: id }),
+  setPendingAssistantTurnId: (id) => set({ pendingAssistantTurnId: id }),
   setVad: (v) => set({ vad: v }),
   setCharacterId: (id) => set({ characterId: id }),
   setInsufficientCredits: (needed, balance) => set({ insufficientCredits: { needed, balance } }),
@@ -189,6 +193,7 @@ export const useChatStore = create<ChatState>((set) => ({
         isStreaming: false,
         isPlaying: false,
         currentTurnId: null,
+        pendingAssistantTurnId: null,
         insufficientCredits: null,
       }
     }),
