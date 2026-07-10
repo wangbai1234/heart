@@ -57,7 +57,7 @@ async def list_characters(
     result = await db.execute(
         text(
             """
-            SELECT id, owner_user_id, visibility, status
+            SELECT id, owner_user_id, visibility, status, has_voice
             FROM characters
             WHERE status = 'active'
               AND (visibility = 'public' OR owner_user_id = :uid)
@@ -65,15 +65,17 @@ async def list_characters(
         ),
         {"uid": uid},
     )
+    raw_rows = list(result.mappings())
     rows = [
         CharacterRow(
-            id=row.id,
-            owner_user_id=row.owner_user_id,
-            visibility=row.visibility,
-            status=row.status,
+            id=row["id"],
+            owner_user_id=row["owner_user_id"],
+            visibility=row["visibility"],
+            status=row["status"],
         )
-        for row in result
+        for row in raw_rows
     ]
+    has_voice_map = {row["id"]: bool(row.get("has_voice", False)) for row in raw_rows}
 
     # Fetch avatar_url from soul_specs.draft for UGC characters
     avatar_urls: dict[str, str | None] = {}
@@ -94,7 +96,12 @@ async def list_characters(
                 avatar_urls[row.character_id] = row.avatar_url
 
     entries = build_catalog_entries(rows, uid, avatar_urls)
-    return {"characters": [asdict(e) for e in entries]}
+    result_list = []
+    for e in entries:
+        entry_dict = asdict(e)
+        entry_dict["has_voice"] = has_voice_map.get(e.id, False)
+        result_list.append(entry_dict)
+    return {"characters": result_list}
 
 
 @router.get("/{character_id}/settings")
@@ -124,9 +131,26 @@ async def update_character_settings(
     current_user: TokenData = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
-    """Update per-character voice toggle (upsert)."""
+    """Update per-character voice toggle (upsert).
+
+    Returns 409 when voice_enabled=True is requested but the character has no
+    voice configured yet (has_voice=FALSE).
+    """
     _require_known_character(character_id)
     uid = uuid.UUID(current_user.user_id)
+
+    if body.voice_enabled:
+        has_voice_result = await db.execute(
+            text("SELECT has_voice FROM characters WHERE id = :cid"),
+            {"cid": character_id},
+        )
+        has_voice = has_voice_result.scalar_one_or_none()
+        if not has_voice:
+            raise HTTPException(
+                status_code=409,
+                detail="请先为该角色配置音色，才能开启语音聊天",
+            )
+
     await db.execute(
         text("""
             INSERT INTO user_character_settings (user_id, character_id, voice_enabled, updated_at)

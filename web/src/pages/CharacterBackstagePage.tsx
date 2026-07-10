@@ -7,7 +7,7 @@ import { resolveCharacterProfile } from '../data/uiContent'
 import { useCharactersStore } from '../stores/charactersStore'
 import { Dialog } from '../components/ui/Dialog'
 import { Switch } from '../components/ui/Switch'
-import { getCharacterSettings, updateCharacterSettings } from '../services/api'
+import { getCharacterSettings, updateCharacterSettings, getCharacterVoice } from '../services/api'
 
 export function CharacterBackstagePage() {
   const navigate = useNavigate()
@@ -21,24 +21,42 @@ export function CharacterBackstagePage() {
   const displayName = currentCharacter?.display_name
   const avatarUrl = currentCharacter?.avatar_url
   const [confirmOpen, setConfirmOpen] = useState(false)
+  const [hasVoice, setHasVoice] = useState(
+    currentCharacter?.has_voice ?? false
+  )
 
   const profile = resolveCharacterProfile(currentCharacterId, displayName, avatarUrl)
 
-  // Hydrate voice setting from backend on mount
+  // Hydrate voice setting + voice config from backend on mount
   useEffect(() => {
     getCharacterSettings(currentCharacterId)
       .then((res) => {
         setVoiceChatEnabled(currentCharacterId, res.voice_enabled)
       })
       .catch(() => { /* keep local value */ })
+
+    getCharacterVoice(currentCharacterId)
+      .then((res) => {
+        setHasVoice(res.has_voice ?? res.clone_status === 'ready')
+      })
+      .catch(() => { /* keep local value */ })
   }, [currentCharacterId])
 
   const handleVoiceToggle = async (value: boolean) => {
+    if (value && !hasVoice) {
+      navigate(`/create-character?voice=${currentCharacterId}`)
+      return
+    }
     setVoiceChatEnabled(currentCharacterId, value)
     try {
       await updateCharacterSettings(currentCharacterId, value)
-    } catch {
-      // Revert on failure
+    } catch (err: any) {
+      // 409 means voice not configured
+      if (err?.status === 409) {
+        setVoiceChatEnabled(currentCharacterId, false)
+        navigate(`/create-character?voice=${currentCharacterId}`)
+        return
+      }
       setVoiceChatEnabled(currentCharacterId, !value)
     }
   }
@@ -123,14 +141,25 @@ export function CharacterBackstagePage() {
               </div>
               <div className="min-w-0 flex-1">
                 <h2 className={`mb-2 text-[18px] leading-[1.22] font-semibold tracking-[-0.02em] ${resolvedTheme === 'dark' ? 'text-[#F3EFF8]' : 'text-[#2D3248]'}`}>
-                  是否开启语音聊天
+                  {hasVoice ? '是否开启语音聊天' : '配置音色'}
                 </h2>
                 <p className={`max-w-[210px] text-[14px] leading-[1.55] ${subtleTextClassName}`}>
-                  开启后 AI 回复将转为语音，语音回复消耗 5 积分/条
+                  {hasVoice
+                    ? '开启后 AI 回复将转为语音，语音回复消耗 5 积分/条'
+                    : '先选择预设音色或克隆专属音色，才能开启语音聊天'}
                 </p>
               </div>
               <div className="shrink-0">
-                <Switch checked={voiceChatEnabled} onChange={handleVoiceToggle} />
+                {hasVoice ? (
+                  <Switch checked={voiceChatEnabled} onChange={handleVoiceToggle} />
+                ) : (
+                  <button
+                    onClick={() => navigate(`/create-character?voice=${currentCharacterId}`)}
+                    className="rounded-full bg-gradient-to-r from-[#FFB7C5] to-[#FF8FAB] px-4 py-2 text-[13px] font-semibold text-white"
+                  >
+                    去配置
+                  </button>
+                )}
               </div>
             </div>
           </section>

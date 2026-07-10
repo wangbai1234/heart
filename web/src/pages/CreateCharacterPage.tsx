@@ -3,7 +3,14 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useThemeStore } from '../stores/themeStore'
 import { useCharactersStore } from '../stores/charactersStore'
 import { useToastStore } from '../stores/toastStore'
-import { ApiError, uploadCharacterAvatar, type CharacterDraftDTO } from '../services/api'
+import {
+  ApiError,
+  uploadCharacterAvatar,
+  getPresetVoices,
+  setPresetVoice,
+  type CharacterDraftDTO,
+  type PresetVoiceDTO,
+} from '../services/api'
 
 function useToast() {
   return useToastStore((s) => s.show)
@@ -176,10 +183,33 @@ export function CreateCharacterPage() {
 
   const [form, setForm] = useState<FormFields>(defaultForm)
   const [submitting, setSubmitting] = useState(false)
-  const [step, setStep] = useState<1 | 2>(1) // step 1: basic info, step 2: personality
+  const [step, setStep] = useState<1 | 2 | 3>(1) // 1: basic info, 2: personality, 3: voice
   const [avatarUrl, setAvatarUrl] = useState<string>('')
   const [avatarUploading, setAvatarUploading] = useState(false)
   const avatarInputRef = useRef<HTMLInputElement>(null)
+
+  // Voice step state
+  const [createdCharacterId, setCreatedCharacterId] = useState<string>('')
+  const [presets, setPresets] = useState<PresetVoiceDTO[]>([])
+  const [selectedPreset, setSelectedPreset] = useState<string>('')
+  const [voiceSaving, setVoiceSaving] = useState(false)
+
+  // ?voice=<cid> mode: configure voice for an already-created character
+  const voiceOnlyId = searchParams.get('voice') ?? ''
+  const isVoiceOnly = Boolean(voiceOnlyId && !editId)
+
+  useEffect(() => {
+    if (isVoiceOnly) {
+      setStep(3)
+      setCreatedCharacterId(voiceOnlyId)
+    }
+  }, [isVoiceOnly, voiceOnlyId])
+
+  useEffect(() => {
+    if (step === 3) {
+      getPresetVoices().then((res) => setPresets(res.presets)).catch(() => {})
+    }
+  }, [step])
 
   // If editing, populate form from catalog's existing character data
   // (draft fields not stored client-side; user sees defaults + can re-fill)
@@ -223,6 +253,23 @@ export function CreateCharacterPage() {
     })
   }
 
+  async function handleVoiceSave() {
+    if (!selectedPreset || !createdCharacterId) {
+      navigate(`/chat/${createdCharacterId}`, { replace: true })
+      return
+    }
+    setVoiceSaving(true)
+    try {
+      await setPresetVoice(createdCharacterId, selectedPreset)
+      showToast('音色配置成功', 'success')
+    } catch {
+      showToast('音色配置失败，可稍后在设置中重试', 'error')
+    } finally {
+      setVoiceSaving(false)
+    }
+    navigate(`/chat/${createdCharacterId}`, { replace: true })
+  }
+
   async function handleSubmit() {
     const err = validateForm(form)
     if (err) {
@@ -238,9 +285,9 @@ export function CreateCharacterPage() {
         showToast('角色已更新', 'success')
         navigate('/my-characters', { replace: true })
       } else {
-        const { id, display_name } = await createCharacter(draft)
-        showToast(`「${display_name}」已创建，快去聊天吧`, 'success')
-        navigate(`/chat/${id}`, { replace: true })
+        const { id } = await createCharacter(draft)
+        setCreatedCharacterId(id)
+        setStep(3)
       }
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : '创建失败，请稍后再试'
@@ -271,7 +318,12 @@ export function CreateCharacterPage() {
       {/* Navigation bar */}
       <nav className="relative z-20 flex items-center justify-between px-5 h-[44px] shrink-0">
         <button
-          onClick={() => step === 2 ? setStep(1) : navigate(-1)}
+          onClick={() => {
+            if (step === 3 && isVoiceOnly) navigate(-1)
+            else if (step === 3) setStep(2)
+            else if (step === 2) setStep(1)
+            else navigate(-1)
+          }}
           className="w-[44px] h-[44px] flex items-center justify-center rounded-full active:bg-[rgba(255,183,197,0.15)] transition-colors"
         >
           <svg width="11" height="19" viewBox="0 0 11 19" fill="none" stroke="var(--color-ink)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -279,21 +331,26 @@ export function CreateCharacterPage() {
           </svg>
         </button>
 
-        <span className="text-[17px] font-semibold text-[var(--color-ink)]">{title}</span>
+        <span className="text-[17px] font-semibold text-[var(--color-ink)]">
+          {step === 3 ? '配置音色' : title}
+        </span>
 
-        {/* Step indicator */}
-        <div className="flex items-center gap-1.5 pr-1">
-          {[1, 2].map((s) => (
-            <div
-              key={s}
-              className={`rounded-full transition-all duration-[240ms] ${
-                s === step
-                  ? 'w-[20px] h-[6px] bg-[var(--color-primary)]'
-                  : 'w-[6px] h-[6px] bg-[rgba(255,183,197,0.35)]'
-              }`}
-            />
-          ))}
-        </div>
+        {/* Step indicator — only for creation flow */}
+        {!isVoiceOnly && (
+          <div className="flex items-center gap-1.5 pr-1">
+            {[1, 2, 3].map((s) => (
+              <div
+                key={s}
+                className={`rounded-full transition-all duration-[240ms] ${
+                  s === step
+                    ? 'w-[20px] h-[6px] bg-[var(--color-primary)]'
+                    : 'w-[6px] h-[6px] bg-[rgba(255,183,197,0.35)]'
+                }`}
+              />
+            ))}
+          </div>
+        )}
+        {isVoiceOnly && <div className="w-[44px]" />}
       </nav>
 
       {/* Scrollable content */}
@@ -464,6 +521,72 @@ export function CreateCharacterPage() {
           </>
         )}
 
+        {step === 3 && (
+          <>
+            <div className="text-center pt-6 pb-4">
+              <p className="text-[13px] text-[var(--color-text-muted)] leading-relaxed">
+                选择一个预设音色，让她开口说话。
+                <br />
+                <span className="text-[11px]">也可以跳过，稍后在后台配置。</span>
+              </p>
+            </div>
+
+            <SectionTitle>预设音色</SectionTitle>
+            <div className="space-y-2.5">
+              {presets.length === 0 && (
+                <p className="text-center text-[13px] text-[var(--color-text-muted)] py-8">
+                  加载中…
+                </p>
+              )}
+              {presets.map((preset) => {
+                const active = selectedPreset === preset.id
+                return (
+                  <button
+                    key={preset.id}
+                    onClick={() => setSelectedPreset(active ? '' : preset.id)}
+                    className={`w-full text-left px-5 py-4 rounded-[16px] border transition-all duration-[180ms] active:scale-[0.98] backdrop-blur-[12px] ${
+                      active
+                        ? 'bg-[rgba(255,183,197,0.22)] border-[rgba(255,183,197,0.55)] shadow-[0_2px_12px_rgba(255,143,171,0.15)]'
+                        : isDark
+                        ? 'bg-[var(--color-surface-card)] border-[var(--color-border-subtle)]'
+                        : 'bg-[rgba(255,255,255,0.72)] border-[rgba(255,255,255,0.60)]'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`w-[42px] h-[42px] rounded-full flex items-center justify-center shrink-0 ${
+                        active ? 'bg-gradient-to-br from-[#FFB7C5] to-[#FF8FAB]' : 'bg-[rgba(255,183,197,0.18)]'
+                      }`}>
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={active ? 'white' : '#FF7DA1'} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M12 16a4 4 0 0 0 4-4V8a4 4 0 1 0-8 0v4a4 4 0 0 0 4 4Z" />
+                          <path d="M19 11.5a7 7 0 0 1-14 0" />
+                          <path d="M12 18.5v3" />
+                        </svg>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-[15px] font-semibold ${active ? 'text-[#E86083]' : 'text-[var(--color-ink)]'}`}>
+                          {preset.name}
+                        </p>
+                        {preset.description && (
+                          <p className="text-[12px] text-[var(--color-text-muted)] mt-[2px]">
+                            {preset.description}
+                          </p>
+                        )}
+                      </div>
+                      {active && (
+                        <div className="w-[20px] h-[20px] rounded-full bg-gradient-to-br from-[#FFB7C5] to-[#FF8FAB] flex items-center justify-center shrink-0">
+                          <svg width="11" height="8" viewBox="0 0 11 8" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="1,4 4,7 10,1" />
+                          </svg>
+                        </div>
+                      )}
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+          </>
+        )}
+
         {step === 2 && (
           <>
             <div className="text-center pt-6 pb-2">
@@ -532,12 +655,32 @@ export function CreateCharacterPage() {
         style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 34px), 20px)' }}
       >
         <div className={`backdrop-blur-[20px] rounded-[20px] px-4 py-3 ${isDark ? 'bg-[var(--color-surface-card)] border border-[var(--color-border-subtle)] shadow-[0_-4px_20px_rgba(0,0,0,0.15)]' : 'bg-[rgba(255,255,255,0.82)] border border-[rgba(255,255,255,0.70)] shadow-[0_-4px_20px_rgba(255,183,197,0.12)]'}`}>
-          {step === 1 ? (
+          {step === 3 ? (
+            <div className="flex gap-3">
+              <button
+                onClick={() => navigate(`/chat/${createdCharacterId}`, { replace: true })}
+                className={`flex-1 h-[52px] rounded-[14px] text-[16px] font-medium ${isDark ? 'bg-[rgba(255,255,255,0.06)] text-[#ECE9F4]' : 'bg-[rgba(255,183,197,0.12)] text-[#2D3248]'}`}
+              >
+                跳过
+              </button>
+              <button
+                onClick={handleVoiceSave}
+                disabled={voiceSaving || !selectedPreset}
+                className="flex-[2] h-[52px] rounded-[14px] bg-gradient-to-r from-[#FFB7C5] to-[#FF8FAB] text-white text-[17px] font-semibold shadow-[0_8px_24px_-4px_rgba(255,143,171,0.40)] active:scale-[0.98] transition-transform disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center"
+              >
+                {voiceSaving ? (
+                  <svg className="animate-spin w-5 h-5" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                ) : '确认音色'}
+              </button>
+            </div>
+          ) : step === 1 ? (
             <button
               onClick={() => {
                 if (!canProceed) {
                   if (!form.nameZh.trim()) {
-                    // nudge user
                     return
                   }
                 }
@@ -560,7 +703,7 @@ export function CreateCharacterPage() {
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                 </svg>
               ) : (
-                isEdit ? '保存更改' : '创建角色 ✨'
+                isEdit ? '保存更改' : '下一步 →'
               )}
             </button>
           )}

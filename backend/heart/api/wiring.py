@@ -49,6 +49,11 @@ def _get_session_factory():
     return _session_factory
 
 
+def get_db_session_factory():
+    """Return the async session factory (for background tasks)."""
+    return _get_session_factory()
+
+
 async def get_db() -> AsyncSession:
     """FastAPI dependency: yields a fresh AsyncSession per request."""
     factory = _get_session_factory()

@@ -273,6 +273,7 @@ export interface CharacterDTO {
   is_builtin: boolean
   is_owner: boolean
   avatar_url?: string | null
+  has_voice?: boolean
 }
 
 export async function getCharacters(): Promise<{ characters: CharacterDTO[] }> {
@@ -366,6 +367,66 @@ export async function clearCharacterConversations(characterId: string): Promise<
   return request(`/characters/${characterId}/clear-conversations`, {
     method: 'POST',
   })
+}
+
+// ── Voice management ──────────────────────────────────────────────────────────
+
+export interface PresetVoiceDTO {
+  id: string
+  name: string
+  voice_id: string
+  provider: string
+  description?: string | null
+  sample_url?: string | null
+}
+
+export interface CharacterVoiceDTO {
+  configured: boolean
+  voice_type?: 'preset' | 'clone'
+  clone_status?: 'pending' | 'processing' | 'ready' | 'failed'
+  preset_voice_id?: string | null
+  preset_name?: string | null
+  has_voice?: boolean
+}
+
+export async function getPresetVoices(): Promise<{ presets: PresetVoiceDTO[] }> {
+  return request('/voice/presets')
+}
+
+export async function getCharacterVoice(characterId: string): Promise<CharacterVoiceDTO> {
+  return request(`/voice/${characterId}`)
+}
+
+export async function setPresetVoice(
+  characterId: string,
+  presetVoiceId: string,
+): Promise<{ ok: boolean; voice_type: string; clone_status: string }> {
+  return request('/voice/preset', {
+    method: 'POST',
+    body: JSON.stringify({ character_id: characterId, preset_voice_id: presetVoiceId }),
+  })
+}
+
+export async function uploadVoiceClone(
+  characterId: string,
+  file: File,
+): Promise<{ ok: boolean; clone_status: string; balance: number }> {
+  const { accessToken } = (await import('../stores/authStore')).useAuthStore.getState()
+  if (!accessToken) throw new Error('未登录')
+  const formData = new FormData()
+  formData.append('file', file)
+  const res = await fetch(`/api/voice/clone?character_id=${encodeURIComponent(characterId)}`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: formData,
+  })
+  const data = await res.json()
+  if (!res.ok) throw new ApiError(res.status, data.detail || '上传失败')
+  return data
+}
+
+export async function removeCharacterVoice(characterId: string): Promise<{ ok: boolean }> {
+  return request(`/voice/${characterId}`, { method: 'DELETE' })
 }
 
 // --- Proactive messages (SS06 Inner Loop) ---
