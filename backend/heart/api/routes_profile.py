@@ -56,7 +56,7 @@ async def get_profile(
             "gender": user["gender"],
             "birthdate": str(user["birthdate"]) if user["birthdate"] else None,
             "age_verified": user["age_verified_at"] is not None,
-            "credits_balance": user["credits_balance"],
+            "credits_balance": user["credits_balance"] / 100,
         }
     }
 

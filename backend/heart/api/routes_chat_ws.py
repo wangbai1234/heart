@@ -5,8 +5,10 @@ Also provides REST chat history endpoint.
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import json
+import random
 import uuid
 from typing import Any, Optional
 from urllib.parse import urlparse
@@ -206,7 +208,7 @@ async def _precheck_billing(
 
             balance = await get_balance(db, user_uuid)
             expected_cost = (
-                cfg.credits_per_voice_turn if effective_voice else cfg.credits_per_text_turn
+                cfg.credits_cost_voice_message if effective_voice else cfg.credits_cost_text_message
             )
 
             if balance < expected_cost:
@@ -214,8 +216,8 @@ async def _precheck_billing(
                     {
                         "type": "insufficient_credits",
                         "turn_id": turn_id,
-                        "needed": expected_cost,
-                        "balance": balance,
+                        "needed": expected_cost / 100,
+                        "balance": balance / 100,
                     }
                 )
                 return effective_voice, False
@@ -224,6 +226,71 @@ async def _precheck_billing(
         logger.warning("billing_precheck_failed", error=str(e))
         await ws.send_json({"type": "error", "msg": "Billing check failed"})
         return False, False
+
+
+async def _charge_and_insert_bubbles(
+    db: Any,
+    ws: WebSocket,
+    user_uuid: uuid.UUID,
+    turn_id: str,
+    character_id: str,
+    segments: list[str],
+    actual_modality: str,
+    per_message_cost: int,
+    audio_url: Optional[str],
+    audio_duration_ms: Optional[int],
+) -> tuple[int, int]:
+    """Deduct credits and INSERT assistant rows. Returns (n_paid, new_balance)."""
+    from heart.billing import InsufficientCreditsError, deduct_credits
+
+    total_charged = 0
+    new_balance = 0
+
+    for i, seg in enumerate(segments):
+        try:
+            new_balance = await deduct_credits(
+                db,
+                user_uuid,
+                per_message_cost,
+                f"turn:{turn_id}:msg:{i}",
+                f"consume_{actual_modality}",
+            )
+            total_charged += per_message_cost
+            await db.execute(
+                sql_text(
+                    "INSERT INTO chat_messages "
+                    "(id, user_id, character_id, turn_id, role, content, modality, "
+                    " audio_url, audio_duration_ms, credits_charged, sequence_id, created_at) "
+                    "VALUES (:id, :uid, :cid, :tid, 'assistant', :content, :modality, "
+                    "        :audio_url, :audio_dur, :credits, :seq_id, clock_timestamp())"
+                ),
+                {
+                    "id": uuid.uuid4(),
+                    "uid": user_uuid,
+                    "cid": character_id,
+                    "tid": uuid.UUID(turn_id),
+                    "content": seg,
+                    "modality": actual_modality,
+                    "audio_url": audio_url if i == 0 else None,
+                    "audio_dur": audio_duration_ms if i == 0 else None,
+                    "credits": per_message_cost,
+                    "seq_id": i,
+                },
+            )
+        except InsufficientCreditsError as ice:
+            await db.rollback()
+            await ws.send_json(
+                {
+                    "type": "insufficient_credits",
+                    "turn_id": turn_id,
+                    "needed": ice.needed / 100,
+                    "balance": ice.balance / 100,
+                }
+            )
+            await ws.send_json({"type": "turn_end", "turn_id": turn_id})
+            return -1, 0  # sentinel: caller should return early
+
+    return total_charged, new_balance
 
 
 async def _post_turn_billing(
@@ -237,64 +304,51 @@ async def _post_turn_billing(
     turn_safety_blocked: bool,
     stream_session: Any = None,
 ) -> None:
-    """Charge credits and persist chat messages after turn completes."""
+    """Charge credits and persist chat messages after turn completes.
+
+    Text turns: split full response into up to 4 short bubbles; deduct
+    credits_cost_text_message per bubble using per-message idempotency keys.
+    Voice turns: single message, deduct credits_cost_voice_message once.
+    """
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from heart.core.config import settings as cfg
+    from heart.ss05_composer.message_splitter import split_response
+
+    from .wiring import _get_engine
+
+    audio_url = None
+    audio_duration_ms = None
+
+    # ── Upload audio (voice turns only) ──────────────────────────────────────
+    if actual_modality == "voice" and stream_session and stream_session.full_audio:
+        try:
+            from heart.infra.storage import is_s3_configured, upload_file
+
+            if is_s3_configured():
+                audio_bytes = stream_session.full_audio
+                key = f"chat_audio/{user_uuid}/{turn_id}.wav"
+                audio_url = await upload_file(audio_bytes, key, "audio/wav")
+                audio_duration_ms = int(len(audio_bytes) / (24000 * 2) * 1000)
+        except Exception as e:
+            logger.warning("audio_upload_failed", error=str(e))
+
+    full_text = "".join(collected_text)
+    if actual_modality == "text":
+        segments = split_response(full_text)
+        per_message_cost = cfg.credits_cost_text_message
+    else:
+        segments = [full_text]
+        per_message_cost = cfg.credits_cost_voice_message
+
     try:
-        from sqlalchemy.ext.asyncio import AsyncSession
-
-        from heart.billing import InsufficientCreditsError, charge_turn
-        from heart.core.config import settings as cfg
-
-        from .wiring import _get_engine
-
-        credits_charged = 0
-        audio_url = None
-        audio_duration_ms = None
-
-        # Upload audio to S3 if voice modality
-        if actual_modality == "voice" and stream_session and stream_session.full_audio:
-            try:
-                from heart.infra.storage import is_s3_configured, upload_file
-
-                if is_s3_configured():
-                    audio_bytes = stream_session.full_audio
-                    key = f"chat_audio/{user_uuid}/{turn_id}.wav"
-                    audio_url = await upload_file(audio_bytes, key, "audio/wav")
-                    # Estimate duration: PCM16 @24kHz mono = 2 bytes/sample
-                    audio_duration_ms = int(len(audio_bytes) / (24000 * 2) * 1000)
-            except Exception as e:
-                logger.warning("audio_upload_failed", error=str(e))
-
         async with AsyncSession(_get_engine(), expire_on_commit=False) as db:
-            if not turn_safety_blocked:
-                try:
-                    new_balance = await charge_turn(db, user_uuid, turn_id, actual_modality)
-                    credits_charged = (
-                        cfg.credits_per_voice_turn
-                        if actual_modality == "voice"
-                        else cfg.credits_per_text_turn
-                    )
-                    await ws.send_json(
-                        {
-                            "type": "turn_end",
-                            "turn_id": turn_id,
-                            "modality": actual_modality,
-                            "credits_charged": credits_charged,
-                            "balance": new_balance,
-                        }
-                    )
-                except InsufficientCreditsError as ice:
-                    await ws.send_json(
-                        {
-                            "type": "insufficient_credits",
-                            "turn_id": turn_id,
-                            "needed": ice.needed,
-                            "balance": ice.balance,
-                        }
-                    )
-
             await db.execute(
-                sql_text("""INSERT INTO chat_messages (id, user_id, character_id, turn_id, role, content, modality, created_at)
-                            VALUES (:id, :uid, :cid, :tid, 'user', :content, 'text', NOW())"""),
+                sql_text(
+                    "INSERT INTO chat_messages "
+                    "(id, user_id, character_id, turn_id, role, content, modality, created_at) "
+                    "VALUES (:id, :uid, :cid, :tid, 'user', :content, 'text', NOW())"
+                ),
                 {
                     "id": uuid.uuid4(),
                     "uid": user_uuid,
@@ -303,23 +357,51 @@ async def _post_turn_billing(
                     "content": user_text,
                 },
             )
-            full_text = "".join(collected_text)
-            await db.execute(
-                sql_text("""INSERT INTO chat_messages (id, user_id, character_id, turn_id, role, content, modality, audio_url, audio_duration_ms, credits_charged, created_at)
-                            VALUES (:id, :uid, :cid, :tid, 'assistant', :content, :modality, :audio_url, :audio_dur, :credits, clock_timestamp())"""),
-                {
-                    "id": uuid.uuid4(),
-                    "uid": user_uuid,
-                    "cid": character_id,
-                    "tid": uuid.UUID(turn_id),
-                    "content": full_text,
-                    "modality": actual_modality,
-                    "audio_url": audio_url,
-                    "audio_dur": audio_duration_ms,
-                    "credits": credits_charged,
-                },
-            )
+
+            total_charged, new_balance = 0, 0
+            n_paid = len(segments)
+
+            if not turn_safety_blocked:
+                total_charged, new_balance = await _charge_and_insert_bubbles(
+                    db,
+                    ws,
+                    user_uuid,
+                    turn_id,
+                    character_id,
+                    segments,
+                    actual_modality,
+                    per_message_cost,
+                    audio_url,
+                    audio_duration_ms,
+                )
+                if total_charged == -1:
+                    return  # InsufficientCreditsError already handled
+
             await db.commit()
+
+        # ── Send WS events ────────────────────────────────────────────────────
+        for i, seg in enumerate(segments[:n_paid]):
+            await ws.send_json(
+                {
+                    "type": "message_bubble",
+                    "turn_id": turn_id,
+                    "sequence_id": i,
+                    "content": seg,
+                }
+            )
+            if i < n_paid - 1:
+                await asyncio.sleep(random.uniform(0.3, 0.8))
+
+        await ws.send_json(
+            {
+                "type": "turn_end",
+                "turn_id": turn_id,
+                "modality": actual_modality,
+                "credits_charged": total_charged / 100,
+                "balance": new_balance / 100,
+            }
+        )
+
     except Exception as e:
         logger.error("chat_persist_failed", error=str(e))
 

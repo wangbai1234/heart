@@ -86,7 +86,7 @@ class UserResponse(BaseModel):
     gender: Optional[str] = None
     birthdate: Optional[str] = None
     age_verified: bool = False
-    credits_balance: int = 0
+    credits_balance: float = 0.0
 
 
 class TokenResponse(BaseModel):
@@ -388,7 +388,7 @@ async def verify_otp(
             gender=user_row["gender"],
             birthdate=str(user_row["birthdate"]) if user_row["birthdate"] else None,
             age_verified=user_row["age_verified_at"] is not None,
-            credits_balance=user_row["credits_balance"],
+            credits_balance=user_row["credits_balance"] / 100,
         ),
         needs_profile=needs_profile,
     )
@@ -534,6 +534,6 @@ async def get_me(
             "gender": user["gender"],
             "birthdate": str(user["birthdate"]) if user["birthdate"] else None,
             "age_verified": user["age_verified_at"] is not None,
-            "credits_balance": user["credits_balance"],
+            "credits_balance": user["credits_balance"] / 100,
         }
     }
