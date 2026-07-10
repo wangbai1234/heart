@@ -1,4 +1,5 @@
 import { useAuthStore } from '../stores/authStore'
+import { authNavigate } from './navigation'
 
 const BASE_URL = '/api'
 
@@ -64,7 +65,7 @@ async function request<T>(
       res = await fetch(`${BASE_URL}${path}`, { ...options, headers })
     } catch {
       clearSession()
-      window.location.href = '/login'
+      authNavigate('/login')
       throw new Error('Session expired')
     }
   }
@@ -187,6 +188,7 @@ export async function updateProfile(data: {
   display_name?: string
   gender?: string
   birthdate?: string
+  timezone?: string
 }): Promise<{ ok: boolean; age_verified: boolean | null; message?: string }> {
   return request('/profile', {
     method: 'PATCH',

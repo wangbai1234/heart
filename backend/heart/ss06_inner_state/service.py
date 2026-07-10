@@ -203,6 +203,7 @@ class InnerStateService:
         days_since_last_interaction: float,
         recent_context: str,
         user_facts: str,
+        local_time_context: Optional[dict] = None,
     ) -> str:
         """Return LLM-generated content, falling back to a template on any failure."""
         from heart.core.config import settings
@@ -218,6 +219,7 @@ class InnerStateService:
                 days_since_last_interaction=days_since_last_interaction,
                 recent_context=recent_context,
                 user_facts=user_facts,
+                local_time_context=local_time_context,
             )
         except Exception as e:
             logger.warning("proactive_llm_failed", character_id=character_id, error=str(e))
@@ -234,15 +236,29 @@ class InnerStateService:
         days_since_last_interaction: float,
         recent_context: str,
         user_facts: str,
+        local_time_context: Optional[dict] = None,
     ) -> str:
         persona = get_proactive_persona(character_id)
+        time_section = ""
+        if local_time_context:
+            h = local_time_context.get("hour", "")
+            tod = local_time_context.get("time_of_day", "")
+            wd = local_time_context.get("weekday", "")
+            idle = local_time_context.get("hours_since_last_message", "")
+            time_section = (
+                f"\n## 当前时间背景\n"
+                f"- 用户本地时间：{tod}（{h} 点，{wd}）\n"
+                f"- 距离上次聊天：约 {idle} 小时\n"
+                "请根据时间背景选用合适的问候方式（早上/下午/傍晚/深夜）。\n"
+            )
         return (
             f"你是「{character_id}」。{persona}\n"
             f"现在你想主动给对方发一条消息（触发原因：{trigger_type}）。\n\n"
             f"## 关系状态\n"
             f"- 阶段：{relationship_stage}\n"
             f"- 亲密度：{intimacy:.2f}\n"
-            f"- 距上次互动：{days_since_last_interaction:.1f} 天\n\n"
+            f"- 距上次互动：{days_since_last_interaction:.1f} 天\n"
+            f"{time_section}\n"
             f"## 你记得的对方信息\n{user_facts or '（暂无）'}\n\n"
             f"## 最近聊过的\n{recent_context or '（暂无）'}\n\n"
             "## 要求\n"
@@ -262,6 +278,7 @@ class InnerStateService:
         days_since_last_interaction: float,
         recent_context: str,
         user_facts: str,
+        local_time_context: Optional[dict] = None,
     ) -> Optional[str]:
         """Generate a personalized proactive message via the cheap LLM.
 
@@ -279,6 +296,7 @@ class InnerStateService:
             days_since_last_interaction=days_since_last_interaction,
             recent_context=recent_context,
             user_facts=user_facts,
+            local_time_context=local_time_context,
         )
         router = await get_model_router()
         raw = await router.call_cheap(

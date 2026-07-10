@@ -5,6 +5,7 @@ import { useAuthStore } from '../stores/authStore'
 import { wrapPCM16AsWAV } from '../services/audioPlayer'
 import { FEEDBACK_COPY, type CharacterId } from '../data/uiContent'
 import { useToastStore } from '../stores/toastStore'
+import { authNavigate } from '../services/navigation'
 
 const WS_BASE = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/api/chat/ws`
 
@@ -226,9 +227,9 @@ export function useWebSocket() {
             return
           }
         } catch {
-          // Refresh failed — clear session, go to login
+          // Refresh failed — clear session, redirect via React Router
           useAuthStore.getState().clearSession()
-          window.location.href = '/login'
+          authNavigate('/login')
           return
         }
       }
