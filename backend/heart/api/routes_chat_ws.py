@@ -224,7 +224,9 @@ async def _precheck_billing(
             return effective_voice, True
     except Exception as e:
         logger.warning("billing_precheck_failed", error=str(e))
-        await ws.send_json({"type": "error", "msg": "Billing check failed"})
+        await ws.send_json(
+            {"type": "error", "code": "BILLING_CHECK_FAILED", "msg": "Billing check failed"}
+        )
         return False, False
 
 
@@ -470,13 +472,15 @@ async def _handle_chat_message(
     character_id = msg.get("character_id", "rin")
 
     if not user_text:
-        await ws.send_json({"type": "error", "msg": "Missing text"})
+        await ws.send_json({"type": "error", "code": "MISSING_TEXT", "msg": "Missing text"})
         return
 
     # Boundary guard: reject ids with no loaded Soul Spec (in-memory, no DB hit)
     # before they reach billing / orchestrator / persistence.
     if not is_known_character(character_id):
-        await ws.send_json({"type": "error", "msg": f"未知角色: {character_id}"})
+        await ws.send_json(
+            {"type": "error", "code": "SOUL_NOT_LOADED", "msg": f"未知角色: {character_id}"}
+        )
         return
 
     user_uuid = uuid.UUID(user_id)
@@ -489,7 +493,9 @@ async def _handle_chat_message(
     # ── 2. Run orchestrator ──
     orch = get_orchestrator()
     if orch is None:
-        await ws.send_json({"type": "error", "msg": "Orchestrator not available"})
+        await ws.send_json(
+            {"type": "error", "code": "SERVICE_UNAVAILABLE", "msg": "Orchestrator not available"}
+        )
         return
 
     voice_service = get_voice_service()
@@ -650,6 +656,40 @@ async def get_chat_history(
             for r in items
         ],
         "next_cursor": items[-1]["created_at"].isoformat() if has_next and items else None,
+    }
+
+
+@router.get("/api/chat/inbox-summary")
+async def get_inbox_summary(
+    current_user: TokenData = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Return per-character last-message summary for inbox sorting."""
+    uid = uuid.UUID(current_user.user_id)
+    result = await db.execute(
+        sql_text("""
+            SELECT DISTINCT ON (character_id)
+                character_id,
+                content,
+                modality,
+                created_at
+            FROM chat_messages
+            WHERE user_id = :uid
+            ORDER BY character_id, created_at DESC
+        """),
+        {"uid": uid},
+    )
+    rows = result.mappings().all()
+    return {
+        "items": [
+            {
+                "character_id": r["character_id"],
+                "last_message_text": r["content"] or "",
+                "last_message_at": r["created_at"].isoformat() if r["created_at"] else None,
+                "modality": r["modality"],
+            }
+            for r in rows
+        ]
     }
 
 

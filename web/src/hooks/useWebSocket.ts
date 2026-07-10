@@ -24,6 +24,7 @@ interface WsMessage {
   vad?: { energy?: number; mood?: string }
   intimacy?: number
   msg?: string
+  code?: string
   modality?: string
   credits_charged?: number
   balance?: number
@@ -61,6 +62,7 @@ export function useWebSocket() {
 
   const addMessage = useChatStore(s => s.addMessage)
   const appendToLast = useChatStore(s => s.appendToLast)
+  const setGenerating = useChatStore(s => s.setGenerating)
   const setStreaming = useChatStore(s => s.setStreaming)
   const setPlaying = useChatStore(s => s.setPlaying)
   const setCurrentTurnId = useChatStore(s => s.setCurrentTurnId)
@@ -107,6 +109,7 @@ export function useWebSocket() {
             timestamp: Date.now(),
             kind: pendingVoiceTurnRef.current ? 'voice' : 'text',
           })
+          setGenerating(cid, true)
           setStreaming(true)
           setPlaying(false)
           break
@@ -149,7 +152,9 @@ export function useWebSocket() {
         case 'message_bubble':
           // Replace the streaming placeholder (sequence_id=0) or add new bubble
           if (msg.sequence_id === 0) {
-            // Replace the empty streaming message added by turn_start
+            // Clear generating flag — bubbles are arriving, stop the dots
+            setGenerating(cid, false)
+            // Replace the streaming message content with the first split bubble
             useChatStore.setState((s) => {
               const msgs = s.messages[cid] ?? []
               const updated = msgs.map((m, idx) =>
@@ -213,6 +218,7 @@ export function useWebSocket() {
           pendingVoiceTurnRef.current = false
           break
         case 'insufficient_credits':
+          setGenerating(cid, false)
           setStreaming(false)
           setPlaying(false)
           setCurrentTurnId(null)
@@ -224,20 +230,31 @@ export function useWebSocket() {
           }
           break
         case 'interrupted':
+          setGenerating(cid, false)
           setStreaming(false)
           setPlaying(false)
           setCurrentTurnId(null)
           setPendingAssistantTurnId(null)
           pendingVoiceTurnRef.current = false
           break
-        case 'error':
+        case 'error': {
+          setGenerating(cid, false)
           setStreaming(false)
           setPlaying(false)
           setPendingAssistantTurnId(null)
           pendingVoiceTurnRef.current = false
-          // Previously swallowed silently (SUG-1) — surface a friendly toast.
-          useToastStore.getState().show(FEEDBACK_COPY.streamError, 'error')
+          const errCode = msg.code
+          let errMsg: string = FEEDBACK_COPY.streamError
+          if (errCode === 'SOUL_NOT_LOADED') {
+            errMsg = '角色加载中，请稍后重试'
+          } else if (errCode === 'SERVICE_UNAVAILABLE') {
+            errMsg = '服务暂时不可用，请稍后重试'
+          } else if (errCode === 'BILLING_CHECK_FAILED') {
+            errMsg = '账户验证失败，请重试'
+          }
+          useToastStore.getState().show(errMsg, 'error')
           break
+        }
       }
     }
 
@@ -274,7 +291,7 @@ export function useWebSocket() {
     ws.onerror = (err) => {
       console.error('[ws] error', err)
     }
-  }, [addMessage, appendMessageAudio, appendToLast, finalizeMessageAudio, setStreaming, setPlaying, setCurrentTurnId, setPendingAssistantTurnId, setVad])
+  }, [addMessage, appendMessageAudio, appendToLast, finalizeMessageAudio, setGenerating, setStreaming, setPlaying, setCurrentTurnId, setPendingAssistantTurnId, setVad])
 
   useEffect(() => {
     connectRef.current = connect

@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { Routes, Route, Navigate, useNavigate } from 'react-router-dom'
+import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
 import { setNavigate } from './services/navigation'
 import { AuthGuard } from './components/AuthGuard'
 import { SplashPage } from './pages/SplashPage'
@@ -32,17 +32,27 @@ function ChatConversationRouter() {
   return resolvedTheme === 'dark' ? <ChatDarkPage /> : <ChatLightPage />
 }
 
+const SKIP_SAVE_ROUTES = new Set(['/splash', '/onboarding', '/login', '/redeem', '/age-gate', '/'])
+
 export function App() {
   const { fontScale } = useAppStore()
   const accessToken = useAuthStore((s) => s.accessToken)
   const loadCharacters = useCharactersStore((s) => s.load)
   const navigate = useNavigate()
+  const location = useLocation()
 
   // Wire module-level navigate so api.ts / useWebSocket.ts can redirect
   // without a hard page reload (preserves React state and bfcache).
   useEffect(() => {
     setNavigate(navigate)
   }, [navigate])
+
+  // Save last route so PWA can restore it on next open
+  useEffect(() => {
+    if (!SKIP_SAVE_ROUTES.has(location.pathname) && !location.pathname.startsWith('/legal/')) {
+      localStorage.setItem('yuoyuo-last-route', location.pathname + location.search)
+    }
+  }, [location])
 
   useProactivePolling()
 

@@ -77,7 +77,7 @@ export function OTPInput({ length = 12, groupSize = 4, onComplete, onChange }: O
                 style={{
                   width: 'clamp(22px, 5.8vw, 32px)',
                   height: 'clamp(42px, 11vw, 52px)',
-                  fontSize: 'clamp(14px, 3.8vw, 18px)',
+                  fontSize: 'clamp(16px, 4.3vw, 20px)',
                 }}
                 className={`
                   min-w-0 text-center font-semibold font-brand

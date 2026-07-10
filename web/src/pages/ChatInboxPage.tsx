@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Avatar } from '../components/ui/Avatar'
 import { TabBar } from '../components/ui/TabBar'
@@ -8,9 +8,9 @@ import { useAppStore } from '../stores/appStore'
 import { useChatStore } from '../stores/chatStore'
 import { useProactiveStore } from '../stores/proactiveStore'
 import { useCharactersStore } from '../stores/charactersStore'
+import { getInboxSummary } from '../services/api'
 import {
   CHARACTER_PROFILES,
-  CONVERSATION_THREADS,
   formatConversationTime,
   getMessagePreview,
   getUnreadMessageCount,
@@ -88,12 +88,29 @@ export function ChatInboxPage() {
   const threads = useChatStore((s) => s.threads)
   const messages = useChatStore((s) => s.messages)
   const pendingByChar = useProactiveStore((s) => s.pendingByChar)
-  const clearedCharacters = useChatStore((s) => s.clearedCharacters)
   const setActiveCharacter = useChatStore((s) => s.setActiveCharacter)
   const clearThread = useChatStore((s) => s.clearThread)
   const clearMessages = useChatStore((s) => s.clearMessages)
   const serverCharacters = useCharactersStore((s) => s.characters)
   const [deleteTarget, setDeleteTarget] = useState<CharacterId | null>(null)
+  const [inboxSummary, setInboxSummary] = useState<Record<string, { lastText: string; lastAt: number }>>({})
+
+  useEffect(() => {
+    getInboxSummary()
+      .then((res) => {
+        const map: Record<string, { lastText: string; lastAt: number }> = {}
+        for (const item of res.items) {
+          if (item.last_message_at) {
+            map[item.character_id] = {
+              lastText: item.last_message_text,
+              lastAt: new Date(item.last_message_at).getTime(),
+            }
+          }
+        }
+        setInboxSummary(map)
+      })
+      .catch(() => {})
+  }, [])
 
   const pageBg = resolvedTheme === 'dark'
     ? '/assets/backgrounds/暗色聊天背景图.png'
@@ -108,25 +125,36 @@ export function ChatInboxPage() {
   const allConversations = catalog.map(({ id: characterId, displayName, avatarUrl }) => {
     const liveMessages = messages[characterId] ?? []
     const threadMessages = threads[characterId] ?? []
-    const isCleared = clearedCharacters.has(characterId)
-    const fallbackMessages = isCleared ? [] : (CONVERSATION_THREADS[characterId] ?? [])
-    const timeline = (liveMessages.length > 0 ? liveMessages : threadMessages.length > 0 ? threadMessages : fallbackMessages) as TimelineMessage[]
+    const timeline = (liveMessages.length > 0 ? liveMessages : threadMessages) as TimelineMessage[]
     const previewTimeline = timeline.map((item) => ({
       ...item,
       kind: item.kind ?? 'text',
       audioDuration: item.audioDuration,
     }))
     const lastMessage = timeline[timeline.length - 1]
+    const serverSummary = inboxSummary[characterId]
 
     // Proactive messages (SS06) not yet opened: count as unread and, when newest,
     // drive the preview so the user knows the character reached out.
     const pending = pendingByChar[characterId] ?? []
     const latestPending = pending[pending.length - 1]
+
+    // Use the most authoritative timestamp: proactive > local timeline > server summary
+    const localTimestamp = lastMessage?.timestamp ?? 0
+    const serverTimestamp = serverSummary?.lastAt ?? 0
+    const baseTimestamp = Math.max(localTimestamp, serverTimestamp)
     const lastTimestamp = latestPending
-      ? Math.max(lastMessage?.timestamp ?? 0, new Date(latestPending.created_at).getTime())
-      : lastMessage?.timestamp ?? 0
-    const preview = latestPending ? latestPending.content : getMessagePreview(previewTimeline)
+      ? Math.max(baseTimestamp, new Date(latestPending.created_at).getTime())
+      : baseTimestamp
+
+    // Preview: proactive > local > server
+    const localPreview = getMessagePreview(previewTimeline)
+    const preview = latestPending
+      ? latestPending.content
+      : (localPreview || serverSummary?.lastText || '')
+
     const unreadCount = getUnreadMessageCount(timeline) + pending.length
+    const totalMessages = timeline.length + pending.length + (serverSummary ? 1 : 0)
 
     return {
       profile: resolveCharacterProfile(characterId, displayName, avatarUrl),
@@ -135,12 +163,15 @@ export function ChatInboxPage() {
       updatedAt: lastTimestamp ? formatConversationTime(lastTimestamp) : '',
       unreadCount,
       isSelected: currentCharacterId === characterId,
-      totalMessages: timeline.length + pending.length,
+      totalMessages,
+      lastTimestamp,
     }
   })
 
-  // Filter out characters with neither history nor a pending proactive message
-  const conversations = allConversations.filter((c) => c.totalMessages > 0)
+  // Filter out characters with no history at all, then sort newest-first
+  const conversations = allConversations
+    .filter((c) => c.totalMessages > 0)
+    .sort((a, b) => b.lastTimestamp - a.lastTimestamp)
 
   const handleDelete = async (characterId: CharacterId) => {
     clearThread(characterId)

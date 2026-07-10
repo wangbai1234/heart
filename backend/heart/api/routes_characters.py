@@ -393,6 +393,30 @@ async def create_character(
     }
 
 
+@router.get("/{character_id}/draft")
+async def get_character_draft(
+    character_id: str,
+    current_user: TokenData = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Get a UGC character's creation draft (owner only)."""
+    uid = uuid.UUID(current_user.user_id)
+    await _require_owner(character_id, uid, db)
+
+    result = await db.execute(
+        text("""
+            SELECT draft FROM soul_specs
+            WHERE character_id = :cid AND status = 'active'
+            ORDER BY created_at DESC LIMIT 1
+        """),
+        {"cid": character_id},
+    )
+    draft = result.scalar_one_or_none()
+    if draft is None:
+        raise HTTPException(status_code=404, detail="草稿不存在")
+    return draft
+
+
 @router.patch("/{character_id}")
 async def update_character(
     character_id: str,

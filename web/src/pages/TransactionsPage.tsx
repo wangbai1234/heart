@@ -26,8 +26,10 @@ export function TransactionsPage() {
   const { balance, refresh: refreshCredits } = useCreditsStore()
   const [items, setItems] = useState<Transaction[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
   const [nextCursor, setNextCursor] = useState<string | null>(null)
   const [loadingMore, setLoadingMore] = useState(false)
+  const [loadMoreError, setLoadMoreError] = useState(false)
 
   useEffect(() => {
     refreshCredits()
@@ -36,22 +38,28 @@ export function TransactionsPage() {
 
   const loadInitial = async () => {
     setLoading(true)
+    setLoadError(false)
     try {
       const data = await getTransactions(undefined, 20)
       setItems(data.items)
       setNextCursor(data.next_cursor)
-    } catch { /* ignore */ }
+    } catch {
+      setLoadError(true)
+    }
     setLoading(false)
   }
 
   const loadMore = async () => {
     if (!nextCursor || loadingMore) return
     setLoadingMore(true)
+    setLoadMoreError(false)
     try {
       const data = await getTransactions(nextCursor, 20)
       setItems((prev) => [...prev, ...data.items])
       setNextCursor(data.next_cursor)
-    } catch { /* ignore */ }
+    } catch {
+      setLoadMoreError(true)
+    }
     setLoadingMore(false)
   }
 
@@ -90,6 +98,11 @@ export function TransactionsPage() {
               </div>
             ))}
           </div>
+        ) : loadError ? (
+          <div className="text-center py-12">
+            <p className="text-[var(--color-text-muted)] text-[14px]">加载失败</p>
+            <button onClick={loadInitial} className="mt-3 text-[13px] text-[var(--color-primary)] active:opacity-60">重试</button>
+          </div>
         ) : items.length === 0 ? (
           <div className="text-center py-12">
             <p className="text-[var(--color-text-muted)] text-[14px]">暂无积分记录</p>
@@ -119,6 +132,9 @@ export function TransactionsPage() {
               </div>
             ))}
 
+            {loadMoreError && (
+              <p className="w-full py-2 text-center text-[13px] text-[var(--color-error)]">加载失败，请重试</p>
+            )}
             {nextCursor && (
               <button
                 onClick={loadMore}

@@ -52,6 +52,8 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
   const addMessage = useChatStore((s) => s.addMessage)
   const setCharacterId = useChatStore((s) => s.setCharacterId)
   const appendMessage = useChatStore((s) => s.appendMessage)
+  const setLastFetchedAt = useChatStore((s) => s.setLastFetchedAt)
+  const isGenerating = useChatStore((s) => s.isGenerating[currentCharacterId as CharacterId] ?? false)
   const insufficientCredits = useChatStore((s) => s.insufficientCredits)
   const clearInsufficientCredits = useChatStore((s) => s.clearInsufficientCredits)
 
@@ -88,7 +90,8 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
     prevCharRef.current = currentCharacterId
 
     const existing = useChatStore.getState().messages[currentCharacterId] ?? []
-    if (existing.length > 0) {
+    const stale = Date.now() - (useChatStore.getState().lastFetchedAt[currentCharacterId] ?? 0) > 5 * 60 * 1000
+    if (existing.length > 0 && !stale) {
       setHistoryLoaded(true)
       return
     }
@@ -123,6 +126,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
             audioDuration: last.audio_duration_ms ?? undefined,
           })
         }
+        setLastFetchedAt(currentCharacterId, Date.now())
         setHistoryLoaded(true)
       })
       .catch(() => {
@@ -153,6 +157,36 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
       void ackProactive(user.id, pending.map((m) => m.id)).catch(() => {})
     }
   }, [historyLoaded, currentCharacterId, addMessage, appendMessage])
+
+  // Sync on visibilitychange: re-fetch latest 20 messages when app comes to foreground
+  useEffect(() => {
+    const handler = () => {
+      if (document.visibilityState !== 'visible') return
+      if (!isAuthenticated()) return
+      getChatHistory(currentCharacterId, undefined, 20)
+        .then((data) => {
+          const incomingMsgs = [...data.items].reverse()
+          const existing = useChatStore.getState().messages[currentCharacterId] ?? []
+          const existingIds = new Set(existing.map((m) => m.id))
+          const fresh = incomingMsgs.filter((item) => !existingIds.has(item.id))
+          for (const item of fresh) {
+            addMessage(currentCharacterId, {
+              id: item.id,
+              role: item.role as 'user' | 'assistant',
+              content: item.content,
+              timestamp: new Date(item.created_at).getTime(),
+              kind: item.modality === 'voice' ? 'voice' : 'text',
+              audioData: item.modality === 'voice' && item.audio_url ? `/api/chat/audio/${item.id}` : undefined,
+              audioDuration: item.audio_duration_ms ?? undefined,
+            })
+          }
+          if (fresh.length > 0) setLastFetchedAt(currentCharacterId, Date.now())
+        })
+        .catch(() => {})
+    }
+    document.addEventListener('visibilitychange', handler)
+    return () => document.removeEventListener('visibilitychange', handler)
+  }, [currentCharacterId, isAuthenticated, addMessage, setLastFetchedAt])
 
   // Auto-scroll on new messages
   useEffect(() => {
@@ -186,9 +220,29 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
   }, [])
 
   // Render a single message bubble
-  const renderMessage = (msg: Message, showAvatar: boolean) => {
+  const renderMessage = (msg: Message, showAvatar: boolean, isLastAndGenerating = false) => {
     const isAI = msg.role === 'assistant'
     const avatar = isAI ? profile.avatar : userAvatar
+
+    // While generating (streaming + waiting for message_bubble), always show typing dots
+    if (isAI && isLastAndGenerating) {
+      return (
+        <div className={`flex items-start gap-2 ${isAI ? 'self-start' : 'self-end flex-row-reverse'}`}>
+          {showAvatar ? (
+            <Avatar src={avatar} size={40} className="shrink-0 mt-[2px]" />
+          ) : (
+            <div className="w-[40px] shrink-0" />
+          )}
+          <div className={`max-w-[67%] px-4 py-[14px] ${
+            isDark
+              ? 'bg-[rgba(255,255,255,0.06)] backdrop-blur-[16px] rounded-[20px_20px_20px_6px] border border-[rgba(255,255,255,0.06)]'
+              : 'bg-[var(--color-glass-75)] backdrop-blur-[16px] rounded-[20px_20px_20px_6px] border border-[var(--color-border-glass)]'
+          }`}>
+            <BreathingDots />
+          </div>
+        </div>
+      )
+    }
 
     // Voice mode loading bubble uses the same shell as text loading
     if (msg.kind === 'voice' && !msg.audioData) {
@@ -363,6 +417,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
           const prev = index > 0 ? messages[index - 1] : null
           const showTime = shouldShowTimestamp(msg, prev)
           const showAvatar = !prev || prev.role !== msg.role || showTime
+          const isLastAndGenerating = index === messages.length - 1 && isGenerating
 
           return (
             <div key={msg.id} className="flex flex-col">
@@ -377,7 +432,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
                   </span>
                 </div>
               )}
-              {renderMessage(msg, showAvatar)}
+              {renderMessage(msg, showAvatar, isLastAndGenerating)}
             </div>
           )
         })}
@@ -418,7 +473,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
           onKeyDown={(e) => e.key === 'Enter' && handleSend()}
           placeholder={isStreaming ? '正在回复中…' : `想和${profile.shortName}说点什么…`}
           disabled={isStreaming}
-          className={`flex-1 bg-transparent outline-none text-[15px] ${
+          className={`flex-1 bg-transparent outline-none text-[16px] ${
             isDark ? 'text-[#EFE7DD] placeholder-[rgba(228,228,231,0.3)]' : 'text-[var(--color-ink)] placeholder-[var(--color-text-placeholder)]'
           }`}
         />
