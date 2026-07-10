@@ -9,6 +9,14 @@ from typing import Any, Dict
 from heart.core.config import settings
 
 
+class VoiceNotConfigured(Exception):
+    """Raised when a character has no voice configured (not in catalog or DB)."""
+
+    def __init__(self, character_id: str) -> None:
+        self.character_id = character_id
+        super().__init__(f"No voice configured for character: {character_id}")
+
+
 @dataclass(frozen=True)
 class VoiceProfile:
     """Runtime voice profile for one character."""
@@ -109,14 +117,14 @@ def get_voice_profile(character_id: str) -> VoiceProfile:
         profile_data = {}
 
     if character_id not in VOICE_CATALOG and not isinstance(profile_data, dict):
-        raise KeyError(f"Unknown voice: {character_id}/default")
+        raise VoiceNotConfigured(character_id)
     if character_id not in VOICE_CATALOG and not profile_data:
-        raise KeyError(f"Unknown voice: {character_id}/default")
+        raise VoiceNotConfigured(character_id)
 
     fallback = VOICE_CATALOG.get(character_id, {}).get("default", "")
     voice_id = str(profile_data.get("voice_id") or _legacy_voice_id(character_id) or fallback)
     if not voice_id:
-        raise KeyError(f"Unknown voice: {character_id}/default")
+        raise VoiceNotConfigured(character_id)
 
     clone_stability = _coerce_bool(
         profile_data.get("clone_stability"),
@@ -157,11 +165,11 @@ def get_voice_id(character_id: str, variant: str = "default") -> str:
         KeyError: If character_id/variant combination is not found.
     """
     if character_id not in VOICE_CATALOG and character_id not in _load_configured_profiles():
-        raise KeyError(f"Unknown voice: {character_id}/{variant}")
+        raise VoiceNotConfigured(character_id)
     if variant == "default":
         return _resolve_default_voice(character_id)
     if variant not in VOICE_CATALOG[character_id]:
-        raise KeyError(f"Unknown voice: {character_id}/{variant}")
+        raise VoiceNotConfigured(character_id)
     return VOICE_CATALOG[character_id][variant]
 
 

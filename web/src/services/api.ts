@@ -72,7 +72,18 @@ async function request<T>(
 
   if (!res.ok) {
     const errorBody = await res.json().catch(() => ({ detail: 'Request failed' }))
-    throw new ApiError(res.status, errorBody.detail || 'Request failed')
+    let message: string
+    if (Array.isArray(errorBody.detail)) {
+      // Pydantic v2 validation errors return an array of {loc, msg, type} objects
+      message = errorBody.detail
+        .map((d: any) => (d?.msg ?? JSON.stringify(d)))
+        .join('; ')
+    } else if (typeof errorBody.detail === 'string') {
+      message = errorBody.detail
+    } else {
+      message = 'Request failed'
+    }
+    throw new ApiError(res.status, message)
   }
 
   return res.json()

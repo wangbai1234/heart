@@ -406,6 +406,21 @@ async def _post_turn_billing(
 
     except Exception as e:
         logger.error("chat_persist_failed", error=str(e))
+        import contextlib
+
+        with contextlib.suppress(Exception):
+            await ws.send_json(
+                {"type": "error", "code": "PERSIST_FAILED", "msg": "消息保存失败，请重试"}
+            )
+            await ws.send_json(
+                {
+                    "type": "turn_end",
+                    "turn_id": turn_id,
+                    "modality": actual_modality,
+                    "credits_charged": 0,
+                    "balance": 0,
+                }
+            )
 
 
 async def _run_orchestrator(
@@ -444,10 +459,19 @@ async def _run_orchestrator(
             if await _handle_event(ws, event, stream_session, turn_id, character_id):
                 break
     except Exception as e:
+        from heart.ss08_voice.voice_catalog import VoiceNotConfigured
+
+        _is_vcfg = isinstance(e, VoiceNotConfigured)
         logger.error("chat_ws_stream_error", error=str(e))
         if stream_session:
             stream_session.cancel()
-        await ws.send_json({"type": "error", "msg": str(e)})
+        await ws.send_json(
+            {
+                "type": "error",
+                "code": "VOICE_NOT_CONFIGURED" if _is_vcfg else "STREAM_ERROR",
+                "msg": "该角色暂未配置音色" if _is_vcfg else str(e),
+            }
+        )
     finally:
         active_turns.pop(turn_id, None)
 
@@ -489,6 +513,29 @@ async def _handle_chat_message(
     effective_voice, can_proceed = await _precheck_billing(user_uuid, character_id, turn_id, ws)
     if not can_proceed:
         return
+
+    # ── 1b. Pre-populate voice catalog for UGC characters ──
+    # VoiceDirector.derive() uses the in-memory VOICE_CATALOG which only has built-ins.
+    # Resolve DB-backed voice for UGC characters now (async) and register before orchestrator starts.
+    if effective_voice:
+        from heart.ss08_voice.voice_catalog import VoiceNotConfigured, register_voice
+        from heart.ss08_voice.voice_resolver import resolve_voice_id
+
+        async with AsyncSession(_get_engine(), expire_on_commit=False) as _vdb:
+            _resolved_voice_id = await resolve_voice_id(character_id, _vdb)
+
+        if _resolved_voice_id:
+            register_voice(character_id, "default", _resolved_voice_id)
+        else:
+            await ws.send_json(
+                {
+                    "type": "error",
+                    "code": "VOICE_NOT_CONFIGURED",
+                    "msg": "该角色暂未配置音色",
+                    "character_id": character_id,
+                }
+            )
+            return
 
     # ── 2. Run orchestrator ──
     orch = get_orchestrator()
@@ -535,7 +582,19 @@ async def _handle_chat_message(
         )
 
     # ── 3. Post-turn: charge + persist ──
-    if turn_completed:
+    _full_text_empty = not "".join(collected_text).strip()
+    if turn_completed and _full_text_empty:
+        await ws.send_json({"type": "error", "code": "EMPTY_RESPONSE", "msg": "生成失败，请重试"})
+        await ws.send_json(
+            {
+                "type": "turn_end",
+                "turn_id": turn_id,
+                "modality": "text",
+                "credits_charged": 0,
+                "balance": 0,
+            }
+        )
+    elif turn_completed:
         actual_modality = "voice" if audio_produced else "text"
         await _post_turn_billing(
             ws,

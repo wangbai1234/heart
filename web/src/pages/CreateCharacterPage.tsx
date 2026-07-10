@@ -64,7 +64,8 @@ function buildDraft(fields: FormFields, avatarUrl?: string): CharacterDraftDTO {
     avatar_url: avatarUrl || undefined,
     persona: fields.persona.trim(),
     greeting_style: fields.greetingStyle,
-    gender: fields.gender,
+    // gender is UI-only state (used for preset voice filtering); backend CharacterDraft
+    // does not accept it yet (extra="forbid") — do not send until C-6 adds the field.
     speech_samples: fields.samples.map((s) => s.trim()).filter(Boolean),
     sliders: {
       warmth:        toApiSlider(fields.sliders.warmth),
