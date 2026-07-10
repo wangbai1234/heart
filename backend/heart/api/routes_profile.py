@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date, datetime, timezone
+from datetime import date
 from typing import Optional
 
 import structlog
@@ -26,6 +26,7 @@ class ProfileUpdate(BaseModel):
     display_name: Optional[str] = Field(None, min_length=1, max_length=20)
     gender: Optional[str] = None
     birthdate: Optional[str] = None  # ISO date string YYYY-MM-DD
+    timezone: Optional[str] = Field(None, max_length=64)  # IANA tz, e.g. "Asia/Shanghai"
 
 
 @router.get("")
@@ -60,6 +61,28 @@ async def get_profile(
     }
 
 
+def _apply_birthdate(
+    birthdate: str,
+    updates: list,
+    params: dict,
+) -> Optional[bool]:
+    """Validate birthdate, append SQL fragment, return age_verified flag or raise."""
+    try:
+        bd = date.fromisoformat(birthdate)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format, use YYYY-MM-DD") from None
+
+    today = date.today()
+    age_precise = today.year - bd.year - ((today.month, today.day) < (bd.month, bd.day))
+    updates.append("birthdate = :birthdate")
+    params["birthdate"] = bd
+
+    if age_precise >= 18:
+        updates.append("age_verified_at = NOW()")
+        return True
+    return False
+
+
 @router.patch("")
 async def update_profile(
     body: ProfileUpdate,
@@ -84,26 +107,19 @@ async def update_profile(
         updates.append("gender = :gender")
         params["gender"] = body.gender
 
+    if body.timezone is not None:
+        try:
+            from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+            ZoneInfo(body.timezone)
+        except (ZoneInfoNotFoundError, KeyError):
+            raise HTTPException(status_code=400, detail="Invalid timezone") from None
+        updates.append("timezone = :timezone")
+        params["timezone"] = body.timezone
+
     age_verified = None
     if body.birthdate is not None:
-        try:
-            bd = date.fromisoformat(body.birthdate)
-        except ValueError:
-            raise HTTPException(
-                status_code=400, detail="Invalid date format, use YYYY-MM-DD"
-            ) from None
-
-        today = date.today()
-        age_precise = today.year - bd.year - ((today.month, today.day) < (bd.month, bd.day))
-
-        updates.append("birthdate = :birthdate")
-        params["birthdate"] = bd
-
-        if age_precise >= 18:
-            updates.append("age_verified_at = NOW()")
-            age_verified = True
-        else:
-            age_verified = False
+        age_verified = _apply_birthdate(body.birthdate, updates, params)
 
     if not updates:
         raise HTTPException(status_code=400, detail="No fields to update")

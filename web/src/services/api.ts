@@ -188,6 +188,7 @@ export async function updateProfile(data: {
   display_name?: string
   gender?: string
   birthdate?: string
+  timezone?: string
 }): Promise<{ ok: boolean; age_verified: boolean | null; message?: string }> {
   return request('/profile', {
     method: 'PATCH',

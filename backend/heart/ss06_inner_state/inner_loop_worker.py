@@ -13,9 +13,11 @@ from __future__ import annotations
 import asyncio
 import collections
 import os
+import random
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 import structlog
 from sqlalchemy import text
@@ -30,6 +32,10 @@ logger = structlog.get_logger(__name__)
 
 # Daily proactive quota per (user, character), mirrors InnerStateService Gate I-5.
 DAILY_PROACTIVE_QUOTA = 3
+
+# Idle-time thresholds for ritual trigger gate (hours).
+MIN_IDLE_HOURS = 8.0
+DICE_IDLE_HOURS = 12.0
 
 # Bounded in-memory mirror of recently generated messages. Retained for one
 # release as a fallback/diagnostic; the source of truth is the
@@ -67,6 +73,39 @@ def get_pending_proactive_messages(
         and (character_id is None or m.character_id == character_id)
         and m.created_at >= cutoff
     ]
+
+
+def _build_local_time_context(
+    utc_now: datetime,
+    user_timezone: str,
+    hours_since_last_message: float,
+) -> dict:
+    """Return a time-context dict for the proactive content LLM prompt."""
+    try:
+        tz = ZoneInfo(user_timezone)
+    except Exception:
+        tz = ZoneInfo("Asia/Shanghai")
+
+    local_now = utc_now.astimezone(tz)
+    local_hour = local_now.hour
+    weekday_names = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"]
+    weekday_cn = weekday_names[local_now.weekday()]
+
+    if 5 <= local_hour < 12:
+        time_of_day = "早上"
+    elif 12 <= local_hour < 18:
+        time_of_day = "下午"
+    elif 18 <= local_hour < 22:
+        time_of_day = "傍晚"
+    else:
+        time_of_day = "深夜"
+
+    return {
+        "hour": local_hour,
+        "time_of_day": time_of_day,
+        "weekday": weekday_cn,
+        "hours_since_last_message": round(hours_since_last_message, 1),
+    }
 
 
 class InnerLoopWorker:
@@ -121,14 +160,21 @@ class InnerLoopWorker:
         """Tick all active user×character pairs with a single DB session."""
         try:
             async with self.db_session_factory() as session:
-                # Single JOIN query: get active users + relationship info + last activity
+                # Single JOIN query: active users + relationship + user timezone +
+                # last message from the user in this conversation
                 result = await session.execute(
                     text(
                         "SELECT s.user_id, s.character_id, s.last_activity_at, "
-                        "r.current_stage, r.intimacy_level "
+                        "r.current_stage, r.intimacy_level, "
+                        "COALESCE(u.timezone, 'Asia/Shanghai') AS user_timezone, "
+                        "(SELECT MAX(cm.created_at) FROM chat_messages cm "
+                        " WHERE cm.user_id = s.user_id "
+                        "   AND cm.character_id = s.character_id "
+                        "   AND cm.role = 'user') AS last_user_message_at "
                         "FROM sessions s "
                         "LEFT JOIN relationship_states r "
                         "  ON r.user_id = s.user_id AND r.character_id = s.character_id "
+                        "LEFT JOIN users u ON u.id = s.user_id "
                         "WHERE s.last_activity_at > NOW() - INTERVAL '7 days'"
                     )
                 )
@@ -142,6 +188,8 @@ class InnerLoopWorker:
                 last_activity = row[2]
                 relationship_stage = row[3] or "STRANGER"
                 intimacy = float(row[4] or 0.0)
+                user_timezone: str = row[5] or "Asia/Shanghai"
+                last_user_msg_at = row[6]
 
                 # Calculate days since last interaction
                 days_since_last = 0.0
@@ -150,6 +198,10 @@ class InnerLoopWorker:
                         last_activity = last_activity.replace(tzinfo=timezone.utc)
                     delta = datetime.now(timezone.utc) - last_activity
                     days_since_last = delta.total_seconds() / 86400
+
+                # Normalise last_user_message_at to UTC-aware datetime
+                if last_user_msg_at and hasattr(last_user_msg_at, "replace"):
+                    last_user_msg_at = last_user_msg_at.replace(tzinfo=timezone.utc)
 
                 # Check for anniversary
                 try:
@@ -190,10 +242,14 @@ class InnerLoopWorker:
                             content_preview=msg.content[:40],
                         )
 
-                    # Check for ritual triggers (morning/night)
+                    # Check for ritual triggers (idle-based, local-time-aware)
                     async with self.db_session_factory() as ritual_session:
                         ritual_msg = await self._check_ritual_triggers(
-                            user_id, character_id, ritual_session
+                            user_id,
+                            character_id,
+                            ritual_session,
+                            user_timezone=user_timezone,
+                            last_user_message_at=last_user_msg_at,
                         )
                     if ritual_msg is not None:
                         await self._persist(ritual_msg)
@@ -314,39 +370,46 @@ class InnerLoopWorker:
         character_id: str,
         session: AsyncSession,
         now: Optional[datetime] = None,
+        user_timezone: str = "Asia/Shanghai",
+        last_user_message_at: Optional[datetime] = None,
     ) -> Optional[ProactiveMessage]:
-        """Check for ritual triggers (morning/night greetings).
+        """Check for proactive triggers using idle-time gate + local-time context.
 
-        Returns a ProactiveMessage if a ritual should be triggered. ``now`` is
-        injectable for testing; defaults to the current UTC time.
+        New logic (replaces UTC hour-window):
+        - Primary gate: user must be idle >= 8 hours since their last message.
+          < 8 h → never fire (user is actively chatting, don't interrupt).
+          8-12 h → roll dice (50 % chance to fire).
+          > 12 h → always fire (AI should reach out proactively).
+        - Dedup gate: at most one proactive per (user, character) per day.
+        - Daily quota: counted toward DAILY_PROACTIVE_QUOTA.
+        - Content: generated by LLM with local-time context injected into the
+          prompt; falls back to legacy template only on LLM failure.
         """
         if now is None:
             now = datetime.now(timezone.utc)
-        hour = now.hour
 
-        # Morning ritual: 6-10 AM
-        if 6 <= hour <= 10:
-            ritual_type = "morning"
-        # Night ritual: 9 PM - 1 AM
-        elif 21 <= hour or hour <= 1:
-            ritual_type = "night"
+        # ── Idle gate ──────────────────────────────────────────────────────────
+        if last_user_message_at is None:
+            hours_since = float("inf")
         else:
+            hours_since = (now - last_user_message_at).total_seconds() / 3600
+
+        if hours_since < MIN_IDLE_HOURS:
             return None
 
-        trigger_type = f"ritual_{ritual_type}"
+        if MIN_IDLE_HOURS <= hours_since < DICE_IDLE_HOURS:
+            if random.random() > 0.5:
+                return None
 
-        # Dedup: at most one of this ritual per day. Persisting every proactive
-        # message (see _persist) is what makes this count meaningful — before,
-        # nothing was written so this always returned 0. Errors are NOT swallowed:
-        # a missing table now surfaces instead of silently spamming every tick.
+        trigger_type = "ritual_idle"
+
+        # ── Dedup & quota ──────────────────────────────────────────────────────
         already_sent = await proactive_repo.count_today(
             session, user_id, character_id, trigger_type
         )
         if already_sent > 0:
             return None
 
-        # Daily quota: rituals count toward the same max-per-day budget as
-        # tick()-generated proactives (Gate I-5), which they previously bypassed.
         sent_today = await proactive_repo.count_all_today(session, user_id, character_id)
         if sent_today >= DAILY_PROACTIVE_QUOTA:
             logger.info(
@@ -357,8 +420,18 @@ class InnerLoopWorker:
             )
             return None
 
-        # Generate ritual message — per-character greeting from the content registry.
-        content = get_ritual_greeting(character_id, ritual_type)
+        # ── Build local-time context + generate content ───────────────────────
+        ltc = _build_local_time_context(now, user_timezone, hours_since)
+        content = await self.inner_state_service._resolve_proactive_content(
+            character_id=character_id,
+            trigger_type=trigger_type,
+            relationship_stage="FRIEND",
+            intimacy=0.5,
+            days_since_last_interaction=hours_since / 24,
+            recent_context="",
+            user_facts="",
+            local_time_context=ltc,
+        )
 
         msg = ProactiveMessage(
             user_id=user_id,
@@ -372,7 +445,8 @@ class InnerLoopWorker:
             "ritual_triggered",
             user_id=str(user_id),
             character_id=character_id,
-            ritual_type=ritual_type,
+            hours_since=round(hours_since, 1),
+            local_time_of_day=ltc.get("time_of_day"),
         )
 
         return msg

@@ -5,7 +5,7 @@ import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { OTPInput } from '../components/ui/OTPInput'
 import { Toast } from '../components/ui/Toast'
-import { requestOtp, verifyOtp } from '../services/api'
+import { requestOtp, verifyOtp, updateProfile } from '../services/api'
 import { useVisualViewport } from '../hooks/useVisualViewport'
 
 const SESSION_KEY = 'yuoyuo-login-flow'
@@ -115,6 +115,13 @@ export function LoginPage() {
       })
       acceptLegalVersion('v1.0')
       clearSnapshot()
+      // Sync browser timezone to server on every login (handles cross-timezone travel)
+      try {
+        const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
+        if (tz) await updateProfile({ timezone: tz })
+      } catch {
+        // Non-fatal: server will use the stored or default timezone
+      }
       if (res.needs_profile) {
         navigate('/settings/profile', { replace: true })
       } else {
