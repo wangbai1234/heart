@@ -295,6 +295,7 @@ export interface CharacterDraftDTO {
   persona: string
   greeting_style: 'warm' | 'cool' | 'playful' | 'reserved' | 'intense'
   speech_samples?: string[]
+  gender?: 'male' | 'female'
   sliders: {
     warmth: number
     talkativeness: number

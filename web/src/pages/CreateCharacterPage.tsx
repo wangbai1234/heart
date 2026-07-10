@@ -9,6 +9,7 @@ import {
   getPresetVoices,
   setPresetVoice,
   getCharacterDraft,
+  uploadVoiceClone,
   getCharacterVoice,
   type CharacterDraftDTO,
   type PresetVoiceDTO,
@@ -63,6 +64,7 @@ function buildDraft(fields: FormFields, avatarUrl?: string): CharacterDraftDTO {
     avatar_url: avatarUrl || undefined,
     persona: fields.persona.trim(),
     greeting_style: fields.greetingStyle,
+    gender: fields.gender,
     speech_samples: fields.samples.map((s) => s.trim()).filter(Boolean),
     sliders: {
       warmth:        toApiSlider(fields.sliders.warmth),
@@ -80,6 +82,7 @@ interface FormFields {
   nameZh: string
   persona: string
   greetingStyle: GreetingStyle
+  gender: 'female' | 'male'
   sliders: Record<keyof CharacterDraftDTO['sliders'], number> // 0-100 UI scale
   samples: string[]
 }
@@ -89,6 +92,7 @@ function defaultForm(): FormFields {
     nameZh: '',
     persona: '',
     greetingStyle: 'warm',
+    gender: 'female',
     sliders: {
       warmth:        60,
       talkativeness: 50,
@@ -195,6 +199,13 @@ export function CreateCharacterPage() {
   const [presets, setPresets] = useState<PresetVoiceDTO[]>([])
   const [selectedPreset, setSelectedPreset] = useState<string>('')
   const [voiceSaving, setVoiceSaving] = useState(false)
+  const [playingPresetId, setPlayingPresetId] = useState<string | null>(null)
+  const previewAudioRef = useRef<HTMLAudioElement | null>(null)
+
+  // Clone voice upload state
+  const cloneInputRef = useRef<HTMLInputElement>(null)
+  const [cloneStatus, setCloneStatus] = useState<'idle' | 'uploading' | 'processing' | 'ready' | 'failed'>('idle')
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   // ?voice=<cid> mode: configure voice for an already-created character
   const voiceOnlyId = searchParams.get('voice') ?? ''
@@ -211,7 +222,21 @@ export function CreateCharacterPage() {
     if (step === 3) {
       getPresetVoices().then((res) => setPresets(res.presets)).catch(() => {})
     }
+    // Stop preview audio when leaving voice step
+    if (step !== 3 && previewAudioRef.current) {
+      previewAudioRef.current.pause()
+      previewAudioRef.current = null
+      setPlayingPresetId(null)
+    }
   }, [step])
+
+  // Clean up polling and audio on unmount
+  useEffect(() => {
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current)
+      if (previewAudioRef.current) previewAudioRef.current.pause()
+    }
+  }, [])
 
   // If editing, load full draft from the server to pre-populate all fields
   useEffect(() => {
@@ -224,6 +249,7 @@ export function CreateCharacterPage() {
         nameZh: draft.display_name?.zh || '',
         persona: draft.persona || '',
         greetingStyle: (draft.greeting_style as GreetingStyle) || 'warm',
+        gender: (draft.gender as 'female' | 'male') || 'female',
         sliders: {
           warmth:        Math.round((draft.sliders?.warmth ?? 0.6) * 100),
           talkativeness: Math.round((draft.sliders?.talkativeness ?? 0.5) * 100),
@@ -293,6 +319,68 @@ export function CreateCharacterPage() {
       setVoiceSaving(false)
     }
     navigate(`/chat/${createdCharacterId}`, { replace: true })
+  }
+
+  function handlePresetPlay(preset: PresetVoiceDTO) {
+    if (!preset.sample_url) return
+    if (playingPresetId === preset.id) {
+      previewAudioRef.current?.pause()
+      previewAudioRef.current = null
+      setPlayingPresetId(null)
+      return
+    }
+    if (previewAudioRef.current) {
+      previewAudioRef.current.pause()
+      previewAudioRef.current = null
+    }
+    const audio = new Audio(preset.sample_url)
+    previewAudioRef.current = audio
+    audio.onended = () => { setPlayingPresetId(null); previewAudioRef.current = null }
+    audio.play().catch(() => {})
+    setPlayingPresetId(preset.id)
+  }
+
+  async function handleCloneUpload(file: File) {
+    if (!createdCharacterId) return
+    const allowed = ['audio/wav', 'audio/mpeg', 'audio/mp3', 'audio/ogg', 'audio/webm', 'audio/mp4']
+    if (!allowed.some((t) => file.type.startsWith(t.split('/')[0]) && file.type.includes(t.split('/')[1]))) {
+      showToast('请上传 WAV 或 MP3 音频文件', 'error')
+      return
+    }
+    if (file.size > 20 * 1024 * 1024) {
+      showToast('文件不能超过 20MB', 'error')
+      return
+    }
+    setCloneStatus('uploading')
+    try {
+      await uploadVoiceClone(createdCharacterId, file)
+      setCloneStatus('processing')
+      // Poll until ready or failed (max 2 min)
+      let attempts = 0
+      pollRef.current = setInterval(async () => {
+        attempts++
+        if (attempts > 24) {
+          if (pollRef.current) clearInterval(pollRef.current)
+          setCloneStatus('failed')
+          return
+        }
+        try {
+          const voice = await getCharacterVoice(createdCharacterId)
+          if (voice.clone_status === 'ready') {
+            if (pollRef.current) clearInterval(pollRef.current)
+            setCloneStatus('ready')
+            showToast('克隆音色已就绪', 'success')
+          } else if (voice.clone_status === 'failed') {
+            if (pollRef.current) clearInterval(pollRef.current)
+            setCloneStatus('failed')
+          }
+        } catch { /* keep polling */ }
+      }, 5000)
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : '上传失败，请重试'
+      showToast(msg, 'error')
+      setCloneStatus('failed')
+    }
   }
 
   async function handleSubmit() {
@@ -462,6 +550,30 @@ export function CreateCharacterPage() {
               </div>
             </GlassCard>
 
+            {/* Gender */}
+            <SectionTitle>角色性别</SectionTitle>
+            <div className="flex gap-3">
+              {([['female', '女性', '👩'], ['male', '男性', '👨']] as const).map(([value, label, emoji]) => {
+                const active = form.gender === value
+                return (
+                  <button
+                    key={value}
+                    onClick={() => setForm((prev) => ({ ...prev, gender: value }))}
+                    className={`flex-1 flex items-center justify-center gap-2 py-3.5 rounded-[16px] border transition-all duration-[180ms] active:scale-[0.98] ${
+                      active
+                        ? 'bg-[rgba(255,183,197,0.22)] border-[rgba(255,183,197,0.55)] shadow-[0_2px_12px_rgba(255,143,171,0.15)]'
+                        : isDark
+                        ? 'bg-[var(--color-surface-card)] border-[var(--color-border-subtle)]'
+                        : 'bg-[rgba(255,255,255,0.72)] border-[rgba(255,255,255,0.60)]'
+                    } backdrop-blur-[12px]`}
+                  >
+                    <span className="text-[20px]">{emoji}</span>
+                    <span className={`text-[15px] font-semibold ${active ? 'text-[#E86083]' : 'text-[var(--color-ink)]'}`}>{label}</span>
+                  </button>
+                )
+              })}
+            </div>
+
             {/* Persona */}
             <SectionTitle>人设描述</SectionTitle>
             <GlassCard>
@@ -565,6 +677,7 @@ export function CreateCharacterPage() {
               )}
               {presets.map((preset) => {
                 const active = selectedPreset === preset.id
+                const isPlaying = playingPresetId === preset.id
                 return (
                   <button
                     key={preset.id}
@@ -597,6 +710,28 @@ export function CreateCharacterPage() {
                           </p>
                         )}
                       </div>
+                      {preset.sample_url && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handlePresetPlay(preset) }}
+                          className={`w-[36px] h-[36px] rounded-full flex items-center justify-center shrink-0 transition-colors ${
+                            isPlaying
+                              ? 'bg-[#FF8FAB] text-white'
+                              : 'bg-[rgba(255,183,197,0.22)] text-[#FF7DA1]'
+                          }`}
+                          aria-label={isPlaying ? '暂停试听' : '试听'}
+                        >
+                          {isPlaying ? (
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                              <rect x="6" y="4" width="4" height="16" rx="1" />
+                              <rect x="14" y="4" width="4" height="16" rx="1" />
+                            </svg>
+                          ) : (
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                              <polygon points="5,3 19,12 5,21" />
+                            </svg>
+                          )}
+                        </button>
+                      )}
                       {active && (
                         <div className="w-[20px] h-[20px] rounded-full bg-gradient-to-br from-[#FFB7C5] to-[#FF8FAB] flex items-center justify-center shrink-0">
                           <svg width="11" height="8" viewBox="0 0 11 8" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -609,6 +744,79 @@ export function CreateCharacterPage() {
                 )
               })}
             </div>
+
+            {/* Clone voice upload */}
+            {createdCharacterId && (
+              <>
+                <SectionTitle>或者克隆音色（选填）</SectionTitle>
+                <input
+                  ref={cloneInputRef}
+                  type="file"
+                  accept="audio/wav,audio/mpeg,audio/mp3,audio/ogg,audio/webm,audio/mp4"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    if (file) { e.target.value = ''; handleCloneUpload(file) }
+                  }}
+                />
+                <button
+                  onClick={() => cloneInputRef.current?.click()}
+                  disabled={cloneStatus === 'uploading' || cloneStatus === 'processing'}
+                  className={`w-full flex items-center gap-4 px-5 py-4 rounded-[16px] border transition-all duration-[180ms] active:scale-[0.98] backdrop-blur-[12px] ${
+                    cloneStatus === 'ready'
+                      ? 'bg-[rgba(75,200,130,0.12)] border-[rgba(75,200,130,0.40)]'
+                      : cloneStatus === 'failed'
+                      ? 'bg-[rgba(255,90,90,0.10)] border-[rgba(255,90,90,0.35)]'
+                      : isDark
+                      ? 'bg-[var(--color-surface-card)] border-[var(--color-border-subtle)]'
+                      : 'bg-[rgba(255,255,255,0.72)] border-[rgba(255,255,255,0.60)]'
+                  }`}
+                >
+                  <div className={`w-[42px] h-[42px] rounded-full flex items-center justify-center shrink-0 ${
+                    cloneStatus === 'ready' ? 'bg-[rgba(75,200,130,0.20)]' :
+                    cloneStatus === 'failed' ? 'bg-[rgba(255,90,90,0.15)]' :
+                    'bg-[rgba(255,183,197,0.18)]'
+                  }`}>
+                    {cloneStatus === 'uploading' || cloneStatus === 'processing' ? (
+                      <svg className="animate-spin w-5 h-5 text-[#FF7DA1]" viewBox="0 0 24 24" fill="none">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                      </svg>
+                    ) : cloneStatus === 'ready' ? (
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#4BC882" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="20,6 9,17 4,12" />
+                      </svg>
+                    ) : cloneStatus === 'failed' ? (
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FF5A5A" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                      </svg>
+                    ) : (
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FF7DA1" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                        <polyline points="17,8 12,3 7,8" />
+                        <line x1="12" y1="3" x2="12" y2="15" />
+                      </svg>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0 text-left">
+                    <p className={`text-[15px] font-semibold ${
+                      cloneStatus === 'ready' ? 'text-[#4BC882]' :
+                      cloneStatus === 'failed' ? 'text-[#FF5A5A]' :
+                      'text-[var(--color-ink)]'
+                    }`}>
+                      {cloneStatus === 'idle' && '上传音频克隆音色'}
+                      {cloneStatus === 'uploading' && '上传中…'}
+                      {cloneStatus === 'processing' && '克隆中，请稍候…'}
+                      {cloneStatus === 'ready' && '克隆完成 ✓'}
+                      {cloneStatus === 'failed' && '克隆失败，点击重试'}
+                    </p>
+                    <p className="text-[12px] text-[var(--color-text-muted)] mt-[2px]">
+                      WAV / MP3，10–30 秒，最大 20MB
+                    </p>
+                  </div>
+                </button>
+              </>
+            )}
           </>
         )}
 

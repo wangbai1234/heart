@@ -13,6 +13,7 @@ import { Dialog } from './ui/Dialog'
 import { Button } from './ui/Button'
 import { Avatar } from './ui/Avatar'
 import VoiceMessageBubble from './VoiceMessageBubble'
+import { useSwipeNavigation } from '../hooks/useSwipeNavigation'
 
 const EMPTY_MESSAGES: Message[] = []
 
@@ -27,6 +28,9 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
   const [historyLoaded, setHistoryLoaded] = useState(false)
   const [expandedVoiceTextIds, setExpandedVoiceTextIds] = useState<Set<string>>(new Set())
   const scrollRef = useRef<HTMLDivElement>(null)
+
+  // Right-swipe from left edge → back to chat list
+  useSwipeNavigation({ onRightSwipe: () => navigate('/home') })
 
   const storedCharacterId = useAppStore((s) => s.currentCharacterId)
   const setCharacter = useAppStore((s) => s.setCharacter)
