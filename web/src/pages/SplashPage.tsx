@@ -12,15 +12,22 @@ export function SplashPage() {
 
   useEffect(() => {
     if (freeze) return
+    const delay = isAuthenticated() ? 0 : 1500
     const timer = setTimeout(() => {
       if (isAuthenticated()) {
-        navigate('/home', { replace: true })
+        const lastRoute = localStorage.getItem('yuoyuo-last-route')
+        const skip = ['/splash', '/onboarding', '/login', '/redeem', '/', '']
+        if (lastRoute && !skip.includes(lastRoute) && !lastRoute.startsWith('/legal/')) {
+          navigate(lastRoute, { replace: true })
+        } else {
+          navigate('/home', { replace: true })
+        }
       } else if (!hasSeenOnboarding) {
         navigate('/onboarding', { replace: true })
       } else {
         navigate('/login', { replace: true })
       }
-    }, 2500)
+    }, delay)
 
     return () => clearTimeout(timer)
   }, [isAuthenticated, hasSeenOnboarding, navigate, freeze])

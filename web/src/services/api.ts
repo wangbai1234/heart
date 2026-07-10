@@ -235,6 +235,12 @@ export async function exportData(): Promise<any> {
 
 // ── Chat API ───────────────────────────────────────────────────────
 
+export async function getInboxSummary(): Promise<{
+  items: Array<{ character_id: string; last_message_text: string; last_message_at: string | null; modality: string }>
+}> {
+  return request('/chat/inbox-summary')
+}
+
 export async function getChatHistory(
   characterId: string,
   cursor?: string,
@@ -329,6 +335,10 @@ export async function updateCharacter(
   draft: CharacterDraftDTO,
 ): Promise<{ id: string; spec_version: string }> {
   return request(`/characters/${characterId}`, { method: 'PATCH', body: JSON.stringify(draft) })
+}
+
+export async function getCharacterDraft(characterId: string): Promise<CharacterDraftDTO> {
+  return request(`/characters/${characterId}/draft`)
 }
 
 export async function setCharacterVisibility(

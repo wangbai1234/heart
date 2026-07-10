@@ -8,6 +8,8 @@ import {
   uploadCharacterAvatar,
   getPresetVoices,
   setPresetVoice,
+  getCharacterDraft,
+  getCharacterVoice,
   type CharacterDraftDTO,
   type PresetVoiceDTO,
 } from '../services/api'
@@ -211,16 +213,39 @@ export function CreateCharacterPage() {
     }
   }, [step])
 
-  // If editing, populate form from catalog's existing character data
-  // (draft fields not stored client-side; user sees defaults + can re-fill)
+  // If editing, load full draft from the server to pre-populate all fields
   useEffect(() => {
-    if (editId) {
+    if (!editId) return
+    Promise.all([
+      getCharacterDraft(editId),
+      getCharacterVoice(editId).catch(() => null),
+    ]).then(([draft, voiceConfig]) => {
+      setForm({
+        nameZh: draft.display_name?.zh || '',
+        persona: draft.persona || '',
+        greetingStyle: (draft.greeting_style as GreetingStyle) || 'warm',
+        sliders: {
+          warmth:        Math.round((draft.sliders?.warmth ?? 0.6) * 100),
+          talkativeness: Math.round((draft.sliders?.talkativeness ?? 0.5) * 100),
+          directness:    Math.round((draft.sliders?.directness ?? 0.5) * 100),
+          humor:         Math.round((draft.sliders?.humor ?? 0.4) * 100),
+          playfulness:   Math.round((draft.sliders?.playfulness ?? 0.5) * 100),
+          steadiness:    Math.round((draft.sliders?.steadiness ?? 0.6) * 100),
+        },
+        samples: [
+          draft.speech_samples?.[0] || '',
+          draft.speech_samples?.[1] || '',
+          draft.speech_samples?.[2] || '',
+        ],
+      })
+      if (draft.avatar_url) setAvatarUrl(draft.avatar_url)
+      if (voiceConfig?.preset_voice_id) setSelectedPreset(voiceConfig.preset_voice_id)
+    }).catch(() => {
+      // Fallback: at least load display name from catalog
       const char = characters.find((c) => c.id === editId)
-      if (char) {
-        setForm((prev) => ({ ...prev, nameZh: char.display_name }))
-      }
-    }
-  }, [editId, characters])
+      if (char) setForm((prev) => ({ ...prev, nameZh: char.display_name }))
+    })
+  }, [editId])
 
   async function handleAvatarFile(file: File) {
     if (!file.type.startsWith('image/')) {
@@ -447,7 +472,7 @@ export function CreateCharacterPage() {
                   onChange={(e) => setForm((prev) => ({ ...prev, persona: e.target.value }))}
                   maxLength={MAX_PERSONA}
                   rows={8}
-                  className="w-full text-[15px] leading-[1.7] text-[var(--color-ink)] bg-transparent outline-none resize-none placeholder:text-[var(--color-text-placeholder)]"
+                  className="w-full text-[16px] leading-[1.7] text-[var(--color-ink)] bg-transparent outline-none resize-none placeholder:text-[var(--color-text-placeholder)]"
                 />
                 <div className={`text-right text-[12px] mt-1 tabular-nums ${
                   personaLen > MAX_PERSONA
@@ -474,7 +499,7 @@ export function CreateCharacterPage() {
                       value={s}
                       onChange={(e) => setSample(i, e.target.value)}
                       maxLength={80}
-                      className="flex-1 text-[15px] text-[var(--color-ink)] bg-transparent outline-none placeholder:text-[var(--color-text-placeholder)]"
+                      className="flex-1 text-[16px] text-[var(--color-ink)] bg-transparent outline-none placeholder:text-[var(--color-text-placeholder)]"
                     />
                   </div>
                 ))}

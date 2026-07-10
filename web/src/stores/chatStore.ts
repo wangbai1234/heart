@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
 import { concatAudioBase64 } from '../services/audioConcat'
 import { type CharacterId, type ConversationMessage } from '../data/uiContent'
 
@@ -32,6 +33,7 @@ interface ChatState {
 
   // Per-character streaming messages
   messages: Record<CharacterId, Message[]>
+  lastFetchedAt: Record<string, number>
   isStreaming: boolean
   isPlaying: boolean
   currentTurnId: string | null
@@ -40,6 +42,11 @@ interface ChatState {
   characterId: string
   insufficientCredits: { needed: number; balance: number } | null
   clearedCharacters: Set<CharacterId>
+
+  isGenerating: Record<string, boolean>
+
+  setLastFetchedAt: (characterId: string, ts: number) => void
+  setGenerating: (cid: string, val: boolean) => void
 
   // Thread management (from conversationStore)
   setActiveCharacter: (id: CharacterId) => void
@@ -78,13 +85,17 @@ function cloneThreads(): Record<CharacterId, ConversationMessage[]> {
   }
 }
 
-export const useChatStore = create<ChatState>((set) => ({
+export const useChatStore = create<ChatState>()(
+  persist(
+  (set) => ({
   // Per-character threads
   threads: cloneThreads(),
   activeCharacterId: 'rin',
 
   // Per-character streaming messages
   messages: emptyMessages(),
+  lastFetchedAt: {},
+  isGenerating: {},
   isStreaming: false,
   isPlaying: false,
   currentTurnId: null,
@@ -93,6 +104,11 @@ export const useChatStore = create<ChatState>((set) => ({
   characterId: 'rin',
   insufficientCredits: null,
   clearedCharacters: new Set<CharacterId>(),
+
+  setLastFetchedAt: (characterId, ts) =>
+    set((s) => ({ lastFetchedAt: { ...s.lastFetchedAt, [characterId]: ts } })),
+  setGenerating: (cid, val) =>
+    set((s) => ({ isGenerating: { ...s.isGenerating, [cid]: val } })),
 
   // Thread management
   setActiveCharacter: (id) => set({ activeCharacterId: id }),
@@ -192,9 +208,24 @@ export const useChatStore = create<ChatState>((set) => ({
         clearedCharacters: cleared,
         isStreaming: false,
         isPlaying: false,
+        isGenerating: { ...s.isGenerating, [characterId]: false },
         currentTurnId: null,
         pendingAssistantTurnId: null,
         insufficientCredits: null,
       }
     }),
-}))
+  }),
+  {
+    name: 'yuoyuo-chat',
+    partialize: (state) => ({
+      messages: Object.fromEntries(
+        Object.entries(state.messages).map(([cid, msgs]) => [
+          cid,
+          msgs.map((m) => ({ ...m, audioData: undefined, audioChunks: undefined })),
+        ])
+      ),
+      threads: state.threads,
+      lastFetchedAt: state.lastFetchedAt,
+    }),
+  }
+))

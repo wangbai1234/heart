@@ -290,7 +290,7 @@ export function SettingsPage() {
               value={deleteConfirmText}
               onChange={(e) => setDeleteConfirmText(e.target.value)}
               placeholder="输入邮箱确认"
-              className="w-full px-4 py-3 rounded-[12px] bg-[var(--color-glass-55)] border border-[var(--color-divider-inset)] text-[15px] text-[var(--color-ink)] outline-none mb-4"
+              className="w-full px-4 py-3 rounded-[12px] bg-[var(--color-glass-55)] border border-[var(--color-divider-inset)] text-[16px] text-[var(--color-ink)] outline-none mb-4"
             />
             <div className="flex gap-3">
               <Button variant="ghost" size="sm" onClick={() => setDeleteStep(1)} className="flex-1">
