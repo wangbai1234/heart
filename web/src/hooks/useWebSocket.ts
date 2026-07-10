@@ -14,6 +14,8 @@ interface WsMessage {
   turn_id?: string
   delta?: string
   text?: string
+  content?: string
+  sequence_id?: number
   data_b64?: string
   seq?: number
   sentence_seq?: number
@@ -140,6 +142,29 @@ export function useWebSocket() {
               storedB64 = arrayBufferToBase64(wrapPCM16AsWAV(rawBuffer))
             }
             appendMessageAudio(cid, currentTurnId, storedB64, durationMs, msg.seq ?? 0, audioFormat)
+          }
+          break
+        case 'message_bubble':
+          // Replace the streaming placeholder (sequence_id=0) or add new bubble
+          if (msg.sequence_id === 0) {
+            // Replace the empty streaming message added by turn_start
+            useChatStore.setState((s) => {
+              const msgs = s.messages[cid] ?? []
+              const updated = msgs.map((m, idx) =>
+                idx === msgs.length - 1 && m.role === 'assistant'
+                  ? { ...m, content: msg.content ?? '' }
+                  : m
+              )
+              return { messages: { ...s.messages, [cid]: updated } }
+            })
+          } else {
+            addMessage(cid, {
+              id: `${msg.turn_id ?? ''}-${msg.sequence_id ?? 0}`,
+              role: 'assistant',
+              content: msg.content ?? '',
+              timestamp: Date.now(),
+              kind: 'text',
+            })
           }
           break
         case 'turn_end':

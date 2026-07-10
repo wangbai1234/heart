@@ -253,6 +253,70 @@ async def charge_turn(
     raise InsufficientCreditsError(needed=amount, balance=balance)
 
 
+async def deduct_credits(
+    db: AsyncSession,
+    user_id: uuid.UUID,
+    amount: int,
+    idempotency_key: str,
+    type_str: str = "consume_text",
+) -> int:
+    """Deduct *amount* fen from the user balance. Returns new balance in fen.
+
+    Idempotent: a duplicate *idempotency_key* with the same amount returns the
+    previously recorded ``balance_after`` without re-deducting.
+
+    Raises InsufficientCreditsError when the balance would go negative.
+    """
+    tx_id = uuid.uuid4()
+
+    result = await db.execute(
+        text("""
+            WITH updated AS (
+                UPDATE users SET credits_balance = credits_balance - :delta
+                WHERE id = :uid AND credits_balance >= :delta
+                RETURNING credits_balance AS balance_after
+            )
+            INSERT INTO credit_transactions
+                (id, user_id, delta, balance_after, type, ref_type, ref_id, idempotency_key)
+            SELECT :tx_id, :uid, -:delta, updated.balance_after,
+                   :type, 'message', :idem_key, :idem_key
+            FROM updated
+            ON CONFLICT (idempotency_key) DO NOTHING
+            RETURNING balance_after
+        """),
+        {
+            "tx_id": tx_id,
+            "uid": user_id,
+            "delta": amount,
+            "type": type_str,
+            "idem_key": idempotency_key,
+        },
+    )
+    new_balance = result.scalar_one_or_none()
+
+    if new_balance is not None:
+        logger.debug(
+            "credits_deducted",
+            user_id=str(user_id),
+            amount=amount,
+            balance=new_balance,
+            idem_key=idempotency_key,
+        )
+        return new_balance
+
+    # Idempotency hit or insufficient balance — check which
+    existing = await db.execute(
+        text("SELECT balance_after FROM credit_transactions WHERE idempotency_key = :key"),
+        {"key": idempotency_key},
+    )
+    existing_row = existing.scalar_one_or_none()
+    if existing_row is not None:
+        return existing_row
+
+    balance = await get_balance(db, user_id)
+    raise InsufficientCreditsError(needed=amount, balance=balance)
+
+
 async def refund(
     db: AsyncSession,
     user_id: uuid.UUID,

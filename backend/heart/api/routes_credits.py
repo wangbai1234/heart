@@ -32,7 +32,7 @@ async def balance(
     """Return current credits balance."""
     uid = uuid.UUID(current_user.user_id)
     bal = await get_balance(db, uid)
-    return {"balance": bal}
+    return {"balance": bal / 100}
 
 
 @router.get("/transactions")
@@ -75,10 +75,10 @@ async def transactions(
     return {
         "items": [
             {
-                "delta": r["delta"],
+                "delta": r["delta"] / 100,
                 "type": r["type"],
                 "ref_type": r["ref_type"],
-                "balance_after": r["balance_after"],
+                "balance_after": r["balance_after"] / 100,
                 "created_at": r["created_at"].isoformat() if r["created_at"] else None,
             }
             for r in items
@@ -103,7 +103,7 @@ async def redeem_code(
     uid = uuid.UUID(current_user.user_id)
     try:
         new_balance = await redeem(db, uid, body.code)
-        return {"ok": True, "credited": True, "balance": new_balance}
+        return {"ok": True, "credited": True, "balance": new_balance / 100}
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
     except InsufficientCreditsError:
@@ -116,9 +116,9 @@ async def redeem_code(
 async def pricing() -> dict:
     """Return current pricing info."""
     return {
-        "signup_grant": settings.signup_grant_credits,
-        "per_text": settings.credits_per_text_turn,
-        "per_voice": settings.credits_per_voice_turn,
+        "signup_grant": settings.signup_grant_credits / 100,
+        "per_text": settings.credits_cost_text_message / 100,
+        "per_voice": settings.credits_cost_voice_message / 100,
         "afdian_url": settings.afdian_sponsor_url,
         "tiers": [
             {"label": "尝鲜", "price": 6, "credits": 300},

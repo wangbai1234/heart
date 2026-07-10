@@ -149,10 +149,12 @@ class Settings(BaseSettings):
     smtp_username: str = ""
     smtp_password: str = ""
 
-    # Credits / Billing
-    signup_grant_credits: int = 100
-    credits_per_text_turn: int = 1
-    credits_per_voice_turn: int = 5
+    # Credits / Billing (centesimal: 1 display credit = 100 fen internally)
+    signup_grant_credits: int = 10000  # 100 display credits × 100
+    credits_per_text_turn: int = 100  # 1 display credit (legacy turn billing)
+    credits_per_voice_turn: int = 500  # 5 display credits (legacy turn billing)
+    credits_cost_text_message: int = 50  # 0.5 display credits per text bubble
+    credits_cost_voice_message: int = 500  # 5 display credits per voice message
     afdian_user_id: str = ""
     afdian_webhook_token: str = ""
     afdian_sponsor_url: str = "https://afdian.com/a/yuoyuo"
