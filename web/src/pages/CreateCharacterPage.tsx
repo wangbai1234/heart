@@ -221,7 +221,11 @@ export function CreateCharacterPage() {
 
   useEffect(() => {
     if (step === 3) {
-      getPresetVoices().then((res) => setPresets(res.presets)).catch(() => {})
+      // Filter presets by the character's gender selected in step 1.
+      // isVoiceOnly path skips step 1 entirely, so use undefined = no filter
+      // and fall back to showing all voices.
+      const genderFilter = isVoiceOnly ? undefined : form.gender
+      getPresetVoices(genderFilter).then((res) => setPresets(res.presets)).catch(() => {})
     }
     // Stop preview audio when leaving voice step
     if (step !== 3 && previewAudioRef.current) {
@@ -229,7 +233,7 @@ export function CreateCharacterPage() {
       previewAudioRef.current = null
       setPlayingPresetId(null)
     }
-  }, [step])
+  }, [step, form.gender, isVoiceOnly])
 
   // Clean up polling and audio on unmount
   useEffect(() => {

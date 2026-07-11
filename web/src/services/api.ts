@@ -400,6 +400,7 @@ export interface PresetVoiceDTO {
   provider: string
   description?: string | null
   sample_url?: string | null
+  gender?: 'male' | 'female'
 }
 
 export interface CharacterVoiceDTO {
@@ -411,8 +412,11 @@ export interface CharacterVoiceDTO {
   has_voice?: boolean
 }
 
-export async function getPresetVoices(): Promise<{ presets: PresetVoiceDTO[] }> {
-  return request('/voice/presets')
+export async function getPresetVoices(
+  gender?: 'male' | 'female',
+): Promise<{ presets: PresetVoiceDTO[] }> {
+  const qs = gender ? `?gender=${gender}` : ''
+  return request(`/voice/presets${qs}`)
 }
 
 export async function getCharacterVoice(characterId: string): Promise<CharacterVoiceDTO> {
