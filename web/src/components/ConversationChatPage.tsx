@@ -7,7 +7,7 @@ import { CHARACTER_PROFILES, resolveCharacterProfile, shouldShowTimestamp, forma
 import { useCharactersStore } from '../stores/charactersStore'
 import { useWebSocket } from '../hooks/useWebSocket'
 import { useProactiveStore } from '../stores/proactiveStore'
-import { getChatHistory, ackProactive } from '../services/api'
+import { getChatHistory, ackProactive, markCharacterRead } from '../services/api'
 import { BreathingDots } from './ui/BreathingDots'
 import { Dialog } from './ui/Dialog'
 import { Button } from './ui/Button'
@@ -70,6 +70,16 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
   const pageBg = isDark
     ? '/assets/backgrounds/暗色聊天背景图.png'
     : '/assets/backgrounds/聊天背景图.png'
+
+  const setInboxUnreadTotal = useAppStore((s) => s.setInboxUnreadTotal)
+
+  // Mark character read on mount: clears the unread badge for this character.
+  useEffect(() => {
+    if (!isAuthenticated()) return
+    markCharacterRead(currentCharacterId).catch(() => {})
+    // Optimistically clear badge; ChatInboxPage will recompute on next open.
+    setInboxUnreadTotal(0)
+  }, [currentCharacterId, isAuthenticated, setInboxUnreadTotal])
 
   // Set character ID in chat store
   useEffect(() => {
@@ -162,11 +172,12 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
     }
   }, [historyLoaded, currentCharacterId, addMessage, appendMessage])
 
-  // Sync on visibilitychange: re-fetch latest 20 messages when app comes to foreground
+  // Sync on visibilitychange: re-fetch latest messages + mark character read
   useEffect(() => {
     const handler = () => {
       if (document.visibilityState !== 'visible') return
       if (!isAuthenticated()) return
+      markCharacterRead(currentCharacterId).catch(() => {})
       getChatHistory(currentCharacterId, undefined, 20)
         .then((data) => {
           const incomingMsgs = [...data.items].reverse()

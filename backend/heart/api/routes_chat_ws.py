@@ -758,18 +758,32 @@ async def get_inbox_summary(
     current_user: TokenData = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
-    """Return per-character last-message summary for inbox sorting."""
+    """Return per-character last-message summary with server-side unread counts."""
     uid = uuid.UUID(current_user.user_id)
     result = await db.execute(
         sql_text("""
-            SELECT DISTINCT ON (character_id)
-                character_id,
-                content,
-                modality,
-                created_at
-            FROM chat_messages
-            WHERE user_id = :uid
-            ORDER BY character_id, created_at DESC
+            SELECT
+                m.character_id,
+                m.content,
+                m.modality,
+                m.created_at,
+                (
+                    SELECT COUNT(*)
+                    FROM chat_messages cm
+                    WHERE cm.user_id    = :uid
+                      AND cm.character_id = m.character_id
+                      AND cm.role         = 'assistant'
+                      AND cm.created_at   > COALESCE(rs.last_read_at, '-infinity'::timestamptz)
+                ) AS unread_count
+            FROM (
+                SELECT DISTINCT ON (character_id)
+                    character_id, content, modality, created_at
+                FROM chat_messages
+                WHERE user_id = :uid
+                ORDER BY character_id, created_at DESC
+            ) m
+            LEFT JOIN user_character_read_state rs
+                ON rs.user_id = :uid AND rs.character_id = m.character_id
         """),
         {"uid": uid},
     )
@@ -781,10 +795,33 @@ async def get_inbox_summary(
                 "last_message_text": r["content"] or "",
                 "last_message_at": r["created_at"].isoformat() if r["created_at"] else None,
                 "modality": r["modality"],
+                "unread_count": int(r["unread_count"] or 0),
             }
             for r in rows
         ]
     }
+
+
+@router.post("/api/chat/{character_id}/mark-read")
+async def mark_character_read(
+    character_id: str,
+    current_user: TokenData = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Upsert last_read_at for a character so subsequent inbox-summary calls
+    return an accurate unread_count."""
+    uid = uuid.UUID(current_user.user_id)
+    await db.execute(
+        sql_text("""
+            INSERT INTO user_character_read_state (user_id, character_id, last_read_at)
+            VALUES (:uid, :cid, NOW())
+            ON CONFLICT (user_id, character_id)
+            DO UPDATE SET last_read_at = EXCLUDED.last_read_at
+        """),
+        {"uid": uid, "cid": character_id},
+    )
+    await db.commit()
+    return {"ok": True}
 
 
 @router.get("/api/chat/audio/{message_id}")
