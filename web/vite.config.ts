@@ -39,6 +39,19 @@ export default defineConfig({
         navigateFallback: '/index.html',
         // Never let the SW cache/serve API or WebSocket traffic.
         navigateFallbackDenylist: [/^\/api/],
+        runtimeCaching: [
+          {
+            // Stale-while-revalidate for auth check: SW serves cached response
+            // immediately on PWA cold start (eliminates the auth round-trip wait),
+            // then updates the cache in the background.
+            urlPattern: /^\/api\/auth\/me$/,
+            handler: 'StaleWhileRevalidate',
+            options: {
+              cacheName: 'auth-me-cache',
+              expiration: { maxEntries: 1, maxAgeSeconds: 60 },
+            },
+          },
+        ],
       },
     }),
   ],
