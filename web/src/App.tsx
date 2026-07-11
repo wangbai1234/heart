@@ -27,6 +27,7 @@ import { useAppStore } from './stores/appStore'
 import { useAuthStore } from './stores/authStore'
 import { useCharactersStore } from './stores/charactersStore'
 import { useAppBadge } from './hooks/useAppBadge'
+import { useSwipeNavigation } from './hooks/useSwipeNavigation'
 
 function ChatConversationRouter() {
   const { resolvedTheme } = useThemeStore()
@@ -42,6 +43,9 @@ export function App() {
 
   // Global badge: drives navigator.setAppBadge regardless of which page is active.
   useAppBadge(inboxUnreadTotal)
+  // Global back gesture: priority=0 yields to any page that registers its own
+  // priority=1 handler (HomePage blocks, ConversationChatPage overrides target).
+  useSwipeNavigation({ priority: 0 })
   const loadCharacters = useCharactersStore((s) => s.load)
   const navigate = useNavigate()
   const location = useLocation()
