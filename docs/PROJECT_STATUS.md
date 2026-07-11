@@ -4,15 +4,167 @@
 >
 > 这份文件是当前真理。其它历史文件可以参考，但当与本文件冲突时，**以本文件为准**。
 
-**最后更新**：2026-07-06
-**当前 Phase**：✅ 商业外壳 + 记忆系统修复 + 语义召回 全部合并 main，进入手机端（响应式 Web）全面测试
-**当前分支**：main（PR #86–#94 均已合并）
+**最后更新**：2026-07-11
+**当前 Phase**：✅ PWA 审计 24 项全清（批 A/B/C/D）＋ 商业外壳 ＋ 记忆系统 ＋ 语义召回。即将进入 Cloudflare Tunnel 本地部署 + 真机全量回归。
+**当前分支**：main（PR #128–#158 全部合并）
 
 > 📖 **启动/部署/手机端测试/启用语义召回，一律看 [`docs/EXECUTION_MANUAL.md`](EXECUTION_MANUAL.md)（单一操作手册）。**
+> 📖 **拉取最新代码后如何 bring-up 本地环境**，直接看下方 §0.5「拉取最新代码后必做清单」。
 
 ---
 
-## 0. 近期进展（2026-07-06）— 记忆系统已修复，勿再当坏的
+## 0. 近期进展（2026-07-08 → 2026-07-11）— PWA 审计三批修复全清
+
+> ⚠️ 给新会话：本节的 24 个修复已经**全部合入 main 并本地 CI 通过**。上一版本 PROJECT_STATUS 停留在 PR #125（2026-07-08），下方 §0.6 是完整迁移日志。
+
+### 0.1 本轮修复总览（`.claude/plans/yuoyuo-pwa-snazzy-parnas.md` 审计计划）
+
+24 项审计 → 4 项破坏性回归 + 5 项 UX 致命 + 5 项 UGC 补丁 + 6 项体验补强 + 4 项打磨 = 全部完成。
+
+| 批次 | 主题 | PR 号 |
+|---|---|---|
+| **A 系列（hotfix）** | Layer 1.5 crash / gender 422 / turn_end 卡死 / voice DB resolver | #135, #136 |
+| **B 系列（UX 致命）** | 已读语义 + PWA 角标 / 清空聊天 / 注销漏洞 + 成年判断 / 滑块测试 / Splash 白屏 / iOS 输入放大 | #144–#147, #142, #143, #6251233, #f48fd6b, #935ada9 |
+| **C 系列（产品补强）** | 表单持久化 / 全局滑手势 / 自建角标 / 头像上传 spinner / 预设音色真预览 / gender 字段 | #148–#154 |
+| **D 系列（打磨）** | 交易页错误 UI / Clone 音色扣费顺序 / Proactive 配额持久化 / 死代码清理 | #155–#158 |
+
+### 0.2 特别关注：PR #150 → #154 的"假修复 → 真修复"（血泪教训）
+
+- PR #150 (C-5 v1) 用 CDN 占位符 URL 填 `preset_voices.sample_url`，让 ▶ 按钮**渲染**——但点击 `audio.play().catch(() => {})` 静默 404，用户点了没反应。
+- PR #154 (C-5 v2) **真修**：新增 `GET /api/voice/presets/{preset_id}/sample` 后端 TTS 代理端点（MiniMax 合成 + 进程内缓存），迁移 031 把 sample_url 改为端点路径，前端改 blob URL 加错误 toast。
+- **教训**：任何"让按钮出现"的修复必须验证按钮"能工作"。CLAUDE.md 已加"UI 修复必须真机测过"铁律。
+
+### 0.3 数据库迁移变更（关键）
+
+自 2026-07-08 后新增迁移：
+
+- **025** `voice_tables` — `preset_voices` / `character_voices` / `voice_clone_jobs` 表
+- **026** `message_kind` — `chat_messages.kind` 列（区分 action bubble / text bubble）
+- **027** `preset_voice_gender` — 预设音色加 `gender` 列 + 6 行种子
+- **028** `soft_delete_email` — 用户表加 `deleted_at` / `deletion_grace_end` / `original_email`，注销走 30 天冷静期，堵积分套利
+- **029** `read_state` — `user_character_read_state` 表（已读语义 + PWA 角标）
+- **030** `preset_voice_sample_urls` — （被 031 覆盖，见 §0.2）
+- **031** `preset_voice_sample_endpoint` — `sample_url` 改为 `/api/voice/presets/:id/sample`
+
+**当前 alembic heads = 2**（`022_identity_narrative_backfill` + `031_preset_voice_sample_endpoint`）。生产上线前应加一个 merge migration；本地开发环境可 `alembic upgrade <head_a>` 然后 `alembic upgrade <head_b>` 各自 upgrade（CLAUDE.md 铁律）。
+
+### 0.4 环境配置变更
+
+- 无新增 `settings.*` 必填项；`MINIMAX_API_KEY` 是**试听按钮**的硬依赖（未配置 → 端点 503）
+- `MINIMAX_GROUP_ID` 可为空（`/t2a_v2` 端点不需要）
+- `EMBEDDING_API_KEY` 仍是语义召回的门控开关，未配置 → 退回 recency/identity
+
+### 0.5 拉取最新代码后必做清单
+
+**每次 `git pull` 后，按顺序执行（禁止跳步）：**
+
+```bash
+# 1. 停 dev server（CLAUDE.md 铁律：hot-reload + 新 schema = 撒谎式绿灯）
+#    如果 uvicorn 在跑，Ctrl-C
+
+cd /Users/wanglixun/heart
+
+# 2. 拉最新代码
+git pull origin main
+
+# 3. 装依赖（如果有新依赖）
+cd backend && pip install -r requirements.txt
+cd ../web && pnpm install    # 或 npm install，取决于本地
+
+# 4. DB migration —— 多 head 必须显式逐个 upgrade
+cd ../backend
+alembic current                                   # 看当前状态
+alembic heads                                     # 看应到达的头
+alembic upgrade 022_identity_narrative_backfill   # 第一个 head
+alembic upgrade 031_preset_voice_sample_endpoint  # 第二个 head
+alembic current                                   # 确认两个 head 都是 (head) 且 applied
+
+# 5. 关键：验证 6 行预设音色都指向 endpoint（PR #154 的核心）
+python3 -c "
+import asyncio
+from sqlalchemy import text
+from heart.api.wiring import _get_session_factory
+async def main():
+    async with _get_session_factory()() as db:
+        r = await db.execute(text(
+            \"SELECT id, sample_url FROM preset_voices ORDER BY id\"
+        ))
+        for row in r.mappings():
+            assert row['sample_url'].startswith('/api/voice/presets/'), row
+            print('OK', dict(row))
+asyncio.run(main())
+"
+# 期望：6 行输出全部是 /api/voice/presets/*/sample
+
+# 6. 起后端（完全冷启，不是 --reload；SQLAlchemy metadata 只在启动时抓）
+cd /Users/wanglixun/heart/backend
+uvicorn heart.api.main:app --host 0.0.0.0 --port 8000 --reload   # dev 可 --reload
+
+# 7. 起前端
+cd /Users/wanglixun/heart/web
+pnpm run dev    # 默认 5173
+
+# 8. 起 Cloudflare Tunnel（示例，用你自己的 tunnel name）
+cloudflared tunnel run yuoyuo
+```
+
+### 0.6 部署前健康自检（Cloudflare Tunnel 前必看）
+
+- [ ] `.env` 里 `MINIMAX_API_KEY` 有值（否则预设音色 ▶ 按钮点了 503）
+- [ ] `.env` 里 `EMBEDDING_API_KEY` 有值（否则语义召回退回 recency）
+- [ ] `.env` 里 `POSTGRES_*` / `REDIS_URL` / `S3_*` 都能连上
+- [ ] `alembic current` 显示两个 `(head)` 都已 applied
+- [ ] 后端启动日志无 `migration_drift_detected ERROR`（`heart/infra/migration_check.py`）
+- [ ] 后端启动日志无 `TypeError: '<' not supported between instances of 'str' and 'int'`（Layer 1.5 crash 已修，PR #135）
+- [ ] `GET http://localhost:8000/api/voice/presets` 返回 6 行，`sample_url` 全是 `/api/voice/presets/*/sample`
+- [ ] `GET http://localhost:8000/api/voice/presets/rin_default/sample` 用有效 Bearer token 请求，返回 `audio/mpeg` 且 body 非空（首次 1-3 s，之后走进程内缓存瞬回）
+- [ ] `docker ps` 或 systemctl 确认 workers（memory_encoder / memory_extractor / memory_promoter / account_purge / credit_reconciliation）在运行
+
+### 0.7 已知非阻塞项
+
+- **两 alembic head**：本地/staging 无害，生产合并前建议加 merge migration
+- **`archive/ci-legacy/` 遗留**：不影响 CI，不动
+- **`CONVERSATION_THREADS` 已删**：如果 IDE 缓存报 undefined 引用，忽略
+- **`useProactivePolling` 尚未接入 Initiative Decider / ProactiveMessageGenerator**：不阻塞聊天，Wave E 可做
+
+### 0.8 完整 PR 列表（2026-07-08 → 2026-07-11，从旧到新）
+
+```
+#128 P0 persona 注入 — UGC 身份写入 system prompt + 后过滤清洗
+#129 Wave A — mobile UI + PWA login persistence + proactive 时区
+#130 PR B1 — message splitting + centesimal credits
+#131 PR B2 — voice system (preset voices + clone + DB resolver)
+#132 PR C1+C2 — typing indicator + eliminate hard-refresh redirects
+     0c383c9 / e8e673e — PWA 审计 P0/P1/P2 首轮修复（多 bug 混合 commit）
+#135 Batch A hotfixes — Layer 1.5 crash / gender 422 / turn_end / voice DB
+#136 migration drift 报警 + voice endpoint 回退 VOICE_CATALOG
+#137 /character-backstage 音色配置链接跳转
+#138 语义消息分块 — action + text bubble + per-bubble billing
+#139 语音模式修复 — 保留 voice bubble、单次扣费
+#140 音色按角色 gender 过滤
+#141 DB 迁移与环境同步铁律入 CLAUDE.md
+#142 关闭重注册积分套利 + 30 天注销冷静期恢复
+#143 清空聊天真的调后端 API
+#144 ChatInput textarea + 全站输入框 font-size ≥ 16px
+#145 消灭 PWA 冷启白屏
+#146 服务端已读状态 + 全局 PWA 角标
+#147 滑块 → prompt 端到端测试覆盖
+#148 UGC 自建角标
+#149 CharacterDraft 加 gender 字段
+#150 预设音色 sample_url 种子（假修，见 §0.2）
+#151 表单持久化 + 滚动恢复
+#152 全局滑手势
+#153 async boto3 S3 上传 + 头像 spinner
+#154 预设音色 ▶ 真预览（后端 TTS 代理 + blob URL + toast）  ← 覆盖 #150
+#155 Clone 音色成功后扣费（防丢钱）+ MIME 白名单
+#156 交易页错误/加载合并按钮
+#157 删除 CONVERSATION_THREADS 死代码
+#158 Proactive 配额改读 DB + 删死 import
+```
+
+---
+
+## 0-legacy. 近期进展（2026-07-06）— 记忆系统已修复，勿再当坏的
 
 > ⚠️ 给新会话：下面这些**已经修完并合并 main**。旧文档 `docs/TEST_RESULTS.md` / `docs/MEMORY_FIX_PLAN.md`
 > 描述的"记忆坏了/召回不触发/情绪硬编码/L4 脏数据"**都已修复**，那两份是历史工单，勿据其重做。
