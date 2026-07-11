@@ -244,6 +244,62 @@ CI / lint / type-check 报错时按以下四档判定，不同档位不同处置
 
 ---
 
+## 🗄️ DB 迁移与环境同步铁律（2026-07 血泪教训）
+
+### 背景（为什么加这一节）
+上一轮批 A 修复"合并到 main 却仍报同样的 bug"，根因不是代码错，而是 **dev DB schema 落后代码 4 个迁移版本**，`chat_messages` 缺 `sequence_id/turn_id` 列 → 后端 `except Exception` 静默吞掉 `KeyError` → 用户看到"空气泡"以为修复失败。花了 2 小时才定位。
+
+### 硬性要求（违反必须立即停下）
+
+1. **每次 `git pull` 或切分支后**，必须先跑：
+   ```bash
+   cd backend && alembic current && alembic heads
+   ```
+   若 `current` ≠ `heads`，立即执行 `alembic upgrade head`（多 head 时逐个 upgrade），**未升级不得启动 dev server**。
+
+2. **切分支前必先停 dev server**（`Ctrl-C`）。原因：`uvicorn --reload` 只重载 Python 文件，**不重连 DB pool / 不重导 SQLAlchemy metadata**，切到旧分支代码 + 新 schema（或反过来）会撒谎式跑通。切完分支再起服务。
+
+3. **新迁移的 revision 名超过 32 字符**时，第一步 SQL 必须是：
+   ```sql
+   ALTER TABLE alembic_version ALTER COLUMN version_num TYPE VARCHAR(80);
+   ```
+   否则 `alembic upgrade` 会因主键长度限制静默截断或报错。
+
+4. **多 head Alembic DAG（分支合流）** 必须显式：
+   ```bash
+   alembic upgrade <head_a>
+   alembic upgrade <head_b>
+   ```
+   禁止 `alembic upgrade head` 盲跑（会报 "Multiple head revisions"，且部分 CI 环境会跳过静默）。合并两分支的 merge migration 必须在同 PR 内落纸。
+
+5. **禁止 `except Exception:` 静默吞异常**。DB / schema / KeyError 类必须：
+   ```python
+   except Exception:
+       logger.exception("op_failed", extra={"...": ...})
+       raise  # 或走 structured error 到前端
+   ```
+   把错误吞成"看着正常"是欺骗用户，比 crash 更糟。
+
+6. **生产启动时的 migration drift 告警不可绕过**。`heart/infra/migration_check.py` 会 diff disk heads vs `alembic_version`，任何 `migration_drift_detected` ERROR **禁止用 config 屏蔽**，必须当场停下修复。
+
+7. **添加/修改列后必须重启后端服务**（哪怕 `--reload` 在跑）。原因：SQLAlchemy 的 reflected metadata 只在启动时抓，`--reload` 拿不到新列。
+
+### 迁移文件规范
+
+- 新迁移必须 `down_revision` 指向单一 head（避免制造无意的多 head DAG）。
+- 迁移里 `CREATE TABLE / ALTER TABLE / INSERT` 必须用 `IF NOT EXISTS` / `ON CONFLICT DO NOTHING` 兜底幂等（dev/prod 重跑不炸）。
+- 数据回填（如 seed 音色、backfill 列默认值）**必须放在独立 UPDATE**，不与 DDL 混在同一句，否则 rollback 粒度太粗。
+- migration 内禁止 `import heart.xxx` 业务代码（业务变了 migration 会突然跑不起来），只用 `sqlalchemy.text` + raw SQL。
+
+### 提交前 DB 自检（每次 push 前必须问自己）
+1. 我的 dev DB `alembic current` 是不是 `alembic heads` 相同？
+2. 新迁移 revision 名 ≤ 32 字符？> 32 有没有先 ALTER `alembic_version`？
+3. 新迁移会不会造成多 head？造成了有没有加 merge migration？
+4. 修改了列，我的 dev server 有没有**完全重启**（不是 --reload）？
+5. 我改动过的路径里有没有 `except Exception:` 静默吞异常？
+
+---
+
 ## ⚠️ 禁止事项
 
 - ❌ 直接在 main 分支提交（必须用 PR）
@@ -252,6 +308,9 @@ CI / lint / type-check 报错时按以下四档判定，不同档位不同处置
 - ❌ 删除用户数据相关的表（逻辑删除）
 - ❌ 修改已部署的 soul_specs（必须版本化）
 - ❌ CI 配置变更 PR 混入业务变更（CI 修复必须独立 PR）
+- ❌ **`except Exception:` 不 log 不 re-raise 直接 pass**（欺骗式静默）
+- ❌ **dev server 运行中切分支**（hot-reload + 旧 schema = 撒谎式绿灯）
+- ❌ **未跑 `alembic current` 就 push 涉及 DB 的 PR**
 
 ---
 
@@ -264,5 +323,5 @@ CI / lint / type-check 报错时按以下四档判定，不同档位不同处置
 
 ---
 
-**最后更新**: 2026-06-03
-**版本**: 2.0.0
+**最后更新**: 2026-07-11
+**版本**: 2.1.0（新增 DB 迁移与环境同步铁律）
