@@ -28,6 +28,11 @@ router = APIRouter(prefix="/api/voice", tags=["voice"])
 # Voice clone credit cost (800 display credits = 80 000 fen)
 _CLONE_COST_FEN = 80_000
 
+# Preset voice sample cache: preset_id -> MP3 bytes.  Filled on first request
+# so we hit MiniMax at most once per preset per process.  Preset voices are
+# static rows, so cache TTL is process lifetime.
+_PRESET_SAMPLE_CACHE: dict[str, bytes] = {}
+
 # Audio upload constraints
 _MAX_AUDIO_BYTES = 20 * 1024 * 1024  # 20 MB
 _ALLOWED_AUDIO_MIME = {
@@ -119,6 +124,76 @@ async def list_preset_voices(
         )
     rows = [dict(r) for r in result.mappings()]
     return {"presets": rows}
+
+
+@router.get("/presets/{preset_id}/sample")
+@limiter.limit("60/hour")
+async def get_preset_voice_sample(
+    request: Request,
+    preset_id: str,
+    current_user: TokenData = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Synthesize a short sample clip for a preset voice.
+
+    Returns MP3 audio bytes so the character-creation UI can play a preview
+    when the user taps the ▶ button.  Cached per preset_id for the lifetime
+    of the process so we hit the TTS provider at most once per voice.
+    """
+    from fastapi.responses import Response
+
+    if not settings.minimax_api_key:
+        raise HTTPException(status_code=503, detail="TTS provider not configured")
+
+    cached = _PRESET_SAMPLE_CACHE.get(preset_id)
+    if cached is not None:
+        return Response(content=cached, media_type="audio/mpeg")
+
+    row = (
+        (
+            await db.execute(
+                text("""
+                SELECT id, name, voice_id
+                FROM preset_voices
+                WHERE id = :pid AND is_active = TRUE
+            """),
+                {"pid": preset_id},
+            )
+        )
+        .mappings()
+        .fetchone()
+    )
+    if row is None:
+        raise HTTPException(status_code=404, detail="预设音色不存在")
+
+    sample_text = f"你好，我是{row['name']}，很高兴认识你，希望我们能聊得愉快。"
+
+    from heart.ss08_voice.errors import TTSProviderError
+    from heart.ss08_voice.minimax_provider import MiniMaxProvider
+    from heart.ss08_voice.types import TTSRequest
+
+    provider = MiniMaxProvider(
+        api_key=settings.minimax_api_key,
+        group_id=settings.minimax_group_id or "",
+        base_url=settings.minimax_base_url,
+    )
+    try:
+        result = await provider.synthesize(TTSRequest(text=sample_text, voice_id=row["voice_id"]))
+    except TTSProviderError as exc:
+        logger.warning(
+            "preset_sample_synthesize_failed",
+            preset_id=preset_id,
+            error=str(exc),
+        )
+        raise HTTPException(status_code=502, detail="试听合成失败，请稍后再试") from exc
+
+    _PRESET_SAMPLE_CACHE[preset_id] = result.audio
+    logger.info(
+        "preset_sample_synthesized",
+        preset_id=preset_id,
+        bytes=len(result.audio),
+    )
+    return Response(content=result.audio, media_type="audio/mpeg")
 
 
 @router.get("/{character_id}")
