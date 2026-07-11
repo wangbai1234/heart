@@ -10,9 +10,8 @@ export function SplashPage() {
   const hasSeenOnboarding = useAppStore((s) => s.hasSeenOnboarding)
   const freeze = searchParams.get('qa') === 'freeze'
 
-  useEffect(() => {
-    document.getElementById('__initial_splash__')?.remove()
-  }, [])
+  // Note: the inline splash overlay is torn down from App.tsx so it's
+  // removed regardless of which route mounts first.  Nothing to do here.
 
   useEffect(() => {
     if (freeze) return

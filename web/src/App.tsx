@@ -56,6 +56,16 @@ export function App() {
     setNavigate(navigate)
   }, [navigate])
 
+  // Tear down the inline splash overlay from index.html once React has
+  // committed its first render.  Previously SplashPage owned this, but any
+  // route that mounts without going through /splash first — e.g. PWA
+  // "restore last route" landing directly on /chat, or a hard-refresh at
+  // a bookmarked URL — left the fixed z-index:9999 overlay covering the
+  // whole viewport, which looked exactly like being "stuck on /splash".
+  useEffect(() => {
+    document.getElementById('__initial_splash__')?.remove()
+  }, [])
+
   // Save last route so PWA can restore it on next open
   useEffect(() => {
     if (!SKIP_SAVE_ROUTES.has(location.pathname) && !location.pathname.startsWith('/legal/')) {
