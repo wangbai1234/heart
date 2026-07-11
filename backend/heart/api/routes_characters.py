@@ -295,16 +295,34 @@ async def upload_character_avatar(
     from heart.infra.storage import is_s3_configured
     from heart.infra.storage import upload_avatar as s3_upload
 
+    # CharacterDraft.avatar_url is capped at 200 000 chars.  A base64 data URL
+    # of a 130 KB image already reaches ~180 000 chars, so if we're going to
+    # embed the image inline we have to refuse anything larger than that.
+    # The frontend now compresses to 256×256 WebP (~40–60 KB) before uploading,
+    # so this cap only triggers when someone bypasses that path.
+    data_url_raw_limit = 140 * 1024  # ~190 000 chars after base64
+
+    avatar_url: str
     if is_s3_configured():
         try:
             avatar_url = await s3_upload(f"character-{uid.hex[:8]}", data, file.content_type)
         except Exception as exc:
             logger.warning("character_avatar_s3_failed", error=str(exc))
+            if len(data) > data_url_raw_limit:
+                raise HTTPException(
+                    status_code=413,
+                    detail="头像文件过大，请上传更小的图片",
+                ) from exc
             import base64
 
             b64 = base64.b64encode(data).decode()
             avatar_url = f"data:{file.content_type};base64,{b64}"
     else:
+        if len(data) > data_url_raw_limit:
+            raise HTTPException(
+                status_code=413,
+                detail="头像文件过大，请上传更小的图片（未配置对象存储时上限约 140KB）",
+            )
         import base64
 
         b64 = base64.b64encode(data).decode()

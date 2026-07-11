@@ -9,47 +9,7 @@ import { Toast } from '../components/ui/Toast'
 import { BottomSheet } from '../components/ui/BottomSheet'
 import { DatePicker } from '../components/ui/DatePicker'
 import { getProfile, updateProfile, uploadAvatar } from '../services/api'
-
-function compressImage(file: File, maxSize: number): Promise<File> {
-  return new Promise((resolve) => {
-    const objectUrl = URL.createObjectURL(file)
-    const img = new Image()
-    img.onload = () => {
-      URL.revokeObjectURL(objectUrl)
-      const canvas = document.createElement('canvas')
-      let { width, height } = img
-      if (width > maxSize || height > maxSize) {
-        if (width > height) {
-          height = (height / width) * maxSize
-          width = maxSize
-        } else {
-          width = (width / height) * maxSize
-          height = maxSize
-        }
-      }
-      canvas.width = width
-      canvas.height = height
-      canvas.getContext('2d')!.drawImage(img, 0, 0, width, height)
-      canvas.toBlob(
-        (blob) => {
-          if (blob) {
-            const webpName = file.name.replace(/\.[^.]+$/, '.webp')
-            resolve(new File([blob], webpName, { type: 'image/webp' }))
-          } else {
-            resolve(file)
-          }
-        },
-        'image/webp',
-        0.85,
-      )
-    }
-    img.onerror = () => {
-      URL.revokeObjectURL(objectUrl)
-      resolve(file)
-    }
-    img.src = objectUrl
-  })
-}
+import { compressImage } from '../utils/imageCompress'
 
 function formatBirthdate(iso: string): string {
   const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/)

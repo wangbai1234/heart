@@ -81,6 +81,38 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
     setInboxUnreadTotal(0)
   }, [currentCharacterId, isAuthenticated, setInboxUnreadTotal])
 
+  // Also mark read when new assistant messages arrive during the visit AND
+  // when the tab is being hidden.  Without this, mark-read only ever
+  // captured last_read_at from mount time; any assistant reply that landed
+  // during the visit stayed "unread" until the user re-entered — the "只有再
+  // 次进入聊天页 → 再退出 才变成已读" bug from 2026-07-11.
+  const lastAssistantId = messages.length > 0 ? messages[messages.length - 1].id : null
+  const lastAssistantRole = messages.length > 0 ? messages[messages.length - 1].role : null
+  useEffect(() => {
+    if (!isAuthenticated()) return
+    if (lastAssistantRole !== 'assistant') return
+    // Debounce so text_delta storms don't produce a mark-read per token.
+    const t = setTimeout(() => {
+      markCharacterRead(currentCharacterId).catch(() => {})
+    }, 400)
+    return () => clearTimeout(t)
+  }, [currentCharacterId, isAuthenticated, lastAssistantId, lastAssistantRole])
+
+  useEffect(() => {
+    const onHide = () => {
+      if (!isAuthenticated()) return
+      if (document.visibilityState === 'hidden') {
+        markCharacterRead(currentCharacterId).catch(() => {})
+      }
+    }
+    window.addEventListener('pagehide', onHide)
+    document.addEventListener('visibilitychange', onHide)
+    return () => {
+      window.removeEventListener('pagehide', onHide)
+      document.removeEventListener('visibilitychange', onHide)
+    }
+  }, [currentCharacterId, isAuthenticated])
+
   // Set character ID in chat store
   useEffect(() => {
     // Only redirect an unknown id once the catalog is loaded — otherwise a direct

@@ -15,6 +15,7 @@ import {
   type CharacterDraftDTO,
   type PresetVoiceDTO,
 } from '../services/api'
+import { compressImage } from '../utils/imageCompress'
 
 function useToast() {
   return useToastStore((s) => s.show)
@@ -316,13 +317,15 @@ export function CreateCharacterPage() {
     }
     setAvatarUploading(true)
     try {
-      const { avatar_url } = await uploadCharacterAvatar(file)
+      // Compress to 256×256 WebP so that even if the backend has to fall back
+      // to a base64 data URL (S3 not configured), the resulting string stays
+      // well under CharacterDraft.avatar_url max_length=200000.
+      const compressed = await compressImage(file, 256, 0.85).catch(() => file)
+      const { avatar_url } = await uploadCharacterAvatar(compressed)
       setAvatarUrl(avatar_url)
-    } catch {
-      // fallback: use local object URL as preview + data URL for upload
-      const reader = new FileReader()
-      reader.onload = (e) => setAvatarUrl(e.target?.result as string)
-      reader.readAsDataURL(file)
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : '头像上传失败，请重试'
+      showToast(msg, 'error')
     } finally {
       setAvatarUploading(false)
     }

@@ -53,6 +53,13 @@ function estimateChunkDurationMs(buffer: ArrayBuffer, format?: string) {
   return Math.max(1, Math.round(buffer.byteLength * 8 / 128))
 }
 
+// Wall-clock ceiling for a single turn.  If no state-clearing event
+// (turn_end / error / interrupted / insufficient_credits) arrives within
+// this window after turn_start, the frontend force-clears generating and
+// shows a toast so the UI never gets stuck at "正在回复".
+// Voice turns typically finish in <10 s; 60 s is a generous ceiling.
+const TURN_WATCHDOG_MS = 60_000
+
 export function useWebSocket() {
   const wsRef = useRef<WebSocket | null>(null)
   const connectRef = useRef<(() => void) | null>(null)
@@ -60,6 +67,7 @@ export function useWebSocket() {
   const seenChunks = useRef<Set<string>>(new Set())
   const activeCharRef = useRef<CharacterId>('rin')
   const pendingVoiceTurnRef = useRef(false)
+  const watchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const addMessage = useChatStore(s => s.addMessage)
   const appendToLast = useChatStore(s => s.appendToLast)
@@ -95,6 +103,27 @@ export function useWebSocket() {
 
     ws.onopen = () => {}
 
+    const armWatchdog = (cid: CharacterId) => {
+      if (watchdogRef.current) clearTimeout(watchdogRef.current)
+      watchdogRef.current = setTimeout(() => {
+        watchdogRef.current = null
+        setGenerating(cid, false)
+        setStreaming(false)
+        setPlaying(false)
+        setCurrentTurnId(null)
+        setPendingAssistantTurnId(null)
+        pendingVoiceTurnRef.current = false
+        useToastStore.getState().show('响应超时，请重试', 'error')
+      }, TURN_WATCHDOG_MS)
+    }
+
+    const clearWatchdog = () => {
+      if (watchdogRef.current) {
+        clearTimeout(watchdogRef.current)
+        watchdogRef.current = null
+      }
+    }
+
     ws.onmessage = async (ev) => {
       const msg: WsMessage = JSON.parse(ev.data)
       const cid = activeCharRef.current
@@ -113,6 +142,7 @@ export function useWebSocket() {
           setGenerating(cid, true)
           setStreaming(true)
           setPlaying(false)
+          armWatchdog(cid)
           break
         case 'text_delta':
           appendToLast(cid, msg.delta ?? '')
@@ -184,6 +214,7 @@ export function useWebSocket() {
           break
         }
         case 'turn_end':
+          clearWatchdog()
           setGenerating(cid, false)
           if (msg.turn_id) {
             finalizeMessageAudio(cid, msg.turn_id)
@@ -232,6 +263,7 @@ export function useWebSocket() {
           pendingVoiceTurnRef.current = false
           break
         case 'insufficient_credits':
+          clearWatchdog()
           setGenerating(cid, false)
           setStreaming(false)
           setPlaying(false)
@@ -244,6 +276,7 @@ export function useWebSocket() {
           }
           break
         case 'interrupted':
+          clearWatchdog()
           setGenerating(cid, false)
           setStreaming(false)
           setPlaying(false)
@@ -252,6 +285,7 @@ export function useWebSocket() {
           pendingVoiceTurnRef.current = false
           break
         case 'error': {
+          clearWatchdog()
           setGenerating(cid, false)
           setStreaming(false)
           setPlaying(false)
@@ -374,6 +408,10 @@ export function useWebSocket() {
       if (reconnectTimerRef.current) {
         clearTimeout(reconnectTimerRef.current)
         reconnectTimerRef.current = null
+      }
+      if (watchdogRef.current) {
+        clearTimeout(watchdogRef.current)
+        watchdogRef.current = null
       }
       wsRef.current?.close()
       wsRef.current = null
