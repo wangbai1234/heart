@@ -956,16 +956,27 @@ class Orchestrator:
         character_id: str,
         days_since_last_interaction: float = 0.0,
     ) -> None:
-        """Execute one inner-state tick for the user × character pair."""
+        """Execute one inner-state tick for the user × character pair.
+
+        Opens a dedicated session for the tick so the daily proactive quota
+        (Gate I-5) can be enforced against the persistent
+        ``proactive_messages`` table instead of the in-memory counter, which
+        would reset every call because we construct a fresh
+        ``InnerStateService`` per invocation here.
+        """
         try:
+            from heart.api.wiring import _get_session_factory
             from heart.ss06_inner_state.service import InnerStateService
 
             svc = InnerStateService()
-            await svc.tick(
-                user_id=user_id,
-                character_id=character_id,
-                days_since_last_interaction=days_since_last_interaction,
-            )
+            factory = _get_session_factory()
+            async with factory() as db:
+                await svc.tick(
+                    user_id=user_id,
+                    character_id=character_id,
+                    days_since_last_interaction=days_since_last_interaction,
+                    db=db,
+                )
         except Exception as e:
             logger.error(
                 "inner_loop_tick_failed",
