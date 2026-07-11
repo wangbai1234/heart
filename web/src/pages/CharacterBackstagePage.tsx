@@ -44,7 +44,7 @@ export function CharacterBackstagePage() {
 
   const handleVoiceToggle = async (value: boolean) => {
     if (value && !hasVoice) {
-      navigate(`/create-character?voice=${currentCharacterId}`)
+      navigate(`/characters/new?voice=${currentCharacterId}`)
       return
     }
     setVoiceChatEnabled(currentCharacterId, value)
@@ -54,7 +54,7 @@ export function CharacterBackstagePage() {
       // 409 means voice not configured
       if (err?.status === 409) {
         setVoiceChatEnabled(currentCharacterId, false)
-        navigate(`/create-character?voice=${currentCharacterId}`)
+        navigate(`/characters/new?voice=${currentCharacterId}`)
         return
       }
       setVoiceChatEnabled(currentCharacterId, !value)
@@ -154,7 +154,7 @@ export function CharacterBackstagePage() {
                   <Switch checked={voiceChatEnabled} onChange={handleVoiceToggle} />
                 ) : (
                   <button
-                    onClick={() => navigate(`/create-character?voice=${currentCharacterId}`)}
+                    onClick={() => navigate(`/characters/new?voice=${currentCharacterId}`)}
                     className="rounded-full bg-gradient-to-r from-[#FFB7C5] to-[#FF8FAB] px-4 py-2 text-[13px] font-semibold text-white"
                   >
                     去配置
