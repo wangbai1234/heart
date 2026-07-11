@@ -154,64 +154,6 @@ export function resolveCharacterProfile(
 }
 
 const now = Date.now()
-const minutes = (value: number) => now - value * 60 * 1000
-
-export const CONVERSATION_THREADS: Record<string, ConversationMessage[]> = {
-  rin: [
-    {
-      id: 'rin-1',
-      role: 'assistant',
-      content: '早上好，昨晚睡得怎么样？',
-      timestamp: minutes(128),
-      kind: 'text',
-    },
-    {
-      id: 'rin-2',
-      role: 'user',
-      content: '做了个奇怪的梦。',
-      timestamp: minutes(126),
-      kind: 'text',
-    },
-    {
-      id: 'rin-3',
-      role: 'assistant',
-      content: '讲给我听呀～我陪着你。',
-      timestamp: minutes(124),
-      kind: 'text',
-    },
-    {
-      id: 'rin-4',
-      role: 'user',
-      content: '今天有点想和你多聊一会儿。',
-      timestamp: minutes(122),
-      kind: 'text',
-    },
-    {
-      id: 'rin-5',
-      role: 'assistant',
-      content: 'AI 朗读 · 可点击播放',
-      timestamp: minutes(120),
-      kind: 'voice',
-      duration: '0:18',
-    },
-  ],
-  dorothy: [
-    {
-      id: 'dorothy-1',
-      role: 'assistant',
-      content: '晚安呀，记得多喝水，明天见~',
-      timestamp: minutes(78),
-      kind: 'text',
-    },
-    {
-      id: 'dorothy-2',
-      role: 'assistant',
-      content: '我给你留了一条新的晚安消息，记得点开听听呀。',
-      timestamp: minutes(75),
-      kind: 'text',
-    },
-  ],
-}
 
 export const HOME_ANNOUNCEMENTS: HomeAnnouncement[] = [
   {
