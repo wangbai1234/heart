@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 from io import BytesIO
 
@@ -43,13 +44,15 @@ async def ensure_bucket() -> None:
     from heart.core.config import settings
 
     client = _get_s3_client()
-    try:
-        from botocore.exceptions import ClientError
 
-        client.head_bucket(Bucket=settings.s3_bucket_name)
-    except Exception:
-        client.create_bucket(Bucket=settings.s3_bucket_name)
-        logger.info("s3_bucket_created", bucket=settings.s3_bucket_name)
+    def _check_or_create() -> None:
+        try:
+            client.head_bucket(Bucket=settings.s3_bucket_name)
+        except Exception:
+            client.create_bucket(Bucket=settings.s3_bucket_name)
+            logger.info("s3_bucket_created", bucket=settings.s3_bucket_name)
+
+    await asyncio.to_thread(_check_or_create)
     _bucket_checked = True
 
 
@@ -73,7 +76,8 @@ async def upload_file(
     client = _get_s3_client()
     await ensure_bucket()
 
-    client.put_object(
+    await asyncio.to_thread(
+        client.put_object,
         Bucket=settings.s3_bucket_name,
         Key=key,
         Body=data,
@@ -106,12 +110,13 @@ async def upload_avatar(user_id: str, data: bytes, content_type: str) -> str:
 
 
 async def _upload_to_s3(key: str, data: bytes, content_type: str) -> None:
-    """Upload raw bytes to S3/MinIO."""
+    """Upload raw bytes to S3/MinIO (non-blocking via asyncio.to_thread)."""
     client = _get_s3_client()
     await ensure_bucket()
     from heart.core.config import settings
 
-    client.put_object(
+    await asyncio.to_thread(
+        client.put_object,
         Bucket=settings.s3_bucket_name,
         Key=key,
         Body=data,
@@ -125,10 +130,11 @@ async def get_s3_object(key: str) -> tuple[bytes, str]:
     client = _get_s3_client()
     from heart.core.config import settings
 
-    resp = client.get_object(Bucket=settings.s3_bucket_name, Key=key)
-    data = resp["Body"].read()
-    content_type = resp.get("ContentType", "application/octet-stream")
-    return data, content_type
+    def _get() -> tuple[bytes, str]:
+        resp = client.get_object(Bucket=settings.s3_bucket_name, Key=key)
+        return resp["Body"].read(), resp.get("ContentType", "application/octet-stream")
+
+    return await asyncio.to_thread(_get)
 
 
 def is_s3_configured() -> bool:

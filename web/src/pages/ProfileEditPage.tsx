@@ -76,6 +76,7 @@ export function ProfileEditPage() {
   const [gender, setGender] = useState(user?.gender || 'undisclosed')
   const [birthdate, setBirthdate] = useState(user?.birthdate || '')
   const [loading, setLoading] = useState(false)
+  const [avatarUploading, setAvatarUploading] = useState(false)
   const [toast, setToast] = useState({ visible: false, message: '' })
   const [showDatePicker, setShowDatePicker] = useState(false)
 
@@ -120,6 +121,7 @@ export function ProfileEditPage() {
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
+    setAvatarUploading(true)
     try {
       const compressed = await compressImage(file, 512).catch(() => file)
       const res = await uploadAvatar(compressed)
@@ -127,6 +129,8 @@ export function ProfileEditPage() {
       setToast({ visible: true, message: '头像更新成功' })
     } catch {
       setToast({ visible: true, message: '头像上传失败' })
+    } finally {
+      setAvatarUploading(false)
     }
   }
 
@@ -155,20 +159,27 @@ export function ProfileEditPage() {
 
         {/* Avatar */}
         <div className="flex flex-col items-center mb-6">
-          <label className="relative cursor-pointer">
+          <label className={`relative ${avatarUploading ? 'cursor-wait' : 'cursor-pointer'}`}>
             <div className="w-20 h-20 rounded-full bg-[var(--color-primary)] flex items-center justify-center text-white text-[28px] font-bold overflow-hidden">
-              {user?.avatar_url ? (
+              {avatarUploading ? (
+                <svg className="animate-spin w-8 h-8 text-white" viewBox="0 0 24 24" fill="none">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+              ) : user?.avatar_url ? (
                 <img src={user.avatar_url} alt="avatar" className="w-full h-full object-cover" />
               ) : (
                 (displayName || '游')[0]
               )}
             </div>
-            <input type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} />
+            <input type="file" accept="image/*" className="hidden" disabled={avatarUploading} onChange={handleAvatarUpload} />
             <div className="absolute bottom-0 right-0 w-6 h-6 rounded-full bg-[var(--color-ink)] flex items-center justify-center">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2"><path d="M12 20h9M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
             </div>
           </label>
-          <p className="text-[12px] text-[var(--color-text-muted)] mt-2">点击更换头像</p>
+          <p className="text-[12px] text-[var(--color-text-muted)] mt-2">
+            {avatarUploading ? '上传中…' : '点击更换头像'}
+          </p>
         </div>
 
         {/* Form */}
