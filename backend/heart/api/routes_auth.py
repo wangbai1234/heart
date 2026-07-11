@@ -96,6 +96,8 @@ class TokenResponse(BaseModel):
     expires_in: int
     user: UserResponse
     needs_profile: bool
+    needs_restoration: bool = False
+    grace_end: str | None = None
 
 
 # ── Rate limit key helpers (per-email, Redis-based) ─────────────────
@@ -283,12 +285,72 @@ async def verify_otp(
     user_result = await db.execute(
         text("""
             SELECT id, email, display_name, avatar_url, gender, birthdate,
-                   age_verified_at, credits_balance, status
+                   age_verified_at, credits_balance, status, deletion_grace_end
             FROM users WHERE email = :email
         """),
         {"email": email},
     )
     user_row = user_result.mappings().first()
+
+    # Grace-period restoration check: deleted user re-logging in within 30 days.
+    # Issue normal tokens so they can call POST /api/account/restore, but do NOT
+    # grant signup credits — their original balance is preserved.
+    if user_row is not None and user_row["status"] == "deleted":
+        grace_end = user_row["deletion_grace_end"]
+        if grace_end is not None and grace_end > datetime.now(timezone.utc):
+            user_id = user_row["id"]
+            await db.execute(
+                text("UPDATE users SET last_login_at = NOW() WHERE id = :id"),
+                {"id": user_id},
+            )
+            await db.commit()
+            access_token = auth_manager.create_access_token(user_id=str(user_id), email=email)
+            refresh_token_raw = secrets.token_hex(32)
+            refresh_hash = hashlib.sha256(refresh_token_raw.encode()).hexdigest()
+            await db.execute(
+                text("""
+                    INSERT INTO auth_sessions (id, user_id, refresh_token_hash, expires_at, user_agent, ip)
+                    VALUES (:id, :uid, :hash, :expires, :ua, :ip)
+                """),
+                {
+                    "id": uuid.uuid4(),
+                    "uid": user_id,
+                    "hash": refresh_hash,
+                    "expires": datetime.now(timezone.utc)
+                    + timedelta(days=settings.refresh_token_expire_days),
+                    "ua": request.headers.get("user-agent"),
+                    "ip": request.client.host if request.client else None,
+                },
+            )
+            await db.commit()
+            logger.info("otp_verified_deleted_grace", user_id=str(user_id))
+            return TokenResponse(
+                access_token=access_token.access_token,
+                refresh_token=refresh_token_raw,
+                expires_in=access_token.expires_in,
+                user=UserResponse(
+                    id=str(user_row["id"]),
+                    email=user_row["email"],
+                    display_name=user_row["display_name"],
+                    avatar_url=user_row["avatar_url"],
+                    gender=user_row["gender"],
+                    birthdate=str(user_row["birthdate"]) if user_row["birthdate"] else None,
+                    age_verified=user_row["age_verified_at"] is not None,
+                    credits_balance=user_row["credits_balance"] / 100,
+                ),
+                needs_profile=False,
+                needs_restoration=True,
+                grace_end=grace_end.isoformat(),
+            )
+        # Grace period expired — treat as a fresh user (email is still on the row;
+        # anonymize now so the INSERT below can succeed without conflict).
+        anon_email = f"deleted+{uuid.uuid4()}@invalid"
+        await db.execute(
+            text("UPDATE users SET email = :anon WHERE id = :uid"),
+            {"anon": anon_email, "uid": user_row["id"]},
+        )
+        await db.commit()
+        user_row = None  # fall through to new-user path
 
     is_new_user = user_row is None
     if is_new_user:

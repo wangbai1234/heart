@@ -116,6 +116,8 @@ export async function verifyOtp(
   expires_in: number
   user: AuthUser
   needs_profile: boolean
+  needs_restoration?: boolean
+  grace_end?: string | null
 }> {
   return request('/auth/otp/verify', {
     method: 'POST',
@@ -233,11 +235,15 @@ export async function clearConversations(): Promise<{ ok: boolean }> {
   return request('/account/clear-conversations', { method: 'POST' })
 }
 
-export async function deleteAccount(confirm: string): Promise<{ ok: boolean; message: string }> {
+export async function deleteAccount(confirm: string): Promise<{ ok: boolean; message: string; grace_end?: string }> {
   return request('/account/delete', {
     method: 'POST',
     body: JSON.stringify({ confirm }),
   })
+}
+
+export async function restoreAccount(): Promise<{ ok: boolean; message: string }> {
+  return request('/account/restore', { method: 'POST' })
 }
 
 export async function exportData(): Promise<any> {

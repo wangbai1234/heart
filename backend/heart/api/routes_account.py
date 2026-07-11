@@ -94,15 +94,19 @@ async def delete_account(
     if body.confirm != user["email"]:
         raise HTTPException(status_code=400, detail="Confirmation does not match email")
 
-    # Anonymize email + soft delete
-    anon_email = f"deleted+{uuid.uuid4()}@invalid"
+    # Soft-delete: keep original email so the owner can restore within 30 days.
+    # Do NOT anonymize email here — that breaks the restore flow and allows
+    # re-signup credit abuse (verify_otp can't find the user → treats as new).
+    grace_end = datetime.now(timezone.utc) + timedelta(days=30)
     await db.execute(
         text("""
             UPDATE users
-            SET status = 'deleted', deleted_at = NOW(), email = :anon
+            SET status = 'deleted',
+                deleted_at = NOW(),
+                deletion_grace_end = :grace_end
             WHERE id = :uid
         """),
-        {"anon": anon_email, "uid": uid},
+        {"grace_end": grace_end, "uid": uid},
     )
 
     # Revoke all sessions
@@ -125,7 +129,60 @@ async def delete_account(
 
     await db.commit()
     logger.info("account_deleted", user_id=str(uid))
-    return {"ok": True, "message": "账号已注销，30 天后数据将被永久删除"}
+    return {
+        "ok": True,
+        "message": "账号已注销，30 天后数据将被永久删除",
+        "grace_end": grace_end.isoformat(),
+    }
+
+
+@router.post("/restore")
+async def restore_account(
+    current_user: TokenData = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Restore a soft-deleted account within the 30-day grace period."""
+    uid = uuid.UUID(current_user.user_id)
+
+    result = await db.execute(
+        text("""
+            SELECT status, deletion_grace_end
+            FROM users WHERE id = :uid
+        """),
+        {"uid": uid},
+    )
+    user = result.mappings().first()
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if user["status"] != "deleted":
+        raise HTTPException(status_code=400, detail="账号未处于注销状态")
+
+    if user["deletion_grace_end"] and user["deletion_grace_end"] < datetime.now(timezone.utc):
+        raise HTTPException(status_code=410, detail="冷静期已过，无法恢复账号")
+
+    await db.execute(
+        text("""
+            UPDATE users
+            SET status = 'active',
+                deleted_at = NULL,
+                deletion_grace_end = NULL
+            WHERE id = :uid
+        """),
+        {"uid": uid},
+    )
+    # Cancel the pending deletion request
+    await db.execute(
+        text("""
+            UPDATE account_deletion_requests
+            SET status = 'cancelled'
+            WHERE user_id = :uid AND status = 'pending'
+        """),
+        {"uid": uid},
+    )
+    await db.commit()
+    logger.info("account_restored", user_id=str(uid))
+    return {"ok": True, "message": "账号已恢复"}
 
 
 @router.post("/export")
