@@ -9,7 +9,7 @@ expand it into a fully-valid SoulSpec.
 from __future__ import annotations
 
 from enum import Enum
-from typing import Annotated, Optional
+from typing import Annotated, Literal, Optional
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -75,5 +75,6 @@ class CharacterDraft(BaseModel, extra="forbid"):
     speech_samples: Annotated[list[str], Field(min_length=0, max_length=5)] = Field(
         default_factory=list
     )
+    gender: Optional[Literal["male", "female"]] = None
     sliders: SliderSet = Field(default_factory=SliderSet)
     locale: str = "zh"
