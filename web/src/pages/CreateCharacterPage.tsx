@@ -409,9 +409,24 @@ export function CreateCharacterPage() {
 
   async function handleCloneUpload(file: File) {
     if (!createdCharacterId) return
-    const allowed = ['audio/wav', 'audio/mpeg', 'audio/mp3', 'audio/ogg', 'audio/webm', 'audio/mp4']
-    if (!allowed.some((t) => file.type.startsWith(t.split('/')[0]) && file.type.includes(t.split('/')[1]))) {
-      showToast('请上传 WAV 或 MP3 音频文件', 'error')
+    // Match exact browser-reported MIME types.  Chrome tags .wav as audio/wav
+    // but Firefox/Safari sometimes report audio/x-wav; iOS Voice Memos exports
+    // as audio/mp4.  Empty type (some Android browsers) → fall back to the
+    // extension check the backend also does.
+    const allowed = new Set([
+      'audio/wav',
+      'audio/x-wav',
+      'audio/wave',
+      'audio/mpeg',
+      'audio/mp3',
+      'audio/ogg',
+      'audio/webm',
+      'audio/mp4',
+      'audio/aac',
+      'audio/flac',
+    ])
+    if (file.type && !allowed.has(file.type)) {
+      showToast('请上传 WAV / MP3 / M4A / AAC 音频文件', 'error')
       return
     }
     if (file.size > 20 * 1024 * 1024) {
