@@ -127,20 +127,29 @@ export const DEFAULT_CHARACTER_PROFILE: Omit<CharacterProfile, 'id' | 'name' | '
  * @param id          Character id
  * @param displayName Server-provided display name (optional)
  * @param avatarUrl   Server-provided avatar URL for UGC characters (optional).
- *                    When provided, overrides the default fallback avatar.
+ * @param opts.isOwner When true, renders the character as user-created (shows '自建' tag).
  */
-export function resolveCharacterProfile(id: string, displayName?: string, avatarUrl?: string | null): CharacterProfile {
+export function resolveCharacterProfile(
+  id: string,
+  displayName?: string,
+  avatarUrl?: string | null,
+  opts?: { isOwner?: boolean },
+): CharacterProfile {
   const base = CHARACTER_PROFILES[id]
   if (base) {
     return displayName ? { ...base, name: displayName } : base
   }
   const name = displayName || id
+  const isOwner = opts?.isOwner ?? false
   return {
     ...DEFAULT_CHARACTER_PROFILE,
     id,
     name,
     shortName: name,
     avatar: avatarUrl || DEFAULT_CHARACTER_PROFILE.avatar,
+    tag: isOwner ? '自建' : DEFAULT_CHARACTER_PROFILE.tag,
+    tagColor: isOwner ? '#5A88F8' : DEFAULT_CHARACTER_PROFILE.tagColor,
+    tagBg: isOwner ? 'rgba(120,150,255,0.24)' : DEFAULT_CHARACTER_PROFILE.tagBg,
   }
 }
 

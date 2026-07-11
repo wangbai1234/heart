@@ -117,12 +117,12 @@ export function ChatInboxPage() {
     : '/assets/backgrounds/聊天背景图.png'
 
   // Catalog: server list when loaded, built-in profiles as fallback.
-  const catalog: Array<{ id: string; displayName?: string; avatarUrl?: string | null }> =
+  const catalog: Array<{ id: string; displayName?: string; avatarUrl?: string | null; isOwner: boolean }> =
     serverCharacters.length > 0
-      ? serverCharacters.map((c) => ({ id: c.id, displayName: c.display_name, avatarUrl: c.avatar_url }))
-      : Object.keys(CHARACTER_PROFILES).map((id) => ({ id }))
+      ? serverCharacters.map((c) => ({ id: c.id, displayName: c.display_name, avatarUrl: c.avatar_url, isOwner: c.is_owner && !c.is_builtin }))
+      : Object.keys(CHARACTER_PROFILES).map((id) => ({ id, isOwner: false }))
 
-  const allConversations = catalog.map(({ id: characterId, displayName, avatarUrl }) => {
+  const allConversations = catalog.map(({ id: characterId, displayName, avatarUrl, isOwner }) => {
     const liveMessages = messages[characterId] ?? []
     const threadMessages = threads[characterId] ?? []
     const timeline = (liveMessages.length > 0 ? liveMessages : threadMessages) as TimelineMessage[]
@@ -161,7 +161,7 @@ export function ChatInboxPage() {
     const totalMessages = timeline.length + pending.length + (serverSummary ? 1 : 0)
 
     return {
-      profile: resolveCharacterProfile(characterId, displayName, avatarUrl),
+      profile: resolveCharacterProfile(characterId, displayName, avatarUrl, { isOwner }),
       characterId,
       preview,
       updatedAt: lastTimestamp ? formatConversationTime(lastTimestamp) : '',
