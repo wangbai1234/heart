@@ -30,7 +30,7 @@ interface CharacterCardProps {
 }
 
 function CharacterCard({ char, onEdit, onVisibility, onDisable }: CharacterCardProps) {
-  const profile = resolveCharacterProfile(char.id, char.display_name, char.avatar_url)
+  const profile = resolveCharacterProfile(char.id, char.display_name, char.avatar_url, { isOwner: char.is_owner && !char.is_builtin })
   const vis = VIS_LABELS[char.visibility] ?? VIS_LABELS.private
   const [menuOpen, setMenuOpen] = useState(false)
   const [visMenuOpen, setVisMenuOpen] = useState(false)
