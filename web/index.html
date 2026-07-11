@@ -14,6 +14,14 @@
   </head>
   <body>
     <div id="root"></div>
+    <!-- Inline splash: hides the white flash before React first paints.
+         SplashPage removes this div on mount. -->
+    <div id="__initial_splash__" style="
+      position:fixed;inset:0;z-index:9999;
+      background-color:#F5D0E0;
+      background-image:url('/assets/backgrounds/加载页.png');
+      background-size:cover;background-position:center top;
+    "></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

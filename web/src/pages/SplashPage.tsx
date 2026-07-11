@@ -11,6 +11,10 @@ export function SplashPage() {
   const freeze = searchParams.get('qa') === 'freeze'
 
   useEffect(() => {
+    document.getElementById('__initial_splash__')?.remove()
+  }, [])
+
+  useEffect(() => {
     if (freeze) return
     const delay = isAuthenticated() ? 0 : 1500
     const timer = setTimeout(() => {
