@@ -12,6 +12,10 @@ Recognises Chinese/English/OOC brackets:
 Dialog is further split at sentence terminators (。！？…!?). Adjacent text
 segments shorter than ``MIN_TEXT_CHARS`` merge with the next segment so we
 never emit a bubble like "嗯。".
+
+Corner-quote brackets ``「…」`` (Japanese/Chinese dialog quoting) are treated
+as protected atoms — terminators inside a `「…」` pair do not trigger a split,
+so `「今晚别走。」` stays in one bubble instead of leaking `」` as an orphan.
 """
 
 from __future__ import annotations
@@ -84,13 +88,23 @@ def _split_actions_and_dialog(text: str) -> list[Segment]:
 
 
 def _split_by_terminators(text: str) -> list[str]:
-    """Split a dialog run at terminators, keeping each terminator attached."""
+    """Split a dialog run at terminators, keeping each terminator attached.
+
+    Terminators (`。！？…!?`) that appear *inside* a ``「…」`` pair are treated
+    as part of the quoted content and do not trigger a split — otherwise the
+    closing `」` leaks into its own orphan bubble.
+    """
     parts = _TERM_RE.split(text)
     out: list[str] = []
     buf = ""
+    corner_quote_depth = 0
     for part in parts:
+        if not _TERM_RE.fullmatch(part):
+            corner_quote_depth += part.count("「") - part.count("」")
+            if corner_quote_depth < 0:
+                corner_quote_depth = 0
         buf += part
-        if _TERM_RE.fullmatch(part):
+        if _TERM_RE.fullmatch(part) and corner_quote_depth == 0:
             stripped = buf.strip()
             if stripped:
                 out.append(stripped)

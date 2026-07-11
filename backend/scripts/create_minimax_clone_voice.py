@@ -38,12 +38,22 @@ def _trim_wav(source: Path, seconds: float) -> Path:
     return target
 
 
+_MIME_BY_SUFFIX = {
+    ".mp3": "audio/mpeg",
+    ".m4a": "audio/mp4",
+    ".wav": "audio/wav",
+    ".webm": "audio/webm",
+    ".ogg": "audio/ogg",
+}
+
+
 def _upload_file(client: httpx.Client, path: Path, purpose: str) -> int:
+    mime = _MIME_BY_SUFFIX.get(path.suffix.lower(), "audio/wav")
     with path.open("rb") as fh:
         response = client.post(
             f"{settings.minimax_base_url}/files/upload",
             data={"purpose": purpose},
-            files={"file": (path.name, fh, "audio/wav")},
+            files={"file": (path.name, fh, mime)},
         )
     response.raise_for_status()
     payload = response.json()
@@ -103,7 +113,8 @@ def main() -> None:
     if not source.exists():
         raise SystemExit(f"找不到参考音频: {source}")
 
-    custom_voice_id = args.voice_id or f"RinClone_{source.stat().st_mtime_ns}"
+    default_prefix = args.character[:1].upper() + args.character[1:] + "Clone"
+    custom_voice_id = args.voice_id or f"{default_prefix}_{source.stat().st_mtime_ns}"
 
     headers = {
         "Authorization": f"Bearer {settings.minimax_api_key}",

@@ -128,3 +128,42 @@ def test_no_terminator_single_segment():
     """一句没标点的对白不拆"""
     result = split_response("你今天真的很好看")
     assert result == [{"kind": "text", "content": "你今天真的很好看"}]
+
+
+def test_corner_quote_wraps_terminator_stays_atomic():
+    """`「今晚别走。」` — 终止符在角引号内，不切分，不留孤儿 `」`。"""
+    result = split_response("「今晚别走。」")
+    assert result == [{"kind": "text", "content": "「今晚别走。」"}]
+
+
+def test_corner_quote_ellipsis_stays_atomic():
+    """`「……不说了。」` — 省略号+句号在角引号内也不拆。"""
+    result = split_response("「……不说了。」")
+    assert result == [{"kind": "text", "content": "「……不说了。」"}]
+
+
+def test_corner_quote_then_outside_terminator_splits():
+    """引号闭合后外面的终止符仍触发正常切分。"""
+    result = split_response("「你说什么。」我听不清。她小声说。")
+    texts = [s["content"] for s in result if s["kind"] == "text"]
+    assert texts == ["「你说什么。」我听不清。", "她小声说。"]
+
+
+def test_corner_quote_after_normal_sentence():
+    """引号前面正常句子先切，引号自身保持完整。"""
+    result = split_response("嗯。「我在。」")
+    assert result == [{"kind": "text", "content": "嗯。「我在。」"}]
+
+
+def test_action_paren_then_corner_quote():
+    """动作括号与角引号并存 — 动作归 action，引号归 text 且不拆。"""
+    result = split_response("（凛低头）「不说了。」")
+    assert result[0] == {"kind": "action", "content": "凛低头"}
+    assert result[1] == {"kind": "text", "content": "「不说了。」"}
+
+
+def test_unmatched_close_corner_quote_is_defensive():
+    """孤立 `」` 不导致负深度或异常，仍走正常终止符切分。"""
+    result = split_response("」孤儿。你好呀。")
+    texts = [s["content"] for s in result if s["kind"] == "text"]
+    assert texts == ["」孤儿。你好呀。"]
