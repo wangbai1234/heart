@@ -7,7 +7,8 @@ import { resolveCharacterProfile } from '../data/uiContent'
 import { useCharactersStore } from '../stores/charactersStore'
 import { Dialog } from '../components/ui/Dialog'
 import { Switch } from '../components/ui/Switch'
-import { getCharacterSettings, updateCharacterSettings, getCharacterVoice } from '../services/api'
+import { getCharacterSettings, updateCharacterSettings, getCharacterVoice, clearCharacterConversations } from '../services/api'
+import { useToastStore } from '../stores/toastStore'
 
 export function CharacterBackstagePage() {
   const navigate = useNavigate()
@@ -77,6 +78,13 @@ export function CharacterBackstagePage() {
     : 'text-[rgba(47,54,74,0.54)]'
 
   const handleClearThread = async () => {
+    try {
+      await clearCharacterConversations(currentCharacterId)
+    } catch {
+      useToastStore.getState().show('清空失败，请重试', 'error')
+      setConfirmOpen(false)
+      return
+    }
     clearThread(currentCharacterId)
     clearMessages(currentCharacterId)
     setConfirmOpen(false)

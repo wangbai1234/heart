@@ -8,8 +8,9 @@ import { useAppStore } from '../stores/appStore'
 import { useChatStore } from '../stores/chatStore'
 import { useProactiveStore } from '../stores/proactiveStore'
 import { useCharactersStore } from '../stores/charactersStore'
-import { getInboxSummary } from '../services/api'
+import { getInboxSummary, clearCharacterConversations } from '../services/api'
 import { useAppBadge } from '../hooks/useAppBadge'
+import { useToastStore } from '../stores/toastStore'
 import {
   CHARACTER_PROFILES,
   formatConversationTime,
@@ -178,6 +179,13 @@ export function ChatInboxPage() {
   useAppBadge(totalUnreadCount)
 
   const handleDelete = async (characterId: CharacterId) => {
+    try {
+      await clearCharacterConversations(characterId)
+    } catch {
+      useToastStore.getState().show('清空失败，请重试', 'error')
+      setDeleteTarget(null)
+      return
+    }
     clearThread(characterId)
     clearMessages(characterId)
     setDeleteTarget(null)
