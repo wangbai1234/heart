@@ -5,7 +5,7 @@ import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { OTPInput } from '../components/ui/OTPInput'
 import { Toast } from '../components/ui/Toast'
-import { requestOtp, verifyOtp, updateProfile } from '../services/api'
+import { requestOtp, verifyOtp, updateProfile, logout, restoreAccount } from '../services/api'
 import { useVisualViewport } from '../hooks/useVisualViewport'
 
 const SESSION_KEY = 'yuoyuo-login-flow'
@@ -37,7 +37,7 @@ function clearSnapshot() {
   sessionStorage.removeItem(SESSION_KEY)
 }
 
-type Step = 'email' | 'code'
+type Step = 'email' | 'code' | 'restoration'
 
 export function LoginPage() {
   const snap = readSnapshot()
@@ -47,6 +47,7 @@ export function LoginPage() {
   const [email, setEmail] = useState(snap?.email ?? '')
   const [loading, setLoading] = useState(false)
   const [toast, setToast] = useState({ visible: false, message: '' })
+  const [restorationGraceEnd, setRestorationGraceEnd] = useState<string | null>(null)
   // cooldown is derived from wall-clock; -1 means "not counting"
   const [cooldownEndAt, setCooldownEndAt] = useState<number>(
     snap && snap.cooldownEndAt > now ? snap.cooldownEndAt : 0
@@ -115,6 +116,13 @@ export function LoginPage() {
       })
       acceptLegalVersion('v1.0')
       clearSnapshot()
+
+      if (res.needs_restoration) {
+        setRestorationGraceEnd(res.grace_end ?? null)
+        setStep('restoration')
+        return
+      }
+
       // Sync browser timezone to server on every login (handles cross-timezone travel)
       try {
         const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
@@ -178,7 +186,29 @@ export function LoginPage() {
 
         {/* Form card */}
         <div className="bg-[var(--color-glass-75)] backdrop-blur-[20px] rounded-[24px] border border-[var(--color-border-glass)] shadow-[var(--shadow-hero)] p-5 mb-4">
-          {step === 'email' ? (
+          {step === 'restoration' ? (
+            <RestorationCard
+              graceEnd={restorationGraceEnd}
+              loading={loading}
+              onRestore={async () => {
+                setLoading(true)
+                try {
+                  await restoreAccount()
+                  navigate('/home', { replace: true })
+                } catch {
+                  setToast({ visible: true, message: '恢复失败，请重试' })
+                } finally {
+                  setLoading(false)
+                }
+              }}
+              onCancel={async () => {
+                const { refreshToken, clearSession } = useAuthStore.getState()
+                try { await logout(refreshToken ?? undefined) } catch { /* best-effort */ }
+                clearSession()
+                setStep('email')
+              }}
+            />
+          ) : step === 'email' ? (
             <>
               <Input
                 icon={
@@ -263,6 +293,52 @@ export function LoginPage() {
       <div style={{ height: 'var(--safe-bottom)' }} />
 
       <Toast visible={toast.visible} message={toast.message} onDismiss={() => setToast({ visible: false, message: '' })} />
+    </div>
+  )
+}
+
+function RestorationCard({
+  graceEnd,
+  loading,
+  onRestore,
+  onCancel,
+}: {
+  graceEnd: string | null
+  loading: boolean
+  onRestore: () => void
+  onCancel: () => void
+}) {
+  const daysLeft = graceEnd
+    ? Math.max(0, Math.ceil((new Date(graceEnd).getTime() - Date.now()) / 86400000))
+    : 0
+
+  return (
+    <div className="text-center">
+      <div className="text-[40px] mb-3">👋</div>
+      <h2 className="text-[18px] font-semibold text-[var(--color-ink)] mb-2">
+        欢迎回来
+      </h2>
+      <p className="text-[14px] text-[var(--color-text-secondary)] mb-1">
+        您的账号正处于冷静期（还剩 {daysLeft} 天），数据仍然保留。
+      </p>
+      <p className="text-[13px] text-[var(--color-text-muted)] mb-5">
+        是否恢复账号并继续使用？
+      </p>
+      <Button
+        variant="primary"
+        size="lg"
+        loading={loading}
+        onClick={onRestore}
+      >
+        恢复账号
+      </Button>
+      <button
+        onClick={onCancel}
+        disabled={loading}
+        className="mt-3 w-full text-center text-[14px] text-[var(--color-text-muted)] py-2 active:opacity-60"
+      >
+        不了，退出登录
+      </button>
     </div>
   )
 }

@@ -106,7 +106,7 @@ export function ProfileEditPage() {
         setToast({ visible: true, message: '未满 18 周岁，无法使用本产品' })
         setTimeout(() => navigate('/age-gate', { replace: true }), 1500)
       } else {
-        setUser({ display_name: trimmedName, gender, birthdate, age_verified: true })
+        setUser({ display_name: trimmedName, gender, birthdate, age_verified: res.age_verified === true })
         setToast({ visible: true, message: '保存成功' })
         setTimeout(() => navigate('/home', { replace: true }), 800)
       }
