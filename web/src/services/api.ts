@@ -435,6 +435,24 @@ export async function getPresetVoices(
   return request(`/voice/presets${qs}`)
 }
 
+/**
+ * Fetch a preset voice sample as a Blob and return an object URL suitable for
+ * `new Audio(url)`.  Sends the current Bearer token via fetch (since <audio>
+ * cannot carry Authorization headers).  Caller is responsible for revoking
+ * the URL with `URL.revokeObjectURL` once playback is done.
+ */
+export async function getPresetVoiceSampleUrl(presetId: string): Promise<string> {
+  const { accessToken } = useAuthStore.getState()
+  const res = await fetch(`${BASE_URL}/voice/presets/${encodeURIComponent(presetId)}/sample`, {
+    headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+  })
+  if (!res.ok) {
+    throw new Error(`sample fetch failed: ${res.status}`)
+  }
+  const blob = await res.blob()
+  return URL.createObjectURL(blob)
+}
+
 export async function getCharacterVoice(characterId: string): Promise<CharacterVoiceDTO> {
   return request(`/voice/${characterId}`)
 }

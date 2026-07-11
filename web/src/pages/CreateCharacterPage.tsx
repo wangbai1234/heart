@@ -7,6 +7,7 @@ import {
   ApiError,
   uploadCharacterAvatar,
   getPresetVoices,
+  getPresetVoiceSampleUrl,
   setPresetVoice,
   getCharacterDraft,
   uploadVoiceClone,
@@ -201,6 +202,9 @@ export function CreateCharacterPage() {
   const [voiceSaving, setVoiceSaving] = useState(false)
   const [playingPresetId, setPlayingPresetId] = useState<string | null>(null)
   const previewAudioRef = useRef<HTMLAudioElement | null>(null)
+  // Object URL for the blob we fetched from /api/voice/presets/:id/sample.
+  // Kept alongside previewAudioRef so both are torn down together.
+  const previewObjectUrlRef = useRef<string | null>(null)
 
   // Clone voice upload state
   const cloneInputRef = useRef<HTMLInputElement>(null)
@@ -230,6 +234,10 @@ export function CreateCharacterPage() {
     if (step !== 3 && previewAudioRef.current) {
       previewAudioRef.current.pause()
       previewAudioRef.current = null
+      if (previewObjectUrlRef.current) {
+        URL.revokeObjectURL(previewObjectUrlRef.current)
+        previewObjectUrlRef.current = null
+      }
       setPlayingPresetId(null)
     }
   }, [step, form.gender, isVoiceOnly])
@@ -239,6 +247,7 @@ export function CreateCharacterPage() {
     return () => {
       if (pollRef.current) clearInterval(pollRef.current)
       if (previewAudioRef.current) previewAudioRef.current.pause()
+      if (previewObjectUrlRef.current) URL.revokeObjectURL(previewObjectUrlRef.current)
     }
   }, [])
 
@@ -348,23 +357,54 @@ export function CreateCharacterPage() {
     navigate(`/chat/${createdCharacterId}`, { replace: true })
   }
 
-  function handlePresetPlay(preset: PresetVoiceDTO) {
-    if (!preset.sample_url) return
-    if (playingPresetId === preset.id) {
-      previewAudioRef.current?.pause()
-      previewAudioRef.current = null
-      setPlayingPresetId(null)
-      return
-    }
+  // Tracks the id of the sample fetch that should "win" if multiple presets
+  // are tapped in quick succession.  Bumped on every play/stop call.
+  const previewTicketRef = useRef(0)
+
+  function stopPreview() {
+    previewTicketRef.current++
     if (previewAudioRef.current) {
       previewAudioRef.current.pause()
       previewAudioRef.current = null
     }
-    const audio = new Audio(preset.sample_url)
-    previewAudioRef.current = audio
-    audio.onended = () => { setPlayingPresetId(null); previewAudioRef.current = null }
-    audio.play().catch(() => {})
+    if (previewObjectUrlRef.current) {
+      URL.revokeObjectURL(previewObjectUrlRef.current)
+      previewObjectUrlRef.current = null
+    }
+    setPlayingPresetId(null)
+  }
+
+  async function handlePresetPlay(preset: PresetVoiceDTO) {
+    if (!preset.sample_url) return
+    if (playingPresetId === preset.id) {
+      stopPreview()
+      return
+    }
+    stopPreview()
+    const myTicket = ++previewTicketRef.current
     setPlayingPresetId(preset.id)
+    try {
+      const objectUrl = await getPresetVoiceSampleUrl(preset.id)
+      // Another tap superseded us — throw this fetch away.
+      if (myTicket !== previewTicketRef.current) {
+        URL.revokeObjectURL(objectUrl)
+        return
+      }
+      previewObjectUrlRef.current = objectUrl
+      const audio = new Audio(objectUrl)
+      previewAudioRef.current = audio
+      audio.onended = () => { stopPreview() }
+      audio.onerror = () => {
+        if (myTicket !== previewTicketRef.current) return
+        showToast('试听失败，请稍后再试', 'error')
+        stopPreview()
+      }
+      await audio.play()
+    } catch {
+      if (myTicket !== previewTicketRef.current) return
+      showToast('试听失败，请稍后再试', 'error')
+      stopPreview()
+    }
   }
 
   async function handleCloneUpload(file: File) {
