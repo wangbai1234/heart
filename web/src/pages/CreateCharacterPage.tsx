@@ -242,6 +242,29 @@ export function CreateCharacterPage() {
     }
   }, [])
 
+  // Form persistence for new-character mode: restore saved draft on mount,
+  // save on every change, clear on successful submit.
+  const DRAFT_KEY = 'yuoyuo-create-draft'
+  useEffect(() => {
+    if (editId || isVoiceOnly) return   // edit mode loads from server; voice-only has no form
+    try {
+      const raw = sessionStorage.getItem(DRAFT_KEY)
+      if (!raw) return
+      const saved = JSON.parse(raw) as { form: FormFields; avatarUrl: string; step: 1 | 2 }
+      if (saved.form) setForm(saved.form)
+      if (saved.avatarUrl) setAvatarUrl(saved.avatarUrl)
+      if (saved.step) setStep(saved.step)
+    } catch { /* corrupted entry — ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
+    if (editId || isVoiceOnly || step === 3) return
+    try {
+      sessionStorage.setItem(DRAFT_KEY, JSON.stringify({ form, avatarUrl, step }))
+    } catch { /* storage full — ignore */ }
+  }, [form, avatarUrl, step, editId, isVoiceOnly])
+
   // If editing, load full draft from the server to pre-populate all fields
   useEffect(() => {
     if (!editId) return
@@ -403,6 +426,7 @@ export function CreateCharacterPage() {
         navigate('/my-characters', { replace: true })
       } else {
         const { id } = await createCharacter(draft)
+        sessionStorage.removeItem(DRAFT_KEY)
         setCreatedCharacterId(id)
         setStep(3)
       }

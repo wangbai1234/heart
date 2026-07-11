@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
+import { useScrollRestore } from '../hooks/useScrollRestore'
 import { useNavigate } from 'react-router-dom'
 import { Avatar } from '../components/ui/Avatar'
 import { TabBar } from '../components/ui/TabBar'
@@ -93,6 +94,7 @@ export function ChatInboxPage() {
   const clearMessages = useChatStore((s) => s.clearMessages)
   const serverCharacters = useCharactersStore((s) => s.characters)
   const setInboxUnreadTotal = useAppStore((s) => s.setInboxUnreadTotal)
+  const scrollRef = useScrollRestore()
   const [deleteTarget, setDeleteTarget] = useState<CharacterId | null>(null)
   const [inboxSummary, setInboxSummary] = useState<Record<string, { lastText: string; lastAt: number; serverUnread: number }>>({})
 
@@ -209,7 +211,7 @@ export function ChatInboxPage() {
           <h1 className="mt-1 text-[28px] font-semibold tracking-[-0.03em] text-[var(--color-ink)]">聊天列表</h1>
         </header>
 
-        <div className="flex-1 overflow-y-auto px-4 pb-[180px] pt-4">
+        <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 pb-[180px] pt-4">
           {conversations.length === 0 ? (
             <div className="flex flex-col items-center justify-center pt-20">
               <p className="text-[15px] text-[var(--color-text-muted)]">暂无聊天记录</p>

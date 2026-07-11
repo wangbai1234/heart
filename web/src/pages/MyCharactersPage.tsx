@@ -5,6 +5,7 @@ import { useThemeStore } from '../stores/themeStore'
 import { useCharactersStore } from '../stores/charactersStore'
 import { useToastStore } from '../stores/toastStore'
 import { resolveCharacterProfile } from '../data/uiContent'
+import { useScrollRestore } from '../hooks/useScrollRestore'
 
 function useToast() {
   return useToastStore((s) => s.show)
@@ -180,6 +181,7 @@ export function MyCharactersPage() {
   const { resolvedTheme } = useThemeStore()
   const isDark = resolvedTheme === 'dark'
 
+  const scrollRef = useScrollRestore()
   const [disableTarget, setDisableTarget] = useState<CharacterDTO | null>(null)
   const [disabling, setDisabling] = useState(false)
 
@@ -240,7 +242,7 @@ export function MyCharactersPage() {
       </nav>
 
       {/* Content */}
-      <div className="relative z-10 flex-1 overflow-y-auto px-4 pb-[120px] pt-2">
+      <div ref={scrollRef} className="relative z-10 flex-1 overflow-y-auto px-4 pb-[120px] pt-2">
         {myChars.length === 0 ? (
           <EmptyState onCreateClick={() => navigate('/characters/new')} />
         ) : (
