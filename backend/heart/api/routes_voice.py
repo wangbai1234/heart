@@ -109,20 +109,35 @@ async def get_character_voice(
     current_user: TokenData = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
-    """Get the voice configuration for a character."""
+    """Get the voice configuration for a character.
+
+    Fallback order:
+      1. `character_voices` DB row (preset or clone)
+      2. In-memory `VOICE_CATALOG` (rin/dorothy built-ins)
+    """
+    from heart.ss08_voice.voice_catalog import VOICE_CATALOG
     from heart.ss08_voice.voice_resolver import get_voice_config
 
     config = await get_voice_config(character_id, db)
-    if config is None:
-        return {"configured": False}
-    return {
-        "configured": True,
-        "voice_type": config["voice_type"],
-        "clone_status": config["clone_status"],
-        "preset_voice_id": config["preset_voice_id"],
-        "preset_name": config.get("preset_name"),
-        "has_voice": config["clone_status"] == "ready",
-    }
+    if config is not None:
+        return {
+            "configured": True,
+            "voice_type": config["voice_type"],
+            "clone_status": config["clone_status"],
+            "preset_voice_id": config["preset_voice_id"],
+            "preset_name": config.get("preset_name"),
+            "has_voice": config["clone_status"] == "ready",
+        }
+    if character_id in VOICE_CATALOG:
+        return {
+            "configured": True,
+            "voice_type": "preset",
+            "clone_status": "ready",
+            "preset_voice_id": None,
+            "preset_name": None,
+            "has_voice": True,
+        }
+    return {"configured": False}
 
 
 class PresetVoiceBody(BaseModel):
