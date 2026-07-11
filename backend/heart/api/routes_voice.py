@@ -87,18 +87,36 @@ async def synthesize(
 
 @router.get("/presets")
 async def list_preset_voices(
+    gender: str | None = None,
     current_user: TokenData = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
-    """List available preset voice options."""
-    result = await db.execute(
-        text("""
-            SELECT id, name, voice_id, provider, description, sample_url
-            FROM preset_voices
-            WHERE is_active = TRUE
-            ORDER BY id
-        """)
-    )
+    """List available preset voice options.
+
+    ``gender`` — optional filter. When provided, only preset voices whose
+    ``gender`` column matches are returned. Value must be 'male' or 'female'.
+    """
+    if gender not in (None, "male", "female"):
+        raise HTTPException(status_code=400, detail="gender must be 'male' or 'female'")
+    if gender is None:
+        result = await db.execute(
+            text("""
+                SELECT id, name, voice_id, provider, description, sample_url, gender
+                FROM preset_voices
+                WHERE is_active = TRUE
+                ORDER BY gender, id
+            """)
+        )
+    else:
+        result = await db.execute(
+            text("""
+                SELECT id, name, voice_id, provider, description, sample_url, gender
+                FROM preset_voices
+                WHERE is_active = TRUE AND gender = :gender
+                ORDER BY id
+            """),
+            {"gender": gender},
+        )
     rows = [dict(r) for r in result.mappings()]
     return {"presets": rows}
 
