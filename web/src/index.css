@@ -44,6 +44,11 @@ body {
   font-size: inherit;
 }
 
+/* Prevent iOS Safari from auto-zooming on input focus */
+input, textarea, select {
+  font-size: max(16px, 1em);
+}
+
 .text-\[10px\] { font-size: calc(10px * var(--app-font-scale)); }
 .text-\[12px\] { font-size: calc(12px * var(--app-font-scale)); }
 .text-\[13px\] { font-size: calc(13px * var(--app-font-scale)); }

@@ -31,7 +31,7 @@ export function ChatInput({ onSend, onInterrupt }: Props) {
           className="flex-1 resize-none rounded-xl bg-[var(--color-surface-light)] text-[var(--color-text)]
                      placeholder-[var(--color-text-muted)] border border-[var(--color-border)]
                      px-4 py-3 focus:outline-none focus:border-[var(--color-primary)]
-                     max-h-32 min-h-[48px]"
+                     max-h-32 min-h-[48px] text-[16px]"
           placeholder="Type a message..."
           rows={1}
           value={text}
