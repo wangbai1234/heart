@@ -764,42 +764,58 @@ class ComposerService:
         # ── Layer 1.5: Cognitive style (slider-derived speaking style) ──
         cs = getattr(soul_spec, "cognitive_style", None)
         if cs is not None:
-            style_parts: list[str] = []
-            expr = cs.expression
-            sl = (
-                expr.sentence_length.baseline if hasattr(expr.sentence_length, "baseline") else None
-            )
-            if sl is not None:
-                if sl < 30:
-                    style_parts.append("说话简短，每次回复不超过两句")
-                elif sl > 70:
-                    style_parts.append("表达详细，喜欢展开说清楚")
-            ed = (
-                expr.emotional_directness.baseline
-                if hasattr(expr.emotional_directness, "baseline")
-                else None
-            )
-            if ed is not None:
-                if ed > 0.7:
-                    style_parts.append("情感表达直接，不掩藏内心感受")
-                elif ed < 0.3:
-                    style_parts.append("情感含蓄，不轻易流露真实心思")
-            hw = expr.hedge_words.baseline if hasattr(expr.hedge_words, "baseline") else None
-            if hw is not None:
-                if hw < 0.25:
-                    style_parts.append("说话直接，不绕弯子")
-                elif hw > 0.65:
-                    style_parts.append("说话委婉，喜欢用「也许」「可能」「大概」等软化语气")
-            uom = (
-                expr.use_of_metaphor.baseline if hasattr(expr.use_of_metaphor, "baseline") else None
-            )
-            if uom is not None and uom > 0.65:
-                style_parts.append("喜欢用比喻和意象来表达情感")
-            mv = cs.emotional_inertia.mood_volatility if hasattr(cs, "emotional_inertia") else None
-            if mv is not None and mv > 0.65:
-                style_parts.append("情绪起伏明显，容易被细节触动")
-            if style_parts:
-                parts.append("\n【说话方式补充】\n" + "，".join(style_parts) + "。")
+            try:
+                style_parts: list[str] = []
+                expr = cs.expression
+                # sentence_length.baseline is a string enum: "very_short"/"short"/"medium"/"long"
+                _sl_order: dict[str, int] = {"very_short": 0, "short": 1, "medium": 2, "long": 3}
+                sl_raw = (
+                    expr.sentence_length.baseline
+                    if hasattr(expr.sentence_length, "baseline")
+                    else None
+                )
+                sl = _sl_order.get(sl_raw) if isinstance(sl_raw, str) else None
+                if sl is not None:
+                    if sl <= 1:
+                        style_parts.append("说话简短，每次回复不超过两句")
+                    elif sl >= 3:
+                        style_parts.append("表达详细，喜欢展开说清楚")
+                ed = (
+                    expr.emotional_directness.baseline
+                    if hasattr(expr.emotional_directness, "baseline")
+                    else None
+                )
+                if isinstance(ed, (int, float)):
+                    if ed > 0.7:
+                        style_parts.append("情感表达直接，不掩藏内心感受")
+                    elif ed < 0.3:
+                        style_parts.append("情感含蓄，不轻易流露真实心思")
+                hw = expr.hedge_words.baseline if hasattr(expr.hedge_words, "baseline") else None
+                if isinstance(hw, (int, float)):
+                    if hw < 0.25:
+                        style_parts.append("说话直接，不绕弯子")
+                    elif hw > 0.65:
+                        style_parts.append("说话委婉，喜欢用「也许」「可能」「大概」等软化语气")
+                uom = (
+                    expr.use_of_metaphor.baseline
+                    if hasattr(expr.use_of_metaphor, "baseline")
+                    else None
+                )
+                if isinstance(uom, (int, float)) and uom > 0.65:
+                    style_parts.append("喜欢用比喻和意象来表达情感")
+                mv = (
+                    cs.emotional_inertia.mood_volatility
+                    if hasattr(cs, "emotional_inertia")
+                    else None
+                )
+                if isinstance(mv, (int, float)) and mv > 0.65:
+                    style_parts.append("情绪起伏明显，容易被细节触动")
+                if style_parts:
+                    parts.append("\n【说话方式补充】\n" + "，".join(style_parts) + "。")
+            except Exception:
+                import logging as _logging
+
+                _logging.getLogger(__name__).exception("layer_1_5_style_injection_failed")
 
         # ── Layer 2: Desires / fears / beliefs ───────────────────
         desire_lines = []

@@ -35,10 +35,10 @@ async def resolve_voice_id(character_id: str, db: AsyncSession) -> str | None:
     if row is None:
         # No row — fall back to legacy in-memory catalog
         try:
-            from heart.ss08_voice.voice_catalog import get_voice_id
+            from heart.ss08_voice.voice_catalog import VoiceNotConfigured, get_voice_id
 
             return get_voice_id(character_id)
-        except KeyError:
+        except (KeyError, VoiceNotConfigured):
             return None
 
     if row["voice_type"] == "clone":

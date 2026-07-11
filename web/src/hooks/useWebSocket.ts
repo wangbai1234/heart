@@ -175,6 +175,7 @@ export function useWebSocket() {
           }
           break
         case 'turn_end':
+          setGenerating(cid, false)
           if (msg.turn_id) {
             finalizeMessageAudio(cid, msg.turn_id)
             if (msg.modality) {
@@ -251,6 +252,12 @@ export function useWebSocket() {
             errMsg = '服务暂时不可用，请稍后重试'
           } else if (errCode === 'BILLING_CHECK_FAILED') {
             errMsg = '账户验证失败，请重试'
+          } else if (errCode === 'VOICE_NOT_CONFIGURED') {
+            errMsg = '该角色暂未配置音色，已切换为文字模式'
+          } else if (errCode === 'EMPTY_RESPONSE') {
+            errMsg = '生成失败，请重试'
+          } else if (errCode === 'PERSIST_FAILED') {
+            errMsg = '消息保存失败，请重试'
           }
           useToastStore.getState().show(errMsg, 'error')
           break

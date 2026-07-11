@@ -31,8 +31,9 @@ def test_get_voice_id_dorothy():
 
 
 def test_get_voice_id_unknown_raises():
-    """Test getting voice ID for unknown character raises KeyError."""
-    with pytest.raises(KeyError, match="Unknown voice"):
+    """Test getting voice ID for unknown character raises VoiceNotConfigured."""
+    from heart.ss08_voice.voice_catalog import VoiceNotConfigured
+    with pytest.raises(VoiceNotConfigured):
         get_voice_id("unknown_character")
 
 
