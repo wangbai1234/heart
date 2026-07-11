@@ -315,6 +315,27 @@ async def _charge_and_insert_bubbles(
     return total_charged, new_balance
 
 
+def _derive_segments_and_cost(
+    full_text: str, actual_modality: str, cfg: Any
+) -> tuple[list[Any], int]:
+    """Return ``(segments, per_message_cost)`` for a completed turn.
+
+    Text mode gets the full semantic split (action + text bubbles). Voice
+    mode intentionally emits a single text bubble because TTS synthesises
+    the whole response as one audio clip: splitting into N bubbles would
+    charge voice cost × N while only one clip plays. Per-bubble TTS is a
+    future enhancement.
+    """
+    from heart.ss05_composer.message_splitter import split_response
+
+    if actual_modality == "text":
+        segments = split_response(full_text)
+        if not segments:
+            segments = [{"kind": "text", "content": full_text}]
+        return segments, cfg.credits_cost_text_message
+    return [{"kind": "text", "content": full_text}], cfg.credits_cost_voice_message
+
+
 async def _post_turn_billing(
     ws: WebSocket,
     user_uuid: uuid.UUID,
@@ -335,7 +356,6 @@ async def _post_turn_billing(
     from sqlalchemy.ext.asyncio import AsyncSession
 
     from heart.core.config import settings as cfg
-    from heart.ss05_composer.message_splitter import split_response
 
     from .wiring import _get_engine
 
@@ -356,16 +376,7 @@ async def _post_turn_billing(
             logger.warning("audio_upload_failed", error=str(e))
 
     full_text = "".join(collected_text)
-    # Always split semantically — action bubbles are extracted in both text
-    # and voice modes so the frontend never sees a single wall-of-text bubble.
-    segments = split_response(full_text)
-    if not segments:
-        segments = [{"kind": "text", "content": full_text}]
-    per_message_cost = (
-        cfg.credits_cost_text_message
-        if actual_modality == "text"
-        else cfg.credits_cost_voice_message
-    )
+    segments, per_message_cost = _derive_segments_and_cost(full_text, actual_modality, cfg)
 
     try:
         async with AsyncSession(_get_engine(), expire_on_commit=False) as db:
