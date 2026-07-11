@@ -8,7 +8,7 @@ export interface Message {
   role: 'user' | 'assistant'
   content: string
   timestamp: number
-  kind?: 'text' | 'voice'
+  kind?: 'text' | 'voice' | 'action'
   duration?: string
   audioData?: string
   audioDuration?: number
