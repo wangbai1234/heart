@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from heart.api.rate_limit import limiter
 from heart.api.wiring import get_db
-from heart.billing import InsufficientCreditsError, deduct_credits
+from heart.billing import InsufficientCreditsError, deduct_credits, get_balance
 from heart.core.auth import TokenData, get_current_user
 from heart.core.config import settings
 
@@ -334,18 +334,18 @@ async def clone_voice(
     if len(data) < 1024:
         raise HTTPException(status_code=400, detail="音频文件过小，请上传有效录音")
 
-    # Charge credits before uploading
-    idem_key = f"voice_clone:{character_id}:{uid}"
-    try:
-        new_balance = await deduct_credits(
-            db, uid, _CLONE_COST_FEN, idem_key, type_str="consume_voice_clone"
-        )
-        await db.commit()
-    except InsufficientCreditsError as exc:
+    # Pre-check balance without deducting.  Actual deduction happens in the
+    # background clone job on success, so a failed clone leaves no charge.
+    # A user's balance may still drop between here and the async deduct
+    # (they spend credits chatting during the ~30-120 s clone window); in
+    # that unlikely race we let the clone finish and log the deficit rather
+    # than fail after work is already done.
+    balance = await get_balance(db, uid)
+    if balance < _CLONE_COST_FEN:
         raise HTTPException(
             status_code=402,
-            detail=f"积分不足，克隆需要 800 积分，当前余额 {exc.balance / 100:.1f}",
-        ) from exc
+            detail=f"积分不足，克隆需要 800 积分，当前余额 {balance / 100:.1f}",
+        )
 
     # Upload to S3 / MinIO
     from heart.infra.storage import is_s3_configured
@@ -397,7 +397,10 @@ async def clone_voice(
     return {
         "ok": True,
         "clone_status": "processing",
-        "balance": new_balance / 100,
+        # Balance is unchanged at this point — clone credits are charged when
+        # the job succeeds (see _run_clone_job).  Return the current balance
+        # so the UI can render it correctly.
+        "balance": balance / 100,
     }
 
 
@@ -418,6 +421,27 @@ async def _run_clone_job(character_id: str, audio_url: str, user_id: str) -> Non
         try:
             clone_voice_id = await _call_tts_clone_api(audio_url, character_id)
             if clone_voice_id:
+                # Charge credits only after the provider returns a voice_id —
+                # a failed clone should not cost the user anything.
+                # Idempotency key ties to the specific audio_url (unique per
+                # upload) so retries within the same URL don't double-charge.
+                try:
+                    await deduct_credits(
+                        db,
+                        uuid.UUID(user_id),
+                        _CLONE_COST_FEN,
+                        f"voice_clone_success:{audio_url}",
+                        type_str="consume_voice_clone",
+                    )
+                except InsufficientCreditsError:
+                    # Rare race: balance dropped after the pre-check.  We've
+                    # already burned the TTS API call, so log and let the clone
+                    # succeed — the user effectively gets one free clone.
+                    logger.warning(
+                        "voice_clone_deduct_after_success_failed",
+                        character_id=character_id,
+                        user_id=user_id,
+                    )
                 await db.execute(
                     text("""
                         UPDATE character_voices
