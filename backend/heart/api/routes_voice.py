@@ -347,20 +347,33 @@ async def clone_voice(
             detail=f"积分不足，克隆需要 800 积分，当前余额 {balance / 100:.1f}",
         )
 
-    # Upload to S3 / MinIO
+    # Upload to S3 / MinIO — voice clone REQUIRES a real object URL that the
+    # TTS provider can fetch, so we refuse the request when S3 is not
+    # configured or the upload fails.  The old "local://" synthetic-id
+    # fallback in _call_tts_clone_api produced fake "cloned" voices that
+    # rendered ready in the UI but crashed the first time a user actually
+    # spoke to that character — see the "假成功" report on 2026-07-11.
     from heart.infra.storage import is_s3_configured
     from heart.infra.storage import upload_file as s3_upload
 
+    if not is_s3_configured():
+        raise HTTPException(
+            status_code=503,
+            detail="音色克隆需要对象存储（S3/MinIO），当前环境未配置。请联系管理员或改用预设音色。",
+        )
+    if not (settings.voice_provider == "minimax" and settings.minimax_api_key):
+        raise HTTPException(
+            status_code=503,
+            detail="音色克隆服务未配置，请联系管理员或改用预设音色。",
+        )
+
     ext = mime.split("/")[-1].replace("x-wav", "wav").replace("mpeg", "mp3")
     key = f"voice-samples/{character_id}/{uuid.uuid4().hex}.{ext}"
-    if is_s3_configured():
-        try:
-            audio_url = await s3_upload(data, key, mime)
-        except Exception as exc:
-            logger.warning("voice_clone_s3_failed", error=str(exc))
-            audio_url = f"local://{key}"
-    else:
-        audio_url = f"local://{key}"
+    try:
+        audio_url = await s3_upload(data, key, mime)
+    except Exception as exc:
+        logger.warning("voice_clone_s3_failed", error=str(exc))
+        raise HTTPException(status_code=502, detail="音频上传失败，请稍后重试") from exc
 
     # Upsert character_voices row with status = 'processing'
     await db.execute(
@@ -488,24 +501,26 @@ async def _run_clone_job(character_id: str, audio_url: str, user_id: str) -> Non
 async def _call_tts_clone_api(audio_url: str, character_id: str) -> str | None:
     """Call the configured TTS provider's voice clone endpoint.
 
-    Returns the new voice_id on success, or None if not supported / disabled.
-    For local:// URLs (no S3) we skip the actual API call and return a
-    synthetic voice_id so development/test flows still work end-to-end.
+    Returns the new voice_id on success, or None on any failure so the caller
+    marks the job as failed and reports it back to the user honestly.  There
+    is no synthetic-id fallback: pretending to succeed produced voice_ids the
+    TTS provider rejected at chat time, which surfaced as the "stuck at 正在
+    回复" bug (2026-07-11).
     """
     if audio_url.startswith("local://"):
-        # Dev fallback: use preset female-shaonv voice ID
-        return f"ugc_clone_{character_id}"
+        logger.warning("voice_clone_local_url_rejected", audio_url=audio_url)
+        return None
 
     provider = settings.voice_provider
-    if provider == "minimax" and settings.minimax_api_key:
-        try:
-            return await _minimax_clone(audio_url)
-        except Exception as exc:
-            logger.warning("minimax_clone_failed", error=str(exc))
-            return None
+    if not (provider == "minimax" and settings.minimax_api_key):
+        logger.warning("voice_clone_provider_unavailable", provider=provider)
+        return None
 
-    # No provider configured — use synthetic id for local dev
-    return f"ugc_clone_{character_id}"
+    try:
+        return await _minimax_clone(audio_url)
+    except Exception as exc:
+        logger.warning("minimax_clone_failed", error=str(exc))
+        return None
 
 
 async def _minimax_clone(audio_url: str) -> str | None:
