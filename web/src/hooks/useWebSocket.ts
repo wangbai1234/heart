@@ -29,6 +29,7 @@ interface WsMessage {
   credits_charged?: number
   balance?: number
   needed?: number
+  kind?: 'text' | 'action'
 }
 
 function b64ToArrayBuffer(b64: string): ArrayBuffer {
@@ -149,17 +150,19 @@ export function useWebSocket() {
             appendMessageAudio(cid, currentTurnId, storedB64, durationMs, msg.seq ?? 0, audioFormat)
           }
           break
-        case 'message_bubble':
-          // Replace the streaming placeholder (sequence_id=0) or add new bubble
+        case 'message_bubble': {
+          // Semantic split: msg.kind ∈ {'text','action'}. Default to 'text'
+          // if the server didn't send a kind (older backend).
+          const bubbleKind: 'text' | 'action' = msg.kind === 'action' ? 'action' : 'text'
+          // Replace the streaming placeholder (sequence_id=0) OR add new bubble.
           if (msg.sequence_id === 0) {
             // Clear generating flag — bubbles are arriving, stop the dots
             setGenerating(cid, false)
-            // Replace the streaming message content with the first split bubble
             useChatStore.setState((s) => {
               const msgs = s.messages[cid] ?? []
               const updated = msgs.map((m, idx) =>
                 idx === msgs.length - 1 && m.role === 'assistant'
-                  ? { ...m, content: msg.content ?? '' }
+                  ? { ...m, content: msg.content ?? '', kind: bubbleKind }
                   : m
               )
               return { messages: { ...s.messages, [cid]: updated } }
@@ -170,10 +173,11 @@ export function useWebSocket() {
               role: 'assistant',
               content: msg.content ?? '',
               timestamp: Date.now(),
-              kind: 'text',
+              kind: bubbleKind,
             })
           }
           break
+        }
         case 'turn_end':
           setGenerating(cid, false)
           if (msg.turn_id) {
@@ -184,7 +188,11 @@ export function useWebSocket() {
                 messages: {
                   ...s.messages,
                   [cid]: (s.messages[cid] ?? []).map((message) =>
-                    message.id === msg.turn_id ? { ...message, kind: normalizedKind } : message,
+                    // Only overwrite kind for the placeholder message (id === turn_id)
+                    // AND only if it isn't already an action bubble.
+                    message.id === msg.turn_id && message.kind !== 'action'
+                      ? { ...message, kind: normalizedKind }
+                      : message,
                   ),
                 },
               }))

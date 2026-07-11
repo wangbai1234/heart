@@ -236,47 +236,67 @@ async def _charge_and_insert_bubbles(
     user_uuid: uuid.UUID,
     turn_id: str,
     character_id: str,
-    segments: list[str],
+    segments: list[Any],
     actual_modality: str,
     per_message_cost: int,
     audio_url: Optional[str],
     audio_duration_ms: Optional[int],
 ) -> tuple[int, int]:
-    """Deduct credits and INSERT assistant rows. Returns (n_paid, new_balance)."""
+    """Deduct credits and INSERT assistant rows.
+
+    ``segments`` is a list of ``{kind, content}`` dicts from split_response.
+    Action segments are persisted but not charged and get no audio metadata.
+    Text segments are charged at per_message_cost each.
+    """
     from heart.billing import InsufficientCreditsError, deduct_credits
 
     total_charged = 0
     new_balance = 0
+    audio_attached = False
 
     for i, seg in enumerate(segments):
+        kind = seg["kind"]
+        content = seg["content"]
         try:
-            new_balance = await deduct_credits(
-                db,
-                user_uuid,
-                per_message_cost,
-                f"turn:{turn_id}:msg:{i}",
-                f"consume_{actual_modality}",
-            )
-            total_charged += per_message_cost
+            credits_this_row = 0
+            seg_audio_url = None
+            seg_audio_dur = None
+            if kind == "text":
+                new_balance = await deduct_credits(
+                    db,
+                    user_uuid,
+                    per_message_cost,
+                    f"turn:{turn_id}:msg:{i}",
+                    f"consume_{actual_modality}",
+                )
+                total_charged += per_message_cost
+                credits_this_row = per_message_cost
+                if not audio_attached:
+                    seg_audio_url = audio_url
+                    seg_audio_dur = audio_duration_ms
+                    audio_attached = True
             await db.execute(
                 sql_text(
                     "INSERT INTO chat_messages "
                     "(id, user_id, character_id, turn_id, role, content, modality, "
-                    " audio_url, audio_duration_ms, credits_charged, sequence_id, created_at) "
+                    " audio_url, audio_duration_ms, credits_charged, sequence_id, kind, "
+                    " created_at) "
                     "VALUES (:id, :uid, :cid, :tid, 'assistant', :content, :modality, "
-                    "        :audio_url, :audio_dur, :credits, :seq_id, clock_timestamp())"
+                    "        :audio_url, :audio_dur, :credits, :seq_id, :kind, "
+                    "        clock_timestamp())"
                 ),
                 {
                     "id": uuid.uuid4(),
                     "uid": user_uuid,
                     "cid": character_id,
                     "tid": uuid.UUID(turn_id),
-                    "content": seg,
-                    "modality": actual_modality,
-                    "audio_url": audio_url if i == 0 else None,
-                    "audio_dur": audio_duration_ms if i == 0 else None,
-                    "credits": per_message_cost,
+                    "content": content,
+                    "modality": actual_modality if kind == "text" else "text",
+                    "audio_url": seg_audio_url,
+                    "audio_dur": seg_audio_dur,
+                    "credits": credits_this_row,
                     "seq_id": i,
+                    "kind": kind,
                 },
             )
         except InsufficientCreditsError as ice:
@@ -336,12 +356,16 @@ async def _post_turn_billing(
             logger.warning("audio_upload_failed", error=str(e))
 
     full_text = "".join(collected_text)
-    if actual_modality == "text":
-        segments = split_response(full_text)
-        per_message_cost = cfg.credits_cost_text_message
-    else:
-        segments = [full_text]
-        per_message_cost = cfg.credits_cost_voice_message
+    # Always split semantically — action bubbles are extracted in both text
+    # and voice modes so the frontend never sees a single wall-of-text bubble.
+    segments = split_response(full_text)
+    if not segments:
+        segments = [{"kind": "text", "content": full_text}]
+    per_message_cost = (
+        cfg.credits_cost_text_message
+        if actual_modality == "text"
+        else cfg.credits_cost_voice_message
+    )
 
     try:
         async with AsyncSession(_get_engine(), expire_on_commit=False) as db:
@@ -361,7 +385,6 @@ async def _post_turn_billing(
             )
 
             total_charged, new_balance = 0, 0
-            n_paid = len(segments)
 
             if not turn_safety_blocked:
                 total_charged, new_balance = await _charge_and_insert_bubbles(
@@ -382,17 +405,18 @@ async def _post_turn_billing(
             await db.commit()
 
         # ── Send WS events ────────────────────────────────────────────────────
-        for i, seg in enumerate(segments[:n_paid]):
+        for i, seg in enumerate(segments):
             await ws.send_json(
                 {
                     "type": "message_bubble",
                     "turn_id": turn_id,
                     "sequence_id": i,
-                    "content": seg,
+                    "kind": seg["kind"],
+                    "content": seg["content"],
                 }
             )
-            if i < n_paid - 1:
-                await asyncio.sleep(random.uniform(0.3, 0.8))
+            if i < len(segments) - 1:
+                await asyncio.sleep(random.uniform(0.25, 0.6))
 
         await ws.send_json(
             {

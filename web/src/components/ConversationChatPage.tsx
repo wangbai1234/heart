@@ -268,6 +268,23 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
       )
     }
 
+    // Action bubble — grey italic narration (parenthetical action / expression / OOC)
+    // Rendered without avatar, centre-aligned, low-contrast to keep the reader's
+    // eye on the dialog. Independent from voice / TTS.
+    if (msg.kind === 'action' && msg.content) {
+      return (
+        <div className="flex justify-center my-1">
+          <div className={`max-w-[80%] px-3 py-1.5 rounded-full text-[13px] italic ${
+            isDark
+              ? 'bg-[rgba(255,255,255,0.05)] text-[rgba(228,228,231,0.55)]'
+              : 'bg-[rgba(0,0,0,0.04)] text-[rgba(45,50,72,0.55)]'
+          }`}>
+            {msg.content}
+          </div>
+        </div>
+      )
+    }
+
     // Show breathing dots in text bubble when message is empty during streaming
     const isEmpty = msg.content === '' && isStreaming
     if (isEmpty) {
