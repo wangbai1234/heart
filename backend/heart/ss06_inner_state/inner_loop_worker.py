@@ -23,7 +23,6 @@ import structlog
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from heart.ss01_soul.character_content import get_ritual_greeting
 from heart.ss06_inner_state import proactive_repo
 from heart.ss06_inner_state.models import ProactiveMessage
 from heart.ss06_inner_state.service import InnerStateService
