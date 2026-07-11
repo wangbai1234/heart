@@ -160,11 +160,16 @@ export function useWebSocket() {
             setGenerating(cid, false)
             useChatStore.setState((s) => {
               const msgs = s.messages[cid] ?? []
-              const updated = msgs.map((m, idx) =>
-                idx === msgs.length - 1 && m.role === 'assistant'
-                  ? { ...m, content: msg.content ?? '', kind: bubbleKind }
-                  : m
-              )
+              const updated = msgs.map((m, idx) => {
+                if (idx !== msgs.length - 1 || m.role !== 'assistant') return m
+                // Preserve kind='voice' if audio_chunk already arrived — the
+                // voice bubble owns the audio and its display kind must win
+                // over an incoming 'text'. Action bubbles never race with
+                // voice, so bubbleKind='action' still applies.
+                const nextKind: 'text' | 'voice' | 'action' =
+                  m.kind === 'voice' && bubbleKind === 'text' ? 'voice' : bubbleKind
+                return { ...m, content: msg.content ?? '', kind: nextKind }
+              })
               return { messages: { ...s.messages, [cid]: updated } }
             })
           } else {
