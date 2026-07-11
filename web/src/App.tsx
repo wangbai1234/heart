@@ -26,6 +26,7 @@ import { useThemeStore } from './stores/themeStore'
 import { useAppStore } from './stores/appStore'
 import { useAuthStore } from './stores/authStore'
 import { useCharactersStore } from './stores/charactersStore'
+import { useAppBadge } from './hooks/useAppBadge'
 
 function ChatConversationRouter() {
   const { resolvedTheme } = useThemeStore()
@@ -36,7 +37,11 @@ const SKIP_SAVE_ROUTES = new Set(['/splash', '/onboarding', '/login', '/redeem',
 
 export function App() {
   const { fontScale } = useAppStore()
+  const inboxUnreadTotal = useAppStore((s) => s.inboxUnreadTotal)
   const accessToken = useAuthStore((s) => s.accessToken)
+
+  // Global badge: drives navigator.setAppBadge regardless of which page is active.
+  useAppBadge(inboxUnreadTotal)
   const loadCharacters = useCharactersStore((s) => s.load)
   const navigate = useNavigate()
   const location = useLocation()

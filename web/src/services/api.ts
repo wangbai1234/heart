@@ -253,9 +253,19 @@ export async function exportData(): Promise<any> {
 // ── Chat API ───────────────────────────────────────────────────────
 
 export async function getInboxSummary(): Promise<{
-  items: Array<{ character_id: string; last_message_text: string; last_message_at: string | null; modality: string }>
+  items: Array<{
+    character_id: string
+    last_message_text: string
+    last_message_at: string | null
+    modality: string
+    unread_count: number
+  }>
 }> {
   return request('/chat/inbox-summary')
+}
+
+export async function markCharacterRead(characterId: string): Promise<{ ok: boolean }> {
+  return request(`/chat/${encodeURIComponent(characterId)}/mark-read`, { method: 'POST' })
 }
 
 export async function getChatHistory(

@@ -17,6 +17,7 @@ interface AppState {
   isMuteNever: boolean
   voiceChatEnabled: Record<CharacterId, boolean>
   pushEnabled: boolean
+  inboxUnreadTotal: number
 
   setFirstLaunch: (v: boolean) => void
   setCharacter: (id: CharacterId) => void
@@ -27,6 +28,7 @@ interface AppState {
   setMuteNever: (v: boolean) => void
   setVoiceChatEnabled: (id: CharacterId, enabled: boolean) => void
   setPushEnabled: (v: boolean) => void
+  setInboxUnreadTotal: (n: number) => void
 }
 
 export const useAppStore = create<AppState>()(
@@ -47,6 +49,7 @@ export const useAppStore = create<AppState>()(
         dorothy: false,
       },
       pushEnabled: false,
+      inboxUnreadTotal: 0,
 
       setFirstLaunch: (v) => set({ isFirstLaunch: v }),
       setCharacter: (id) => set({ currentCharacterId: id }),
@@ -69,6 +72,7 @@ export const useAppStore = create<AppState>()(
           },
         })),
       setPushEnabled: (v) => set({ pushEnabled: v }),
+      setInboxUnreadTotal: (n) => set({ inboxUnreadTotal: n }),
     }),
     {
       name: 'yuoyuo-app',

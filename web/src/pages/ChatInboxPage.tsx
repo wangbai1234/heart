@@ -9,13 +9,11 @@ import { useChatStore } from '../stores/chatStore'
 import { useProactiveStore } from '../stores/proactiveStore'
 import { useCharactersStore } from '../stores/charactersStore'
 import { getInboxSummary, clearCharacterConversations } from '../services/api'
-import { useAppBadge } from '../hooks/useAppBadge'
 import { useToastStore } from '../stores/toastStore'
 import {
   CHARACTER_PROFILES,
   formatConversationTime,
   getMessagePreview,
-  getUnreadMessageCount,
   resolveCharacterProfile,
   type CharacterId,
 } from '../data/uiContent'
@@ -94,19 +92,19 @@ export function ChatInboxPage() {
   const clearThread = useChatStore((s) => s.clearThread)
   const clearMessages = useChatStore((s) => s.clearMessages)
   const serverCharacters = useCharactersStore((s) => s.characters)
+  const setInboxUnreadTotal = useAppStore((s) => s.setInboxUnreadTotal)
   const [deleteTarget, setDeleteTarget] = useState<CharacterId | null>(null)
-  const [inboxSummary, setInboxSummary] = useState<Record<string, { lastText: string; lastAt: number }>>({})
+  const [inboxSummary, setInboxSummary] = useState<Record<string, { lastText: string; lastAt: number; serverUnread: number }>>({})
 
   useEffect(() => {
     getInboxSummary()
       .then((res) => {
-        const map: Record<string, { lastText: string; lastAt: number }> = {}
+        const map: Record<string, { lastText: string; lastAt: number; serverUnread: number }> = {}
         for (const item of res.items) {
-          if (item.last_message_at) {
-            map[item.character_id] = {
-              lastText: item.last_message_text,
-              lastAt: new Date(item.last_message_at).getTime(),
-            }
+          map[item.character_id] = {
+            lastText: item.last_message_text,
+            lastAt: item.last_message_at ? new Date(item.last_message_at).getTime() : 0,
+            serverUnread: item.unread_count ?? 0,
           }
         }
         setInboxSummary(map)
@@ -155,7 +153,11 @@ export function ChatInboxPage() {
       ? latestPending.content
       : (localPreview || serverSummary?.lastText || '')
 
-    const unreadCount = getUnreadMessageCount(timeline) + pending.length
+    // Prefer server unread_count (accurate); fall back to proactive-only count when
+    // server hasn't responded yet so the badge isn't stuck at 0 before first fetch.
+    const unreadCount = serverSummary
+      ? serverSummary.serverUnread + pending.length
+      : pending.length
     const totalMessages = timeline.length + pending.length + (serverSummary ? 1 : 0)
 
     return {
@@ -176,7 +178,12 @@ export function ChatInboxPage() {
     .sort((a, b) => b.lastTimestamp - a.lastTimestamp)
 
   const totalUnreadCount = conversations.reduce((sum, c) => sum + c.unreadCount, 0)
-  useAppBadge(totalUnreadCount)
+
+  // Sync badge count to global store so App.tsx can drive useAppBadge even
+  // when the user is on a different page.
+  useEffect(() => {
+    setInboxUnreadTotal(totalUnreadCount)
+  }, [totalUnreadCount, setInboxUnreadTotal])
 
   const handleDelete = async (characterId: CharacterId) => {
     try {
