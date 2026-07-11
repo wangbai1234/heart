@@ -106,6 +106,15 @@ async def lifespan(app: FastAPI):
     except RuntimeError as e:
         logger.warning("jwt_secret_invalid", error=str(e))
 
+    # Check migration drift — logs ERROR if disk heads ≠ alembic_version rows.
+    try:
+        from heart.api.wiring import _get_engine
+        from heart.infra.migration_check import check_migration_drift
+
+        await check_migration_drift(_get_engine())
+    except Exception as _exc:
+        logger.warning("migration_check_failed", error=str(_exc))
+
     # Warm DB-sourced UGC soul specs and character content overlays.
     # Uses a short-lived connection so the pool is not held during the full
     # lifespan.  Failure is non-fatal: the service starts with file specs only.
