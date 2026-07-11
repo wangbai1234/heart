@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useCreditsStore } from '../stores/creditsStore'
 import { getTransactions } from '../services/api'
 import { Skeleton } from '../components/ui/Skeleton'
+import { useScrollRestore } from '../hooks/useScrollRestore'
 
 interface Transaction {
   delta: number
@@ -24,6 +25,7 @@ const TYPE_LABELS: Record<string, string> = {
 export function TransactionsPage() {
   const navigate = useNavigate()
   const { balance, refresh: refreshCredits } = useCreditsStore()
+  const scrollRef = useScrollRestore()
   const [items, setItems] = useState<Transaction[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState(false)
@@ -85,7 +87,7 @@ export function TransactionsPage() {
       </div>
 
       {/* Transaction list */}
-      <div className="flex-1 overflow-y-auto px-5">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-5">
         {loading ? (
           <div className="space-y-3">
             {Array.from({ length: 5 }).map((_, i) => (
