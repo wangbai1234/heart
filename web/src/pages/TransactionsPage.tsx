@@ -134,16 +134,21 @@ export function TransactionsPage() {
               </div>
             ))}
 
-            {loadMoreError && (
-              <p className="w-full py-2 text-center text-[13px] text-[var(--color-error)]">加载失败，请重试</p>
-            )}
             {nextCursor && (
               <button
                 onClick={loadMore}
                 disabled={loadingMore}
-                className="w-full py-3 text-center text-[13px] text-[var(--color-primary)] active:opacity-60"
+                className={`w-full py-3 text-center text-[13px] active:opacity-60 ${
+                  loadMoreError
+                    ? 'text-[var(--color-error)]'
+                    : 'text-[var(--color-primary)]'
+                }`}
               >
-                {loadingMore ? '加载中...' : '加载更多'}
+                {loadingMore
+                  ? '加载中...'
+                  : loadMoreError
+                  ? '加载失败，点击重试'
+                  : '加载更多'}
               </button>
             )}
           </div>
