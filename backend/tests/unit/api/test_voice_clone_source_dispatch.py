@@ -85,6 +85,26 @@ async def test_dispatch_returns_none_on_missing_provider():
 
 
 @pytest.mark.asyncio
+async def test_dispatch_allows_clone_when_primary_provider_is_mimo():
+    """Clone must proceed as long as MiniMax key is set — the primary TTS
+    provider being MiMo (voice_provider="mimo") is not a reason to refuse
+    clone. Regression from 2026-07-12 real-device report."""
+    with (
+        patch.object(routes_voice.settings, "voice_provider", "mimo"),
+        patch.object(routes_voice.settings, "minimax_api_key", "test-key"),
+        patch.object(
+            routes_voice,
+            "_minimax_clone_by_file_id",
+            new=AsyncMock(return_value="VOICE_OK"),
+        ) as mock_file,
+    ):
+        got = await routes_voice._call_tts_clone_api("minimax_file://42", "char_abc")
+
+    assert got == "VOICE_OK"
+    mock_file.assert_awaited_once_with(42, "char_abc")
+
+
+@pytest.mark.asyncio
 async def test_dispatch_swallows_exceptions():
     """A raised inner helper turns into ``None`` — job marks failed, no crash."""
     with (
