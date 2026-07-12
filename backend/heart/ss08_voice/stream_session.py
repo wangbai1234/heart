@@ -13,15 +13,21 @@ from heart.ss08_voice.voice_cache import VoiceCache, should_cache
 logger = structlog.get_logger(__name__)
 
 
-_PARENTHETICAL_PATTERN = re.compile(r"[（(][^()（）]*[)）]")
+# Action-bracket pattern — kept in sync with
+# ``heart.ss05_composer.message_splitter._ACTION_RE`` so any bracket the bubble
+# splitter treats as an action ("action" kind, grey pill) is also stripped
+# from the TTS input. Historically this pattern only recognised parentheses,
+# which meant characters emitting 【叹气】 or [回到主题] had their action tags
+# read aloud (TEST_REPORT_20260712 §5.4).
+_ACTION_PATTERN = re.compile(r"[（(【\[]([^（()【\[\]）)】\n]*)[）)】\]]")
 
 
 def _extract_tts_stage_directions(text: str) -> tuple[str, list[str]]:
-    """Remove parenthetical stage directions for TTS only.
+    """Remove action brackets from ``text`` before it hits TTS.
 
     Keeps the original text intact for transcript/history, but avoids reading
-    bracketed descriptions such as:
-    （目光停顿片刻，嗓音带着雨后的凉意）
+    bracketed descriptions aloud, whether they come as
+    （目光停顿片刻，嗓音带着雨后的凉意）, 【叹气】, or [回到主题].
     """
     if not text:
         return "", []
@@ -29,10 +35,8 @@ def _extract_tts_stage_directions(text: str) -> tuple[str, list[str]]:
     directions: list[str] = []
     # Re-run until stable so multiple short bracket segments are removed.
     while True:
-        directions.extend(
-            match.group(0)[1:-1].strip() for match in _PARENTHETICAL_PATTERN.finditer(stripped)
-        )
-        next_text = _PARENTHETICAL_PATTERN.sub("", stripped)
+        directions.extend(match.group(1).strip() for match in _ACTION_PATTERN.finditer(stripped))
+        next_text = _ACTION_PATTERN.sub("", stripped)
         if next_text == stripped:
             break
         stripped = next_text
@@ -42,7 +46,7 @@ def _extract_tts_stage_directions(text: str) -> tuple[str, list[str]]:
 
 
 def _strip_tts_stage_directions(text: str) -> str:
-    """Return only the speakable text, preserving square brackets."""
+    """Return only the speakable text — every action-bracket span removed."""
     stripped, _ = _extract_tts_stage_directions(text)
     return stripped
 
