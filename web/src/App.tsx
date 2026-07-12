@@ -28,6 +28,7 @@ import { useAppStore } from './stores/appStore'
 import { useAuthStore } from './stores/authStore'
 import { useCharactersStore } from './stores/charactersStore'
 import { useAppBadge } from './hooks/useAppBadge'
+import { useInboxBadgeSync } from './hooks/useInboxBadgeSync'
 import { useSwipeNavigation } from './hooks/useSwipeNavigation'
 
 function ChatConversationRouter() {
@@ -53,6 +54,10 @@ export function App() {
 
   // Global badge: drives navigator.setAppBadge regardless of which page is active.
   useAppBadge(inboxUnreadTotal)
+  // Global badge sync: without this hook the total only updates when the user
+  // opens the inbox page. Users who live on /home or /chat had a stuck badge
+  // (TEST_REPORT_20260712 §6.4).
+  useInboxBadgeSync()
   // Global back gesture: priority=0 yields to any page that registers its own
   // priority=1 handler (HomePage blocks, ConversationChatPage overrides target).
   useSwipeNavigation({ priority: 0 })
