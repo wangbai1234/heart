@@ -36,6 +36,14 @@ DAILY_PROACTIVE_QUOTA = 3
 MIN_IDLE_HOURS = 8.0
 DICE_IDLE_HOURS = 12.0
 
+# Cross-character cooldown. Mirrors CROSS_CHARACTER_COOLDOWN_MINUTES on
+# InnerStateService so both entry points enforce the same user-scoped rule.
+_CROSS_CHARACTER_COOLDOWN_MINUTES = 30
+
+# Content-dedup window (days). Mirrors CONTENT_DEDUP_DAYS on
+# InnerStateService.
+_CONTENT_DEDUP_DAYS = 3
+
 # Bounded in-memory mirror of recently generated messages. Retained for one
 # release as a fallback/diagnostic; the source of truth is the
 # proactive_messages table. TODO(sunset 2026-09): remove once the DB-backed
@@ -217,18 +225,25 @@ class InnerLoopWorker:
                     user_id, character_id
                 )
 
-                # Tick (outside session to avoid holding connection)
+                # Tick — pass a DB session so the daily quota / cross-character
+                # cooldown / content-dedup gates hit the proactive_messages
+                # table. Without a session tick() falls back to an in-memory
+                # counter that resets on process restart, which is how BUG-6
+                # in TEST_REPORT_20260712 got 4 messages per (user, character)
+                # per day past the 3-cap.
                 try:
-                    msg = await self.inner_state_service.tick(
-                        user_id=user_id,
-                        character_id=character_id,
-                        relationship_stage=relationship_stage,
-                        intimacy=intimacy,
-                        days_since_last_interaction=days_since_last,
-                        is_anniversary=is_anniversary,
-                        recent_context=recent_context,
-                        user_facts=user_facts,
-                    )
+                    async with self.db_session_factory() as tick_session:
+                        msg = await self.inner_state_service.tick(
+                            user_id=user_id,
+                            character_id=character_id,
+                            relationship_stage=relationship_stage,
+                            intimacy=intimacy,
+                            days_since_last_interaction=days_since_last,
+                            is_anniversary=is_anniversary,
+                            recent_context=recent_context,
+                            user_facts=user_facts,
+                            db=tick_session,
+                        )
 
                     if msg is not None:
                         await self._persist(msg)
@@ -363,6 +378,49 @@ class InnerLoopWorker:
 
         return False
 
+    async def _dedup_or_none(
+        self,
+        *,
+        session: AsyncSession,
+        user_id: UUID,
+        character_id: str,
+        content: str,
+        trigger_type: str,
+        hours_since: float,
+        ltc: dict,
+    ) -> Optional[str]:
+        """Retry the content once if it duplicates a recent send; else suppress.
+
+        Mirrors ``InnerStateService`` Gate I-8 for the ritual path.
+        """
+        for _attempt in range(2):
+            if not await proactive_repo.content_seen_recently(
+                session, user_id, character_id, content, _CONTENT_DEDUP_DAYS
+            ):
+                return content
+            logger.info(
+                "ritual_content_duplicate_retry",
+                user_id=str(user_id),
+                character_id=character_id,
+            )
+            content = await self.inner_state_service._resolve_proactive_content(
+                character_id=character_id,
+                trigger_type=trigger_type,
+                relationship_stage="FRIEND",
+                intimacy=0.5,
+                days_since_last_interaction=hours_since / 24,
+                recent_context="",
+                user_facts="",
+                local_time_context=ltc,
+            )
+        logger.info(
+            "ritual_suppressed_content_dedup",
+            user_id=str(user_id),
+            character_id=character_id,
+            content_preview=(content or "")[:40],
+        )
+        return None
+
     async def _check_ritual_triggers(
         self,
         user_id: UUID,
@@ -419,6 +477,20 @@ class InnerLoopWorker:
             )
             return None
 
+        # Cross-character cooldown — same rule as InnerStateService Gate I-7.
+        # Prevents the fan-out burst where every character pings the user in
+        # the same tick (TEST_REPORT_20260712 BUG-6).
+        if await proactive_repo.any_recent_across_characters(
+            session, user_id, _CROSS_CHARACTER_COOLDOWN_MINUTES
+        ):
+            logger.info(
+                "ritual_suppressed_cross_character_cooldown",
+                user_id=str(user_id),
+                character_id=character_id,
+                window_minutes=_CROSS_CHARACTER_COOLDOWN_MINUTES,
+            )
+            return None
+
         # ── Build local-time context + generate content ───────────────────────
         ltc = _build_local_time_context(now, user_timezone, hours_since)
         content = await self.inner_state_service._resolve_proactive_content(
@@ -431,6 +503,18 @@ class InnerLoopWorker:
             user_facts="",
             local_time_context=ltc,
         )
+
+        content = await self._dedup_or_none(
+            session=session,
+            user_id=user_id,
+            character_id=character_id,
+            content=content,
+            trigger_type=trigger_type,
+            hours_since=hours_since,
+            ltc=ltc,
+        )
+        if content is None:
+            return None
 
         msg = ProactiveMessage(
             user_id=user_id,
