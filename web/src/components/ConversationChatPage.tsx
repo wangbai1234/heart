@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { useAppStore } from '../stores/appStore'
 import { useChatStore, type Message } from '../stores/chatStore'
 import { useAuthStore } from '../stores/authStore'
-import { CHARACTER_PROFILES, resolveCharacterProfile, shouldShowTimestamp, formatChatTime, formatTextByDisplayWidth, type CharacterId } from '../data/uiContent'
+import { CHARACTER_PROFILES, resolveCharacterProfile, shouldShowTimestamp, formatChatTime, type CharacterId } from '../data/uiContent'
 import { useCharactersStore } from '../stores/charactersStore'
 import { useWebSocket } from '../hooks/useWebSocket'
 import { useProactiveStore } from '../stores/proactiveStore'
@@ -286,7 +286,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
           ) : (
             <div className="w-[40px] shrink-0" />
           )}
-          <div className={`max-w-[67%] px-4 py-[14px] ${
+          <div className={`max-w-[calc(18em+2rem)] px-4 py-[14px] ${
             isDark
               ? 'bg-[rgba(255,255,255,0.06)] backdrop-blur-[16px] rounded-[20px_20px_20px_6px] border border-[rgba(255,255,255,0.06)]'
               : 'bg-[var(--color-glass-75)] backdrop-blur-[16px] rounded-[20px_20px_20px_6px] border border-[var(--color-border-glass)]'
@@ -306,7 +306,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
           ) : (
             <div className="w-[40px] shrink-0" />
           )}
-          <div className={`max-w-[67%] px-4 py-[14px] ${
+          <div className={`max-w-[calc(18em+2rem)] px-4 py-[14px] ${
             isDark
               ? 'bg-[rgba(255,255,255,0.06)] backdrop-blur-[16px] rounded-[20px_20px_20px_6px] border border-[rgba(255,255,255,0.06)]'
               : 'bg-[var(--color-glass-75)] backdrop-blur-[16px] rounded-[20px_20px_20px_6px] border border-[var(--color-border-glass)]'
@@ -344,7 +344,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
           ) : (
             <div className="w-[40px] shrink-0" />
           )}
-          <div className={`max-w-[67%] px-4 py-[14px] ${
+          <div className={`max-w-[calc(18em+2rem)] px-4 py-[14px] ${
             isAI
               ? isDark
                 ? 'bg-[rgba(255,255,255,0.06)] backdrop-blur-[16px] rounded-[20px_20px_20px_6px] border border-[rgba(255,255,255,0.06)]'
@@ -418,7 +418,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
           <div className="w-[40px] shrink-0" />
         )}
         <div
-          className={`max-w-[67%] px-4 py-[14px] ${
+          className={`max-w-[calc(18em+2rem)] px-4 py-[14px] ${
             isAI
               ? isDark
                 ? 'bg-[rgba(255,255,255,0.06)] backdrop-blur-[16px] rounded-[20px_20px_20px_6px] text-[#EFE7DD] border border-[rgba(255,255,255,0.06)]'
@@ -428,8 +428,8 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
                 : 'bg-gradient-to-br from-[#A7C7E7] to-[#BFD7EE] rounded-[6px_20px_20px_20px] text-white min-w-[48px]'
           }`}
         >
-          <p className={`text-[16px] leading-[1.6] ${isAI ? '' : 'whitespace-pre-wrap'}`}>
-            {isAI ? msg.content : formatTextByDisplayWidth(msg.content)}
+          <p className="text-[16px] leading-[1.6] whitespace-pre-wrap break-words">
+            {msg.content}
           </p>
         </div>
       </div>

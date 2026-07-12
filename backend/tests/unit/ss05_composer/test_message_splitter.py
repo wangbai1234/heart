@@ -220,3 +220,27 @@ def test_plain_dialog_without_action_subject_is_untouched():
     result = split_response("你今天怎么样，还好吗？我有点担心你。")
     kinds = [s["kind"] for s in result]
     assert kinds == ["text", "text"]
+
+
+def test_long_action_bracket_with_internal_newline_stays_atomic():
+    """`（...嘲讽\n急着走？） 俯身...` — regression from live-chat report.
+
+    The LLM sometimes drops a newline inside a long action bracket. The old
+    `_ACTION_RE` character class excluded `\\n`, so the closing `）` leaked
+    into a text bubble that started with `）`. Content must stay one action
+    bubble; interior newline collapses to a space.
+    """
+    raw = (
+        "（指尖轻抬，一缕暗紫色魔力缠绕上你的手腕，语气带着淡淡的嘲讽\n"
+        "急着走？）俯身在你耳边，声音压得极低 你以为惹怒我，还能全身而退吗？"
+    )
+    result = split_response(raw)
+    # First segment must be a single action bubble containing the full span.
+    assert result[0]["kind"] == "action"
+    assert "指尖轻抬" in result[0]["content"]
+    assert "急着走？" in result[0]["content"]
+    # No orphan `）` sitting alone in a text bubble.
+    text_contents = [s["content"] for s in result if s["kind"] == "text"]
+    assert all(not tc.lstrip().startswith("）") for tc in text_contents)
+    # Interior newline is collapsed — grey pill renders as a single line.
+    assert "\n" not in result[0]["content"]
