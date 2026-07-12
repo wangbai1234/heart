@@ -449,7 +449,17 @@ export async function getPresetVoiceSampleUrl(presetId: string): Promise<string>
     headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
   })
   if (!res.ok) {
-    throw new Error(`sample fetch failed: ${res.status}`)
+    // Read the detail out so the UI can show what actually broke instead of
+    // "please try again". The endpoint appends the provider's raw error to
+    // `detail` (see backend/heart/api/routes_voice.py:get_preset_voice_sample).
+    let detail = ''
+    try {
+      const body = await res.json()
+      if (typeof body?.detail === 'string') detail = body.detail
+    } catch {
+      // ignore parse errors; res.ok=false without JSON body is possible
+    }
+    throw new ApiError(res.status, detail || `sample fetch failed: ${res.status}`)
   }
   const blob = await res.blob()
   return URL.createObjectURL(blob)

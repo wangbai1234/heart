@@ -180,12 +180,25 @@ async def get_preset_voice_sample(
     try:
         result = await provider.synthesize(TTSRequest(text=sample_text, voice_id=row["voice_id"]))
     except TTSProviderError as exc:
+        # Surface the provider's real error to the client so the UI can show a
+        # useful message ("voice_id female-wenrou not found") instead of a
+        # generic "please try again". Truncate the raw provider payload to
+        # 320 chars — enough to spot the failure mode without leaking a full
+        # stack trace or huge JSON body.
+        provider_msg = str(exc)
+        if len(provider_msg) > 320:
+            provider_msg = provider_msg[:317] + "..."
         logger.warning(
             "preset_sample_synthesize_failed",
             preset_id=preset_id,
-            error=str(exc),
+            voice_id=row["voice_id"],
+            status_code=exc.status_code,
+            error=provider_msg,
         )
-        raise HTTPException(status_code=502, detail="试听合成失败，请稍后再试") from exc
+        raise HTTPException(
+            status_code=502,
+            detail=f"试听合成失败：{provider_msg}",
+        ) from exc
 
     _PRESET_SAMPLE_CACHE[preset_id] = result.audio
     logger.info(

@@ -406,9 +406,14 @@ export function CreateCharacterPage() {
         stopPreview()
       }
       await audio.play()
-    } catch {
+    } catch (err) {
       if (myTicket !== previewTicketRef.current) return
-      showToast('试听失败，请稍后再试', 'error')
+      // Surface the backend's provider error when we have one, otherwise fall
+      // back to the generic copy. Keeps the toast short (max ~40 chars) so
+      // long MiniMax payloads don't overflow the fixed-height bubble.
+      const raw = err instanceof Error ? err.message : ''
+      const msg = raw && raw.length <= 80 ? raw : '试听失败，请稍后再试'
+      showToast(msg, 'error')
       stopPreview()
     }
   }
