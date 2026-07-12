@@ -73,12 +73,18 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
 
   const setInboxUnreadTotal = useAppStore((s) => s.setInboxUnreadTotal)
 
-  // Mark character read on mount: clears the unread badge for this character.
+  // Mark character read on mount + unmount: clears the unread badge for this
+  // character on entry AND when leaving via in-app navigation (SPA navigate
+  // doesn't fire visibilitychange/pagehide — those are tab-level events).
   useEffect(() => {
     if (!isAuthenticated()) return
     markCharacterRead(currentCharacterId).catch(() => {})
     // Optimistically clear badge; ChatInboxPage will recompute on next open.
     setInboxUnreadTotal(0)
+    return () => {
+      // Fire-and-forget on unmount; response ignored (component is gone).
+      markCharacterRead(currentCharacterId).catch(() => {})
+    }
   }, [currentCharacterId, isAuthenticated, setInboxUnreadTotal])
 
   // Also mark read when new assistant messages arrive during the visit AND
