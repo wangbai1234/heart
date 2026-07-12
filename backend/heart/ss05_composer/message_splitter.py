@@ -95,7 +95,12 @@ _ACTION_SUBJECTS_LIST: tuple[str, ...] = (
     "心跳",
     "心口",
 )
-_ACTION_SUBJECT_RE = re.compile(r"^(?:" + "|".join(_ACTION_SUBJECTS_LIST) + r")")
+# Pattern is intentionally UNANCHORED so `.search()` can find a subject noun
+# anywhere in the segment (needed for the "转身，目光带着审视 你..." case
+# where the segment starts with a plain verb and the subject shows up mid-
+# string). `.match()` still works — Python's re.match anchors implicitly to
+# the start regardless of whether the pattern has a leading `^`.
+_ACTION_SUBJECT_RE = re.compile(r"(?:" + "|".join(_ACTION_SUBJECTS_LIST) + r")")
 
 # Words that commonly start a spoken utterance in Chinese. We use these to
 # confirm that the whitespace we found in a segment is really the seam between
@@ -182,7 +187,13 @@ def _wrap_bare_actions(text: str) -> str:
             i += 1
             continue
         stripped = part.strip()
-        if not stripped or not _ACTION_SUBJECT_RE.match(stripped):
+        # Gate: use `search` (not `match`) so cases where the action subject
+        # sits mid-string still qualify — e.g. "转身，目光带着审视 你..."
+        # where the segment starts with a non-subject verb ("转身") but the
+        # subject noun ("目光") shows up after a comma. The seam checks below
+        # keep this from over-triggering on plain dialog that happens to
+        # mention body parts ("你今天的目光很温柔").
+        if not stripped or not _ACTION_SUBJECT_RE.search(stripped):
             out.append(part)
             i += 1
             continue
@@ -193,18 +204,27 @@ def _wrap_bare_actions(text: str) -> str:
         body = stripped
 
         # Case A: body has a whitespace seam whose right side starts with a
-        # dialog-starter word — split there, wrap the left side.
+        # dialog-starter word — split there, wrap the left side. Require the
+        # action side (pre-seam) to actually contain a subject noun; otherwise
+        # the subject lives inside the dialog half and this isn't action
+        # prose we should wrap.
         seam_match = re.search(rf"(.*?)\s+({_DIALOG_START_RE.pattern}.*)$", body)
         if seam_match:
             action, dialog = seam_match.group(1).rstrip(), seam_match.group(2).lstrip()
-            if action:
+            if action and _ACTION_SUBJECT_RE.search(action):
                 out.append(f"{leading}（{action}）{dialog}{trailing}")
                 i += 1
                 continue
 
-        # Case B: no obvious seam — wrap the whole segment. Absorb the
-        # trailing terminator inside the bracket so a lone `。` doesn't
-        # leak into an empty text bubble after the action pill.
+        # Case B: no obvious seam — wrap the whole segment ONLY when it
+        # actually starts with a subject noun. When the subject sits mid-
+        # string with no seam ("我说话不错。目光很好看。") we leave it as
+        # dialog. Absorb the trailing terminator inside the bracket so a lone
+        # `。` doesn't leak into an empty text bubble after the action pill.
+        if not _ACTION_SUBJECT_RE.match(stripped):
+            out.append(part)
+            i += 1
+            continue
         next_term = ""
         if i + 1 < len(parts) and _TERM_RE.fullmatch(parts[i + 1]):
             next_term = parts[i + 1]
@@ -257,21 +277,24 @@ def split_response(text: str) -> list[Segment]:
 
 
 def _split_actions_and_dialog(text: str) -> list[Segment]:
-    """Extract action spans and keep everything else as text (unchunked)."""
+    """Extract action spans and keep everything else as text (unchunked).
+
+    Both action pills and text bubbles collapse interior whitespace runs to
+    a single space. Frontend renders bubbles with ``whitespace-pre-wrap``,
+    so any ``\\n`` the LLM inserts as its own formatting would otherwise
+    show as a blank line inside the bubble ("同气泡空行" report).
+    """
     out: list[Segment] = []
     cursor = 0
     for m in _ACTION_RE.finditer(text):
-        pre = text[cursor : m.start()].strip()
+        pre = re.sub(r"\s+", " ", text[cursor : m.start()]).strip()
         if pre:
             out.append({"kind": "text", "content": pre})
-        # Collapse interior newlines / runs of whitespace inside the action
-        # content: a `（长动作\n描写）` should still render as one grey pill
-        # instead of showing the seam the LLM inserted for its own layout.
         inner = re.sub(r"\s+", " ", m.group(1)).strip()
         if inner:
             out.append({"kind": "action", "content": inner})
         cursor = m.end()
-    tail = text[cursor:].strip()
+    tail = re.sub(r"\s+", " ", text[cursor:]).strip()
     if tail:
         out.append({"kind": "text", "content": tail})
     return out
