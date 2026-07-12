@@ -21,6 +21,12 @@ depends_on = None
 
 
 def upgrade() -> None:
+    # alembic_version.version_num is VARCHAR(32) by default; this revision name
+    # is 38 chars, so widen the column before alembic records it.
+    op.execute(
+        "ALTER TABLE alembic_version ALTER COLUMN version_num TYPE VARCHAR(80)"
+    )
+
     # ── 1. sequence_id on chat_messages ───────────────────────────────────────
     op.execute(
         "ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS sequence_id SMALLINT NOT NULL DEFAULT 0"
