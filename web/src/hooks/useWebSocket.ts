@@ -301,6 +301,16 @@ export function useWebSocket() {
             errMsg = '账户验证失败，请重试'
           } else if (errCode === 'VOICE_NOT_CONFIGURED') {
             errMsg = '该角色暂未配置音色，已切换为文字模式'
+            // Also flip local voice_enabled back off so the next message
+            // doesn't re-fire the same broken voice code path. Server side
+            // still holds voice_enabled=true (we don't PATCH here) but the
+            // client-side gate is enough to keep the user unstuck. When
+            // they re-open the character backstage the switch will be shown
+            // off; toggling on again will 409 and offer to configure.
+            const errCharacterId = (msg as { character_id?: string }).character_id ?? cid
+            if (errCharacterId) {
+              useAppStore.getState().setVoiceChatEnabled(errCharacterId as CharacterId, false)
+            }
           } else if (errCode === 'EMPTY_RESPONSE') {
             errMsg = '生成失败，请重试'
           } else if (errCode === 'PERSIST_FAILED') {
