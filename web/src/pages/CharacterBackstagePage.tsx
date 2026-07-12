@@ -44,7 +44,13 @@ export function CharacterBackstagePage() {
   }, [currentCharacterId])
 
   const handleVoiceToggle = async (value: boolean) => {
+    // Reason we need a toast here: previous UX silently navigated the user
+    // to /characters/new when hasVoice=false. Users read that as "the switch
+    // was flipped on and I got taken to a random page" — and then chatted
+    // expecting voice replies, only to see nothing. Now we announce the
+    // dependency explicitly (TEST_REPORT_20260712 §4.5, BUG-2).
     if (value && !hasVoice) {
+      useToastStore.getState().show('该角色暂未配置音色，请先选择一个音色', 'info')
       navigate(`/characters/new?voice=${currentCharacterId}`)
       return
     }
@@ -52,12 +58,15 @@ export function CharacterBackstagePage() {
     try {
       await updateCharacterSettings(currentCharacterId, value)
     } catch (err: any) {
-      // 409 means voice not configured
+      // 409 = has_voice denormalized flag was stale on the server side and
+      // the character actually has no voice row. Same fix as above.
       if (err?.status === 409) {
+        useToastStore.getState().show('请先为该角色配置音色，才能开启语音聊天', 'info')
         setVoiceChatEnabled(currentCharacterId, false)
         navigate(`/characters/new?voice=${currentCharacterId}`)
         return
       }
+      useToastStore.getState().show('语音开关切换失败，请稍后重试', 'error')
       setVoiceChatEnabled(currentCharacterId, !value)
     }
   }
