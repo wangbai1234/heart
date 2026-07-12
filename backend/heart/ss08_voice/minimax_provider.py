@@ -29,6 +29,21 @@ class MiniMaxProvider:
         self._base_url = base_url.rstrip("/")
         self._client = httpx.AsyncClient(timeout=30.0)
 
+    def _endpoint(self, path: str) -> str:
+        """Build the full t2a URL, appending ?GroupId= when configured.
+
+        Mainland MiniMax (api.minimaxi.com) resolves cloned ``UGC_*`` voice_ids
+        via the caller's GroupId. Without it, t2a_v2 returns a bad body ("voice
+        not found") which the caller sees as "偏离轨道" via the generic error
+        path. Preset voices like ``female-shaonv`` are global and work either
+        way — this used to hide the bug on the built-in rin/dorothy path.
+        """
+        url = f"{self._base_url}{path}"
+        if self._group_id:
+            sep = "&" if "?" in url else "?"
+            return f"{url}{sep}GroupId={self._group_id}"
+        return url
+
     def _build_body(self, req: TTSRequest, stream: bool) -> dict:
         emotion = req.emotion if req.emotion in _VALID_EMOTIONS else "neutral"
         body = {
@@ -61,7 +76,7 @@ class MiniMaxProvider:
 
         try:
             response = await self._client.post(
-                f"{self._base_url}/t2a_v2",
+                self._endpoint("/t2a_v2"),
                 json=body,
                 headers={
                     "Authorization": f"Bearer {self._api_key}",
@@ -78,6 +93,18 @@ class MiniMaxProvider:
             raise TTSProviderError(f"MiniMax request failed: {str(e)}") from e
 
         data = response.json()
+        # MiniMax returns HTTP 200 with a non-zero base_resp.status_code for
+        # logical failures (missing GroupId, unknown voice_id, quota, etc.).
+        # Surface those as actionable errors instead of masking them behind
+        # "Invalid MiniMax response".
+        base_resp = data.get("base_resp") if isinstance(data, dict) else None
+        if isinstance(base_resp, dict):
+            status_code = base_resp.get("status_code")
+            if status_code not in (0, None):
+                raise TTSProviderError(
+                    f"MiniMax logical error: status={status_code} msg={base_resp.get('status_msg', '')}",
+                    status_code=int(status_code) if isinstance(status_code, int) else 500,
+                )
         if "data" not in data or "audio" not in data["data"]:
             raise TTSProviderError(f"Invalid MiniMax response: {data}")
 
@@ -105,7 +132,7 @@ class MiniMaxProvider:
         try:
             async with self._client.stream(
                 "POST",
-                f"{self._base_url}/t2a_v2",
+                self._endpoint("/t2a_v2"),
                 json=body,
                 headers={
                     "Authorization": f"Bearer {self._api_key}",
