@@ -17,14 +17,33 @@ from datetime import datetime, timedelta, timezone
 from typing import List, Sequence
 from uuid import UUID
 
+import structlog
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from heart.ss06_inner_state.models import ProactiveMessage
 
+logger = structlog.get_logger(__name__)
 
-async def insert_message(session: AsyncSession, msg: ProactiveMessage) -> None:
-    """Persist one proactive message. Caller owns the transaction (commit)."""
+DAILY_PROACTIVE_QUOTA = 3
+
+
+async def insert_message(session: AsyncSession, msg: ProactiveMessage) -> bool:
+    """Persist one proactive message. Returns False (no-op) when the daily
+    quota for (user, character) is already reached — defense-in-depth against
+    any upstream call site that forgot to gate.
+
+    Caller owns the transaction (commit).
+    """
+    sent_today = await count_all_today(session, msg.user_id, msg.character_id)
+    if sent_today >= DAILY_PROACTIVE_QUOTA:
+        logger.warning(
+            "proactive_quota_exceeded_at_repo",
+            user_id=str(msg.user_id),
+            character_id=msg.character_id,
+            sent_today=sent_today,
+        )
+        return False
     await session.execute(
         text(
             "INSERT INTO proactive_messages "
@@ -43,6 +62,7 @@ async def insert_message(session: AsyncSession, msg: ProactiveMessage) -> None:
         },
     )
     await session.commit()
+    return True
 
 
 async def count_today(
