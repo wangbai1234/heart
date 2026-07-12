@@ -30,6 +30,16 @@ from .models import InnerState, ProactiveMessage
 # in inner_loop_worker.py so both entry points enforce the same cap.
 DAILY_PROACTIVE_QUOTA = 3
 
+# Cross-character cooldown (minutes). If ANY character sent this user a proactive
+# in the last N minutes, suppress new ones — otherwise a scheduler tick that
+# fans out per-character produces the "8 characters at 03:16:17 UTC" burst
+# reported in TEST_REPORT_20260712 BUG-6.
+CROSS_CHARACTER_COOLDOWN_MINUTES = 30
+
+# Content-dedup window (days). Same character resending the same string
+# within this window is suppressed — kills the "月月想着你" x9 loop in BUG-1.
+CONTENT_DEDUP_DAYS = 3
+
 logger = structlog.get_logger(__name__)
 
 PROACTIVE_MESSAGES_TOTAL = Counter(
@@ -145,6 +155,23 @@ class InnerStateService:
             INNER_LOOP_DURATION_SECONDS.labels(character=character_id).observe(elapsed)
             return None
 
+        # Gate I-7: cross-character cooldown. Reject if any character already
+        # pinged this user within the last CROSS_CHARACTER_COOLDOWN_MINUTES —
+        # only enforced when a DB session is available (tests/dev with no db
+        # keep the legacy in-memory behavior).
+        if db is not None and await proactive_repo.any_recent_across_characters(
+            db, user_id, CROSS_CHARACTER_COOLDOWN_MINUTES
+        ):
+            logger.info(
+                "proactive_suppressed_cross_character_cooldown",
+                user_id=str(user_id),
+                character_id=character_id,
+                window_minutes=CROSS_CHARACTER_COOLDOWN_MINUTES,
+            )
+            elapsed = time.monotonic() - t0
+            INNER_LOOP_DURATION_SECONDS.labels(character=character_id).observe(elapsed)
+            return None
+
         # Decision: should we send a proactive?
         base_prob = 0.02  # base probability per tick
         prob = base_prob
@@ -182,6 +209,43 @@ class InnerStateService:
             recent_context=recent_context,
             user_facts=user_facts,
         )
+
+        # Gate I-8: content dedup. If we've already sent this exact string for
+        # this user×character within CONTENT_DEDUP_DAYS, drop it — the LLM/
+        # template lottery landed on a repeat, and shipping it would be the
+        # "月月想着你" x9 spam from BUG-1. Retry once with a fresh sample; if
+        # still duplicate, suppress.
+        if db is not None:
+            for _attempt in range(2):
+                if not await proactive_repo.content_seen_recently(
+                    db, user_id, character_id, content, CONTENT_DEDUP_DAYS
+                ):
+                    break
+                logger.info(
+                    "proactive_content_duplicate_retry",
+                    user_id=str(user_id),
+                    character_id=character_id,
+                    trigger_type=trigger_type,
+                )
+                content = await self._resolve_proactive_content(
+                    character_id=character_id,
+                    trigger_type=trigger_type,
+                    relationship_stage=relationship_stage,
+                    intimacy=intimacy,
+                    days_since_last_interaction=days_since_last_interaction,
+                    recent_context=recent_context,
+                    user_facts=user_facts,
+                )
+            else:
+                logger.info(
+                    "proactive_suppressed_content_dedup",
+                    user_id=str(user_id),
+                    character_id=character_id,
+                    content_preview=(content or "")[:40],
+                )
+                elapsed = time.monotonic() - t0
+                INNER_LOOP_DURATION_SECONDS.labels(character=character_id).observe(elapsed)
+                return None
 
         msg = ProactiveMessage(
             user_id=user_id,

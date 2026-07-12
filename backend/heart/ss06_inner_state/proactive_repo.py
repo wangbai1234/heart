@@ -92,6 +92,64 @@ async def count_all_today(
     return int(result.scalar() or 0)
 
 
+async def any_recent_across_characters(
+    session: AsyncSession,
+    user_id: UUID,
+    within_minutes: int,
+) -> bool:
+    """Did any character send this user a proactive within ``within_minutes``?
+
+    Cross-character rate-limit: prevents the "8 characters in the same second"
+    burst reported in TEST_REPORT_20260712 BUG-6. Ticks fan out per character
+    within a single scheduler pass, so without a user-scoped gate a chatty
+    user with many characters gets a wall of concurrent proactives.
+    """
+    result = await session.execute(
+        text(
+            "SELECT 1 FROM proactive_messages "
+            "WHERE user_id = :user_id "
+            "AND created_at >= NOW() - make_interval(mins => :mins) "
+            "LIMIT 1"
+        ),
+        {"user_id": str(user_id), "mins": int(within_minutes)},
+    )
+    return result.first() is not None
+
+
+async def content_seen_recently(
+    session: AsyncSession,
+    user_id: UUID,
+    character_id: str,
+    content: str,
+    within_days: int,
+) -> bool:
+    """Has this exact content been sent recently for this user×character?
+
+    Blocks the "月月想着你，今天过得怎么样？" x9 spam (TEST_REPORT_20260712
+    BUG-1). Compares on the trimmed content, so trailing whitespace does not
+    let a near-duplicate slip past.
+    """
+    stripped = (content or "").strip()
+    if not stripped:
+        return False
+    result = await session.execute(
+        text(
+            "SELECT 1 FROM proactive_messages "
+            "WHERE user_id = :user_id AND character_id = :character_id "
+            "AND TRIM(content) = :content "
+            "AND created_at >= NOW() - make_interval(days => :days) "
+            "LIMIT 1"
+        ),
+        {
+            "user_id": str(user_id),
+            "character_id": character_id,
+            "content": stripped,
+            "days": int(within_days),
+        },
+    )
+    return result.first() is not None
+
+
 async def fetch_pending(
     session: AsyncSession,
     user_id: UUID,
