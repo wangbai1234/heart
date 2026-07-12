@@ -360,33 +360,20 @@ async def clone_voice(
             detail=f"积分不足，克隆需要 800 积分，当前余额 {balance / 100:.1f}",
         )
 
-    # Upload to S3 / MinIO — voice clone REQUIRES a real object URL that the
-    # TTS provider can fetch, so we refuse the request when S3 is not
-    # configured or the upload fails.  The old "local://" synthetic-id
-    # fallback in _call_tts_clone_api produced fake "cloned" voices that
-    # rendered ready in the UI but crashed the first time a user actually
-    # spoke to that character — see the "假成功" report on 2026-07-11.
-    from heart.infra.storage import is_s3_configured
-    from heart.infra.storage import upload_file as s3_upload
-
-    if not is_s3_configured():
-        raise HTTPException(
-            status_code=503,
-            detail="音色克隆需要对象存储（S3/MinIO），当前环境未配置。请联系管理员或改用预设音色。",
-        )
+    # MiniMax must be configured — clone always ends up calling their API,
+    # regardless of how we hand it the audio.
     if not (settings.voice_provider == "minimax" and settings.minimax_api_key):
         raise HTTPException(
             status_code=503,
             detail="音色克隆服务未配置，请联系管理员或改用预设音色。",
         )
 
-    ext = mime.split("/")[-1].replace("x-wav", "wav").replace("mpeg", "mp3")
-    key = f"voice-samples/{character_id}/{uuid.uuid4().hex}.{ext}"
-    try:
-        audio_url = await s3_upload(data, key, mime)
-    except Exception as exc:
-        logger.warning("voice_clone_s3_failed", error=str(exc))
-        raise HTTPException(status_code=502, detail="音频上传失败，请稍后重试") from exc
+    audio_source = await _stage_audio_for_clone(
+        data=data,
+        filename=file.filename or "sample.wav",
+        mime=mime,
+        character_id=character_id,
+    )
 
     # Upsert character_voices row with status = 'processing'
     await db.execute(
@@ -402,7 +389,7 @@ async def clone_voice(
                     error_msg       = NULL,
                     updated_at      = NOW()
         """),
-        {"cid": character_id, "uid": uid, "url": audio_url},
+        {"cid": character_id, "uid": uid, "url": audio_source},
     )
     await db.commit()
 
@@ -410,14 +397,14 @@ async def clone_voice(
         "voice_clone_started",
         character_id=character_id,
         user_id=str(uid),
-        audio_url=audio_url,
+        audio_source=audio_source,
     )
 
     # Fire-and-forget background clone task
     import asyncio
 
     asyncio.get_event_loop().call_soon_threadsafe(
-        lambda: asyncio.ensure_future(_run_clone_job(character_id, audio_url, str(uid)))
+        lambda: asyncio.ensure_future(_run_clone_job(character_id, audio_source, str(uid)))
     )
 
     return {
@@ -430,8 +417,47 @@ async def clone_voice(
     }
 
 
-async def _run_clone_job(character_id: str, audio_url: str, user_id: str) -> None:
-    """Background task: call TTS provider voice clone API and update DB."""
+async def _stage_audio_for_clone(
+    *,
+    data: bytes,
+    filename: str,
+    mime: str,
+    character_id: str,
+) -> str:
+    """Hand the audio bytes to MiniMax and return a tagged handle.
+
+    Two paths:
+      1. S3/MinIO configured → upload once, return the public file_url.
+      2. Otherwise → forward to MiniMax `/files/upload` and return
+         ``minimax_file://<file_id>``. Lets dev / small deploys run voice
+         clone end-to-end without provisioning S3.
+    """
+    from heart.infra.storage import is_s3_configured
+    from heart.infra.storage import upload_file as s3_upload
+
+    if is_s3_configured():
+        ext = mime.split("/")[-1].replace("x-wav", "wav").replace("mpeg", "mp3")
+        key = f"voice-samples/{character_id}/{uuid.uuid4().hex}.{ext}"
+        try:
+            return await s3_upload(data, key, mime)
+        except Exception as exc:
+            logger.warning("voice_clone_s3_failed", error=str(exc))
+            raise HTTPException(status_code=502, detail="音频上传失败，请稍后重试") from exc
+
+    try:
+        file_id = await _upload_audio_to_minimax(data, filename, mime)
+    except Exception as exc:
+        logger.warning("voice_clone_minimax_upload_failed", error=str(exc))
+        raise HTTPException(status_code=502, detail="音频上传失败，请稍后重试") from exc
+    return f"minimax_file://{file_id}"
+
+
+async def _run_clone_job(character_id: str, audio_source: str, user_id: str) -> None:
+    """Background task: call TTS provider voice clone API and update DB.
+
+    ``audio_source`` is the tagged handle stored in ``character_voices.clone_audio_url``.
+    See ``_call_tts_clone_api`` for the accepted schemes.
+    """
     import asyncio
 
     await asyncio.sleep(2)  # give the HTTP response time to flush
@@ -445,18 +471,18 @@ async def _run_clone_job(character_id: str, audio_url: str, user_id: str) -> Non
 
     async with session_factory() as db:
         try:
-            clone_voice_id = await _call_tts_clone_api(audio_url, character_id)
+            clone_voice_id = await _call_tts_clone_api(audio_source, character_id)
             if clone_voice_id:
                 # Charge credits only after the provider returns a voice_id —
                 # a failed clone should not cost the user anything.
-                # Idempotency key ties to the specific audio_url (unique per
-                # upload) so retries within the same URL don't double-charge.
+                # Idempotency key ties to the specific audio source (unique per
+                # upload) so retries within the same source don't double-charge.
                 try:
                     await deduct_credits(
                         db,
                         uuid.UUID(user_id),
                         _CLONE_COST_FEN,
-                        f"voice_clone_success:{audio_url}",
+                        f"voice_clone_success:{audio_source}",
                         type_str="consume_voice_clone",
                     )
                 except InsufficientCreditsError:
@@ -511,7 +537,7 @@ async def _run_clone_job(character_id: str, audio_url: str, user_id: str) -> Non
                 pass
 
 
-async def _call_tts_clone_api(audio_url: str, character_id: str) -> str | None:
+async def _call_tts_clone_api(audio_source: str, character_id: str) -> str | None:
     """Call the configured TTS provider's voice clone endpoint.
 
     Returns the new voice_id on success, or None on any failure so the caller
@@ -519,9 +545,15 @@ async def _call_tts_clone_api(audio_url: str, character_id: str) -> str | None:
     is no synthetic-id fallback: pretending to succeed produced voice_ids the
     TTS provider rejected at chat time, which surfaced as the "stuck at 正在
     回复" bug (2026-07-11).
+
+    ``audio_source`` carries a scheme prefix identifying how MiniMax should
+    receive the audio:
+      - ``minimax_file://<file_id>`` — a MiniMax-hosted file_id from the
+        ``/files/upload`` endpoint. Used when S3 isn't configured.
+      - anything else — treated as a publicly-fetchable ``file_url``.
     """
-    if audio_url.startswith("local://"):
-        logger.warning("voice_clone_local_url_rejected", audio_url=audio_url)
+    if audio_source.startswith("local://"):
+        logger.warning("voice_clone_local_url_rejected", audio_source=audio_source)
         return None
 
     provider = settings.voice_provider
@@ -530,24 +562,62 @@ async def _call_tts_clone_api(audio_url: str, character_id: str) -> str | None:
         return None
 
     try:
-        return await _minimax_clone(audio_url)
+        if audio_source.startswith("minimax_file://"):
+            file_id_str = audio_source[len("minimax_file://") :]
+            return await _minimax_clone_by_file_id(int(file_id_str), character_id)
+        return await _minimax_clone_by_url(audio_source, character_id)
     except Exception as exc:
         logger.warning("minimax_clone_failed", error=str(exc))
         return None
 
 
-async def _minimax_clone(audio_url: str) -> str | None:
-    """Submit voice clone job to MiniMax T2A v2 voice cloning API."""
+async def _minimax_clone_by_url(audio_url: str, character_id: str) -> str | None:
+    """Submit voice clone job to MiniMax with a public ``file_url``."""
+    return await _minimax_voice_clone_request(
+        {
+            "file_url": audio_url,
+            "voice_id": _clone_voice_id_for(character_id),
+            "need_noise_reduction": True,
+            "need_volume_normalization": True,
+            "aigc_watermark": False,
+        }
+    )
+
+
+async def _minimax_clone_by_file_id(file_id: int, character_id: str) -> str | None:
+    """Submit voice clone job to MiniMax with a MiniMax-hosted ``file_id``."""
+    return await _minimax_voice_clone_request(
+        {
+            "file_id": file_id,
+            "voice_id": _clone_voice_id_for(character_id),
+            "need_noise_reduction": True,
+            "need_volume_normalization": True,
+            "aigc_watermark": False,
+        }
+    )
+
+
+def _clone_voice_id_for(character_id: str) -> str:
+    """Build the custom voice_id MiniMax should assign to this clone.
+
+    MiniMax requires a unique voice_id per clone job (the value we later use
+    when synthesizing). We include the character_id so the string is human-
+    inspectable in the DB / logs, and a short random suffix so re-clones
+    don't collide with the previous voice_id.
+    """
+    suffix = uuid.uuid4().hex[:8]
+    # MiniMax voice_id must start with a letter; character_id may be a uuid.
+    safe = "".join(c for c in character_id if c.isalnum())[:24] or "clone"
+    return f"UGC_{safe}_{suffix}"
+
+
+async def _minimax_voice_clone_request(payload: dict) -> str | None:
+    """Post the given payload to MiniMax's ``/voice_clone`` endpoint."""
     import aiohttp
 
     headers = {
         "Authorization": f"Bearer {settings.minimax_api_key}",
         "Content-Type": "application/json",
-    }
-    payload = {
-        "file_url": audio_url,
-        "need_noise_reduction": True,
-        "need_volume_normalization": True,
     }
     url = f"{settings.minimax_base_url}/voice_clone"
     async with aiohttp.ClientSession() as session:
@@ -559,7 +629,51 @@ async def _minimax_clone(audio_url: str) -> str | None:
                 logger.warning("minimax_clone_error", status=resp.status, body=text_body[:200])
                 return None
             body = await resp.json()
-            return body.get("voice_id") or body.get("id")
+            # MiniMax echoes back the voice_id we sent on success; also accept
+            # `id` for defensive compatibility with older API versions.
+            return payload.get("voice_id") or body.get("voice_id") or body.get("id")
+
+
+async def _upload_audio_to_minimax(data: bytes, filename: str, mime: str) -> int:
+    """Upload raw audio bytes to MiniMax ``/files/upload`` and return the file_id.
+
+    Used when S3 is not configured — MiniMax hosts the audio internally so we
+    still get a voice_clone-able reference without needing a public URL.
+    Kept synchronous with the calling coroutine's `await`; uses ``aiohttp``
+    to avoid pulling in a second HTTP client for one endpoint.
+    """
+    import aiohttp
+
+    if not settings.minimax_api_key:
+        raise RuntimeError("MINIMAX_API_KEY not configured")
+
+    headers = {"Authorization": f"Bearer {settings.minimax_api_key}"}
+    url = f"{settings.minimax_base_url}/files/upload"
+
+    form = aiohttp.FormData()
+    form.add_field("purpose", "voice_clone")
+    form.add_field(
+        "file",
+        data,
+        filename=filename,
+        content_type=mime or "application/octet-stream",
+    )
+
+    async with aiohttp.ClientSession() as session:
+        async with session.post(
+            url, data=form, headers=headers, timeout=aiohttp.ClientTimeout(total=60)
+        ) as resp:
+            if resp.status != 200:
+                text_body = await resp.text()
+                raise RuntimeError(
+                    f"MiniMax files/upload failed status={resp.status} body={text_body[:200]}"
+                )
+            body = await resp.json()
+    file_obj = body.get("file") or {}
+    file_id = file_obj.get("file_id") or body.get("file_id")
+    if file_id is None:
+        raise RuntimeError(f"MiniMax files/upload missing file_id in response: {body}")
+    return int(file_id)
 
 
 @router.delete("/{character_id}")
