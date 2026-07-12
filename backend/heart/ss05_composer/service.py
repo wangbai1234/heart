@@ -849,6 +849,23 @@ class ComposerService:
             ex_block = "\n".join(f"「{ex}」" for ex in example_lines[:5])
             parts.append(f"\n【真实声音示例】\n{ex_block}")
 
+        # ── Layer 3.5: Message-format contract (bubble splitter) ──────
+        # The frontend renders the reply as a mix of grey action pills and
+        # white dialog bubbles. It can only tell them apart when action /
+        # expression / narration is wrapped in （）. Without this contract
+        # the LLM sometimes emits raw prose that mixes action and dialog
+        # inline (rin turn 2 in TEST_REPORT_20260712 follow-up) and every
+        # segment falls through to a plain text bubble.
+        parts.append(
+            "\n【表达格式（重要）】\n"
+            "- 所有动作、神态、心理描写、旁白必须用中文全角括号（）包裹。\n"
+            "- 括号里只写动作/神态，不写对白；对白直接写在括号外。\n"
+            "- 一条消息里动作与对白可以多次穿插，每个动作片段独立用一对（）。\n"
+            "- 禁止把动作描写和对白混在同一段裸文本里，例如"
+            "「目光微微闪动，随即移开视线 不。」是错误的，正确是"
+            "「（目光微微闪动，随即移开视线）不。」。"
+        )
+
         # ── Layer 4: Hard constraints (compiled, never raw strings) ──
         # Raw forbidden strings are NOT pasted in; that would expose the
         # spec and give attackers a ready-made bypass list.
