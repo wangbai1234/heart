@@ -3,9 +3,9 @@
 #
 # 用途：完全初始化本地开发环境并启动服务器
 # 前置条件：
-#   - Docker Desktop (或 docker + docker-compose)
-#   - Python 3.11+
-#   - 已复制 .env.example → .env （至少有 JWT_SECRET_KEY）
+#   - Docker Desktop (或 docker + docker compose)
+#   - Python 3.11+ (python3 or python3.11)
+#   - 已复制 .env.example → .env （至少设置 JWT_SECRET_KEY）
 #
 # 用法：
 #   bash scripts/local-startup.sh          启动（docker + deps + migrate + dev server）
@@ -30,6 +30,25 @@ die()  { printf "${c_red}[error]${c_reset} %s\n" "$*" >&2; exit 1; }
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BACKEND_DIR="$REPO_ROOT/backend"
 
+# Detect python3 binary (prefer explicit version if available)
+PYTHON3="python3"
+if command -v python3.11 &>/dev/null; then
+    PYTHON3="python3.11"
+elif command -v python3.12 &>/dev/null; then
+    PYTHON3="python3.12"
+elif ! command -v python3 &>/dev/null; then
+    die "python3 未找到。请安装 Python 3.11+"
+fi
+
+# Detect docker compose command (v2 preferred, fall back to v1)
+if docker compose version &>/dev/null 2>&1; then
+    DOCKER_COMPOSE="docker compose"
+elif command -v docker-compose &>/dev/null; then
+    DOCKER_COMPOSE="docker-compose"
+else
+    die "docker compose 未找到。请安装 Docker Desktop 或 Docker Engine + Compose plugin"
+fi
+
 # ---- 前置条件检查 ----
 check_prerequisites() {
     log "检查前置条件..."
@@ -39,33 +58,23 @@ check_prerequisites() {
         die "docker 未找到。请安装 Docker Desktop: https://www.docker.com/products/docker-desktop"
     fi
 
-    # docker-compose
-    if ! command -v docker-compose &>/dev/null; then
-        die "docker-compose 未找到"
-    fi
-
-    # Python 3.11
-    if ! command -v python3.11 &>/dev/null; then
-        die "python3.11 未找到。请安装 Python 3.11+，或改 scripts/local-startup.sh 中的 python3.11 为你系统上的版本"
-    fi
-
     # .env
     if [ ! -f "$REPO_ROOT/.env" ]; then
-        die "$REPO_ROOT/.env 不存在。请先: cp .env.example .env"
+        die "$REPO_ROOT/.env 不存在。请先: cp .env.example .env  （并填写 JWT_SECRET_KEY 等必填项）"
     fi
 
-    info "✓ 前置条件 OK"
+    info "✓ 前置条件 OK (python: $PYTHON3, compose: $DOCKER_COMPOSE)"
 }
 
 # ---- 启动 Docker ----
 docker_up() {
     log "启动 Docker 服务（postgres + redis）..."
     cd "$REPO_ROOT"
-    docker-compose up -d postgres redis
+    $DOCKER_COMPOSE up -d postgres redis
 
     log "等待服务就绪（最多 30 秒）..."
     for i in $(seq 1 30); do
-        if docker-compose ps postgres | grep -q "healthy"; then
+        if $DOCKER_COMPOSE ps postgres | grep -q "healthy"; then
             info "✓ postgres 已就绪"
             break
         fi
@@ -73,7 +82,7 @@ docker_up() {
     done
 
     for i in $(seq 1 30); do
-        if docker-compose ps redis | grep -q "healthy"; then
+        if $DOCKER_COMPOSE ps redis | grep -q "healthy"; then
             info "✓ redis 已就绪"
             break
         fi
@@ -85,7 +94,7 @@ docker_up() {
 install_deps() {
     log "安装 Python 依赖..."
     cd "$BACKEND_DIR"
-    python3.11 -m pip install -q --disable-pip-version-check -e ".[dev]"
+    $PYTHON3 -m pip install -q --disable-pip-version-check -e ".[dev]"
     info "✓ 依赖安装完成"
 }
 
@@ -93,8 +102,18 @@ install_deps() {
 run_migrations() {
     log "运行数据库迁移..."
     cd "$BACKEND_DIR"
-    python3.11 -m alembic upgrade heads 2>&1 | grep -v "^$"
-    info "✓ 迁移完成"
+
+    # Show current state first
+    $PYTHON3 -m alembic current 2>&1 | grep -v "^$" || true
+
+    # This project has a multi-head Alembic DAG. "alembic upgrade heads" upgrades all
+    # heads in one pass. If this fails with "Multiple head revisions", run each head
+    # explicitly:
+    #   alembic upgrade 022_identity_narrative_backfill
+    #   alembic upgrade 031_preset_voice_sample_endpoint
+    $PYTHON3 -m alembic upgrade heads 2>&1 | grep -v "^$"
+
+    info "✓ 迁移完成（运行 'alembic current' 验证两个 head 都显示 (head)）"
 }
 
 # ---- 启动开发服务器 ----
@@ -102,63 +121,44 @@ start_dev_server() {
     log "启动 FastAPI 开发服务器..."
     echo ""
     cd "$BACKEND_DIR"
-    python3.11 -m uvicorn heart.api.main:app --reload --host 127.0.0.1 --port 8000
+    $PYTHON3 -m uvicorn heart.api.main:app --reload --host 127.0.0.1 --port 8000
 }
 
 # ---- 完整测试流程 ----
 run_tests() {
-    log "测试所有 endpoint..."
+    log "测试核心 endpoint..."
     sleep 3
 
     BASE_URL="http://localhost:8000"
 
     echo ""
     info "1️⃣  GET /"
-    curl -s "$BASE_URL/" | python3.11 -m json.tool || true
+    curl -s "$BASE_URL/" | $PYTHON3 -m json.tool || true
     echo ""
 
     info "2️⃣  GET /health/live"
-    curl -s "$BASE_URL/health/live" | python3.11 -m json.tool || true
+    curl -s "$BASE_URL/health/live" | $PYTHON3 -m json.tool || true
     echo ""
 
     info "3️⃣  GET /health/ready"
-    curl -s "$BASE_URL/health/ready" | python3.11 -m json.tool || true
+    curl -s "$BASE_URL/health/ready" | $PYTHON3 -m json.tool || true
     echo ""
 
-    info "4️⃣  POST /api/auth/login"
-    TOKEN=$(curl -s -X POST "$BASE_URL/api/auth/login" \
+    info "4️⃣  POST /api/auth/otp/request (OTP login flow)"
+    curl -s -X POST "$BASE_URL/api/auth/otp/request" \
         -H "Content-Type: application/json" \
-        -d '{"user_id":"test_user_001","email":"test@example.com"}' | \
-        python3.11 -c "import json,sys; print(json.load(sys.stdin)['access_token'])" 2>/dev/null) || true
+        -d '{"email":"test@example.com"}' | $PYTHON3 -m json.tool || true
+    echo ""
 
-    if [ -n "$TOKEN" ]; then
-        echo "✓ Token: ${TOKEN:0:50}..."
-        echo ""
-
-        info "5️⃣  GET /api/auth/verify"
-        curl -s "$BASE_URL/api/auth/verify" \
-            -H "Authorization: Bearer $TOKEN" | python3.11 -m json.tool || true
-        echo ""
-
-        info "6️⃣  POST /api/chat/echo"
-        curl -s -X POST "$BASE_URL/api/chat/echo" \
-            -H "Authorization: Bearer $TOKEN" \
-            -H "Content-Type: application/json" \
-            -d '{"character_id":"rin","messages":[{"role":"user","content":"你好"}]}' | \
-            python3.11 -m json.tool || true
-        echo ""
-
-        warn "所有测试完成 ✓"
-    else
-        warn "无法获取 token，跳过后续测试"
-    fi
+    warn "基础 endpoint 测试完成"
+    warn "完整登录需要 OTP 验证码（见邮箱），请在浏览器打开 http://localhost:5173 测试"
 }
 
 # ---- 清理 ----
 cleanup() {
     log "停止 Docker + 清缓存..."
     cd "$REPO_ROOT"
-    docker-compose down || true
+    $DOCKER_COMPOSE down || true
     find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
     find . -type d -name ".pytest_cache" -exec rm -rf {} + 2>/dev/null || true
     find . -type d -name ".mypy_cache" -exec rm -rf {} + 2>/dev/null || true
@@ -180,7 +180,7 @@ main() {
             echo ""
             echo "下一步，启动开发服务器："
             echo "  cd backend"
-            echo "  python3.11 -m uvicorn heart.api.main:app --reload --host 127.0.0.1 --port 8000"
+            echo "  $PYTHON3 -m uvicorn heart.api.main:app --reload --host 127.0.0.1 --port 8000"
             ;;
         --test)
             run_tests

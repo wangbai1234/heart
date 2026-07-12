@@ -5,9 +5,9 @@
 # 1. Create .env.prod with production secrets (see .env.prod.example)
 # 2. Run: cd web && npm run build (generates web/dist)
 # 3. Run: docker compose -f docker-compose.prod.yml up -d
-# 4. Run: docker compose -f docker-compose.prod.yml exec api alembic upgrade heads
-
-version: '3.8'
+# 4. Run DB migrations (two heads — run separately):
+#    docker compose -f docker-compose.prod.yml exec api alembic upgrade 022_identity_narrative_backfill
+#    docker compose -f docker-compose.prod.yml exec api alembic upgrade 031_preset_voice_sample_endpoint
 
 services:
   # PostgreSQL 15+ with pgvector extension
@@ -45,7 +45,7 @@ services:
     networks:
       - heart-network
 
-  # Heart API (main backend)
+  # Heart API (main backend — API only, workers disabled)
   api:
     build:
       context: ./backend
@@ -56,6 +56,7 @@ services:
     environment:
       - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-heart}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-heart}
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+      - HEART_WORKERS_ENABLED=false
     depends_on:
       postgres:
         condition: service_healthy
@@ -71,7 +72,10 @@ services:
     networks:
       - heart-network
 
-  # Encoder Worker — L2/L3 vector encoding
+  # Encoder Worker — L2/L3 vector encoding + all background workers
+  # Runs as a separate container with HEART_WORKERS_ENABLED=true so that background
+  # tasks (memory_encoder, memory_extractor, memory_promoter, account_purge,
+  # credit_reconciliation) run in a dedicated process without impacting API latency.
   encoder-worker:
     build:
       context: ./backend
