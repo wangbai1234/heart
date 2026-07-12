@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
+import type { ReactElement } from 'react'
 import { setNavigate } from './services/navigation'
 import { AuthGuard } from './components/AuthGuard'
 import { SplashPage } from './pages/SplashPage'
@@ -32,6 +33,15 @@ import { useSwipeNavigation } from './hooks/useSwipeNavigation'
 function ChatConversationRouter() {
   const { resolvedTheme } = useThemeStore()
   return resolvedTheme === 'dark' ? <ChatDarkPage /> : <ChatLightPage />
+}
+
+// Catch-all target. Unknown routes previously all bounced to /splash, which
+// re-triggered the splash timer chain. For authenticated sessions we jump
+// directly to /home so a stray unknown path can never fight the SplashPage
+// timer over which route wins (TEST_REPORT_20260712 §7).
+function NotFoundRedirect(): ReactElement {
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
+  return <Navigate to={isAuthenticated() ? '/home' : '/splash'} replace />
 }
 
 const SKIP_SAVE_ROUTES = new Set(['/splash', '/onboarding', '/login', '/redeem', '/age-gate', '/'])
@@ -107,7 +117,7 @@ export function App() {
         <Route path="/qa/states" element={<UIStatePreviewPage />} />
         <Route path="/characters/new" element={<CreateCharacterPage />} />
         <Route path="/my-characters" element={<MyCharactersPage />} />
-        <Route path="*" element={<Navigate to="/splash" replace />} />
+        <Route path="*" element={<NotFoundRedirect />} />
       </Routes>
     </AuthGuard>
   )
