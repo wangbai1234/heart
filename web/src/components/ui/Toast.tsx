@@ -18,17 +18,23 @@ const VARIANT_BORDER: Record<ToastVariant, string> = {
   success: 'var(--color-mint, var(--color-border-glass))',
 }
 
+const DURATION_BY_VARIANT: Record<ToastVariant, number> = {
+  info: 2200,
+  success: 2200,
+  error: 4500,
+}
+
 export function Toast({ message, visible, onDismiss, variant = 'info', offsetIndex = 0 }: ToastProps) {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     if (visible && onDismiss) {
-      timerRef.current = setTimeout(onDismiss, 2200)
+      timerRef.current = setTimeout(onDismiss, DURATION_BY_VARIANT[variant])
       return () => {
         if (timerRef.current) clearTimeout(timerRef.current)
       }
     }
-  }, [visible, onDismiss])
+  }, [visible, onDismiss, variant])
 
   if (!visible) return null
 
