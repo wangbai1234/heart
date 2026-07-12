@@ -345,7 +345,9 @@ def _split_by_terminators(text: str) -> list[str]:
     corner_quote_depth = 0
     for part in parts:
         if not _TERM_RE.fullmatch(part):
-            corner_quote_depth += part.count("「") - part.count("」")
+            corner_quote_depth += (
+                part.count("「") + part.count("｢") - part.count("」") - part.count("｣")
+            )
             if corner_quote_depth < 0:
                 corner_quote_depth = 0
         buf += part

@@ -304,3 +304,18 @@ def test_long_action_bracket_with_internal_newline_stays_atomic():
     assert all(not tc.lstrip().startswith("）") for tc in text_contents)
     # Interior newline is collapsed — grey pill renders as a single line.
     assert "\n" not in result[0]["content"]
+
+
+def test_halfwidth_corner_quote_stays_atomic():
+    """半角 ｢｣ 也应被视为原子引号，内部句号不触发拆分。"""
+    result = split_response("｢今晚别走。我们聊聊。｣")
+    assert result == [{"kind": "text", "content": "｢今晚别走。我们聊聊。｣"}]
+
+
+def test_halfwidth_corner_quote_mixed_with_fullwidth():
+    """全角与半角混用（罕见但可能）也不能出现负深度或孤儿。"""
+    result = split_response("「外层。｢内层。｣」")
+    # 全部保留在一条气泡内
+    assert len(result) == 1
+    assert result[0]["kind"] == "text"
+    assert "内层" in result[0]["content"] and "外层" in result[0]["content"]
