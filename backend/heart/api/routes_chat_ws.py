@@ -709,7 +709,7 @@ async def get_chat_history(
         result = await db.execute(
             sql_text("""
                 SELECT id, role, content, modality, audio_url, audio_duration_ms,
-                       credits_charged, turn_id, created_at
+                       credits_charged, turn_id, created_at, kind
                 FROM chat_messages
                 WHERE user_id = :uid AND character_id = :cid AND created_at < :cursor
                 ORDER BY created_at DESC
@@ -721,7 +721,7 @@ async def get_chat_history(
         result = await db.execute(
             sql_text("""
                 SELECT id, role, content, modality, audio_url, audio_duration_ms,
-                       credits_charged, turn_id, created_at
+                       credits_charged, turn_id, created_at, kind
                 FROM chat_messages
                 WHERE user_id = :uid AND character_id = :cid
                 ORDER BY created_at DESC
@@ -746,6 +746,11 @@ async def get_chat_history(
                 "credits_charged": r["credits_charged"],
                 "turn_id": str(r["turn_id"]) if r["turn_id"] else None,
                 "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+                # `kind` distinguishes an action bubble (grey pill) from a text
+                # bubble. Without it the frontend fell back to modality-based
+                # kinds and rendered action messages as plain text on history
+                # load (TEST_REPORT_20260712 BUG-5).
+                "kind": r["kind"] or "text",
             }
             for r in items
         ],
