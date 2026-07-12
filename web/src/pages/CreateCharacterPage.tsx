@@ -418,8 +418,43 @@ export function CreateCharacterPage() {
     }
   }
 
+  /**
+   * Guarantee we have a persisted character to bind the clone to. In the
+   * creation flow (E1-1 deferred create to step-3 confirm/skip) the row
+   * doesn't exist yet — Clone upload has to trigger its own finalize on
+   * demand, otherwise the upload UI can never work in step 3. Returns the
+   * character id on success or empty string on failure (toast already shown).
+   */
+  async function ensureCharacterCreated(): Promise<string> {
+    if (createdCharacterId) return createdCharacterId
+    // Edit flow: character already exists on the server as `editId`.
+    if (editId) return editId
+    const err = validateForm(form)
+    if (err) {
+      showToast(err, 'error')
+      return ''
+    }
+    setSubmitting(true)
+    try {
+      const draft = buildDraft(form, avatarUrl || undefined)
+      const { id } = await createCharacter(draft)
+      sessionStorage.removeItem(DRAFT_KEY)
+      setCreatedCharacterId(id)
+      return id
+    } catch (e) {
+      const msg = e instanceof ApiError ? e.message : '创建角色失败，请重试'
+      showToast(msg, 'error')
+      return ''
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
   async function handleCloneUpload(file: File) {
-    if (!createdCharacterId) return
+    // Ensure the character exists before uploading; in the create flow this
+    // finalizes creation so the clone binds to a real row (E1-1 side effect).
+    const cid = await ensureCharacterCreated()
+    if (!cid) return
     // Match exact browser-reported MIME types.  Chrome tags .wav as audio/wav
     // but Firefox/Safari sometimes report audio/x-wav; iOS Voice Memos exports
     // as audio/mp4.  Empty type (some Android browsers) → fall back to the
@@ -446,7 +481,7 @@ export function CreateCharacterPage() {
     }
     setCloneStatus('uploading')
     try {
-      await uploadVoiceClone(createdCharacterId, file)
+      await uploadVoiceClone(cid, file)
       setCloneStatus('processing')
       // Poll until ready or failed (max 2 min)
       let attempts = 0
@@ -458,7 +493,7 @@ export function CreateCharacterPage() {
           return
         }
         try {
-          const voice = await getCharacterVoice(createdCharacterId)
+          const voice = await getCharacterVoice(cid)
           if (voice.clone_status === 'ready') {
             if (pollRef.current) clearInterval(pollRef.current)
             setCloneStatus('ready')
@@ -871,8 +906,14 @@ export function CreateCharacterPage() {
               })}
             </div>
 
-            {/* Clone voice upload */}
-            {createdCharacterId && (
+            {/* Clone voice upload — always rendered in step 3.
+                The character id used for the upload is resolved on demand by
+                ensureCharacterCreated(): existing createdCharacterId → editId
+                → new character finalized from the form. Prior code gated on
+                `createdCharacterId &&`, which after E1-1 was empty during the
+                whole voice step in the create flow, so the section vanished
+                (TEST_REPORT_20260712 §4.3 follow-up). */}
+            {(
               <>
                 <SectionTitle>或者克隆音色（选填）</SectionTitle>
                 <input
