@@ -289,7 +289,14 @@ class InnerLoopWorker:
         """
         try:
             async with self.db_session_factory() as session:
-                await proactive_repo.insert_message(session, msg)
+                inserted = await proactive_repo.insert_message(session, msg)
+            if not inserted:
+                logger.warning(
+                    "proactive_skipped_quota_exceeded",
+                    user_id=str(msg.user_id),
+                    character_id=msg.character_id,
+                    trigger_type=msg.trigger_type,
+                )
         except Exception as e:
             logger.error(
                 "proactive_message_persist_failed",

@@ -227,3 +227,74 @@ class TestRitualDedupAndQuota:
         assert msg is not None
         assert msg.content == "今晚外面月亮很圆"
         assert seen.await_count == 2
+
+
+class TestRepoQuotaGate:
+    """proactive_repo.insert_message enforces DAILY_PROACTIVE_QUOTA as last defense."""
+
+    @pytest.mark.asyncio
+    async def test_repo_insert_refuses_over_quota(self, monkeypatch):
+        """insert_message returns False and skips INSERT when sent_today >= quota."""
+        from unittest.mock import AsyncMock, MagicMock, patch
+        from uuid import uuid4
+        from datetime import datetime, timezone
+
+        from heart.ss06_inner_state import proactive_repo
+        from heart.ss06_inner_state.models import ProactiveMessage
+
+        msg = ProactiveMessage(
+            id=uuid4(),
+            user_id=uuid4(),
+            character_id="test_char",
+            content="今晚外面月亮很圆",
+            trigger_type="ritual_idle",
+            created_at=datetime.now(tz=timezone.utc),
+        )
+
+        mock_session = MagicMock()
+
+        # Simulate quota already exhausted
+        with patch.object(
+            proactive_repo,
+            "count_all_today",
+            new=AsyncMock(return_value=3),
+        ):
+            result = await proactive_repo.insert_message(mock_session, msg)
+
+        assert result is False
+        mock_session.execute.assert_not_called()
+        mock_session.commit.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_repo_insert_succeeds_under_quota(self, monkeypatch):
+        """insert_message returns True and executes INSERT when sent_today < quota."""
+        from unittest.mock import AsyncMock, MagicMock, patch
+        from uuid import uuid4
+        from datetime import datetime, timezone
+
+        from heart.ss06_inner_state import proactive_repo
+        from heart.ss06_inner_state.models import ProactiveMessage
+
+        msg = ProactiveMessage(
+            id=uuid4(),
+            user_id=uuid4(),
+            character_id="test_char",
+            content="今晚外面月亮很圆",
+            trigger_type="ritual_idle",
+            created_at=datetime.now(tz=timezone.utc),
+        )
+
+        mock_session = MagicMock()
+        mock_session.execute = AsyncMock()
+        mock_session.commit = AsyncMock()
+
+        with patch.object(
+            proactive_repo,
+            "count_all_today",
+            new=AsyncMock(return_value=2),
+        ):
+            result = await proactive_repo.insert_message(mock_session, msg)
+
+        assert result is True
+        mock_session.execute.assert_called_once()
+        mock_session.commit.assert_called_once()
