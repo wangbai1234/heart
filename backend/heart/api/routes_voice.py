@@ -233,6 +233,13 @@ async def get_character_voice(
             "preset_voice_id": config["preset_voice_id"],
             "preset_name": config.get("preset_name"),
             "has_voice": config["clone_status"] == "ready",
+            # Surface the DB error_msg only for failed clones. The frontend
+            # shows this in a toast so the user can act on it (missing
+            # GroupId / unreachable audio URL / MiniMax quota etc.) instead
+            # of just seeing "克隆失败，点击重试".
+            "error_msg": (
+                config.get("error_msg") if config.get("clone_status") == "failed" else None
+            ),
         }
     if character_id in VOICE_CATALOG:
         return {
@@ -430,15 +437,18 @@ async def _stage_audio_for_clone(
     """Hand the audio bytes to MiniMax and return a tagged handle.
 
     Two paths:
-      1. S3/MinIO configured → upload once, return the public file_url.
-      2. Otherwise → forward to MiniMax `/files/upload` and return
-         ``minimax_file://<file_id>``. Lets dev / small deploys run voice
-         clone end-to-end without provisioning S3.
+      1. S3/MinIO configured AND endpoint is publicly reachable → upload once,
+         return the public file_url that MiniMax can fetch.
+      2. Otherwise (S3 not configured, OR endpoint is localhost/private) →
+         forward to MiniMax `/files/upload` and return ``minimax_file://<id>``.
+         Dev with local MinIO on ``http://localhost:9000`` used to hit path 1
+         and hand MiniMax a URL its servers could not reach, which surfaced as
+         "克隆失败" ~4s after upload. See ``is_s3_endpoint_public``.
     """
-    from heart.infra.storage import is_s3_configured
+    from heart.infra.storage import is_s3_endpoint_public
     from heart.infra.storage import upload_file as s3_upload
 
-    if is_s3_configured():
+    if is_s3_endpoint_public():
         ext = mime.split("/")[-1].replace("x-wav", "wav").replace("mpeg", "mp3")
         key = f"voice-samples/{character_id}/{uuid.uuid4().hex}.{ext}"
         try:
@@ -474,7 +484,7 @@ async def _run_clone_job(character_id: str, audio_source: str, user_id: str) -> 
 
     async with session_factory() as db:
         try:
-            clone_voice_id = await _call_tts_clone_api(audio_source, character_id)
+            clone_voice_id, err_msg = await _call_tts_clone_api(audio_source, character_id)
             if clone_voice_id:
                 # Charge credits only after the provider returns a voice_id —
                 # a failed clone should not cost the user anything.
@@ -501,6 +511,7 @@ async def _run_clone_job(character_id: str, audio_source: str, user_id: str) -> 
                     text("""
                         UPDATE character_voices
                         SET clone_voice_id = :vid, clone_status = 'ready',
+                            error_msg = NULL,
                             updated_at = NOW()
                         WHERE character_id = :cid
                     """),
@@ -512,16 +523,20 @@ async def _run_clone_job(character_id: str, audio_source: str, user_id: str) -> 
                 )
                 logger.info("voice_clone_ready", character_id=character_id, voice_id=clone_voice_id)
             else:
+                reason = (err_msg or "音色克隆失败，请稍后重试")[:200]
                 await db.execute(
                     text("""
                         UPDATE character_voices
-                        SET clone_status = 'failed', error_msg = 'Provider returned no voice id',
-                            updated_at = NOW()
+                        SET clone_status = 'failed', error_msg = :err, updated_at = NOW()
                         WHERE character_id = :cid
                     """),
-                    {"cid": character_id},
+                    {"cid": character_id, "err": reason},
                 )
-                logger.warning("voice_clone_failed", character_id=character_id)
+                logger.warning(
+                    "voice_clone_failed",
+                    character_id=character_id,
+                    reason=reason,
+                )
             await db.commit()
         except Exception as exc:
             await db.rollback()
@@ -540,29 +555,77 @@ async def _run_clone_job(character_id: str, audio_source: str, user_id: str) -> 
                 pass
 
 
-async def _call_tts_clone_api(audio_source: str, character_id: str) -> str | None:
+def _minimax_requires_group_id() -> bool:
+    """Whether the configured MiniMax base URL requires ``?GroupId=`` on
+    ``/voice_clone`` and ``/files/upload``.
+
+    The mainland-China domains (``api.minimaxi.com``, ``api.minimaxi.chat``)
+    have historically required GroupId as a query parameter on these two
+    endpoints even when the Authorization header carries a scoped API key.
+    The international domain (``api.minimax.io``) accepts Bearer-only auth.
+    Presence-of-``minimaxi`` in the host is the sharpest signal we have.
+    """
+    base = (settings.minimax_base_url or "").lower()
+    return "minimaxi." in base
+
+
+def _minimax_endpoint(path: str) -> str:
+    """Build a MiniMax endpoint URL, appending ``?GroupId=`` when set.
+
+    Guarantees the query separator is always ``?`` (path is expected to be
+    plain like ``/voice_clone``). Missing group_id → no query param, so
+    callers on the international endpoint remain unaffected. When the
+    Chinese endpoint is configured but group_id is empty we still build a
+    URL without the param — MiniMax will reject and the raw error body is
+    surfaced to the user via ``error_msg``, which is more useful than a
+    silent local guard.
+    """
+    base = (settings.minimax_base_url or "").rstrip("/")
+    url = f"{base}{path}"
+    gid = (settings.minimax_group_id or "").strip()
+    if gid:
+        url = f"{url}?GroupId={gid}"
+    return url
+
+
+async def _call_tts_clone_api(
+    audio_source: str, character_id: str
+) -> tuple[str | None, str | None]:
     """Call the configured TTS provider's voice clone endpoint.
 
-    Returns the new voice_id on success, or None on any failure so the caller
-    marks the job as failed and reports it back to the user honestly.  There
-    is no synthetic-id fallback: pretending to succeed produced voice_ids the
-    TTS provider rejected at chat time, which surfaced as the "stuck at 正在
-    回复" bug (2026-07-11).
+    Returns ``(voice_id, error_msg)``:
+      - success: ``(voice_id, None)``
+      - failure: ``(None, reason)`` — reason is the raw provider message when
+        available, or a short internal tag otherwise. The caller writes it to
+        ``character_voices.error_msg`` so the polling API can show a real
+        reason instead of a generic "克隆失败，请重试" that gives the user
+        nothing to act on.
+
+    There is no synthetic-id fallback: pretending to succeed produced
+    voice_ids the TTS provider rejected at chat time, which surfaced as the
+    "stuck at 正在回复" bug (2026-07-11).
 
     ``audio_source`` carries a scheme prefix identifying how MiniMax should
     receive the audio:
       - ``minimax_file://<file_id>`` — a MiniMax-hosted file_id from the
-        ``/files/upload`` endpoint. Used when S3 isn't configured.
+        ``/files/upload`` endpoint. Used when S3 isn't publicly reachable.
       - anything else — treated as a publicly-fetchable ``file_url``.
     """
     if audio_source.startswith("local://"):
         logger.warning("voice_clone_local_url_rejected", audio_source=audio_source)
-        return None
+        return None, "internal: local:// audio source rejected"
 
     # See endpoint gate above: clone is MiniMax-only regardless of primary TTS.
     if not settings.minimax_api_key:
         logger.warning("voice_clone_provider_unavailable", provider=settings.voice_provider)
-        return None
+        return None, "MINIMAX_API_KEY 未配置"
+
+    if _minimax_requires_group_id() and not (settings.minimax_group_id or "").strip():
+        logger.warning(
+            "voice_clone_group_id_missing",
+            base_url=settings.minimax_base_url,
+        )
+        return None, "MINIMAX_GROUP_ID 未配置（大陆版 api.minimaxi 域名必填）"
 
     try:
         if audio_source.startswith("minimax_file://"):
@@ -571,10 +634,10 @@ async def _call_tts_clone_api(audio_source: str, character_id: str) -> str | Non
         return await _minimax_clone_by_url(audio_source, character_id)
     except Exception as exc:
         logger.warning("minimax_clone_failed", error=str(exc))
-        return None
+        return None, f"MiniMax 请求异常：{str(exc)[:160]}"
 
 
-async def _minimax_clone_by_url(audio_url: str, character_id: str) -> str | None:
+async def _minimax_clone_by_url(audio_url: str, character_id: str) -> tuple[str | None, str | None]:
     """Submit voice clone job to MiniMax with a public ``file_url``."""
     return await _minimax_voice_clone_request(
         {
@@ -587,7 +650,9 @@ async def _minimax_clone_by_url(audio_url: str, character_id: str) -> str | None
     )
 
 
-async def _minimax_clone_by_file_id(file_id: int, character_id: str) -> str | None:
+async def _minimax_clone_by_file_id(
+    file_id: int, character_id: str
+) -> tuple[str | None, str | None]:
     """Submit voice clone job to MiniMax with a MiniMax-hosted ``file_id``."""
     return await _minimax_voice_clone_request(
         {
@@ -614,7 +679,26 @@ def _clone_voice_id_for(character_id: str) -> str:
     return f"UGC_{safe}_{suffix}"
 
 
-async def _minimax_voice_clone_request(payload: dict) -> str | None:
+def _extract_minimax_base_resp_error(body: dict) -> str | None:
+    """Return a human-readable reason if ``body`` carries a non-zero
+    ``base_resp.status_code``.
+
+    MiniMax returns HTTP 200 for logical failures too — the real signal lives
+    in ``base_resp.status_code`` / ``status_msg``. Ignoring this made
+    unreachable ``file_url`` responses look successful (returning the
+    ``voice_id`` we ourselves supplied), which then blew up during chat.
+    """
+    base_resp = body.get("base_resp") if isinstance(body, dict) else None
+    if not isinstance(base_resp, dict):
+        return None
+    status_code = base_resp.get("status_code")
+    if status_code in (0, "0", None):
+        return None
+    status_msg = base_resp.get("status_msg") or "unknown error"
+    return f"MiniMax {status_code}: {status_msg}"
+
+
+async def _minimax_voice_clone_request(payload: dict) -> tuple[str | None, str | None]:
     """Post the given payload to MiniMax's ``/voice_clone`` endpoint."""
     import aiohttp
 
@@ -622,7 +706,7 @@ async def _minimax_voice_clone_request(payload: dict) -> str | None:
         "Authorization": f"Bearer {settings.minimax_api_key}",
         "Content-Type": "application/json",
     }
-    url = f"{settings.minimax_base_url}/voice_clone"
+    url = _minimax_endpoint("/voice_clone")
     async with aiohttp.ClientSession() as session:
         async with session.post(
             url, json=payload, headers=headers, timeout=aiohttp.ClientTimeout(total=60)
@@ -630,20 +714,31 @@ async def _minimax_voice_clone_request(payload: dict) -> str | None:
             if resp.status != 200:
                 text_body = await resp.text()
                 logger.warning("minimax_clone_error", status=resp.status, body=text_body[:200])
-                return None
+                return None, f"MiniMax HTTP {resp.status}：{text_body[:160]}"
             body = await resp.json()
-            # MiniMax echoes back the voice_id we sent on success; also accept
-            # `id` for defensive compatibility with older API versions.
-            return payload.get("voice_id") or body.get("voice_id") or body.get("id")
+            base_err = _extract_minimax_base_resp_error(body)
+            if base_err is not None:
+                logger.warning(
+                    "minimax_clone_base_resp_error", reason=base_err, body=str(body)[:200]
+                )
+                return None, base_err
+            # Success: MiniMax echoes back the voice_id we sent. Fall back to
+            # ``id`` for defensive compatibility with older API versions.
+            voice_id = payload.get("voice_id") or body.get("voice_id") or body.get("id")
+            if not voice_id:
+                logger.warning("minimax_clone_missing_voice_id", body=str(body)[:200])
+                return None, "MiniMax 未返回 voice_id"
+            return voice_id, None
 
 
 async def _upload_audio_to_minimax(data: bytes, filename: str, mime: str) -> int:
     """Upload raw audio bytes to MiniMax ``/files/upload`` and return the file_id.
 
-    Used when S3 is not configured — MiniMax hosts the audio internally so we
-    still get a voice_clone-able reference without needing a public URL.
-    Kept synchronous with the calling coroutine's `await`; uses ``aiohttp``
-    to avoid pulling in a second HTTP client for one endpoint.
+    Used when S3 is not configured or the endpoint is not publicly reachable —
+    MiniMax hosts the audio internally so we still get a voice_clone-able
+    reference without needing a public URL. Kept synchronous with the calling
+    coroutine's ``await``; uses ``aiohttp`` to avoid pulling in a second HTTP
+    client for one endpoint.
     """
     import aiohttp
 
@@ -651,7 +746,7 @@ async def _upload_audio_to_minimax(data: bytes, filename: str, mime: str) -> int
         raise RuntimeError("MINIMAX_API_KEY not configured")
 
     headers = {"Authorization": f"Bearer {settings.minimax_api_key}"}
-    url = f"{settings.minimax_base_url}/files/upload"
+    url = _minimax_endpoint("/files/upload")
 
     form = aiohttp.FormData()
     form.add_field("purpose", "voice_clone")
@@ -672,6 +767,9 @@ async def _upload_audio_to_minimax(data: bytes, filename: str, mime: str) -> int
                     f"MiniMax files/upload failed status={resp.status} body={text_body[:200]}"
                 )
             body = await resp.json()
+    base_err = _extract_minimax_base_resp_error(body)
+    if base_err is not None:
+        raise RuntimeError(f"MiniMax files/upload rejected: {base_err}")
     file_obj = body.get("file") or {}
     file_id = file_obj.get("file_id") or body.get("file_id")
     if file_id is None:

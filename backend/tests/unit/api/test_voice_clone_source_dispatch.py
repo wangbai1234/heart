@@ -6,6 +6,11 @@ The clone endpoint now supports two audio-delivery paths:
 
 Dispatch happens in ``_call_tts_clone_api``. These tests lock in the
 routing so a future refactor doesn't silently regress into "always URL".
+
+``_call_tts_clone_api`` and its inner helpers return ``tuple[voice_id, err_msg]``
+where exactly one is non-None — success is ``(voice_id, None)``, failure
+is ``(None, reason)``. The reason is written to ``character_voices.error_msg``
+so the frontend toast can be actionable instead of "克隆失败，请重试".
 """
 
 from __future__ import annotations
@@ -20,8 +25,9 @@ from heart.api import routes_voice
 @pytest.mark.asyncio
 async def test_local_scheme_is_rejected():
     """Legacy 'local://' placeholder must never succeed — that was the 假成功 bug."""
-    result = await routes_voice._call_tts_clone_api("local://tmp/x.wav", "abc")
-    assert result is None
+    voice_id, err = await routes_voice._call_tts_clone_api("local://tmp/x.wav", "abc")
+    assert voice_id is None
+    assert err and "local://" in err
 
 
 @pytest.mark.asyncio
@@ -30,20 +36,24 @@ async def test_minimax_file_scheme_routes_to_file_id_path():
     with (
         patch.object(routes_voice.settings, "voice_provider", "minimax"),
         patch.object(routes_voice.settings, "minimax_api_key", "test-key"),
+        patch.object(routes_voice.settings, "minimax_group_id", "grp-1"),
         patch.object(
             routes_voice,
             "_minimax_clone_by_file_id",
-            new=AsyncMock(return_value="VOICE_OK"),
+            new=AsyncMock(return_value=("VOICE_OK", None)),
         ) as mock_file,
         patch.object(
             routes_voice,
             "_minimax_clone_by_url",
-            new=AsyncMock(return_value="WRONG"),
+            new=AsyncMock(return_value=("WRONG", None)),
         ) as mock_url,
     ):
-        got = await routes_voice._call_tts_clone_api("minimax_file://12345", "char_abc")
+        voice_id, err = await routes_voice._call_tts_clone_api(
+            "minimax_file://12345", "char_abc"
+        )
 
-    assert got == "VOICE_OK"
+    assert voice_id == "VOICE_OK"
+    assert err is None
     mock_file.assert_awaited_once_with(12345, "char_abc")
     mock_url.assert_not_called()
 
@@ -54,22 +64,24 @@ async def test_https_scheme_routes_to_url_path():
     with (
         patch.object(routes_voice.settings, "voice_provider", "minimax"),
         patch.object(routes_voice.settings, "minimax_api_key", "test-key"),
+        patch.object(routes_voice.settings, "minimax_group_id", "grp-1"),
         patch.object(
             routes_voice,
             "_minimax_clone_by_file_id",
-            new=AsyncMock(return_value="WRONG"),
+            new=AsyncMock(return_value=("WRONG", None)),
         ) as mock_file,
         patch.object(
             routes_voice,
             "_minimax_clone_by_url",
-            new=AsyncMock(return_value="VOICE_OK"),
+            new=AsyncMock(return_value=("VOICE_OK", None)),
         ) as mock_url,
     ):
-        got = await routes_voice._call_tts_clone_api(
+        voice_id, err = await routes_voice._call_tts_clone_api(
             "https://cdn.example.com/sample.wav", "char_abc"
         )
 
-    assert got == "VOICE_OK"
+    assert voice_id == "VOICE_OK"
+    assert err is None
     mock_url.assert_awaited_once_with("https://cdn.example.com/sample.wav", "char_abc")
     mock_file.assert_not_called()
 
@@ -80,8 +92,9 @@ async def test_dispatch_returns_none_on_missing_provider():
         patch.object(routes_voice.settings, "voice_provider", "unset"),
         patch.object(routes_voice.settings, "minimax_api_key", ""),
     ):
-        got = await routes_voice._call_tts_clone_api("minimax_file://1", "x")
-    assert got is None
+        voice_id, err = await routes_voice._call_tts_clone_api("minimax_file://1", "x")
+    assert voice_id is None
+    assert err and "MINIMAX_API_KEY" in err
 
 
 @pytest.mark.asyncio
@@ -92,32 +105,99 @@ async def test_dispatch_allows_clone_when_primary_provider_is_mimo():
     with (
         patch.object(routes_voice.settings, "voice_provider", "mimo"),
         patch.object(routes_voice.settings, "minimax_api_key", "test-key"),
+        patch.object(routes_voice.settings, "minimax_group_id", "grp-1"),
         patch.object(
             routes_voice,
             "_minimax_clone_by_file_id",
-            new=AsyncMock(return_value="VOICE_OK"),
+            new=AsyncMock(return_value=("VOICE_OK", None)),
         ) as mock_file,
     ):
-        got = await routes_voice._call_tts_clone_api("minimax_file://42", "char_abc")
+        voice_id, err = await routes_voice._call_tts_clone_api(
+            "minimax_file://42", "char_abc"
+        )
 
-    assert got == "VOICE_OK"
+    assert voice_id == "VOICE_OK"
+    assert err is None
     mock_file.assert_awaited_once_with(42, "char_abc")
 
 
 @pytest.mark.asyncio
 async def test_dispatch_swallows_exceptions():
-    """A raised inner helper turns into ``None`` — job marks failed, no crash."""
+    """A raised inner helper turns into ``(None, reason)`` — job marks failed
+    with the exception text as the reason, no crash."""
     with (
         patch.object(routes_voice.settings, "voice_provider", "minimax"),
         patch.object(routes_voice.settings, "minimax_api_key", "test-key"),
+        patch.object(routes_voice.settings, "minimax_group_id", "grp-1"),
         patch.object(
             routes_voice,
             "_minimax_clone_by_url",
             new=AsyncMock(side_effect=RuntimeError("boom")),
         ),
     ):
-        got = await routes_voice._call_tts_clone_api("https://x/y.wav", "z")
-    assert got is None
+        voice_id, err = await routes_voice._call_tts_clone_api("https://x/y.wav", "z")
+    assert voice_id is None
+    assert err and "boom" in err
+
+
+@pytest.mark.asyncio
+async def test_dispatch_flags_missing_group_id_on_mainland_endpoint():
+    """Mainland-China ``api.minimaxi.*`` domains require ``?GroupId=`` on
+    /voice_clone. When it's empty the call is doomed to fail with a fast
+    4xx and the user sees "克隆失败" ~4s later with no clue. The dispatcher
+    now fails early with an actionable ``error_msg`` instead.
+    """
+    with (
+        patch.object(routes_voice.settings, "voice_provider", "minimax"),
+        patch.object(routes_voice.settings, "minimax_api_key", "test-key"),
+        patch.object(routes_voice.settings, "minimax_group_id", ""),
+        patch.object(
+            routes_voice.settings, "minimax_base_url", "https://api.minimaxi.com/v1"
+        ),
+    ):
+        voice_id, err = await routes_voice._call_tts_clone_api("minimax_file://7", "x")
+    assert voice_id is None
+    assert err and "MINIMAX_GROUP_ID" in err
+
+
+def test_minimax_endpoint_appends_group_id_when_set():
+    with (
+        patch.object(routes_voice.settings, "minimax_group_id", "grp-123"),
+        patch.object(
+            routes_voice.settings, "minimax_base_url", "https://api.minimaxi.com/v1"
+        ),
+    ):
+        url = routes_voice._minimax_endpoint("/voice_clone")
+    assert url == "https://api.minimaxi.com/v1/voice_clone?GroupId=grp-123"
+
+
+def test_minimax_endpoint_omits_group_id_when_unset():
+    """International endpoint uses Bearer-only auth — no GroupId query."""
+    with (
+        patch.object(routes_voice.settings, "minimax_group_id", ""),
+        patch.object(routes_voice.settings, "minimax_base_url", "https://api.minimax.io/v1"),
+    ):
+        url = routes_voice._minimax_endpoint("/files/upload")
+    assert url == "https://api.minimax.io/v1/files/upload"
+
+
+def test_extract_minimax_base_resp_error_handles_success():
+    assert routes_voice._extract_minimax_base_resp_error({"base_resp": {"status_code": 0}}) is None
+    assert routes_voice._extract_minimax_base_resp_error({}) is None
+    assert routes_voice._extract_minimax_base_resp_error({"base_resp": None}) is None
+
+
+def test_extract_minimax_base_resp_error_returns_reason_on_failure():
+    body = {
+        "base_resp": {"status_code": 1002, "status_msg": "invalid params: file_url"},
+        # Note: MiniMax often returns HTTP 200 even for logical failures,
+        # so this branch must be honoured or we'd mark a doomed clone as
+        # ready and stall in chat later (2026-07-11 regression).
+    }
+    got = routes_voice._extract_minimax_base_resp_error(body)
+    assert got is not None
+    assert "1002" in got
+    assert "invalid params: file_url" in got
 
 
 def test_clone_voice_id_for_starts_with_letter_and_contains_char_id():
