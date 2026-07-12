@@ -361,8 +361,11 @@ async def clone_voice(
         )
 
     # MiniMax must be configured — clone always ends up calling their API,
-    # regardless of how we hand it the audio.
-    if not (settings.voice_provider == "minimax" and settings.minimax_api_key):
+    # regardless of how we hand it the audio. We deliberately DON'T require
+    # ``voice_provider == "minimax"`` here: even when the deployment picks
+    # MiMo as its primary TTS, MiniMax remains the only clone backend, and
+    # the resulting voice_id will be reached via fallback at chat time.
+    if not settings.minimax_api_key:
         raise HTTPException(
             status_code=503,
             detail="音色克隆服务未配置，请联系管理员或改用预设音色。",
@@ -556,9 +559,9 @@ async def _call_tts_clone_api(audio_source: str, character_id: str) -> str | Non
         logger.warning("voice_clone_local_url_rejected", audio_source=audio_source)
         return None
 
-    provider = settings.voice_provider
-    if not (provider == "minimax" and settings.minimax_api_key):
-        logger.warning("voice_clone_provider_unavailable", provider=provider)
+    # See endpoint gate above: clone is MiniMax-only regardless of primary TTS.
+    if not settings.minimax_api_key:
+        logger.warning("voice_clone_provider_unavailable", provider=settings.voice_provider)
         return None
 
     try:
