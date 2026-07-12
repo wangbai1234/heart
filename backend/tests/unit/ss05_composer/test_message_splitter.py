@@ -167,3 +167,56 @@ def test_unmatched_close_corner_quote_is_defensive():
     result = split_response("」孤儿。你好呀。")
     texts = [s["content"] for s in result if s["kind"] == "text"]
     assert texts == ["」孤儿。你好呀。"]
+
+
+# ── Post-hoc bracket wrapping (rin turn-2 regression, Plan B) ─────────────────
+
+
+def test_bare_action_prose_before_dialog_is_wrapped():
+    """`目光微微闪动，随即移开视线 不。` → action bubble + dialog bubble."""
+    result = split_response("目光微微闪动，随即移开视线 不。")
+    kinds = [s["kind"] for s in result]
+    assert "action" in kinds
+    action = next(s for s in result if s["kind"] == "action")
+    assert "目光微微闪动" in action["content"]
+    text = next(s for s in result if s["kind"] == "text")
+    assert text["content"].startswith("不")
+
+
+def test_bare_action_mid_stream_wraps_between_dialog():
+    """`你叫对了。声音轻了几分…疲惫 只是…` — dialog + action + dialog."""
+    result = split_response(
+        "你叫对了。声音轻了几分，带着一丝难以察觉的疲惫 只是…被太久没人叫过的名字突然喊住，有点不习惯罢了。"
+    )
+    # Must include the action span; the exact bubble count may vary due to the
+    # short-text merger, so verify the action was extracted.
+    actions = [s["content"] for s in result if s["kind"] == "action"]
+    assert any("声音轻了几分" in a for a in actions)
+    joined_text = "".join(s["content"] for s in result if s["kind"] == "text")
+    assert "你叫对了" in joined_text
+    assert "只是" in joined_text
+
+
+def test_bare_action_no_dialog_wraps_whole_piece():
+    """`目光微微闪动。` — action-only piece wrapped as an action bubble."""
+    result = split_response("目光微微闪动。")
+    kinds = [s["kind"] for s in result]
+    assert kinds == ["action"]
+    assert "目光微微闪动" in result[0]["content"]
+
+
+def test_explicit_brackets_still_win_over_wrapper():
+    """If the LLM already brackets, the heuristic must not double-wrap."""
+    result = split_response("（目光微垂）好的。")
+    action = next(s for s in result if s["kind"] == "action")
+    # Must be the LLM's original content, not '目光微垂）好的' or similar.
+    assert action["content"] == "目光微垂"
+    text = next(s for s in result if s["kind"] == "text")
+    assert text["content"] == "好的。"
+
+
+def test_plain_dialog_without_action_subject_is_untouched():
+    """Regular replies with no body-part noun stay pure text."""
+    result = split_response("你今天怎么样，还好吗？我有点担心你。")
+    kinds = [s["kind"] for s in result]
+    assert kinds == ["text", "text"]
