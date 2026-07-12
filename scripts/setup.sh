@@ -112,10 +112,23 @@ setup_venv() {
         info "✓ .venv 已存在"
     fi
 
-    log "安装 Python 依赖（pip install -e '.[dev]'）..."
+    log "安装 Python 依赖..."
     .venv/bin/pip install --quiet --upgrade pip
-    .venv/bin/pip install -e ".[dev]"
-    info "✓ Python 依赖安装完成"
+
+    # requirements.txt is the authoritative runtime deps list (CI uses it).
+    # Install it first, then pyproject.toml [dev] extras + editable install.
+    if [[ -f "requirements.txt" ]]; then
+        info "  → 安装 requirements.txt（运行时依赖）..."
+        .venv/bin/pip install --quiet -r requirements.txt
+    fi
+    info "  → 安装 pyproject.toml 的 dev 依赖 + editable 包..."
+    .venv/bin/pip install --quiet -e ".[dev]"
+
+    # Sanity check：能否 import 关键模块
+    if ! .venv/bin/python -c "import slowapi, boto3, pgvector, greenlet, aiosmtplib" 2>/dev/null; then
+        die "依赖安装不完整。运行 .venv/bin/pip check 排查。"
+    fi
+    info "✓ Python 依赖安装完成（关键模块 import OK）"
 }
 
 # ──────────────────────────────────────────────────────────────────────────────
