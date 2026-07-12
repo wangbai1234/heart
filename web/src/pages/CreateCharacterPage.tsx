@@ -344,7 +344,10 @@ export function CreateCharacterPage() {
   }
 
   async function handleVoiceSave() {
-    if (!selectedPreset || !createdCharacterId) {
+    // Edit-only path: bind voice to an existing character (isVoiceOnly flow).
+    // The creation flow goes through finalizeCreation() instead.
+    if (!createdCharacterId) return
+    if (!selectedPreset) {
       navigate(`/chat/${createdCharacterId}`, { replace: true })
       return
     }
@@ -475,23 +478,55 @@ export function CreateCharacterPage() {
       return
     }
 
+    if (!editId) {
+      // Advance to voice step WITHOUT persisting — character is only created
+      // when the user confirms or skips voice at step 3, so aborting on step 3
+      // leaves no orphan character on the home list.
+      setStep(3)
+      return
+    }
+
     setSubmitting(true)
     try {
       const draft = buildDraft(form, avatarUrl || undefined)
-      if (editId) {
-        await updateCharacter(editId, draft)
-        showToast('角色已更新', 'success')
-        navigate('/my-characters', { replace: true })
-      } else {
-        const { id } = await createCharacter(draft)
-        sessionStorage.removeItem(DRAFT_KEY)
-        setCreatedCharacterId(id)
-        setStep(3)
-      }
+      await updateCharacter(editId, draft)
+      showToast('角色已更新', 'success')
+      navigate('/my-characters', { replace: true })
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : '创建失败，请稍后再试'
       showToast(msg, 'error')
     } finally {
+      setSubmitting(false)
+    }
+  }
+
+  async function finalizeCreation(presetVoiceId: string | null) {
+    const err = validateForm(form)
+    if (err) {
+      showToast(err, 'error')
+      return
+    }
+    setVoiceSaving(true)
+    setSubmitting(true)
+    try {
+      const draft = buildDraft(form, avatarUrl || undefined)
+      const { id } = await createCharacter(draft)
+      sessionStorage.removeItem(DRAFT_KEY)
+      setCreatedCharacterId(id)
+      if (presetVoiceId) {
+        try {
+          await setPresetVoice(id, presetVoiceId)
+          showToast('音色配置成功', 'success')
+        } catch {
+          showToast('音色配置失败，可稍后在设置中重试', 'error')
+        }
+      }
+      navigate(`/chat/${id}`, { replace: true })
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : '创建失败，请稍后再试'
+      showToast(msg, 'error')
+    } finally {
+      setVoiceSaving(false)
       setSubmitting(false)
     }
   }
@@ -977,17 +1012,36 @@ export function CreateCharacterPage() {
           {step === 3 ? (
             <div className="flex gap-3">
               <button
-                onClick={() => navigate(`/chat/${createdCharacterId}`, { replace: true })}
-                className={`flex-1 h-[52px] rounded-[14px] text-[16px] font-medium ${isDark ? 'bg-[rgba(255,255,255,0.06)] text-[#ECE9F4]' : 'bg-[rgba(255,183,197,0.12)] text-[#2D3248]'}`}
+                onClick={() => {
+                  // Creation flow: character not yet persisted — finalize with no voice.
+                  // Voice-only flow (isVoiceOnly): character already exists — just navigate away.
+                  if (!createdCharacterId && !isVoiceOnly) {
+                    void finalizeCreation(null)
+                  } else if (createdCharacterId) {
+                    navigate(`/chat/${createdCharacterId}`, { replace: true })
+                  } else {
+                    navigate(-1)
+                  }
+                }}
+                disabled={submitting || voiceSaving}
+                className={`flex-1 h-[52px] rounded-[14px] text-[16px] font-medium disabled:opacity-40 disabled:pointer-events-none ${isDark ? 'bg-[rgba(255,255,255,0.06)] text-[#ECE9F4]' : 'bg-[rgba(255,183,197,0.12)] text-[#2D3248]'}`}
               >
                 跳过
               </button>
               <button
-                onClick={handleVoiceSave}
-                disabled={voiceSaving || !selectedPreset}
+                onClick={() => {
+                  // Creation flow: create + bind voice atomically.
+                  // Voice-only edit flow: bind to existing character.
+                  if (!createdCharacterId && !isVoiceOnly) {
+                    void finalizeCreation(selectedPreset || null)
+                  } else {
+                    void handleVoiceSave()
+                  }
+                }}
+                disabled={voiceSaving || submitting || !selectedPreset}
                 className="flex-[2] h-[52px] rounded-[14px] bg-gradient-to-r from-[#FFB7C5] to-[#FF8FAB] text-white text-[17px] font-semibold shadow-[0_8px_24px_-4px_rgba(255,143,171,0.40)] active:scale-[0.98] transition-transform disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center"
               >
-                {voiceSaving ? (
+                {voiceSaving || submitting ? (
                   <svg className="animate-spin w-5 h-5" viewBox="0 0 24 24" fill="none">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
