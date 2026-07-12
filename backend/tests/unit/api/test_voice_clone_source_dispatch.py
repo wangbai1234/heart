@@ -200,6 +200,111 @@ def test_extract_minimax_base_resp_error_returns_reason_on_failure():
     assert "invalid params: file_url" in got
 
 
+@pytest.mark.asyncio
+async def test_voice_clone_request_uses_httpx_client(monkeypatch):
+    """Guard against a silent revert to ``aiohttp`` — Python.org 3.11 macOS
+    installs ship an empty default trust store, so ``aiohttp`` fails TLS
+    against ``*.minimaxi.com`` (WoTrus DV) while ``httpx`` uses certifi and
+    works. If a future refactor swaps the client back, this test breaks.
+    """
+    import httpx
+
+    captured: dict = {}
+
+    class _StubResp:
+        status_code = 200
+        text = ""
+
+        def json(self):
+            return {"base_resp": {"status_code": 0, "status_msg": "success"}}
+
+    class _StubClient:
+        def __init__(self, *a, **kw):
+            captured["client_kwargs"] = kw
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        async def post(self, url, **kw):
+            captured["url"] = url
+            captured["post_kwargs"] = kw
+            return _StubResp()
+
+    monkeypatch.setattr(httpx, "AsyncClient", _StubClient)
+    with (
+        patch.object(routes_voice.settings, "minimax_api_key", "test-key"),
+        patch.object(routes_voice.settings, "minimax_group_id", "grp-1"),
+        patch.object(
+            routes_voice.settings, "minimax_base_url", "https://api.minimaxi.com/v1"
+        ),
+    ):
+        voice_id, err = await routes_voice._minimax_voice_clone_request(
+            {"file_id": 42, "voice_id": "UGC_x_deadbeef"}
+        )
+    assert err is None
+    assert voice_id == "UGC_x_deadbeef"
+    assert captured["url"] == "https://api.minimaxi.com/v1/voice_clone?GroupId=grp-1"
+    assert captured["post_kwargs"]["json"]["file_id"] == 42
+    assert captured["post_kwargs"]["headers"]["Authorization"] == "Bearer test-key"
+
+
+@pytest.mark.asyncio
+async def test_files_upload_uses_httpx_multipart(monkeypatch):
+    """Same guard for ``_upload_audio_to_minimax`` — multipart form data must
+    reach MiniMax with ``purpose=voice_clone`` and the ``file`` part, over
+    httpx (certifi-backed TLS)."""
+    import httpx
+
+    captured: dict = {}
+
+    class _StubResp:
+        status_code = 200
+        text = ""
+
+        def json(self):
+            return {
+                "file": {"file_id": 987654321},
+                "base_resp": {"status_code": 0, "status_msg": "success"},
+            }
+
+    class _StubClient:
+        def __init__(self, *a, **kw):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        async def post(self, url, **kw):
+            captured["url"] = url
+            captured["files"] = kw.get("files")
+            captured["data"] = kw.get("data")
+            return _StubResp()
+
+    monkeypatch.setattr(httpx, "AsyncClient", _StubClient)
+    with (
+        patch.object(routes_voice.settings, "minimax_api_key", "test-key"),
+        patch.object(routes_voice.settings, "minimax_group_id", "grp-1"),
+        patch.object(
+            routes_voice.settings, "minimax_base_url", "https://api.minimaxi.com/v1"
+        ),
+    ):
+        got = await routes_voice._upload_audio_to_minimax(
+            data=b"\x00" * 1024, filename="rin.mp3", mime="audio/mpeg"
+        )
+    assert got == 987654321
+    assert captured["url"] == "https://api.minimaxi.com/v1/files/upload?GroupId=grp-1"
+    assert captured["data"] == {"purpose": "voice_clone"}
+    # httpx multipart contract: files["file"] = (filename, bytes, mime)
+    assert captured["files"]["file"][0] == "rin.mp3"
+    assert captured["files"]["file"][2] == "audio/mpeg"
+
+
 def test_clone_voice_id_for_starts_with_letter_and_contains_char_id():
     """MiniMax voice_id needs to be a stable-ish identifier — sanity-check shape."""
     got = routes_voice._clone_voice_id_for("char_abc123")

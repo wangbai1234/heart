@@ -1089,7 +1089,15 @@ export function CreateCharacterPage() {
                     void handleVoiceSave()
                   }
                 }}
-                disabled={voiceSaving || submitting || !selectedPreset}
+                disabled={
+                  voiceSaving ||
+                  submitting ||
+                  // Enabled when EITHER a preset is picked OR a clone finished.
+                  // Previous gate required ``selectedPreset``, which stranded
+                  // clone-only users on step 3 with a grey "确认音色" and no
+                  // path forward (2026-07-12 real-device report).
+                  (!selectedPreset && cloneStatus !== 'ready')
+                }
                 className="flex-[2] h-[52px] rounded-[14px] bg-gradient-to-r from-[#FFB7C5] to-[#FF8FAB] text-white text-[17px] font-semibold shadow-[0_8px_24px_-4px_rgba(255,143,171,0.40)] active:scale-[0.98] transition-transform disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center"
               >
                 {voiceSaving || submitting ? (
