@@ -37,6 +37,7 @@ from starlette.responses import Response
 from .routes import dev_auth_router, router
 from .routes import dev_router as profile_dev_router
 from .routes_account import router as account_router
+from .routes_admin import router as admin_router
 from .routes_auth import router as auth_router
 from .routes_characters import router as characters_router
 from .routes_chat_ws import router as chat_ws_router
@@ -277,6 +278,7 @@ def create_app() -> FastAPI:
     app.include_router(router)
     app.include_router(auth_router)  # /api/auth/* (OTP, refresh, logout, me)
     app.include_router(credits_router)  # /api/credits/* (balance, transactions, redeem, pricing)
+    app.include_router(admin_router)  # /api/admin/* (admin operations, requires X-Admin-Key)
     app.include_router(webhooks_router)  # /api/webhooks/* (afdian)
     app.include_router(profile_router)  # /api/profile/* (GET/PATCH profile, avatar)
     app.include_router(account_router)  # /api/account/* (clear, delete, export)

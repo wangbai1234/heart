@@ -137,6 +137,9 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 30
     refresh_token_expire_days: int = 30
 
+    # Admin API — set a strong random secret; empty = admin endpoints disabled
+    admin_secret_key: str = ""
+
     # OTP
     otp_pepper: str = "change-me-otp-pepper-32chars-min"
     otp_ttl_seconds: int = 300
