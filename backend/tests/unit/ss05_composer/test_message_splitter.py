@@ -222,6 +222,49 @@ def test_plain_dialog_without_action_subject_is_untouched():
     assert kinds == ["text", "text"]
 
 
+def test_mid_string_subject_after_leading_verb_wraps():
+    """rin turn: `转身，目光带着审视 你连自己说的是什么都还没想清楚吧。`
+
+    The heuristic must now recognise action prose whose LEADING word is a
+    plain verb ("转身") but that contains an action subject ("目光") on the
+    left side of the whitespace-then-dialog seam.
+    """
+    result = split_response("转身，目光带着审视 你连自己说的是什么都还没想清楚吧。")
+    kinds = [s["kind"] for s in result]
+    assert "action" in kinds
+    action = next(s for s in result if s["kind"] == "action")
+    assert "转身" in action["content"]
+    assert "审视" in action["content"]
+    text = next(s for s in result if s["kind"] == "text")
+    assert text["content"].startswith("你连")
+
+
+def test_dialog_mentioning_body_noun_is_not_wrapped():
+    """`你今天的目光很温柔` — subject noun exists but no seam, keep as text."""
+    result = split_response("你今天的目光很温柔")
+    assert result == [{"kind": "text", "content": "你今天的目光很温柔"}]
+
+
+def test_text_bubble_content_has_no_newline():
+    """LLM output with a raw `\\n` between dialog sentences must not appear
+    as a blank line inside a text bubble — the frontend renders bubbles
+    with `whitespace-pre-wrap` so any leaked newline shows up as a gap."""
+    result = split_response("你说得对。\n\n我也这么认为。")
+    assert result, "expected non-empty segments"
+    for seg in result:
+        assert "\n" not in seg["content"], seg
+
+
+def test_action_bracket_then_newline_then_dialog_no_gap():
+    """`（她笑了）\\n你好呀今天。` — action pill then dialog with a leading
+    newline: the text bubble must not carry that newline into rendering."""
+    result = split_response("（她笑了）\n你好呀今天。")
+    kinds = [s["kind"] for s in result]
+    assert kinds == ["action", "text"]
+    assert result[0]["content"] == "她笑了"
+    assert "\n" not in result[1]["content"]
+
+
 def test_long_action_bracket_with_internal_newline_stays_atomic():
     """`（...嘲讽\n急着走？） 俯身...` — regression from live-chat report.
 
