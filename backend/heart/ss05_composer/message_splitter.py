@@ -51,6 +51,10 @@ MAX_TEXT_BUBBLES = 6
 #  2. Are followed by either (a) end-of-segment, or (b) a whitespace boundary
 #     with a common DIALOG_STARTER after it (不, 我, 你, 嗯, …).
 _ACTION_SUBJECTS_LIST: tuple[str, ...] = (
+    # 动作 (motion nouns that read as action prose)
+    "脚步",
+    "身形",
+    "步伐",
     # 身体
     "目光",
     "视线",
@@ -158,6 +162,34 @@ _DIALOG_STARTERS_LIST: tuple[str, ...] = (
     "呀",
     "吗",
     "嘛",
+    # Common single-char utterance openers seen in real logs (2026-07-12
+    # regression: "语气...笑意 爱这个字..." leaked into a text bubble
+    # because "爱" wasn't listed here).
+    "爱",
+    "别",
+    "请",
+    "谢",
+    "让",
+    "记",
+    "听",
+    "看",
+    "快",
+    "慢",
+    "走",
+    "停",
+    "怕",
+    "怎",
+    "为",
+    "干",
+    "做",
+    "帮",
+    "留",
+    "算",
+    "咳",
+    "哼",
+    "唉",
+    "喂",
+    "嘿",
 )
 _DIALOG_START_RE = re.compile(r"(?:" + "|".join(_DIALOG_STARTERS_LIST) + r")")
 

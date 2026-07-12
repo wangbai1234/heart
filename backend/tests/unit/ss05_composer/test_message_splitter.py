@@ -265,6 +265,23 @@ def test_action_bracket_then_newline_then_dialog_no_gap():
     assert "\n" not in result[1]["content"]
 
 
+def test_bare_action_with_love_opener_wraps():
+    """rin regression (2026-07-12): `脚步微顿，没有回头，语气带着一丝若有若无的笑意 爱这个字，可不是随便说说的。`
+
+    Action prose that begins with a motion noun (`脚步`) and ends before a
+    dialog span whose first char is `爱` used to leak into a plain text
+    bubble because `爱` wasn't in `_DIALOG_STARTERS_LIST` and `脚步` wasn't
+    in `_ACTION_SUBJECTS_LIST`. Both are now covered.
+    """
+    result = split_response(
+        "脚步微顿，没有回头，语气带着一丝若有若无的笑意 爱这个字，可不是随便说说的。"
+    )
+    actions = [s["content"] for s in result if s["kind"] == "action"]
+    texts = [s["content"] for s in result if s["kind"] == "text"]
+    assert any("脚步微顿" in a and "笑意" in a for a in actions)
+    assert any(t.startswith("爱这个字") for t in texts)
+
+
 def test_long_action_bracket_with_internal_newline_stays_atomic():
     """`（...嘲讽\n急着走？） 俯身...` — regression from live-chat report.
 
