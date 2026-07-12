@@ -501,6 +501,11 @@ export function CreateCharacterPage() {
           } else if (voice.clone_status === 'failed') {
             if (pollRef.current) clearInterval(pollRef.current)
             setCloneStatus('failed')
+            // Show the real MiniMax / config reason if the backend provided
+            // one. Falls back to a plain retry hint so users on older
+            // deploys (no error_msg) still get feedback.
+            const reason = voice.error_msg?.trim()
+            showToast(reason ? `克隆失败：${reason}` : '克隆失败，请重试', 'error')
           }
         } catch { /* keep polling */ }
       }, 5000)

@@ -428,6 +428,10 @@ export interface CharacterVoiceDTO {
   preset_voice_id?: string | null
   preset_name?: string | null
   has_voice?: boolean
+  // Populated by the backend only when clone_status='failed' — surfaces the
+  // real reason (missing GroupId / unreachable audio URL / MiniMax quota)
+  // so the toast is actionable instead of a generic retry prompt.
+  error_msg?: string | null
 }
 
 export async function getPresetVoices(

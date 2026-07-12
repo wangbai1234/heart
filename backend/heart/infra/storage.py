@@ -142,3 +142,60 @@ def is_s3_configured() -> bool:
     from heart.core.config import settings
 
     return bool(settings.s3_endpoint_url and settings.s3_access_key_id)
+
+
+_LOOPBACK_HOSTS = frozenset({"localhost", "127.0.0.1", "0.0.0.0", "::1"})
+
+
+def _host_is_private(host: str) -> bool:
+    """True if ``host`` is a loopback / RFC1918 / mDNS name.
+
+    Split from ``is_s3_endpoint_public`` to keep that function under ruff's
+    complexity ceiling — the range check for 172.16.0.0/12 dominates the
+    branch count, so isolating it here reads more clearly too.
+    """
+    if not host:
+        return True
+    if host in _LOOPBACK_HOSTS:
+        return True
+    if host.startswith(("10.", "192.168.")):
+        return True
+    if host.endswith(".local"):
+        return True
+    if host.startswith("172."):
+        parts = host.split(".")
+        if len(parts) >= 2:
+            try:
+                second = int(parts[1])
+            except ValueError:
+                return False
+            return 16 <= second <= 31
+    return False
+
+
+def is_s3_endpoint_public() -> bool:
+    """Whether the configured S3 endpoint is reachable from third-party servers.
+
+    Voice-clone hands the resulting URL to MiniMax, whose servers must be
+    able to fetch it. A localhost / private-IP endpoint (typical dev MinIO)
+    silently breaks that: the S3 upload itself succeeds, but MiniMax then
+    fails to download the audio and returns a fast 4xx — surfacing to the
+    user as "克隆失败" a few seconds after upload with no useful reason.
+
+    Callers should use this to decide between the S3 path and the MiniMax
+    ``/files/upload`` fallback.
+    """
+    from urllib.parse import urlparse
+
+    from heart.core.config import settings
+
+    if not is_s3_configured():
+        return False
+    endpoint = (settings.s3_endpoint_url or "").strip()
+    if not endpoint:
+        return False
+    try:
+        host = (urlparse(endpoint).hostname or "").lower()
+    except Exception:
+        return False
+    return not _host_is_private(host)
