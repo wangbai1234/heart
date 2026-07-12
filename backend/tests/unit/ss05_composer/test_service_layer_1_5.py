@@ -117,3 +117,17 @@ def test_string_comparison_does_not_raise_type_error():
     # Must not raise TypeError
     prompt = _run_build_prompt(spec)
     assert isinstance(prompt, str)
+
+
+def test_prompt_contains_action_bracket_format_contract():
+    """Every built prompt must instruct the LLM to wrap actions in （）.
+
+    Without this contract the bubble splitter cannot tell action from
+    dialog on turns where the LLM emits raw prose (see the rin-turn-2
+    incident in TEST_REPORT_20260712 follow-up).
+    """
+    prompt = _run_build_prompt(_make_soul_spec())
+    assert "【表达格式" in prompt
+    assert "（）" in prompt
+    # Sanity: the anti-example the format section warns about.
+    assert "目光微微闪动" in prompt or "括号里只写动作" in prompt
