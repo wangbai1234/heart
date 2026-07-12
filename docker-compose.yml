@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # PostgreSQL 15+ with pgvector extension
   postgres:
@@ -62,9 +60,11 @@ services:
     profiles:
       - storage
 
-  # ── Observability ──
-
-  # Encoder Worker — L2/L3 vector encoding (runs as FastAPI app with workers enabled)
+  # Encoder Worker — L2/L3 vector encoding + background workers
+  # Runs the same FastAPI app with HEART_WORKERS_ENABLED=true so that background
+  # tasks (memory_encoder, memory_extractor, memory_promoter, account_purge,
+  # credit_reconciliation) run in a dedicated process separate from the API.
+  # In dev you can skip this and instead start the backend with HEART_WORKERS_ENABLED=true.
   encoder-worker:
     build:
       context: ./backend
@@ -93,6 +93,8 @@ services:
     restart: unless-stopped
     networks:
       - heart-network
+
+  # ── Observability ──
 
   # Prometheus — scrapes heart-api /metrics
   prometheus:
