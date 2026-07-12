@@ -67,6 +67,12 @@ class Settings(BaseSettings):
     s3_secret_access_key: str = "minioadmin"
     s3_bucket_name: str = "heart-dev"
     s3_region: str = "us-east-1"
+    # Optional public base URL for objects (e.g. Cloudflare R2 r2.dev subdomain).
+    # When set, upload_file() returns this URL instead of the API endpoint URL so
+    # that third-party services (e.g. MiniMax voice clone) can fetch the object
+    # without authentication. Leave empty to use the API endpoint URL (fine for
+    # avatars which are proxied through the backend; only matters for voice clone).
+    s3_public_base_url: str = ""
 
     # Observability
     prometheus_port: int = 9090

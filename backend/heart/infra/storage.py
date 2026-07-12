@@ -84,9 +84,14 @@ async def upload_file(
         ContentType=content_type,
     )
 
-    # Construct URL
-    endpoint = settings.s3_endpoint_url.rstrip("/")
-    url = f"{endpoint}/{settings.s3_bucket_name}/{key}"
+    # Use public base URL when configured (e.g. R2 r2.dev subdomain) so that
+    # third-party services (MiniMax voice clone) can fetch the object without auth.
+    if settings.s3_public_base_url:
+        base = settings.s3_public_base_url.rstrip("/")
+        url = f"{base}/{key}"
+    else:
+        endpoint = settings.s3_endpoint_url.rstrip("/")
+        url = f"{endpoint}/{settings.s3_bucket_name}/{key}"
     logger.info("file_uploaded", key=key, size=len(data))
     return url
 
