@@ -155,7 +155,10 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
             role: item.role as 'user' | 'assistant',
             content: item.content,
             timestamp: new Date(item.created_at).getTime(),
-            kind: item.modality === 'voice' ? 'voice' : 'text',
+            // Prefer the server-provided kind (added in the fix for
+            // TEST_REPORT_20260712 BUG-5). Falls back to modality when the
+            // server response is old (no `kind` field).
+            kind: item.kind === 'action' ? 'action' : item.modality === 'voice' ? 'voice' : 'text',
             audioData: item.modality === 'voice' && item.audio_url ? `/api/chat/audio/${item.id}` : undefined,
             audioDuration: item.audio_duration_ms ?? undefined,
             audioFormat: item.modality === 'voice' ? 'wav' : undefined,
@@ -168,7 +171,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
             role: last.role as 'assistant' | 'user',
             content: last.content,
             timestamp: new Date(last.created_at).getTime(),
-            kind: last.modality === 'voice' ? 'voice' : 'text',
+            kind: last.kind === 'action' ? 'action' : last.modality === 'voice' ? 'voice' : 'text',
             audioDuration: last.audio_duration_ms ?? undefined,
           })
         }
@@ -222,7 +225,10 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
               role: item.role as 'user' | 'assistant',
               content: item.content,
               timestamp: new Date(item.created_at).getTime(),
-              kind: item.modality === 'voice' ? 'voice' : 'text',
+              // Prefer the server-provided kind (added in the fix for
+              // TEST_REPORT_20260712 BUG-5). Falls back to modality when
+              // the server response is old (no `kind` field).
+              kind: item.kind === 'action' ? 'action' : item.modality === 'voice' ? 'voice' : 'text',
               audioData: item.modality === 'voice' && item.audio_url ? `/api/chat/audio/${item.id}` : undefined,
               audioDuration: item.audio_duration_ms ?? undefined,
             })

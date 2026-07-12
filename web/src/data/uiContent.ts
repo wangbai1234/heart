@@ -22,7 +22,9 @@ export interface ConversationMessage {
   role: 'assistant' | 'user'
   content: string
   timestamp: number
-  kind: 'text' | 'voice'
+  // 'action' renders as a grey pill bubble; 'text' is spoken dialog;
+  // 'voice' is an audio message. Matches chat_messages.kind server-side.
+  kind: 'text' | 'voice' | 'action'
   duration?: string
   audioDuration?: number
 }

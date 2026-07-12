@@ -283,6 +283,8 @@ export async function getChatHistory(
     credits_charged: number | null
     turn_id: string | null
     created_at: string
+    /** 'action' for grey pill bubbles, 'text' for spoken dialog, 'voice' for audio messages. */
+    kind: 'text' | 'action' | 'voice' | null
   }>
   next_cursor: string | null
 }> {
