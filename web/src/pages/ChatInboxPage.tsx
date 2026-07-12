@@ -256,17 +256,29 @@ export function ChatInboxPage() {
                           {conversation.profile.statusLabel}
                         </p>
                       </div>
-                      <div className="shrink-0 text-right">
-                        <p className="text-[12px] text-[var(--color-text-muted)]">{conversation.updatedAt}</p>
-                        {conversation.unreadCount > 0 ? (
-                          <span className="mt-2 inline-flex min-w-[24px] items-center justify-center rounded-full bg-[var(--color-unread-badge)] px-2 py-[2px] text-[11px] font-semibold text-white">
-                            {conversation.unreadCount}
-                          </span>
-                        ) : (
-                          <span className="mt-2 inline-flex rounded-full bg-[rgba(255,255,255,0.36)] px-2.5 py-[2px] text-[11px] text-[var(--color-text-muted)]">
-                            已读
-                          </span>
-                        )}
+                      <div className="flex shrink-0 items-start gap-1 text-right">
+                        <div>
+                          <p className="text-[12px] text-[var(--color-text-muted)]">{conversation.updatedAt}</p>
+                          {conversation.unreadCount > 0 ? (
+                            <span className="mt-2 inline-flex min-w-[24px] items-center justify-center rounded-full bg-[var(--color-unread-badge)] px-2 py-[2px] text-[11px] font-semibold text-white">
+                              {conversation.unreadCount}
+                            </span>
+                          ) : (
+                            <span className="mt-2 inline-flex rounded-full bg-[rgba(255,255,255,0.36)] px-2.5 py-[2px] text-[11px] text-[var(--color-text-muted)]">
+                              已读
+                            </span>
+                          )}
+                        </div>
+                        <button
+                          aria-label="更多操作"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setDeleteTarget(conversation.characterId)
+                          }}
+                          className="ml-1 flex h-8 w-8 items-center justify-center rounded-full opacity-50 hover:opacity-100 hover:bg-[var(--color-glass-25)]"
+                        >
+                          <span className="text-lg leading-none">⋯</span>
+                        </button>
                       </div>
                     </div>
 
