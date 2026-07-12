@@ -699,36 +699,47 @@ def _extract_minimax_base_resp_error(body: dict) -> str | None:
 
 
 async def _minimax_voice_clone_request(payload: dict) -> tuple[str | None, str | None]:
-    """Post the given payload to MiniMax's ``/voice_clone`` endpoint."""
-    import aiohttp
+    """Post the given payload to MiniMax's ``/voice_clone`` endpoint.
+
+    Uses ``httpx`` (which loads certifi's CA bundle by default) instead of
+    ``aiohttp`` (whose default ``ssl.create_default_context()`` returns an
+    empty trust store on Python.org macOS installs). WoTrus DV — the CA that
+    signs ``*.minimaxi.com`` — is trusted by certifi's chain but not by an
+    empty store, which is why real-device clone silently failed with
+    "音频上传失败" while the preset ``/t2a_v2`` path (already on httpx) worked.
+    """
+    import httpx
 
     headers = {
         "Authorization": f"Bearer {settings.minimax_api_key}",
         "Content-Type": "application/json",
     }
     url = _minimax_endpoint("/voice_clone")
-    async with aiohttp.ClientSession() as session:
-        async with session.post(
-            url, json=payload, headers=headers, timeout=aiohttp.ClientTimeout(total=60)
-        ) as resp:
-            if resp.status != 200:
-                text_body = await resp.text()
-                logger.warning("minimax_clone_error", status=resp.status, body=text_body[:200])
-                return None, f"MiniMax HTTP {resp.status}：{text_body[:160]}"
-            body = await resp.json()
-            base_err = _extract_minimax_base_resp_error(body)
-            if base_err is not None:
-                logger.warning(
-                    "minimax_clone_base_resp_error", reason=base_err, body=str(body)[:200]
-                )
-                return None, base_err
-            # Success: MiniMax echoes back the voice_id we sent. Fall back to
-            # ``id`` for defensive compatibility with older API versions.
-            voice_id = payload.get("voice_id") or body.get("voice_id") or body.get("id")
-            if not voice_id:
-                logger.warning("minimax_clone_missing_voice_id", body=str(body)[:200])
-                return None, "MiniMax 未返回 voice_id"
-            return voice_id, None
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            resp = await client.post(url, json=payload, headers=headers)
+    except httpx.HTTPError as exc:
+        logger.warning("minimax_clone_transport_error", error=str(exc))
+        return None, f"MiniMax 请求异常：{str(exc)[:160]}"
+    if resp.status_code != 200:
+        logger.warning("minimax_clone_error", status=resp.status_code, body=resp.text[:200])
+        return None, f"MiniMax HTTP {resp.status_code}：{resp.text[:160]}"
+    try:
+        body = resp.json()
+    except ValueError:
+        logger.warning("minimax_clone_bad_json", body=resp.text[:200])
+        return None, "MiniMax 返回内容不是 JSON"
+    base_err = _extract_minimax_base_resp_error(body)
+    if base_err is not None:
+        logger.warning("minimax_clone_base_resp_error", reason=base_err, body=str(body)[:200])
+        return None, base_err
+    # Success: MiniMax echoes back the voice_id we sent. Fall back to
+    # ``id`` for defensive compatibility with older API versions.
+    voice_id = payload.get("voice_id") or body.get("voice_id") or body.get("id")
+    if not voice_id:
+        logger.warning("minimax_clone_missing_voice_id", body=str(body)[:200])
+        return None, "MiniMax 未返回 voice_id"
+    return voice_id, None
 
 
 async def _upload_audio_to_minimax(data: bytes, filename: str, mime: str) -> int:
@@ -736,11 +747,14 @@ async def _upload_audio_to_minimax(data: bytes, filename: str, mime: str) -> int
 
     Used when S3 is not configured or the endpoint is not publicly reachable —
     MiniMax hosts the audio internally so we still get a voice_clone-able
-    reference without needing a public URL. Kept synchronous with the calling
-    coroutine's ``await``; uses ``aiohttp`` to avoid pulling in a second HTTP
-    client for one endpoint.
+    reference without needing a public URL.
+
+    Uses ``httpx`` (certifi CA bundle) rather than ``aiohttp`` — see the note
+    on ``_minimax_voice_clone_request`` for the WoTrus / empty-truststore
+    reason. Handing MiniMax the raw bytes here avoids the S3-URL reachability
+    issue entirely.
     """
-    import aiohttp
+    import httpx
 
     if not settings.minimax_api_key:
         raise RuntimeError("MINIMAX_API_KEY not configured")
@@ -748,25 +762,19 @@ async def _upload_audio_to_minimax(data: bytes, filename: str, mime: str) -> int
     headers = {"Authorization": f"Bearer {settings.minimax_api_key}"}
     url = _minimax_endpoint("/files/upload")
 
-    form = aiohttp.FormData()
-    form.add_field("purpose", "voice_clone")
-    form.add_field(
-        "file",
-        data,
-        filename=filename,
-        content_type=mime or "application/octet-stream",
-    )
+    files = {"file": (filename, data, mime or "application/octet-stream")}
+    form = {"purpose": "voice_clone"}
 
-    async with aiohttp.ClientSession() as session:
-        async with session.post(
-            url, data=form, headers=headers, timeout=aiohttp.ClientTimeout(total=60)
-        ) as resp:
-            if resp.status != 200:
-                text_body = await resp.text()
-                raise RuntimeError(
-                    f"MiniMax files/upload failed status={resp.status} body={text_body[:200]}"
-                )
-            body = await resp.json()
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        resp = await client.post(url, headers=headers, files=files, data=form)
+    if resp.status_code != 200:
+        raise RuntimeError(
+            f"MiniMax files/upload failed status={resp.status_code} body={resp.text[:200]}"
+        )
+    try:
+        body = resp.json()
+    except ValueError as exc:
+        raise RuntimeError(f"MiniMax files/upload non-JSON response: {resp.text[:200]}") from exc
     base_err = _extract_minimax_base_resp_error(body)
     if base_err is not None:
         raise RuntimeError(f"MiniMax files/upload rejected: {base_err}")
