@@ -23,8 +23,12 @@ from __future__ import annotations
 import re
 from typing import Literal, TypedDict
 
-# Action markers: any of the paired brackets below. Contents span one line only.
-_ACTION_RE = re.compile(r"[（(【\[]([^（()【\[\]）)】\n]*)[）)】\]]")
+# Action markers: any of the paired brackets below. Content may span multiple
+# lines — DeepSeek sometimes wraps long action prose with a newline before the
+# closing `）`, and excluding `\n` from the negated class caused the closing
+# bracket to leak into its own text bubble (TEST_REPORT_20260712 follow-up:
+# `（指尖轻抬，...嘲讽\n急着走？）俯身...` split into two orphan text bubbles).
+_ACTION_RE = re.compile(r"[（(【\[]([^（()【\[\]）)】]*)[）)】\]]")
 
 # Chinese/English sentence terminators (kept attached to the preceding text).
 _TERM_RE = re.compile(r"([。！？…!?]+)")
@@ -260,7 +264,10 @@ def _split_actions_and_dialog(text: str) -> list[Segment]:
         pre = text[cursor : m.start()].strip()
         if pre:
             out.append({"kind": "text", "content": pre})
-        inner = m.group(1).strip()
+        # Collapse interior newlines / runs of whitespace inside the action
+        # content: a `（长动作\n描写）` should still render as one grey pill
+        # instead of showing the seam the LLM inserted for its own layout.
+        inner = re.sub(r"\s+", " ", m.group(1)).strip()
         if inner:
             out.append({"kind": "action", "content": inner})
         cursor = m.end()
