@@ -126,6 +126,7 @@ cloudflared tunnel run yuoyuo
 - **`archive/ci-legacy/` 遗留**：不影响 CI，不动
 - **`CONVERSATION_THREADS` 已删**：如果 IDE 缓存报 undefined 引用，忽略
 - **`useProactivePolling` 尚未接入 Initiative Decider / ProactiveMessageGenerator**：不阻塞聊天，Wave E 可做
+- **桌面浏览器不支持左边缘右滑手势（by design）**：`useSwipeNavigation` 只监听 `touchstart/touchmove/touchend`；桌面鼠标无事件。PWA 主设备是手机，桌面手势不属于 launch 关键路径。若后续需要，在 `useSwipeNavigation.ts` 加 `mousedown/mousemove/mouseup` 平行分支（F-6 设计方案）。
 
 ### 0.8 完整 PR 列表（2026-07-08 → 2026-07-11，从旧到新）
 
