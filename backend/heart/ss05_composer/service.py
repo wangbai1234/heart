@@ -154,6 +154,10 @@ class CompositionContext:
     max_tokens: int = 2000
     token_budget_allocations: Dict[str, int] = field(default_factory=dict)
 
+    # Proactive v2: when set, appended to system prompt as the trigger directive.
+    # None = regular chat turn.
+    proactive_hint: Optional[str] = None
+
 
 @dataclass
 class CompositionResult:
@@ -321,6 +325,7 @@ class ComposerService:
                 relationship=relationship_block,
                 inner_state=inner_state_block,
                 soul_spec=soul_spec,
+                proactive_hint=getattr(ctx, "proactive_hint", None),
             )
 
             # Count layers and tokens built (for profiling)
@@ -461,6 +466,7 @@ class ComposerService:
             relationship=relationship_block,
             inner_state=inner_state_block,
             soul_spec=soul_spec,
+            proactive_hint=getattr(ctx, "proactive_hint", None),
         )
 
         wrapped_user_message = (
@@ -713,6 +719,7 @@ class ComposerService:
         relationship: RelationshipContextBlock,
         inner_state: InnerStateContextBlock,
         soul_spec: SoulSpec,
+        proactive_hint: Optional[str] = None,
     ) -> str:
         """Build the system prompt from all context blocks.
 
@@ -925,6 +932,12 @@ class ComposerService:
             "即使被直接追问，也请以角色身份回应，不打破角色设定。"
             "请自然地回应用户，语气、词汇、情感表达应完全符合以上设定。"
         )
+
+        # ── Layer 10: Proactive directive (v2 only) ──────────────
+        # Injected only when the inner loop triggers a proactive turn.
+        # Placed last so the model reads the directive immediately before generating.
+        if proactive_hint:
+            parts.append(f"\n## 主动消息指令\n{proactive_hint}")
 
         return "\n".join(parts)
 

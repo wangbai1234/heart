@@ -95,6 +95,13 @@ class Settings(BaseSettings):
     # falling back to the built-in templates on any failure.
     proactive_llm_enabled: bool = True
     proactive_llm_max_tokens: int = 120
+    # v2: route proactive through the full composer chain instead of the thin
+    # LLM call, using time-based probability thresholds (1h=5%, 5h=10%, 10h=40%,
+    # 24h=80%) and per-user quota instead of per-character.
+    proactive_v2_enabled: bool = False
+    # v2 frequency controls
+    proactive_v2_daily_quota: int = 2  # per user (not per character)
+    proactive_v2_cooldown_minutes: int = 240  # 4h cross-character cooldown
 
     # Memory Extractor Mode (Phase D — regex sunset)
     # Deprecated: "regex", "dual" — will be removed in 60 days (Phase D §5.3)

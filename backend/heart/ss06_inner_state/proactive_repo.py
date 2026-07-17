@@ -136,6 +136,55 @@ async def any_recent_across_characters(
     return result.first() is not None
 
 
+async def count_today_per_user(
+    session: AsyncSession,
+    user_id: UUID,
+) -> int:
+    """Count all proactive messages created today across ALL characters for this user.
+
+    Used by proactive v2 to enforce a per-user daily quota instead of the old
+    per-(user, character) quota that allowed N characters × 3 messages/day.
+    """
+    result = await session.execute(
+        text(
+            "SELECT COUNT(*) FROM proactive_messages "
+            "WHERE user_id = :user_id "
+            "AND created_at::date = CURRENT_DATE"
+        ),
+        {"user_id": str(user_id)},
+    )
+    return int(result.scalar() or 0)
+
+
+async def insert_message_audit(
+    session: AsyncSession,
+    msg: "ProactiveMessage",  # noqa: F821
+) -> None:
+    """Insert into proactive_messages for audit/dedup tracking only.
+
+    Unlike insert_message(), this does NOT enforce the per-character quota —
+    callers (v2 path) have already enforced a per-user quota before calling.
+    Caller owns the transaction.
+    """
+    await session.execute(
+        text(
+            "INSERT INTO proactive_messages "
+            "(id, user_id, character_id, content, trigger_type, created_at, delivered) "
+            "VALUES (:id, :user_id, :character_id, :content, :trigger_type, "
+            ":created_at, false) "
+            "ON CONFLICT DO NOTHING"
+        ),
+        {
+            "id": str(msg.id),
+            "user_id": str(msg.user_id),
+            "character_id": msg.character_id,
+            "content": msg.content,
+            "trigger_type": msg.trigger_type,
+            "created_at": msg.created_at,
+        },
+    )
+
+
 async def content_seen_recently(
     session: AsyncSession,
     user_id: UUID,
