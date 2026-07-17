@@ -183,8 +183,17 @@ setup_env() {
         info "✓ JWT_SECRET_KEY 和 OTP_PEPPER 已自动生成"
     fi
 
+    # 本地开发默认启用 workers（memory_promoter / inner_loop / encoder 等）
+    # 生产环境由 encoder-worker 容器负责，此处仅影响本地 .env
+    if [[ "$OS" == "macos" ]]; then
+        sed -i '' "s|^HEART_WORKERS_ENABLED=.*|HEART_WORKERS_ENABLED=true|" .env
+    else
+        sed -i "s|^HEART_WORKERS_ENABLED=.*|HEART_WORKERS_ENABLED=true|" .env
+    fi
+    info "✓ HEART_WORKERS_ENABLED=true（本地 dev 完整 worker 模式）"
+
     echo ""
-    warn "⚠️  .env 已创建，请填写以下 API Key（nano .env）："
+    warn "⚠️  .env 已创建，请填写以下 API Key（nano .env 或记事本）："
     warn "    DEEPSEEK_API_KEY=sk-..."
     warn "    MINIMAX_API_KEY=sk-api-..."
     warn "    MINIMAX_GROUP_ID=206538..."
@@ -233,7 +242,7 @@ setup_db() {
     log "运行数据库迁移（两个 head）..."
     cd "$BACKEND_DIR"
     .venv/bin/python -m alembic upgrade 022_identity_narrative_backfill
-    .venv/bin/python -m alembic upgrade 032_female_warm_voice_id_tianmei
+    .venv/bin/python -m alembic upgrade 033_chat_messages_is_proactive
 
     echo ""
     .venv/bin/python -m alembic current
@@ -261,7 +270,11 @@ main() {
     echo ""
     echo "  下一步启动开发服务器："
     echo ""
-    echo "    bash scripts/dev.sh"
+    echo "    bash scripts/dev.sh              # 启动 API + 前端（workers 由 .env 决定）"
+    echo ""
+    info "Workers 说明（memory_promoter / inner_loop / encoder）："
+    echo "    .env 已设置 HEART_WORKERS_ENABLED=true"
+    echo "    所有 workers 会随 uvicorn 一起启动，无需额外操作"
     echo ""
 }
 
