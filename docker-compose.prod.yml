@@ -5,9 +5,9 @@
 # 1. Create .env.prod with production secrets (see .env.prod.example)
 # 2. Run: cd web && npm run build (generates web/dist)
 # 3. Run: docker compose -f docker-compose.prod.yml up -d
-# 4. Run DB migrations (two heads — run separately):
+# 4. Run DB migrations (two Alembic heads — run separately):
 #    docker compose -f docker-compose.prod.yml exec api alembic upgrade 022_identity_narrative_backfill
-#    docker compose -f docker-compose.prod.yml exec api alembic upgrade 031_preset_voice_sample_endpoint
+#    docker compose -f docker-compose.prod.yml exec api alembic upgrade 033_chat_messages_is_proactive
 
 services:
   # PostgreSQL 15+ with pgvector extension
