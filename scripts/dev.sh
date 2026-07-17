@@ -125,7 +125,7 @@ start_with_tmux() {
 
     log "创建 tmux 会话 '$SESSION'..."
 
-    # Window 1: api (FastAPI uvicorn)
+    # Window 1: api (FastAPI uvicorn) — .env 里的 HEART_WORKERS_ENABLED 会被 pydantic-settings 读取
     tmux new-session -d -s "$SESSION" -n "api" -x 220 -y 50
     tmux send-keys -t "$SESSION:api" \
         "cd '$BACKEND_DIR' && source .venv/bin/activate && uvicorn heart.api.main:app --reload --host 0.0.0.0 --port 8000" \
@@ -234,6 +234,18 @@ start_background() {
 # ──────────────────────────────────────────────────────────────────────────────
 echo ""
 log "Heart 开发环境启动"
+
+# 读取 .env 里的 HEART_WORKERS_ENABLED，提示用户是否 workers 会随 API 启动
+WORKERS_STATUS="false"
+if [[ -f "$REPO_ROOT/.env" ]]; then
+    WORKERS_STATUS=$(grep -m1 "^HEART_WORKERS_ENABLED=" "$REPO_ROOT/.env" 2>/dev/null | cut -d= -f2 | tr -d '[:space:]' || echo "false")
+fi
+if [[ "$WORKERS_STATUS" == "true" ]]; then
+    info "Workers: ✅ 启用（memory_promoter / inner_loop / encoder 随 API 启动）"
+else
+    info "Workers: ⚪ 禁用（HEART_WORKERS_ENABLED=false）"
+    info "         测试完整功能时可在 .env 改为 true 后重启"
+fi
 
 if command -v tmux &>/dev/null; then
     if [[ -n "${TMUX:-}" ]]; then
