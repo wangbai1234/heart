@@ -249,7 +249,7 @@ start_app_layer() {
 run_migrations() {
     log "运行数据库迁移（两个 Alembic head）..."
     DC exec -T api python -m alembic upgrade 022_identity_narrative_backfill
-    DC exec -T api python -m alembic upgrade 032_female_warm_voice_id_tianmei
+    DC exec -T api python -m alembic upgrade 033_chat_messages_is_proactive
 
     echo ""
     info "当前迁移状态："
