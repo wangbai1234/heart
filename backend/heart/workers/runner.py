@@ -87,6 +87,31 @@ async def start_workers() -> None:  # noqa: C901 — pre-existing complexity, tr
     except Exception as e:
         logger.error("memory_consolidator_worker_start_failed", error=str(e))
 
+    # Start memory promoter worker (L3 → L4 identity fact promotion)
+    try:
+        import redis.asyncio as aioredis
+
+        from heart.api.wiring import _get_session_factory
+        from heart.workers.memory_promoter_worker import MemoryPromoterWorker
+
+        factory = _get_session_factory()
+        redis_client = aioredis.from_url(os.getenv("REDIS_URL", "redis://localhost:6379/0"))
+        promoter = MemoryPromoterWorker(
+            db_session_factory=factory,
+            redis_client=redis_client,
+        )
+        stop_event = asyncio.Event()
+        _worker_stop_events.append(stop_event)
+
+        task = asyncio.create_task(
+            _run_until_stopped(promoter.start, stop_event),
+            name="memory_promoter_worker",
+        )
+        _worker_tasks.append(task)
+        logger.info("memory_promoter_worker_started")
+    except Exception as e:
+        logger.error("memory_promoter_worker_start_failed", error=str(e))
+
     # Start inner loop worker (proactive messages)
     if os.getenv("HEART_INNER_LOOP_ENABLED", "false").lower() == "true":
         try:
