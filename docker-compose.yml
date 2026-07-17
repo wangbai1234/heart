@@ -62,8 +62,9 @@ services:
 
   # Encoder Worker — L2/L3 vector encoding + background workers
   # Runs the same FastAPI app with HEART_WORKERS_ENABLED=true so that background
-  # tasks (memory_encoder, memory_extractor, memory_promoter, account_purge,
-  # credit_reconciliation) run in a dedicated process separate from the API.
+  # tasks (memory_encoder, memory_extractor, memory_consolidator, memory_promoter,
+  # account_purge, credit_reconciliation, otp_cleanup) run in a dedicated process
+  # separate from the API.
   # In dev you can skip this and instead start the backend with HEART_WORKERS_ENABLED=true.
   encoder-worker:
     build:
