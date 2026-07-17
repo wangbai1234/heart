@@ -44,6 +44,27 @@ _CROSS_CHARACTER_COOLDOWN_MINUTES = 30
 # InnerStateService.
 _CONTENT_DEDUP_DAYS = 3
 
+# ── Proactive v2 constants ────────────────────────────────────────────────────
+# Probability table: P(trigger | hours_inactive).
+_V2_PROB_TABLE = [
+    (1.0, 0.0),  # < 1h → 0%
+    (5.0, 0.05),  # 1–5h → 5%
+    (10.0, 0.10),  # 5–10h → 10%
+    (24.0, 0.40),  # 10–24h → 40%
+    (float("inf"), 0.80),  # ≥24h → 80%
+]
+
+
+def _v2_trigger_probability(hours_since: float) -> float:
+    """Return the v2 trigger probability for a given idle duration."""
+    lower = 0.0
+    for upper, prob in _V2_PROB_TABLE:
+        if lower <= hours_since < upper:
+            return prob
+        lower = upper
+    return 0.80
+
+
 # Bounded in-memory mirror of recently generated messages. Retained for one
 # release as a fallback/diagnostic; the source of truth is the
 # proactive_messages table. TODO(sunset 2026-09): remove once the DB-backed
@@ -163,7 +184,7 @@ class InnerLoopWorker:
         logger.info("inner_loop_worker_stopping")
         self._should_stop = True
 
-    async def _tick_all_active_users(self):
+    async def _tick_all_active_users(self):  # noqa: C901 — pre-existing complexity + v2 branch
         """Tick all active user×character pairs with a single DB session."""
         try:
             async with self.db_session_factory() as session:
@@ -210,6 +231,37 @@ class InnerLoopWorker:
                 if last_user_msg_at and hasattr(last_user_msg_at, "replace"):
                     last_user_msg_at = last_user_msg_at.replace(tzinfo=timezone.utc)
 
+                # ── Proactive v2 path ─────────────────────────────────────────────
+                # When enabled, use the new time-based probability table and route
+                # through the full ComposerService (instead of the standalone thin
+                # LLM call). Quota is per-user, not per-character.
+                from heart.core.config import settings as _settings
+
+                if _settings.proactive_v2_enabled:
+                    hours_since_user_reply: float = (
+                        float("inf")
+                        if last_user_msg_at is None
+                        else (datetime.now(timezone.utc) - last_user_msg_at).total_seconds() / 3600
+                    )
+                    prob = _v2_trigger_probability(hours_since_user_reply)
+                    if prob > 0 and random.random() < prob:
+                        try:
+                            await self._generate_v2_proactive_message(
+                                user_id=user_id,
+                                character_id=character_id,
+                                hours_since=hours_since_user_reply,
+                                user_timezone=user_timezone,
+                            )
+                        except Exception as e:
+                            logger.error(
+                                "proactive_v2_tick_failed",
+                                user_id=str(user_id),
+                                character_id=character_id,
+                                error=str(e),
+                            )
+                    continue  # skip old twin-trigger path
+
+                # ── Old v1 path (PROACTIVE_V2_ENABLED=false) ─────────────────────
                 # Check for anniversary
                 try:
                     async with self.db_session_factory() as anniv_session:
@@ -540,3 +592,144 @@ class InnerLoopWorker:
         )
 
         return msg
+
+    async def _generate_v2_proactive_message(
+        self,
+        user_id: UUID,
+        character_id: str,
+        hours_since: float,
+        user_timezone: str,
+    ) -> None:
+        """Proactive v2: generate via composer chain + store in chat_messages.
+
+        Uses the full ComposerService (soul YAML, SS03 emotion, SS04 relationship,
+        recent chat history, L3/L4 memory) instead of the thin standalone LLM call.
+        Stores in chat_messages with is_proactive=True; also inserts into
+        proactive_messages for audit/quota tracking.
+        """
+        from uuid import uuid4
+
+        from heart.api.wiring import _get_session_factory, build_composer_service
+        from heart.core.config import settings
+        from heart.ss05_composer.service import CompositionContext
+        from heart.ss06_inner_state.models import ProactiveMessage as _ProactiveModel
+
+        factory = _get_session_factory()
+        async with factory() as session:
+            # Per-user daily quota check (v2: across ALL characters)
+            sent_today = await proactive_repo.count_today_per_user(session, user_id)
+            if sent_today >= settings.proactive_v2_daily_quota:
+                logger.debug(
+                    "proactive_v2_quota_exceeded",
+                    user_id=str(user_id),
+                    sent_today=sent_today,
+                )
+                return
+
+            # Per-user cooldown (4h across all characters)
+            if await proactive_repo.any_recent_across_characters(
+                session, user_id, settings.proactive_v2_cooldown_minutes
+            ):
+                logger.debug(
+                    "proactive_v2_cooldown",
+                    user_id=str(user_id),
+                    cooldown_minutes=settings.proactive_v2_cooldown_minutes,
+                )
+                return
+
+            # Build proactive directive injected into system prompt
+            ltc = _build_local_time_context(datetime.now(timezone.utc), user_timezone, hours_since)
+            proactive_hint = (
+                f"当前用户已经 {hours_since:.0f} 小时没有回复消息"
+                f"（本地时间：{ltc['time_of_day']}，{ltc['weekday']}）。\n"
+                "请结合：\n"
+                "1. 最近聊天内容；\n"
+                "2. 用户兴趣和记忆；\n"
+                "3. 当前角色人格；\n"
+                "4. 你们之间的关系状态；\n"
+                "主动生成一条自然消息。"
+                "不要说「早安」「晚安」「在吗」这类客套话，"
+                "也不要报菜名式罗列你知道的信息。"
+                "1-2句话，像真的主动发消息，只输出消息本身。"
+            )
+
+            composer = await build_composer_service(db_session=session)
+            if composer is None:
+                logger.warning("proactive_v2_composer_unavailable", user_id=str(user_id))
+                return
+
+            turn_id = uuid4()
+            ctx = CompositionContext(
+                user_id=user_id,
+                character_id=character_id,
+                turn_id=turn_id,
+                user_message="",
+                proactive_hint=proactive_hint,
+            )
+
+            try:
+                result = await composer.compose(
+                    ctx=ctx,
+                    user_message="",
+                )
+            except Exception as e:
+                logger.error(
+                    "proactive_v2_compose_failed",
+                    user_id=str(user_id),
+                    character_id=character_id,
+                    error=str(e),
+                )
+                return
+
+            content = result.response if result else None
+            if not content:
+                return
+
+            now = datetime.now(timezone.utc)
+            msg_id = uuid4()
+
+            # Store in chat_messages with is_proactive=True
+            try:
+                from sqlalchemy import text as sa_text
+
+                await session.execute(
+                    sa_text(
+                        "INSERT INTO chat_messages "
+                        "(id, user_id, character_id, role, content, is_proactive, created_at) "
+                        "VALUES (:id, :user_id, :character_id, 'assistant', :content, true, :now)"
+                    ),
+                    {
+                        "id": str(msg_id),
+                        "user_id": str(user_id),
+                        "character_id": character_id,
+                        "content": content,
+                        "now": now,
+                    },
+                )
+            except Exception as e:
+                logger.error(
+                    "proactive_v2_chat_insert_failed",
+                    user_id=str(user_id),
+                    error=str(e),
+                )
+                raise  # don't silently swallow
+
+            # Audit record in proactive_messages
+            audit_msg = _ProactiveModel(
+                user_id=user_id,
+                character_id=character_id,
+                content=content,
+                trigger_type="proactive_v2_idle",
+                created_at=now,
+            )
+            await proactive_repo.insert_message_audit(session, audit_msg)
+
+            await session.commit()
+
+            logger.info(
+                "proactive_v2_sent",
+                user_id=str(user_id),
+                character_id=character_id,
+                hours_since=round(hours_since, 1),
+                content_preview=content[:40],
+            )
