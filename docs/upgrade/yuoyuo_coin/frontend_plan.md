@@ -17,6 +17,7 @@
 - 新页面放 `web/src/pages/`，路由在 `web/src/App.tsx` 注册并套 `AuthGuard`；跨会话持久化用 zustand persist。
 - **文案产品名恒 `yuoyuo`**；货币显示恒「yuoyuo币」（本次由「积分」改名）。
 - 所有金额从后端 `getPricing()` 拉取，**禁前端硬编码档位/价格**（后端 ÷100 已是显示币值）。
+- **接口以 `api_contract.md` 为准**：REST 响应字段、WS 事件（`model`/`served_model`/`degraded_to`/`model_forbidden`）、枚举（tier/model/provider）。mock 阶段按契约造假数据，后端上线后只换数据源、不改组件契约。
 
 ---
 

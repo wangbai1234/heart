@@ -13,6 +13,7 @@
 | 文件 | 内容 | 执行方 |
 |------|------|--------|
 | `00_INDEX.md`（本文） | 货币模型 · 等级矩阵 · 定价 · 迁移清单 · 时序 · 构建顺序 · 风险 · 验收 | 先读 |
+| `api_contract.md` | **前后端接口契约（单一真理）**：REST + WS 字段/枚举/定价 | 前后端共读 |
 | `backend_plan.md` | 后端 7 个 PR（B1–B7）+ 末尾 **Sonnet 执行 Prompt** | Sonnet |
 | `frontend_plan.md` | 前端 6 个模块（F1–F6）+ 末尾 **GPT 执行 Prompt** | GPT |
 

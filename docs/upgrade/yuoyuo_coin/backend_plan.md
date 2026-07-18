@@ -94,7 +94,8 @@
   - **服务端强制**：`membership.assert_tts_allowed(tier,"fish")` / `assert_clone_allowed(tier, provider)` — 免费用户请求 Fish → 403 结构化错误（前端已置灰，这是后端兜底）。
 - config.py 语音块（L186-213）新增 `fish_audio_api_key`、`fish_base_url`、`fish_model`；`voice_provider` 默认改 `mimo`（与 `.env.example` 对齐，消除现有 mismatch）。`.env.example` 补 `FISH_AUDIO_API_KEY`（占位符）。
 
-**产出**：`fish_provider.py`（新）、`wiring.py`/`service.py`/`routes_voice.py`/`config.py`（改）、迁移 036、`.env.example`（改）、单测（provider 选择、failover 链、Fish 免费用户拒、克隆按 provider 计费、预设 5/性别）。
+**产出**：`fish_provider.py`（新）、`wiring.py`/`service.py`/`routes_voice.py`/`config.py`（改）、迁移 036、`.env.example`/`.env.prod.example`（Fish/定价段已预置，按需校正）、单测（provider 选择、failover 链、Fish 免费用户拒、克隆按 provider 计费、预设 5/性别）。
+> ⚠️ 本 PR 让 MiMo 导演成为 primary 后，需把 `scripts/deploy-prod.sh` 里强制 `VOICE_PROVIDER=minimax` 的 sed（约 L139）改为 `mimo`，并放宽「MINIMAX_API_KEY 必填」校验（改为 mimo 模式下不强制），否则生产部署会因缺 MiniMax key 而中止。
 
 ---
 
@@ -135,6 +136,11 @@
 - revision 名 ≤32 字符；`IF NOT EXISTS` / `ON CONFLICT DO NOTHING` 幂等；DDL 与回填分离；写 `downgrade`；迁移内禁 `import heart.xxx`。
 - 改列后**完全重启后端**（非 --reload）。
 - 每次 push 前 `alembic current == heads`。
+- **每个新增迁移的 PR 必须同步更新** `scripts/setup.sh` 与 `scripts/deploy-prod.sh` 的迁移目标 revision（当前 pin 到 `033`）到该 PR 引入的最新 head，否则 dev/prod DB 会缺表（脚本内已留 ⚠️ 提示行）。
+
+## 接口契约
+
+所有新端点/字段/枚举以 `api_contract.md` 为准；每个后端 PR body 必须声明「符合 api_contract.md §X」。定价/权益/成本单位见契约 §0（对外币、内部 fen）。
 
 ---
 
