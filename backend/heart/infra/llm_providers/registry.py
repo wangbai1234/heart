@@ -12,8 +12,10 @@ import os
 from typing import Dict, Optional, Type
 
 from heart.infra.llm_providers.base import CircuitBreakerInterface, LLMProvider
+from heart.infra.llm_providers.claude import ClaudeProvider
 from heart.infra.llm_providers.deepseek import DeepSeekV4FlashProvider
 from heart.infra.llm_providers.deepseek_pro import DeepSeekV4ProProvider
+from heart.infra.llm_providers.grok import GrokProvider
 from heart.infra.llm_providers.pool import ConcurrencyGate, PooledLLMProvider
 
 
@@ -217,6 +219,38 @@ def initialize_registry(
         provider=PooledLLMProvider(flash_members, gate=gate, max_retries=max_retries),
         models=[cheap_model, "deepseek-chat"],
     )
+
+    # Grok (xAI) — optional; registered only when GROK_API_KEY is configured
+    grok_api_key = os.getenv("GROK_API_KEY")
+    grok_base_url = os.getenv("GROK_BASE_URL")
+    grok_model = os.getenv("GROK_MODEL", "grok-3-mini-fast")
+    if grok_api_key:
+        registry.register_provider_instance(
+            provider_name="grok",
+            provider=GrokProvider(
+                api_key=grok_api_key,
+                base_url=grok_base_url,
+                circuit_breaker=circuit_breaker,
+            ),
+            models=[grok_model, "grok"],
+        )
+
+    # Claude (Anthropic) — optional; registered only when CLAUDE_API_KEY is configured
+    claude_api_key = os.getenv("CLAUDE_API_KEY")
+    claude_base_url = os.getenv("CLAUDE_BASE_URL")
+    claude_model = os.getenv("CLAUDE_MODEL", "claude-sonnet-4-5")
+    claude_api_style = os.getenv("CLAUDE_API_STYLE", "anthropic")
+    if claude_api_key:
+        registry.register_provider_instance(
+            provider_name="claude",
+            provider=ClaudeProvider(
+                api_key=claude_api_key,
+                base_url=claude_base_url,
+                circuit_breaker=circuit_breaker,
+                api_style=claude_api_style,
+            ),
+            models=[claude_model, "claude"],
+        )
 
     _global_registry = registry
     return registry
