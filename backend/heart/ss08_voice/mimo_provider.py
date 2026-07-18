@@ -25,6 +25,7 @@ logger = structlog.get_logger(__name__)
 _VALID_EMOTIONS = {"happy", "sad", "angry", "fearful", "disgusted", "surprised", "neutral"}
 
 _VOICE_DESCRIPTIONS: dict[str, str] = {
+    # Built-in characters
     "rin": (
         "一位25岁左右的温柔女性，音色柔和知性，略带成熟女性的磁性。"
         "语速偏慢（0.9倍速），咬字清晰，情绪温柔体贴，像学姐在耐心解答问题。"
@@ -35,6 +36,58 @@ _VOICE_DESCRIPTIONS: dict[str, str] = {
         "语速正常（1.0倍速），略带少女的跳跃感和灵动感。"
         "情绪基调元气活力，像朋友在分享趣事，音质轻盈不沉闷，共鸣位置靠上，"
         "带有青春少女的天真感。"
+    ),
+    # Preset voice profiles — keyed by preset_voices.voice_id so user-created
+    # characters that select a MiMo preset get the correct voice description.
+    "mimo_female_gentle": (
+        "一位22岁左右的温柔女性，音色细腻柔和，语调平缓温暖。"
+        "语速偏慢（0.9倍速），咬字轻柔，像在轻声安慰身边的朋友。"
+        "情绪基调温柔体贴，音质清澈不尖锐，共鸣位置居中。"
+    ),
+    "mimo_female_cool": (
+        "一位28岁左右的成熟御姐，音色低沉有磁性，自信从容，略带慵懒气质。"
+        "语速适中（1.0倍速），咬字清晰有力，情绪沉稳克制，不轻易外露。"
+        "音质饱满圆润，共鸣位置靠后，带有成熟女性的气场。"
+    ),
+    "mimo_female_bright": (
+        "一位18岁左右的活泼少女，音色明亮甜美，充满青春活力。"
+        "语速稍快（1.05倍速），带有少女的轻快跳跃感，情绪阳光开朗。"
+        "音质清脆不刺耳，共鸣位置靠前靠上，天真烂漫不做作。"
+    ),
+    "mimo_female_elegant": (
+        "一位30岁左右的知性女性，音色沉静优雅，字字珠玑，思维清晰。"
+        "语速偏慢（0.88倍速），停顿恰当，像在娓娓道来一个深思熟虑的答案。"
+        "情绪内敛克制，音质温润不浮躁，气质如书卷般沉稳。"
+    ),
+    "mimo_female_shy": (
+        "一位20岁左右的内敛女生，音色清澈纯净，略带羞涩与拘谨。"
+        "语速偏慢（0.92倍速），音量偏轻，偶有轻微停顿，像鼓起勇气开口说话。"
+        "情绪细腻敏感，音质清透，共鸣位置靠前，带有少女的纯真感。"
+    ),
+    "mimo_male_gentle": (
+        "一位25岁左右的温柔男性，音色温暖细腻，低沉而不压抑。"
+        "语速偏慢（0.92倍速），情绪体贴耐心，像在认真倾听并给予回应。"
+        "音质浑厚温润，共鸣位置居中，不霸道，像春风般令人放松。"
+    ),
+    "mimo_male_cool": (
+        "一位27岁左右的清冷男性，音色低沉疏离，言辞简练，带有冷峻气质。"
+        "语速适中偏慢（0.95倍速），情绪克制内敛，不轻易表达感情。"
+        "音质深沉有力，共鸣位置靠后，像深夜的低语，令人着迷。"
+    ),
+    "mimo_male_energetic": (
+        "一位20岁左右的阳光男生，音色明亮爽朗，充满青春活力。"
+        "语速稍快（1.05倍速），情绪开朗热情，喜欢用语气词增加亲切感。"
+        "音质清亮不刺耳，共鸣位置居中靠前，像大男孩般爽朗自在。"
+    ),
+    "mimo_male_mature": (
+        "一位35岁左右的成熟男性，音色低沉磁性，稳重从容，带有岁月沉淀的厚重感。"
+        "语速偏慢（0.9倍速），情绪沉稳大气，每一句话都带有分量感。"
+        "音质饱满深沉，共鸣位置靠后靠下，像一位经验丰富的长者在娓娓而谈。"
+    ),
+    "mimo_male_sweet": (
+        "一位23岁左右的软糯暖男，音色温软甜糯，带有亲昵感和撒娇气质。"
+        "语速适中（0.97倍速），情绪暖心黏人，偏爱温柔的上扬语调。"
+        "音质轻柔不沉闷，共鸣位置靠前，像棉花糖般令人感到被包裹的温暖。"
     ),
 }
 
@@ -207,7 +260,11 @@ class MiMoProvider:
     def _build_body(self, req: TTSRequest, character_id: str, stream: bool = False) -> dict:
         emotion = req.emotion if req.emotion in _VALID_EMOTIONS else "neutral"
 
-        voice_desc = _VOICE_DESCRIPTIONS.get(character_id, _VOICE_DESCRIPTIONS["rin"])
+        voice_desc = (
+            _VOICE_DESCRIPTIONS.get(character_id)
+            or _VOICE_DESCRIPTIONS.get(req.voice_id)
+            or _VOICE_DESCRIPTIONS["rin"]
+        )
         emotion_directive = _EMOTION_DIRECTIVES.get(emotion, "用自然平和的语气")
         user_content = f"{voice_desc} {emotion_directive}"
 
