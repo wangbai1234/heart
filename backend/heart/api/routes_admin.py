@@ -121,9 +121,8 @@ async def admin_grant_credits(
 
 
 class FulfillOrderRequest(BaseModel):
-    out_trade_no: str
-    plan_id: str = ""
-    remark: str = ""
+    out_trade_no: str = Field(..., description="爱发电订单号")
+    user_id: str = Field(..., description="指定履约的用户 UUID")
 
 
 @router.post("/afdian/fulfill")
@@ -132,8 +131,37 @@ async def admin_fulfill_afdian_order(
     _: None = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
-    """Manually trigger fulfillment for a single afdian order."""
-    from heart.afdian.fulfillment import fulfill_order
+    """手动将 unmatched 爱发电订单履约给指定用户。
 
-    ok, msg = await fulfill_order(db, body.out_trade_no, body.plan_id, body.remark)
-    return {"ok": ok, "message": msg, "out_trade_no": body.out_trade_no}
+    适用于买家备注里没有有效绑定码、自动履约失败的订单。
+    管理员核实身份后调此端点，指定 user_id 直接发放会员/币包。
+    """
+    from heart.afdian.fulfillment import admin_fulfill_order
+
+    try:
+        uid = uuid.UUID(body.user_id)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="user_id 格式错误"
+        ) from None
+
+    # Verify user exists
+    row = await db.execute(
+        text("SELECT id FROM users WHERE id = :uid AND deleted_at IS NULL"),
+        {"uid": uid},
+    )
+    if row.fetchone() is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="用户不存在")
+
+    try:
+        detail = await admin_fulfill_order(db, body.out_trade_no, uid)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+
+    logger.info(
+        "admin_afdian_fulfill",
+        out_trade_no=body.out_trade_no,
+        user_id=str(uid),
+        detail=detail,
+    )
+    return {"ok": True, "fulfilled": detail, "out_trade_no": body.out_trade_no}
