@@ -273,11 +273,40 @@ def _build_minimax_members() -> list:
 
 
 def _build_primary_voice_provider() -> Any:
-    """Build the primary TTS provider: MiniMax first (clone voice_id), else MiMo.
+    """Build the primary TTS provider: MiMo first, then Fish, then MiniMax last.
 
-    When any MiniMax key is configured, providers are wrapped in a PooledTTSProvider that
-    caps outbound concurrency and rotates/fails-over across keys (transparent for 1 key).
+    Priority order (B5):
+    1. MiMo — if MIMO_API_KEY set
+    2. Fish Audio — if FISH_API_KEY set
+    3. MiniMax — legacy fallback (clone voice_id support)
     """
+    if settings.mimo_api_key:
+        try:
+            from heart.ss08_voice.mimo_provider import MiMoProvider
+
+            provider = MiMoProvider(
+                api_key=settings.mimo_api_key,
+                base_url=settings.mimo_base_url,
+            )
+            logger.info("wiring_mimo_primary_initialized")
+            return provider
+        except Exception as e:
+            logger.warning("wiring_mimo_provider_init_failed", error=str(e))
+
+    if settings.fish_api_key:
+        try:
+            from heart.ss08_voice.fish_provider import FishProvider
+
+            provider = FishProvider(
+                api_key=settings.fish_api_key,
+                base_url=settings.fish_base_url,
+                model=settings.fish_model,
+            )
+            logger.info("wiring_fish_primary_initialized")
+            return provider
+        except Exception as e:
+            logger.warning("wiring_fish_provider_init_failed", error=str(e))
+
     if settings.minimax_api_key or settings.minimax_api_keys:
         try:
             from heart.ss08_voice.pooled_provider import PooledTTSProvider
@@ -295,37 +324,42 @@ def _build_primary_voice_provider() -> Any:
         except Exception as e:
             logger.warning("wiring_minimax_provider_init_failed", error=str(e))
 
-    if settings.mimo_api_key:
-        try:
-            from heart.ss08_voice.mimo_provider import MiMoProvider
-
-            provider = MiMoProvider(
-                api_key=settings.mimo_api_key,
-                base_url=settings.mimo_base_url,
-            )
-            logger.info("wiring_mimo_provider_initialized")
-            return provider
-        except Exception as e:
-            logger.warning("wiring_mimo_provider_init_failed", error=str(e))
-
     return None
 
 
 def _build_fallback_voice_provider(primary_provider: Any) -> Any:
-    """Build the fallback TTS provider. MiMo backs a MiniMax primary; else MiniMax."""
+    """Build the fallback TTS provider.
+
+    - MiMo primary → Fish fallback (if configured), else MiniMax
+    - Fish primary → MiniMax fallback (if configured)
+    - MiniMax primary → MiMo fallback (if configured)
+    """
     if not settings.voice_fallback_enabled:
         return None
+    primary_name = primary_provider.name if primary_provider else ""
     try:
-        if primary_provider and primary_provider.name == "minimax" and settings.mimo_api_key:
-            from heart.ss08_voice.mimo_provider import MiMoProvider
+        if primary_name == "mimo":
+            if settings.fish_api_key:
+                from heart.ss08_voice.fish_provider import FishProvider
 
-            provider = MiMoProvider(
-                api_key=settings.mimo_api_key,
-                base_url=settings.mimo_base_url,
-            )
-            logger.info("wiring_mimo_fallback_initialized")
-            return provider
-        if settings.minimax_api_key:
+                provider = FishProvider(
+                    api_key=settings.fish_api_key,
+                    base_url=settings.fish_base_url,
+                    model=settings.fish_model,
+                )
+                logger.info("wiring_fish_fallback_initialized")
+                return provider
+            if settings.minimax_api_key:
+                from heart.ss08_voice.minimax_provider import MiniMaxProvider
+
+                provider = MiniMaxProvider(
+                    api_key=settings.minimax_api_key,
+                    group_id=settings.minimax_group_id or "",
+                    base_url=settings.minimax_base_url,
+                )
+                logger.info("wiring_minimax_fallback_initialized")
+                return provider
+        elif primary_name == "fish" and settings.minimax_api_key:
             from heart.ss08_voice.minimax_provider import MiniMaxProvider
 
             provider = MiniMaxProvider(
@@ -334,6 +368,15 @@ def _build_fallback_voice_provider(primary_provider: Any) -> Any:
                 base_url=settings.minimax_base_url,
             )
             logger.info("wiring_minimax_fallback_initialized")
+            return provider
+        elif primary_name == "minimax" and settings.mimo_api_key:
+            from heart.ss08_voice.mimo_provider import MiMoProvider
+
+            provider = MiMoProvider(
+                api_key=settings.mimo_api_key,
+                base_url=settings.mimo_base_url,
+            )
+            logger.info("wiring_mimo_fallback_initialized")
             return provider
     except Exception as e:
         logger.warning("wiring_voice_fallback_init_failed", error=str(e))
@@ -354,7 +397,8 @@ def get_voice_service():
     primary_provider = _build_primary_voice_provider()
     if not primary_provider:
         logger.warning(
-            "wiring_no_voice_provider", hint="Set MIMO_API_KEY or MINIMAX_API_KEY in .env"
+            "wiring_no_voice_provider",
+            hint="Set MIMO_API_KEY, FISH_API_KEY, or MINIMAX_API_KEY in .env",
         )
         return None
 

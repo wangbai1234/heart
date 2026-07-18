@@ -25,8 +25,21 @@ logger = structlog.get_logger()
 
 router = APIRouter(prefix="/api/voice", tags=["voice"])
 
-# Voice clone credit cost (800 display credits = 80 000 fen)
-_CLONE_COST_FEN = 80_000
+# Hardcoded fallback clone cost — superseded by config-driven action_cost_fen()
+# when billing/pricing.py is available.  Kept for safety during startup.
+_CLONE_COST_FEN_FALLBACK = 80_000
+
+
+def _clone_cost_fen(provider: str) -> int:
+    """Return clone cost in fen for the given TTS provider (config-driven)."""
+    try:
+        from heart.billing.pricing import action_cost_fen
+
+        cost = action_cost_fen(f"clone_{provider}")
+        return cost if cost > 0 else _CLONE_COST_FEN_FALLBACK
+    except Exception:
+        return _CLONE_COST_FEN_FALLBACK
+
 
 # Preset voice sample cache: preset_id -> MP3 bytes.  Filled on first request
 # so we hit MiniMax at most once per preset per process.  Preset voices are
@@ -321,14 +334,16 @@ async def set_preset_voice(
 async def clone_voice(
     request: Request,
     character_id: str,
+    provider: str = "mimo",
     file: UploadFile = File(...),
     current_user: TokenData = Depends(require_age_verified),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """Upload an audio sample to clone a voice for a UGC character.
 
-    Deducts 800 credits (80 000 fen) on success. The clone job runs
-    asynchronously; poll GET /api/voice/{character_id} for status.
+    Query param `provider` selects the clone backend (default: mimo).
+    Supported values: mimo, fish, minimax.
+    Clone cost is config-driven via AFDIAN_SKU_MAP pricing.
     """
     uid = uuid.UUID(current_user.user_id)
 
@@ -360,11 +375,12 @@ async def clone_voice(
     # (they spend credits chatting during the ~30-120 s clone window); in
     # that unlikely race we let the clone finish and log the deficit rather
     # than fail after work is already done.
+    clone_cost = _clone_cost_fen(provider)
     balance = await get_balance(db, uid)
-    if balance < _CLONE_COST_FEN:
+    if balance < clone_cost:
         raise HTTPException(
             status_code=402,
-            detail=f"积分不足，克隆需要 800 积分，当前余额 {balance / 100:.1f}",
+            detail=f"积分不足，克隆需要 {clone_cost // 100} 积分，当前余额 {balance / 100:.1f}",
         )
 
     # MiniMax must be configured — clone always ends up calling their API,
@@ -491,10 +507,17 @@ async def _run_clone_job(character_id: str, audio_source: str, user_id: str) -> 
                 # Idempotency key ties to the specific audio source (unique per
                 # upload) so retries within the same source don't double-charge.
                 try:
+                    # Infer clone provider from audio_source scheme for cost lookup
+                    _prov = "minimax"
+                    if audio_source.startswith("mimo"):
+                        _prov = "mimo"
+                    elif audio_source.startswith("fish"):
+                        _prov = "fish"
+                    _cost = _clone_cost_fen(_prov)
                     await deduct_credits(
                         db,
                         uuid.UUID(user_id),
-                        _CLONE_COST_FEN,
+                        _cost,
                         f"voice_clone_success:{audio_source}",
                         type_str="consume_voice_clone",
                     )

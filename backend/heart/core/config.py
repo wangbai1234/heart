@@ -235,6 +235,11 @@ class Settings(BaseSettings):
     # "anthropic" for native /v1/messages; "openai-compat" for proxy
     claude_api_style: str = "anthropic"
 
+    # Fish Audio TTS — optional; leave empty to disable
+    fish_api_key: str = ""
+    fish_base_url: str = "https://api.fish.audio"
+    fish_model: str = "speech-1.6"
+
     # MiMo TTS (voiceclone v2.5)
     mimo_api_key: str | None = None
     mimo_base_url: str = "https://api.xiaomimimo.com/v1"
