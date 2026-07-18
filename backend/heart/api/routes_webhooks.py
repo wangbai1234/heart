@@ -99,4 +99,16 @@ async def afdian_webhook(
         # Still return 200 to avoid Afdian retry
 
     logger.info("afdian_webhook_received", out_trade_no=out_trade_no)
+
+    # Auto-fulfill: match remark binding code → grant membership/coins
+    try:
+        from heart.afdian.fulfillment import fulfill_order
+
+        plan_id = data.get("plan_id", "")
+        remark = data.get("remark", "")
+        await fulfill_order(db, out_trade_no, plan_id, remark)
+    except Exception:
+        logger.exception("afdian_auto_fulfill_error", out_trade_no=out_trade_no)
+        # Return 200 anyway — Afdian will not retry on 200
+
     return {"ec": 200, "em": "success"}
