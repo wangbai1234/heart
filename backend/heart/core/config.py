@@ -198,6 +198,37 @@ class Settings(BaseSettings):
     minimax_language_boost: str | None = "Chinese"
     voice_profiles: str | None = None
 
+    # LLM Providers - Grok (xAI) — optional; leave empty to disable
+    grok_api_key: str = ""
+    grok_base_url: str = "https://api.x.ai"
+    grok_model: str = "grok-3-mini-fast"
+
+    # LLM Providers - Claude (Anthropic) — optional; leave empty to disable
+    claude_api_key: str = ""
+    claude_base_url: str = "https://api.anthropic.com"
+    claude_model: str = "claude-sonnet-4-5"
+    # "anthropic" for native /v1/messages; "openai-compat" for proxy
+    claude_api_style: str = "anthropic"
+
+    # Per-action pricing (display coins; ×100 = fen internally)
+    grok_cost_credits: int = 3
+    claude_cost_credits: int = 12
+    mimo_tts_cost_credits: int = 5
+    fish_tts_cost_credits: int = 8
+    clone_mimo_cost_credits: int = 50
+    clone_fish_cost_credits: int = 100
+
+    # Membership tiers config (JSON; see heart/membership/__init__.py)
+    membership_tiers_config: str = (
+        '{"free":{"models":["deepseek"],"tts":["mimo"],"clone":[],"monthly_grant":0},'
+        '"plus":{"models":["deepseek","grok"],"tts":["mimo","fish"],"clone":["mimo","fish"],"monthly_grant":400},'
+        '"immersive":{"models":["deepseek","grok","claude"],"tts":["mimo","fish"],"clone":["mimo","fish"],"monthly_grant":800}}'
+    )
+    membership_plus_price_monthly: int = 39
+    membership_immersive_price_monthly: int = 79
+    # Afdian SKU → (tier, months) JSON map; e.g. '{"sku_abc123":["plus",1]}'
+    afdian_sku_map: str = "{}"
+
     # MiMo TTS (voiceclone v2.5)
     mimo_api_key: str | None = None
     mimo_base_url: str = "https://api.xiaomimimo.com/v1"
