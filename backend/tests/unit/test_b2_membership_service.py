@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timedelta, timezone
-from unittest.mock import AsyncMock, MagicMock, call
+from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import pytest
 
@@ -28,7 +28,8 @@ class TestActivateOrExtend:
 
         user_id = uuid.uuid4()
         before = datetime.now(tz=timezone.utc)
-        expires = await activate_or_extend(db, user_id, "plus", 30)
+        with patch("heart.membership.service.grant_credits", new=AsyncMock(return_value=0)):
+            expires = await activate_or_extend(db, user_id, "plus", 30)
         after = datetime.now(tz=timezone.utc)
 
         assert expires >= before + timedelta(days=30)
@@ -43,11 +44,12 @@ class TestActivateOrExtend:
         existing_expires = datetime.now(tz=timezone.utc) + timedelta(days=15)
         select_result = MagicMock()
         select_result.scalar_one_or_none.return_value = existing_expires
-        insert_result = MagicMock()
-        db.execute = AsyncMock(side_effect=[select_result, insert_result])
+        update_result = MagicMock()
+        db.execute = AsyncMock(side_effect=[select_result, update_result])
 
         user_id = uuid.uuid4()
-        expires = await activate_or_extend(db, user_id, "plus", 30)
+        with patch("heart.membership.service.grant_credits", new=AsyncMock(return_value=0)):
+            expires = await activate_or_extend(db, user_id, "plus", 30)
 
         expected = existing_expires + timedelta(days=30)
         assert abs((expires - expected).total_seconds()) < 1
@@ -56,22 +58,7 @@ class TestActivateOrExtend:
     async def test_granted_by_is_passed_to_insert(self):
         from heart.membership.service import activate_or_extend
 
-        captured_params = {}
-
-        async def fake_execute(stmt, params=None):
-            if params and "granted_by" in params:
-                captured_params.update(params)
-            return MagicMock()
-
-        db = AsyncMock()
-        # SELECT returns None
-        select_result = MagicMock()
-        select_result.scalar_one_or_none.return_value = None
-        db.execute = AsyncMock(side_effect=[select_result, AsyncMock()])
-
-        # Patch the second call to capture params
         calls = []
-        original_execute = db.execute
 
         async def tracking_execute(stmt, params=None):
             calls.append(params)
@@ -79,9 +66,11 @@ class TestActivateOrExtend:
             r.scalar_one_or_none.return_value = None
             return r
 
+        db = AsyncMock()
         db.execute = tracking_execute
 
-        await activate_or_extend(db, uuid.uuid4(), "immersive", 30, granted_by="afdian:order123")
+        with patch("heart.membership.service.grant_credits", new=AsyncMock(return_value=0)):
+            await activate_or_extend(db, uuid.uuid4(), "immersive", 30, granted_by="afdian:order123")
 
         # Second call is the INSERT with granted_by
         insert_params = calls[1]
@@ -97,8 +86,41 @@ class TestActivateOrExtend:
         select_result.scalar_one_or_none.return_value = None
         db.execute = AsyncMock(side_effect=[select_result, MagicMock()])
 
-        expires = await activate_or_extend(db, uuid.uuid4(), "plus", 7)
+        with patch("heart.membership.service.grant_credits", new=AsyncMock(return_value=0)):
+            expires = await activate_or_extend(db, uuid.uuid4(), "plus", 7)
         assert expires.tzinfo is not None
+
+    @pytest.mark.asyncio
+    async def test_monthly_grant_called_for_plus(self):
+        from heart.membership.service import activate_or_extend
+
+        db = AsyncMock()
+        select_result = MagicMock()
+        select_result.scalar_one_or_none.return_value = None
+        db.execute = AsyncMock(side_effect=[select_result, MagicMock()])
+
+        with patch("heart.membership.service.grant_credits", new_callable=AsyncMock) as mock_grant:
+            mock_grant.return_value = 0
+            await activate_or_extend(db, uuid.uuid4(), "plus", 30, granted_by="afdian:order456")
+
+        mock_grant.assert_called_once()
+        call_kwargs = mock_grant.call_args.kwargs
+        assert call_kwargs.get("type_str") == "membership_grant"
+        assert call_kwargs.get("idempotency_key") == "membership_grant:afdian:order456"
+
+    @pytest.mark.asyncio
+    async def test_monthly_grant_not_called_for_free(self):
+        from heart.membership.service import activate_or_extend
+
+        db = AsyncMock()
+        select_result = MagicMock()
+        select_result.scalar_one_or_none.return_value = None
+        db.execute = AsyncMock(side_effect=[select_result, MagicMock()])
+
+        with patch("heart.membership.service.grant_credits", new_callable=AsyncMock) as mock_grant:
+            await activate_or_extend(db, uuid.uuid4(), "free", 30)
+
+        mock_grant.assert_not_called()
 
 
 # ---------------------------------------------------------------------------

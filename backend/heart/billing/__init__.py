@@ -53,7 +53,7 @@ async def grant(
     ref_id: Optional[str] = None,
     metadata: Optional[dict] = None,
 ) -> int:
-    """Grant credits (signup bonus, manual adjustment).
+    """Grant credits (signup bonus, membership grant, invite reward, etc.).
 
     Returns new balance. Idempotent — duplicate key returns existing balance.
     type_str must be one of the contract §0.1 enum values (grant/invite/membership_grant/…).
