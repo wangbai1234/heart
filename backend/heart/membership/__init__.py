@@ -80,7 +80,6 @@ async def get_effective_tier(db: AsyncSession, user_id: uuid.UUID) -> str:
             text("""
                 SELECT tier FROM user_memberships
                 WHERE user_id = :uid
-                  AND status = 'active'
                   AND expires_at > NOW()
                 ORDER BY expires_at DESC
                 LIMIT 1
