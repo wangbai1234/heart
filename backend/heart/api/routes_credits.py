@@ -114,8 +114,16 @@ async def redeem_code(
 
 @router.get("/pricing")
 async def pricing() -> dict:
-    """Return current pricing info."""
+    """Return current pricing info including model costs and membership tiers."""
+    from heart.billing.pricing import action_cost_fen, llm_cost_fen, tts_cost_fen
+    from heart.membership import get_entitlements
+
+    free_ent = get_entitlements("free")
+    plus_ent = get_entitlements("plus")
+    immersive_ent = get_entitlements("immersive")
+
     return {
+        # Legacy fields (kept for backwards compat)
         "signup_grant": settings.signup_grant_credits / 100,
         "per_text": settings.credits_cost_text_message / 100,
         "per_voice": settings.credits_cost_voice_message / 100,
@@ -125,5 +133,97 @@ async def pricing() -> dict:
             {"label": "常用", "price": 30, "credits": 1800},
             {"label": "超值", "price": 68, "credits": 4500},
             {"label": "豪华", "price": 128, "credits": 9000},
+        ],
+        # Model pricing (cost in display coins per LLM turn)
+        "models": [
+            {
+                "id": "deepseek",
+                "label": "DeepSeek",
+                "cost": llm_cost_fen("deepseek") // 100,
+                "tiers_allowed": ["free", "plus", "immersive"],
+            },
+            {
+                "id": "grok",
+                "label": "Grok",
+                "cost": settings.grok_cost_credits,
+                "tiers_allowed": ["plus", "immersive"],
+            },
+            {
+                "id": "claude",
+                "label": "Claude",
+                "cost": settings.claude_cost_credits,
+                "tiers_allowed": ["immersive"],
+            },
+        ],
+        # TTS pricing (cost in display coins per voice bubble)
+        "tts_providers": [
+            {
+                "id": "mimo",
+                "label": "MiMo",
+                "cost": settings.mimo_tts_cost_credits,
+                "tiers_allowed": ["free", "plus", "immersive"],
+            },
+            {
+                "id": "fish",
+                "label": "Fish Audio",
+                "cost": settings.fish_tts_cost_credits,
+                "tiers_allowed": ["plus", "immersive"],
+            },
+        ],
+        # One-shot actions (cost in display coins)
+        "actions": [
+            {
+                "id": "clone_mimo",
+                "label": "MiMo 声音克隆",
+                "cost": action_cost_fen("clone_mimo") // 100,
+            },
+            {
+                "id": "clone_fish",
+                "label": "Fish 声音克隆",
+                "cost": action_cost_fen("clone_fish") // 100,
+            },
+        ],
+        # Membership subscription tiers
+        "membership_tiers": [
+            {
+                "id": "free",
+                "label": "体验版",
+                "price_monthly": 0,
+                "models": free_ent.models,
+                "tts": free_ent.tts,
+                "clone": free_ent.clone,
+                "monthly_grant": free_ent.monthly_grant_fen // 100,
+            },
+            {
+                "id": "plus",
+                "label": "进阶版",
+                "price_monthly": settings.membership_plus_price_monthly,
+                "models": plus_ent.models,
+                "tts": plus_ent.tts,
+                "clone": plus_ent.clone,
+                "monthly_grant": plus_ent.monthly_grant_fen // 100,
+            },
+            {
+                "id": "immersive",
+                "label": "沉浸版",
+                "price_monthly": settings.membership_immersive_price_monthly,
+                "models": immersive_ent.models,
+                "tts": immersive_ent.tts,
+                "clone": immersive_ent.clone,
+                "monthly_grant": immersive_ent.monthly_grant_fen // 100,
+            },
+        ],
+        # Coin shop packages
+        "shop": [
+            {"sku": "coins_60", "label": "☕ 小份补给", "price": 6, "credits": 60, "bonus": 0},
+            {"sku": "coins_220", "label": "🌙 陪伴补给", "price": 18, "credits": 200, "bonus": 20},
+            {"sku": "coins_650", "label": "⭐ 深度补给", "price": 48, "credits": 480, "bonus": 170},
+            {
+                "sku": "coins_2000",
+                "label": "🌌 长期陪伴",
+                "price": 128,
+                "credits": 1280,
+                "bonus": 720,
+            },
         ],
     }

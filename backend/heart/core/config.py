@@ -175,6 +175,31 @@ class Settings(BaseSettings):
     afdian_webhook_token: str = ""
     afdian_sponsor_url: str = "https://afdian.com/a/yuoyuo"
 
+    # Per-action pricing (display coins; ×100 = fen internally)
+    grok_cost_credits: int = 3  # 300 fen per LLM turn
+    claude_cost_credits: int = 12  # 1200 fen per LLM turn
+    mimo_tts_cost_credits: int = 5  # 500 fen per TTS bubble
+    fish_tts_cost_credits: int = 8  # 800 fen per TTS bubble
+    clone_mimo_cost_credits: int = 50  # 5000 fen per clone
+    clone_fish_cost_credits: int = 100  # 10000 fen per clone
+
+    # Membership tier definitions (JSON string, overridable via MEMBERSHIP_TIERS_CONFIG env var).
+    # Each tier maps to: models (allowed LLM slugs), tts (allowed TTS providers),
+    # clone (allowed clone providers), monthly_grant (coins per 30-day cycle).
+    membership_tiers_config: str = (
+        '{"free":{"models":["deepseek"],"tts":["mimo"],"clone":[],"monthly_grant":0},'
+        '"plus":{"models":["deepseek","grok"],"tts":["mimo","fish"],"clone":["mimo","fish"],"monthly_grant":400},'
+        '"immersive":{"models":["deepseek","grok","claude"],"tts":["mimo","fish"],"clone":["mimo","fish"],"monthly_grant":800}}'
+    )
+
+    # Membership subscription prices (CNY/month, for pricing endpoint display only)
+    membership_plus_price_monthly: int = 39
+    membership_immersive_price_monthly: int = 79
+
+    # Afdian SKU → fulfillment map (JSON string, overridable via AFDIAN_SKU_MAP env var).
+    # Each entry: {"type":"membership","tier":"plus","days":30} or {"type":"coins","coins":220}
+    afdian_sku_map: str = "{}"
+
     # Push Notifications (V1)
     fcm_credentials_path: str = ""
     apns_credentials_path: str = ""
