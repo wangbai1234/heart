@@ -243,6 +243,10 @@ setup_db() {
     cd "$BACKEND_DIR"
     .venv/bin/python -m alembic upgrade 022_identity_narrative_backfill
     .venv/bin/python -m alembic upgrade 033_chat_messages_is_proactive
+    # ⚠️ 商业化 V1（docs/upgrade/yuoyuo_coin）新增迁移 034-037 落地后，
+    #    在此追加一行升级到最新 head，例如：
+    #    .venv/bin/python -m alembic upgrade 037_invites
+    #    否则 dev DB 会缺少会员/邀请/音色 provider 等表（撒谎式绿灯）。
 
     echo ""
     .venv/bin/python -m alembic current

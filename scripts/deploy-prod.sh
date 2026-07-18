@@ -250,6 +250,10 @@ run_migrations() {
     log "运行数据库迁移（两个 Alembic head）..."
     DC exec -T api python -m alembic upgrade 022_identity_narrative_backfill
     DC exec -T api python -m alembic upgrade 033_chat_messages_is_proactive
+    # ⚠️ 商业化 V1（docs/upgrade/yuoyuo_coin）新增迁移 034-037 落地后，
+    #    在此追加一行升级到最新 head，例如：
+    #    DC exec -T api python -m alembic upgrade 037_invites
+    #    否则生产 DB 会缺少会员/邀请/音色 provider 等表。
 
     echo ""
     info "当前迁移状态："
