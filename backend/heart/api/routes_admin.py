@@ -118,3 +118,22 @@ async def admin_grant_credits(
         credited=body.amount,
         new_balance=new_balance_fen / 100,
     )
+
+
+class FulfillOrderRequest(BaseModel):
+    out_trade_no: str
+    plan_id: str = ""
+    remark: str = ""
+
+
+@router.post("/afdian/fulfill")
+async def admin_fulfill_afdian_order(
+    body: FulfillOrderRequest,
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Manually trigger fulfillment for a single afdian order."""
+    from heart.afdian.fulfillment import fulfill_order
+
+    ok, msg = await fulfill_order(db, body.out_trade_no, body.plan_id, body.remark)
+    return {"ok": ok, "message": msg, "out_trade_no": body.out_trade_no}
