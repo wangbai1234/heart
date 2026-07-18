@@ -395,3 +395,23 @@ def test_config_membership_pricing_defaults():
     assert s.fish_tts_cost_credits == 8
     assert s.clone_mimo_cost_credits == 50
     assert s.clone_fish_cost_credits == 100
+
+
+def test_initialize_registry_registers_bare_deepseek_slug(monkeypatch):
+    """Regression (showstopper B): the whole stack defaults to the bare slug
+    model="deepseek" (ss07_orchestration/models.py) and it is the last link in the
+    failover chain [claude, grok, deepseek]. initialize_registry must register that
+    exact slug, otherwise free-tier turns raise KeyError (chat dead) or silently
+    route to a paid model. Uses a dummy key — no network at construction time.
+    """
+    from heart.infra.llm_providers import registry as registry_mod
+
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-test-dummy")
+    monkeypatch.delenv("DEEPSEEK_API_KEYS", raising=False)
+    monkeypatch.delenv("GROK_API_KEY", raising=False)
+    monkeypatch.delenv("CLAUDE_API_KEY", raising=False)
+
+    reg = registry_mod.initialize_registry(circuit_breaker=None)
+
+    # Must resolve without raising KeyError.
+    assert reg.get_provider_for_model("deepseek") is not None

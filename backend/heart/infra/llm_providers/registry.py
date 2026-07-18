@@ -217,7 +217,11 @@ def initialize_registry(
     registry.register_provider_instance(
         provider_name="deepseek-v4-flash",
         provider=PooledLLMProvider(flash_members, gate=gate, max_retries=max_retries),
-        models=[cheap_model, "deepseek-chat"],
+        # "deepseek" is the bare default slug used across the stack
+        # (ss07_orchestration/models.py: model="deepseek") and the last link in the
+        # failover chain [claude, grok, deepseek]; register it so free-tier turns route
+        # to the cheap DeepSeek provider instead of raising KeyError.
+        models=[cheap_model, "deepseek-chat", "deepseek"],
     )
 
     # Grok (xAI) — optional; registered only when GROK_API_KEY is configured
