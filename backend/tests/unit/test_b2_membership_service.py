@@ -106,54 +106,74 @@ class TestActivateOrExtend:
 # ---------------------------------------------------------------------------
 
 
+def _make_db_for_membership(expires_at=None, binding_code="TESTCODE1"):
+    """Build an AsyncMock db that handles GET /membership queries."""
+    db = AsyncMock()
+
+    expires_mock = MagicMock()
+    expires_mock.scalar_one_or_none.return_value = expires_at
+
+    binding_mock = MagicMock()
+    binding_mock.scalar_one_or_none.return_value = binding_code
+
+    db.execute = AsyncMock(side_effect=[expires_mock, binding_mock])
+    db.commit = AsyncMock()
+    return db
+
+
 class TestGetMembershipEndpoint:
     @pytest.mark.asyncio
     async def test_returns_tier_and_entitlements(self):
+        from unittest.mock import patch
+
         from heart.api.routes_membership import get_membership
 
         current_user = MagicMock()
         current_user.user_id = str(uuid.uuid4())
+        db = _make_db_for_membership()
 
-        db = AsyncMock()
-
-        with (
-            __import__("unittest.mock", fromlist=["patch"]).patch(
-                "heart.api.routes_membership.get_effective_tier", new=AsyncMock(return_value="plus")
-            ),
+        with patch(
+            "heart.api.routes_membership.get_effective_tier", new=AsyncMock(return_value="plus")
         ):
             result = await get_membership(current_user=current_user, db=db)
 
         assert result["tier"] == "plus"
-        assert "grok" in result["models"]
-        assert "claude" not in result["models"]
-        assert "fish" in result["tts"]
-        assert result["monthly_grant_coins"] == 400
+        assert "grok" in result["entitlements"]["models"]
+        assert "claude" not in result["entitlements"]["models"]
+        assert "fish" in result["entitlements"]["tts"]
+        assert result["monthly_grant"] == 400
+        assert "binding_code" in result
+        assert "expires_at" in result
 
     @pytest.mark.asyncio
     async def test_free_tier_has_no_fish(self):
-        from heart.api.routes_membership import get_membership
         from unittest.mock import patch
+
+        from heart.api.routes_membership import get_membership
 
         current_user = MagicMock()
         current_user.user_id = str(uuid.uuid4())
-        db = AsyncMock()
+        db = _make_db_for_membership()
 
-        with patch("heart.api.routes_membership.get_effective_tier", new=AsyncMock(return_value="free")):
+        with patch(
+            "heart.api.routes_membership.get_effective_tier", new=AsyncMock(return_value="free")
+        ):
             result = await get_membership(current_user=current_user, db=db)
 
         assert result["tier"] == "free"
-        assert "grok" not in result["models"]
-        assert "fish" not in result["tts"]
-        assert result["monthly_grant_coins"] == 0
+        assert "grok" not in result["entitlements"]["models"]
+        assert "fish" not in result["entitlements"]["tts"]
+        assert result["monthly_grant"] == 0
 
     @pytest.mark.asyncio
     async def test_immersive_tier_has_claude(self):
-        from heart.api.routes_membership import get_membership
         from unittest.mock import patch
+
+        from heart.api.routes_membership import get_membership
 
         current_user = MagicMock()
         current_user.user_id = str(uuid.uuid4())
-        db = AsyncMock()
+        db = _make_db_for_membership()
 
         with patch(
             "heart.api.routes_membership.get_effective_tier",
@@ -161,5 +181,22 @@ class TestGetMembershipEndpoint:
         ):
             result = await get_membership(current_user=current_user, db=db)
 
-        assert "claude" in result["models"]
-        assert result["monthly_grant_coins"] == 800
+        assert "claude" in result["entitlements"]["models"]
+        assert result["monthly_grant"] == 800
+
+    @pytest.mark.asyncio
+    async def test_free_user_has_null_expires_at(self):
+        from unittest.mock import patch
+
+        from heart.api.routes_membership import get_membership
+
+        current_user = MagicMock()
+        current_user.user_id = str(uuid.uuid4())
+        db = _make_db_for_membership(expires_at=None)
+
+        with patch(
+            "heart.api.routes_membership.get_effective_tier", new=AsyncMock(return_value="free")
+        ):
+            result = await get_membership(current_user=current_user, db=db)
+
+        assert result["expires_at"] is None

@@ -48,6 +48,7 @@ async def grant(
     user_id: uuid.UUID,
     amount: int,
     idempotency_key: str,
+    type_str: str = "grant",
     ref_type: Optional[str] = None,
     ref_id: Optional[str] = None,
     metadata: Optional[dict] = None,
@@ -55,6 +56,7 @@ async def grant(
     """Grant credits (signup bonus, manual adjustment).
 
     Returns new balance. Idempotent — duplicate key returns existing balance.
+    type_str must be one of the contract §0.1 enum values (grant/invite/membership_grant/…).
     """
     import json
 
@@ -68,7 +70,7 @@ async def grant(
                     RETURNING credits_balance AS balance_after
                 )
                 INSERT INTO credit_transactions (id, user_id, delta, balance_after, type, ref_type, ref_id, idempotency_key, metadata)
-                SELECT :tx_id, :uid, :delta, updated.balance_after, 'grant', :ref_type, :ref_id, :idem_key, :meta
+                SELECT :tx_id, :uid, :delta, updated.balance_after, :type_str, :ref_type, :ref_id, :idem_key, :meta
                 FROM updated
                 ON CONFLICT (idempotency_key) DO NOTHING
                 RETURNING balance_after
@@ -77,6 +79,7 @@ async def grant(
                 "tx_id": tx_id,
                 "uid": user_id,
                 "delta": amount,
+                "type_str": type_str,
                 "ref_type": ref_type,
                 "ref_id": ref_id,
                 "idem_key": idempotency_key,
