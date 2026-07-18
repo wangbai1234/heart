@@ -17,6 +17,7 @@ from heart.api.wiring import get_db
 from heart.billing import InsufficientCreditsError, deduct_credits, get_balance
 from heart.core.auth import TokenData, get_current_user
 from heart.core.config import settings
+from heart.membership import CloneForbiddenError, assert_clone_allowed, get_effective_tier
 
 from .deps import require_age_verified
 from .wiring import get_voice_service
@@ -28,6 +29,7 @@ router = APIRouter(prefix="/api/voice", tags=["voice"])
 # Hardcoded fallback clone cost — superseded by config-driven action_cost_fen()
 # when billing/pricing.py is available.  Kept for safety during startup.
 _CLONE_COST_FEN_FALLBACK = 80_000
+_VALID_CLONE_PROVIDERS = frozenset({"mimo", "fish", "minimax"})
 
 
 def _clone_cost_fen(provider: str) -> int:
@@ -39,6 +41,22 @@ def _clone_cost_fen(provider: str) -> int:
         return cost if cost > 0 else _CLONE_COST_FEN_FALLBACK
     except Exception:
         return _CLONE_COST_FEN_FALLBACK
+
+
+def _check_clone_provider_available(provider: str) -> None:
+    """Raise HTTPException 503 if the requested clone provider is not configured."""
+    if provider == "fish":
+        if not settings.fish_api_key:
+            raise HTTPException(
+                status_code=503,
+                detail="Fish 音色克隆服务未配置，请联系管理员或改用预设音色。",
+            )
+    else:
+        if not settings.minimax_api_key:
+            raise HTTPException(
+                status_code=503,
+                detail="音色克隆服务未配置，请联系管理员或改用预设音色。",
+            )
 
 
 # Preset voice sample cache: preset_id -> MP3 bytes.  Filled on first request
@@ -347,6 +365,10 @@ async def clone_voice(
     """
     uid = uuid.UUID(current_user.user_id)
 
+    # Provider validation
+    if provider not in _VALID_CLONE_PROVIDERS:
+        raise HTTPException(status_code=400, detail=f"不支持的克隆 provider: {provider}")
+
     # Ownership check — only UGC characters (owner_user_id = uid) allowed
     char_result = await db.execute(
         text("SELECT owner_user_id FROM characters WHERE id = :cid"),
@@ -357,6 +379,16 @@ async def clone_voice(
         raise HTTPException(status_code=404, detail="角色不存在")
     if char_row[0] is None or str(char_row[0]) != str(uid):
         raise HTTPException(status_code=403, detail="只能为自己创建的角色克隆音色")
+
+    # Tier gate — Fish/MiMo clone requires paid membership
+    tier = await get_effective_tier(db, uid)
+    try:
+        assert_clone_allowed(tier, provider)
+    except CloneForbiddenError as e:
+        raise HTTPException(
+            status_code=403,
+            detail={"code": "tier_forbidden", "provider": e.provider, "tier": e.tier},
+        ) from e
 
     # MIME check
     mime = file.content_type or ""
@@ -383,16 +415,8 @@ async def clone_voice(
             detail=f"积分不足，克隆需要 {clone_cost // 100} 积分，当前余额 {balance / 100:.1f}",
         )
 
-    # MiniMax must be configured — clone always ends up calling their API,
-    # regardless of how we hand it the audio. We deliberately DON'T require
-    # ``voice_provider == "minimax"`` here: even when the deployment picks
-    # MiMo as its primary TTS, MiniMax remains the only clone backend, and
-    # the resulting voice_id will be reached via fallback at chat time.
-    if not settings.minimax_api_key:
-        raise HTTPException(
-            status_code=503,
-            detail="音色克隆服务未配置，请联系管理员或改用预设音色。",
-        )
+    # Provider availability check
+    _check_clone_provider_available(provider)
 
     audio_source = await _stage_audio_for_clone(
         data=data,
@@ -429,8 +453,11 @@ async def clone_voice(
     # Fire-and-forget background clone task
     import asyncio
 
+    _provider_captured = provider
     asyncio.get_event_loop().call_soon_threadsafe(
-        lambda: asyncio.ensure_future(_run_clone_job(character_id, audio_source, str(uid)))
+        lambda: asyncio.ensure_future(
+            _run_clone_job(character_id, audio_source, str(uid), _provider_captured)
+        )
     )
 
     return {
@@ -481,7 +508,9 @@ async def _stage_audio_for_clone(
     return f"minimax_file://{file_id}"
 
 
-async def _run_clone_job(character_id: str, audio_source: str, user_id: str) -> None:
+async def _run_clone_job(
+    character_id: str, audio_source: str, user_id: str, provider: str = "minimax"
+) -> None:
     """Background task: call TTS provider voice clone API and update DB.
 
     ``audio_source`` is the tagged handle stored in ``character_voices.clone_audio_url``.
@@ -500,20 +529,16 @@ async def _run_clone_job(character_id: str, audio_source: str, user_id: str) -> 
 
     async with session_factory() as db:
         try:
-            clone_voice_id, err_msg = await _call_tts_clone_api(audio_source, character_id)
+            clone_voice_id, err_msg = await _call_tts_clone_api(
+                audio_source, character_id, provider
+            )
             if clone_voice_id:
                 # Charge credits only after the provider returns a voice_id —
                 # a failed clone should not cost the user anything.
                 # Idempotency key ties to the specific audio source (unique per
                 # upload) so retries within the same source don't double-charge.
                 try:
-                    # Infer clone provider from audio_source scheme for cost lookup
-                    _prov = "minimax"
-                    if audio_source.startswith("mimo"):
-                        _prov = "mimo"
-                    elif audio_source.startswith("fish"):
-                        _prov = "fish"
-                    _cost = _clone_cost_fen(_prov)
+                    _cost = _clone_cost_fen(provider)
                     await deduct_credits(
                         db,
                         uuid.UUID(user_id),
@@ -612,42 +637,32 @@ def _minimax_endpoint(path: str) -> str:
 
 
 async def _call_tts_clone_api(
-    audio_source: str, character_id: str
+    audio_source: str, character_id: str, provider: str = "minimax"
 ) -> tuple[str | None, str | None]:
-    """Call the configured TTS provider's voice clone endpoint.
+    """Call the correct TTS provider's voice clone endpoint.
 
     Returns ``(voice_id, error_msg)``:
       - success: ``(voice_id, None)``
-      - failure: ``(None, reason)`` — reason is the raw provider message when
-        available, or a short internal tag otherwise. The caller writes it to
-        ``character_voices.error_msg`` so the polling API can show a real
-        reason instead of a generic "克隆失败，请重试" that gives the user
-        nothing to act on.
+      - failure: ``(None, reason)``
 
-    There is no synthetic-id fallback: pretending to succeed produced
-    voice_ids the TTS provider rejected at chat time, which surfaced as the
-    "stuck at 正在回复" bug (2026-07-11).
-
-    ``audio_source`` carries a scheme prefix identifying how MiniMax should
-    receive the audio:
-      - ``minimax_file://<file_id>`` — a MiniMax-hosted file_id from the
-        ``/files/upload`` endpoint. Used when S3 isn't publicly reachable.
-      - anything else — treated as a publicly-fetchable ``file_url``.
+    ``audio_source`` carries a scheme prefix identifying how the audio is staged:
+      - ``minimax_file://<file_id>`` — a MiniMax-hosted file_id (dev fallback)
+      - anything else — treated as a publicly-fetchable URL (S3/MinIO)
     """
     if audio_source.startswith("local://"):
         logger.warning("voice_clone_local_url_rejected", audio_source=audio_source)
         return None, "internal: local:// audio source rejected"
 
-    # See endpoint gate above: clone is MiniMax-only regardless of primary TTS.
+    if provider == "fish":
+        return await _fish_clone_by_source(audio_source, character_id)
+
+    # MiMo clone falls through to MiniMax backend (MiMo clone API not yet available)
     if not settings.minimax_api_key:
-        logger.warning("voice_clone_provider_unavailable", provider=settings.voice_provider)
+        logger.warning("voice_clone_provider_unavailable", provider=provider)
         return None, "MINIMAX_API_KEY 未配置"
 
     if _minimax_requires_group_id() and not (settings.minimax_group_id or "").strip():
-        logger.warning(
-            "voice_clone_group_id_missing",
-            base_url=settings.minimax_base_url,
-        )
+        logger.warning("voice_clone_group_id_missing", base_url=settings.minimax_base_url)
         return None, "MINIMAX_GROUP_ID 未配置（大陆版 api.minimaxi 域名必填）"
 
     try:
@@ -658,6 +673,60 @@ async def _call_tts_clone_api(
     except Exception as exc:
         logger.warning("minimax_clone_failed", error=str(exc))
         return None, f"MiniMax 请求异常：{str(exc)[:160]}"
+
+
+async def _fish_clone_by_source(
+    audio_source: str, character_id: str
+) -> tuple[str | None, str | None]:
+    """Clone voice via Fish Audio API.
+
+    Downloads audio from ``audio_source`` (public URL or minimax_file:// scheme),
+    then uploads to Fish Audio ``/model`` endpoint.
+    Returns ``(model_id, None)`` on success or ``(None, error_msg)`` on failure.
+    """
+    if not settings.fish_api_key:
+        return None, "FISH_API_KEY 未配置"
+
+    import httpx
+
+    try:
+        if audio_source.startswith("minimax_file://"):
+            return None, "Fish 克隆需要公网可访问的音频存储，dev 环境不支持 minimax_file:// scheme"
+
+        # Download audio from public URL
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            dl = await client.get(audio_source)
+            if dl.status_code != 200:
+                return None, f"音频下载失败: HTTP {dl.status_code}"
+            audio_bytes = dl.content
+
+        filename = f"clone_{character_id[:8]}.wav"
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            resp = await client.post(
+                f"{settings.fish_base_url}/model",
+                headers={"Authorization": f"Bearer {settings.fish_api_key}"},
+                data={
+                    "title": f"yuoyuo_{character_id[:8]}",
+                    "train_mode": "fast",
+                    "enhance_audio": "true",
+                },
+                files={"voices": (filename, audio_bytes, "audio/wav")},
+            )
+
+        if resp.status_code not in (200, 201):
+            return None, f"Fish Audio clone error {resp.status_code}: {resp.text[:200]}"
+
+        result = resp.json()
+        model_id = result.get("_id")
+        if not model_id:
+            return None, f"Fish Audio 未返回 model_id: {str(result)[:200]}"
+
+        logger.info("fish_clone_ready", character_id=character_id, model_id=model_id)
+        return model_id, None
+
+    except Exception as exc:
+        logger.warning("fish_clone_failed", error=str(exc))
+        return None, f"Fish Audio 请求异常：{str(exc)[:160]}"
 
 
 async def _minimax_clone_by_url(audio_url: str, character_id: str) -> tuple[str | None, str | None]:

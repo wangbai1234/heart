@@ -317,3 +317,162 @@ def test_clone_voice_id_for_handles_ugly_ids():
     """Even a pure-symbol character_id shouldn't produce an empty middle segment."""
     got = routes_voice._clone_voice_id_for("---")
     assert got.startswith("UGC_clone_")
+
+
+# ---------------------------------------------------------------------------
+# Fish provider routing (P4 — defect E)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_fish_provider_routes_to_fish_clone():
+    """provider='fish' must call _fish_clone_by_source, never MiniMax."""
+    with (
+        patch.object(
+            routes_voice,
+            "_fish_clone_by_source",
+            new=AsyncMock(return_value=("fish-model-id", None)),
+        ) as mock_fish,
+        patch.object(
+            routes_voice,
+            "_minimax_clone_by_url",
+            new=AsyncMock(return_value=("WRONG", None)),
+        ) as mock_mm,
+    ):
+        voice_id, err = await routes_voice._call_tts_clone_api(
+            "https://cdn.example.com/sample.wav", "char_xyz", provider="fish"
+        )
+
+    assert voice_id == "fish-model-id"
+    assert err is None
+    mock_fish.assert_awaited_once_with("https://cdn.example.com/sample.wav", "char_xyz")
+    mock_mm.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_fish_clone_minimax_file_scheme_returns_error():
+    """minimax_file:// scheme is dev-only; Fish clone can't download from MiniMax files."""
+    with patch.object(routes_voice.settings, "fish_api_key", "sk-fish"):
+        voice_id, err = await routes_voice._fish_clone_by_source("minimax_file://999", "ch")
+    assert voice_id is None
+    assert err and "Fish" in err and "minimax_file://" in err
+
+
+@pytest.mark.asyncio
+async def test_fish_clone_no_api_key_returns_error():
+    with patch.object(routes_voice.settings, "fish_api_key", ""):
+        voice_id, err = await routes_voice._fish_clone_by_source(
+            "https://cdn.example.com/x.wav", "ch"
+        )
+    assert voice_id is None
+    assert err and "FISH_API_KEY" in err
+
+
+@pytest.mark.asyncio
+async def test_fish_clone_success(monkeypatch):
+    """Happy path: Fish Audio returns model_id → returned as voice_id."""
+    import httpx
+
+    download_resp = type("R", (), {"status_code": 200, "content": b"audio"})()
+    model_resp = type(
+        "R",
+        (),
+        {
+            "status_code": 200,
+            "text": "",
+            "json": lambda self: {"_id": "fish-model-abc"},
+        },
+    )()
+
+    class _StubClient:
+        def __init__(self, *a, **kw):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        async def get(self, url, **kw):
+            return download_resp
+
+        async def post(self, url, **kw):
+            return model_resp
+
+    monkeypatch.setattr(httpx, "AsyncClient", _StubClient)
+    with patch.object(routes_voice.settings, "fish_api_key", "sk-fish"):
+        voice_id, err = await routes_voice._fish_clone_by_source(
+            "https://cdn.example.com/sample.wav", "char_abc123"
+        )
+    assert voice_id == "fish-model-abc"
+    assert err is None
+
+
+@pytest.mark.asyncio
+async def test_fish_clone_bad_status_returns_error(monkeypatch):
+    import httpx
+
+    download_resp = type("R", (), {"status_code": 200, "content": b"audio"})()
+    bad_resp = type("R", (), {"status_code": 400, "text": "invalid audio"})()
+
+    class _StubClient:
+        def __init__(self, *a, **kw):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a):
+            return False
+
+        async def get(self, url, **kw):
+            return download_resp
+
+        async def post(self, url, **kw):
+            return bad_resp
+
+    monkeypatch.setattr(httpx, "AsyncClient", _StubClient)
+    with patch.object(routes_voice.settings, "fish_api_key", "sk-fish"):
+        voice_id, err = await routes_voice._fish_clone_by_source(
+            "https://cdn.example.com/sample.wav", "char_abc123"
+        )
+    assert voice_id is None
+    assert err and "400" in err
+
+
+# ---------------------------------------------------------------------------
+# Tier gate: assert_clone_allowed must reject free users (P4 — defect E)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_assert_clone_allowed_rejects_free_tier():
+    from heart.membership import CloneForbiddenError, assert_clone_allowed
+
+    with pytest.raises(CloneForbiddenError) as exc_info:
+        assert_clone_allowed("free", "fish")
+    assert exc_info.value.provider == "fish"
+    assert exc_info.value.tier == "free"
+
+
+@pytest.mark.asyncio
+async def test_assert_clone_allowed_rejects_free_mimo():
+    from heart.membership import CloneForbiddenError, assert_clone_allowed
+
+    with pytest.raises(CloneForbiddenError):
+        assert_clone_allowed("free", "mimo")
+
+
+@pytest.mark.asyncio
+async def test_assert_clone_allowed_permits_plus_fish():
+    from heart.membership import assert_clone_allowed
+
+    assert_clone_allowed("plus", "fish")  # must not raise
+
+
+@pytest.mark.asyncio
+async def test_assert_clone_allowed_permits_immersive_fish():
+    from heart.membership import assert_clone_allowed
+
+    assert_clone_allowed("immersive", "fish")  # must not raise
