@@ -7,7 +7,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # _charge_llm_cost — idempotency key + skip-when-free
 # ---------------------------------------------------------------------------
@@ -37,9 +36,7 @@ class TestChargeLlmCost:
 
         assert cost == 300  # grok_cost_credits=3 → 300 fen
         assert bal == 5000
-        mock_deduct.assert_called_once_with(
-            db, user_id, 300, f"turn:{turn_id}:llm", "consume_llm"
-        )
+        mock_deduct.assert_called_once_with(db, user_id, 300, f"turn:{turn_id}:llm", "consume_llm")
 
     @pytest.mark.asyncio
     async def test_claude_deducts_1200_fen(self):
@@ -54,9 +51,7 @@ class TestChargeLlmCost:
 
         assert cost == 1200  # claude_cost_credits=12 → 1200 fen
         assert bal == 3000
-        mock_deduct.assert_called_once_with(
-            db, user_id, 1200, f"turn:{turn_id}:llm", "consume_llm"
-        )
+        mock_deduct.assert_called_once_with(db, user_id, 1200, f"turn:{turn_id}:llm", "consume_llm")
 
     @pytest.mark.asyncio
     async def test_idempotency_key_format(self):
@@ -159,6 +154,106 @@ class TestPrecheckBillingModelForbidden:
         # No model_forbidden event for deepseek
         for call in ws.send_json.call_args_list:
             assert call[0][0].get("type") != "model_forbidden"
+
+
+# ---------------------------------------------------------------------------
+# _precheck_billing — TTS provider tier gate (E): degrade voice→text, never block
+# ---------------------------------------------------------------------------
+
+
+_TIERS_CFG = (
+    '{"free":{"models":["deepseek"],"tts":["mimo"],"clone":[],"monthly_grant":0},'
+    '"plus":{"models":["deepseek","grok"],"tts":["mimo","fish"],"clone":["mimo","fish"],"monthly_grant":400}}'
+)
+
+
+def _precheck_mock_db():
+    mock_db = AsyncMock()
+    mock_db.__aenter__ = AsyncMock(return_value=mock_db)
+    mock_db.__aexit__ = AsyncMock(return_value=False)
+    voice_result = MagicMock()
+    voice_result.scalar_one_or_none.return_value = True  # voice enabled
+    balance_result = MagicMock()
+    balance_result.scalar_one_or_none.return_value = 100000  # ample balance
+    mock_db.execute = AsyncMock(side_effect=[voice_result, balance_result])
+    return mock_db
+
+
+class TestPrecheckTtsGate:
+    @pytest.mark.asyncio
+    async def test_free_user_fish_primary_downgrades_to_text(self):
+        """Free tier (tts=[mimo]) with Fish primary → voice degraded, turn NOT blocked."""
+        from heart.api.routes_chat_ws import _precheck_billing
+
+        ws = AsyncMock()
+        ws.send_json = AsyncMock()
+        turn_id = str(uuid.uuid4())
+        mock_db = _precheck_mock_db()
+
+        with (
+            patch("heart.membership.get_effective_tier", new=AsyncMock(return_value="free")),
+            patch("heart.api.routes_chat_ws._get_engine"),
+            patch("sqlalchemy.ext.asyncio.AsyncSession", return_value=mock_db),
+            patch("heart.api.routes_chat_ws._active_tts_provider_name", return_value="fish"),
+            patch("heart.core.config.settings.membership_tiers_config", _TIERS_CFG),
+        ):
+            effective_voice, can_proceed = await _precheck_billing(
+                uuid.uuid4(), "char1", turn_id, ws, model="deepseek"
+            )
+
+        assert effective_voice is False  # degraded to text
+        assert can_proceed is True  # never block the text turn
+        # No model_forbidden / hard error emitted
+        for call in ws.send_json.call_args_list:
+            assert call[0][0].get("type") not in ("model_forbidden", "error")
+
+    @pytest.mark.asyncio
+    async def test_free_user_mimo_primary_keeps_voice(self):
+        """Free tier allows mimo → voice preserved."""
+        from heart.api.routes_chat_ws import _precheck_billing
+
+        ws = AsyncMock()
+        ws.send_json = AsyncMock()
+        turn_id = str(uuid.uuid4())
+        mock_db = _precheck_mock_db()
+
+        with (
+            patch("heart.membership.get_effective_tier", new=AsyncMock(return_value="free")),
+            patch("heart.api.routes_chat_ws._get_engine"),
+            patch("sqlalchemy.ext.asyncio.AsyncSession", return_value=mock_db),
+            patch("heart.api.routes_chat_ws._active_tts_provider_name", return_value="mimo"),
+            patch("heart.core.config.settings.membership_tiers_config", _TIERS_CFG),
+        ):
+            effective_voice, can_proceed = await _precheck_billing(
+                uuid.uuid4(), "char1", turn_id, ws, model="deepseek"
+            )
+
+        assert effective_voice is True
+        assert can_proceed is True
+
+    @pytest.mark.asyncio
+    async def test_plus_user_fish_primary_keeps_voice(self):
+        """Plus tier allows fish → voice preserved even with Fish primary."""
+        from heart.api.routes_chat_ws import _precheck_billing
+
+        ws = AsyncMock()
+        ws.send_json = AsyncMock()
+        turn_id = str(uuid.uuid4())
+        mock_db = _precheck_mock_db()
+
+        with (
+            patch("heart.membership.get_effective_tier", new=AsyncMock(return_value="plus")),
+            patch("heart.api.routes_chat_ws._get_engine"),
+            patch("sqlalchemy.ext.asyncio.AsyncSession", return_value=mock_db),
+            patch("heart.api.routes_chat_ws._active_tts_provider_name", return_value="fish"),
+            patch("heart.core.config.settings.membership_tiers_config", _TIERS_CFG),
+        ):
+            effective_voice, can_proceed = await _precheck_billing(
+                uuid.uuid4(), "char1", turn_id, ws, model="deepseek"
+            )
+
+        assert effective_voice is True
+        assert can_proceed is True
 
 
 # ---------------------------------------------------------------------------
@@ -298,9 +393,7 @@ class TestChargeTtsCost:
 
         assert cost == 500  # mimo_tts_cost_credits=5 → 500 fen
         assert bal == 9500
-        mock_deduct.assert_called_once_with(
-            db, user_id, 500, f"turn:{turn_id}:tts", "consume_tts"
-        )
+        mock_deduct.assert_called_once_with(db, user_id, 500, f"turn:{turn_id}:tts", "consume_tts")
 
     @pytest.mark.asyncio
     async def test_fish_deducts_800_fen(self):
@@ -315,9 +408,7 @@ class TestChargeTtsCost:
 
         assert cost == 800  # fish_tts_cost_credits=8 → 800 fen
         assert bal == 8000
-        mock_deduct.assert_called_once_with(
-            db, user_id, 800, f"turn:{turn_id}:tts", "consume_tts"
-        )
+        mock_deduct.assert_called_once_with(db, user_id, 800, f"turn:{turn_id}:tts", "consume_tts")
 
     @pytest.mark.asyncio
     async def test_idempotency_key_format(self):

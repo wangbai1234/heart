@@ -250,9 +250,10 @@ run_migrations() {
     log "运行数据库迁移（两个 Alembic head）..."
     DC exec -T api python -m alembic upgrade 022_identity_narrative_backfill
     DC exec -T api python -m alembic upgrade 033_chat_messages_is_proactive
-    # 商业化 V1（docs/upgrade/yuoyuo_coin）迁移 034-037 线性串在 033 之后（单头 037_invites）。
+    # 商业化 V1（docs/upgrade/yuoyuo_coin）迁移 034-038 线性串在 033 之后（单头 038_mimo_preset_seeds）。
+    # 038 种子 10 个 MiMo 预设音色 —— 必须升到 038，否则建角色第 3 步预设为空。
     # 追加新迁移时把下面的 revision 改成新的最新 head。
-    DC exec -T api python -m alembic upgrade 037_invites
+    DC exec -T api python -m alembic upgrade 038_mimo_preset_seeds
 
     echo ""
     info "当前迁移状态："
