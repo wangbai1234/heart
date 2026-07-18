@@ -181,6 +181,22 @@ async def _process_stream_events(
         active_turns.pop(turn_id, None)
 
 
+def _active_tts_provider_name() -> str:
+    """Name of the primary TTS provider (process singleton), or '' if none.
+
+    Used to gate voice turns by tier: the provider is not user-selectable
+    (VoiceService is a process singleton), so we check the primary the turn
+    would actually use.
+    """
+    try:
+        from .wiring import get_voice_service
+
+        vs = get_voice_service()
+        return vs.provider.name if vs and vs.provider else ""
+    except Exception:
+        return ""
+
+
 async def _precheck_billing(
     user_uuid: uuid.UUID,
     character_id: str,
@@ -196,9 +212,14 @@ async def _precheck_billing(
         from sqlalchemy.ext.asyncio import AsyncSession
 
         from heart.billing import get_balance
-        from heart.billing.pricing import llm_cost_fen
-        from heart.core.config import settings as cfg
-        from heart.membership import ModelForbiddenError, assert_model_allowed, get_effective_tier
+        from heart.billing.pricing import llm_cost_fen, tts_cost_fen
+        from heart.membership import (
+            ModelForbiddenError,
+            TtsForbiddenError,
+            assert_model_allowed,
+            assert_tts_allowed,
+            get_effective_tier,
+        )
 
         from .wiring import _get_engine
 
@@ -227,13 +248,29 @@ async def _precheck_billing(
                 )
                 return effective_voice, False
 
-            # Balance check: require enough for LLM cost + at least one bubble
+            # Voice TTS entitlement (E): if the active TTS provider isn't allowed
+            # for this tier, silently degrade this turn to text — never block text.
+            tts_cost = 0
+            if effective_voice:
+                provider_name = _active_tts_provider_name()
+                try:
+                    assert_tts_allowed(tier, provider_name)
+                    tts_cost = tts_cost_fen(provider_name)
+                except TtsForbiddenError:
+                    logger.info(
+                        "voice_downgraded_tier_forbidden",
+                        tier=tier,
+                        provider=provider_name,
+                        turn_id=turn_id,
+                    )
+                    effective_voice = False
+
+            # Balance floor (C): LLM (per model) + TTS (per provider). There is no
+            # legacy per-message charge — text bubbles are free; a turn costs only
+            # the LLM (by served model) plus TTS (by provider, voice turns only).
             balance = await get_balance(db, user_uuid)
             llm_cost = llm_cost_fen(model)
-            bubble_cost = (
-                cfg.credits_cost_voice_message if effective_voice else cfg.credits_cost_text_message
-            )
-            min_required = llm_cost + bubble_cost
+            min_required = llm_cost + tts_cost
 
             if balance < min_required:
                 await ws.send_json(
@@ -287,15 +324,19 @@ async def _charge_and_insert_bubbles(
             seg_audio_url = None
             seg_audio_dur = None
             if kind == "text":
-                new_balance = await deduct_credits(
-                    db,
-                    user_uuid,
-                    per_message_cost,
-                    f"turn:{turn_id}:msg:{i}",
-                    f"consume_{actual_modality}",
-                )
-                total_charged += per_message_cost
-                credits_this_row = per_message_cost
+                # per_message_cost is 0 under the model+provider billing scheme
+                # (LLM charged per turn, TTS per provider). Only deduct if a
+                # legacy per-message cost is explicitly configured (> 0).
+                if per_message_cost > 0:
+                    new_balance = await deduct_credits(
+                        db,
+                        user_uuid,
+                        per_message_cost,
+                        f"turn:{turn_id}:msg:{i}",
+                        f"consume_{actual_modality}",
+                    )
+                    total_charged += per_message_cost
+                    credits_this_row = per_message_cost
                 if not audio_attached:
                     seg_audio_url = audio_url
                     seg_audio_dur = audio_duration_ms
@@ -348,17 +389,24 @@ def _derive_segments_and_cost(
     Text mode gets the full semantic split (action + text bubbles). Voice
     mode intentionally emits a single text bubble because TTS synthesises
     the whole response as one audio clip: splitting into N bubbles would
-    charge voice cost × N while only one clip plays. Per-bubble TTS is a
-    future enhancement.
+    charge voice cost × N while only one clip plays.
+
+    ``per_message_cost`` is always 0 under the model+provider billing scheme:
+    a turn is billed per LLM turn (by served model) and per TTS (by provider),
+    never per message bubble. Returning 0 here avoids the legacy double-charge
+    (voice bubbles were previously charged ``credits_cost_voice_message`` *on
+    top of* the per-provider TTS cost). ``cfg`` is retained for signature
+    compatibility with existing callers/tests.
     """
     from heart.ss05_composer.message_splitter import split_response
 
+    _ = cfg  # legacy per-message cost is intentionally not applied
     if actual_modality == "text":
         segments = split_response(full_text)
         if not segments:
             segments = [{"kind": "text", "content": full_text}]
-        return segments, cfg.credits_cost_text_message
-    return [{"kind": "text", "content": full_text}], cfg.credits_cost_voice_message
+        return segments, 0
+    return [{"kind": "text", "content": full_text}], 0
 
 
 async def _upload_turn_audio(
@@ -522,6 +570,13 @@ async def _post_turn_billing(
                             error=str(_tts_err),
                         )
                         raise
+
+                # Free turn (e.g. DeepSeek text, nothing deducted): the charge
+                # helpers return 0 balance, so fetch the real balance for turn_end.
+                if total_charged == 0:
+                    from heart.billing import get_balance
+
+                    new_balance = await get_balance(db, user_uuid)
 
             await db.commit()
 

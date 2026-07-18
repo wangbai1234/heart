@@ -1,22 +1,47 @@
 # yuoyuo 商业化 V1 — 测试方案（交付 mimo 执行）
 
-> 状态：**验收未通过 · 存在阻断缺陷**（详见 §1）。本方案兼做「回归测试清单」+「缺陷确认清单」。
+> 状态：**后端阻断缺陷已修复 · 可进入功能验收**（详见 §0/§1）。本方案兼做「回归测试清单」+「修复验证清单」。
 > 范围：会员 + yuoyuo币 + 多模型 + Fish 语音/克隆 + 爱发电自动履约 + 邀请。
 > 依据：`00_INDEX.md` / `backend_plan.md` / `frontend_plan.md` / `api_contract.md`
-> 后端代码：main（PR #205–#211，B1–B7 已合并）。前端代码：**尚未提交/未开 PR**，仅存工作区（见 §1）。
-> 最后更新：2026-07-18
+> 后端代码：main（PR #205–#217，B1–B7 + 缺陷 A–H 修复已合并；P6 在 PR #218 待合并）。前端代码：**仓库内不存在**（见 §0.4 缺陷 I）。
+> 最后更新：2026-07-19（据实读代码重新验收；替代 07-18 旧版）
 
 ---
 
 ## 0. 验收结论摘要（先读）
 
+### 0.1 修复进度（对照 07-18 缺陷 A–I，均已实读代码核实）
+
+| 缺陷 | 描述 | 当前状态 | 证据（文件:行） |
+|----|------|---------|----------------|
+| A | 会员查询读不存在的 `status` 列，聊天全崩 | ✅ 已修（改用 `expires_at > NOW()`） | `heart/membership/__init__.py:78` |
+| B | 默认 `deepseek` slug 未注册，主链路路由失败 | ✅ 已修（注册裸 slug） | `heart/infra/llm_providers/registry.py:224` |
+| C | TTS 未按 provider 计费 / 语音双扣 | ✅ **已修**（本轮）：per-message 计费归零，一 turn 只按 LLM(模型) + TTS(provider) 计费；语音不再叠扣旧 `voice_message` 价；DeepSeek 文本 0 币 | `routes_chat_ws.py:_derive_segments_and_cost/_precheck_billing` |
+| D | 会员月度赠币从不发放 | ✅ 已修（`monthly_grant` 幂等发放） | `heart/membership/service.py:94-100` |
+| E | Fish/克隆权益零拦截 | ✅ **已修**（本轮）：克隆侧 `assert_clone_allowed` 已接；TTS 侧新增 precheck 闸门——tier 不允许当前 TTS provider 时该 turn **静默降级为纯文本**（不阻塞文本） | 克隆: `routes_voice.py:386`；TTS: `routes_chat_ws.py:_precheck_billing` |
+| F | activate 非幂等、插多行 | ✅ 已修（update-then-insert upsert） | `heart/membership/service.py:56-79` |
+| G | 邀请端点不符契约 | ✅ 已修（新增 `/status`+`/bind`；旧 `/use` 保留兼容） | `heart/api/routes_invite.py:26,94` |
+| H | pricing/membership 响应结构不符契约 | ◑ 声称已修（#213），**mimo 须抽验响应结构对齐 `api_contract.md`** | — |
+| 036 种子 | 每性别 5 个 MiMo 预设未种子 | ✅ 已修（种子在 `038_mimo_preset_seeds`；`voice_provider` 列在 036） | 10 preset 单测 pass |
+| P6 | admin 手动履约无法指定 user | ✅ 代码已写（`admin_fulfill_order` 收 user_id），**PR #218 待合并** | `heart/afdian/fulfillment.py:174` |
+
+### 0.2 层级结论
+
 | 层 | 结论 | 说明 |
 |----|------|------|
-| 后端 B1–B7 | **需修复，不可上线** | 迁移 034 应用后**聊天主链路即被阻断**（缺陷 A/B）；TTS 计费、会员月度赠币、克隆按 provider 路由、Fish 权益拦截均未落地 |
-| 前端 F1–F6 | **功能完成但未交付** | `npm run build` 通过、接口契约字段对齐；但代码**全部在工作区未提交、未开 PR**；多处硬编码颜色（违背 token 规范）；F6 预设未按性别分组 |
-| 脚本/环境 | **已修正** | 迁移目标 033→037、`FISH_API_KEY` 命名、env 模板去重，均已修正（见 §0.3） |
+| 后端 B1–B7 | **阻断已清 + C/E 已修，可功能验收** | A/B 阻断 + C 双扣 + E TTS 闸门本轮全部修复；全量单测 1361 passed。功能验收剩「跑通实测」而非「已知缺陷」 |
+| 前端 F1–F6 | **未落地** | 仓库内无 membership/wallet/invite 页面，`api.ts` 无 `getMembership/getInviteStatus/getShopTiers`。07-18「工作区未提交」的说法与当前不符——**这些文件不存在** |
+| 脚本/环境 | **迁移目标需上调** | `setup.sh`/`deploy-prod.sh` 仍 pin `037_invites`，但当前 head 是 `038_mimo_preset_seeds` → 按脚本装则 10 个预设音色不入库（见 §0.3） |
 
-> **给 mimo 的话**：请**先按 §1 修掉 A、B 两个阻断缺陷**，否则从「发一条消息」开始就会失败，后续用例无法进行。修完 A/B 后按 §2 冒烟，再按 §3–§11 逐项验收。标 ❌ 的用例是「已定位的已知缺陷」，用于确认而非探索。
+### 0.3 ⚠️ 三个必须先处理的环境/脚本问题
+
+1. ✅ **脚本迁移目标已上调**（本轮修复）：`scripts/setup.sh` 与 `scripts/deploy-prod.sh` 现执行 `alembic upgrade 038_mimo_preset_seeds`，预设音色会随 setup 入库。若用旧脚本装过，手动 `alembic upgrade 038_mimo_preset_seeds` 补齐。
+2. **Alembic 多头**：`alembic heads` 返回两个头（`022_identity_narrative_backfill` + `038_mimo_preset_seeds`）。**禁用 `alembic upgrade head`**（报 Multiple head revisions）。yuoyuo 链自身线性单头 `033→034→…→038`，升级请**显式指定 `038_mimo_preset_seeds`**。
+3. **改列后必须完全重启后端**（非 `--reload`），切分支前先停 dev server（见 `.claude/CLAUDE.md` DB 铁律）。
+
+### 0.4 给 mimo 的话
+
+后端 A/B 阻断 + C 语音双扣 + E TTS 免费闸门**均已修复**（全量单测 1361 passed），可直接从 §2 冒烟进入功能验收，不必再修后端逻辑。标 ✅ 的用例请做**回归/实测验证**（确认修复真生效、无回退），重点跑通 §1 的 C、E 实测判定。前端 F1–F6 **无代码可测**，§10 暂缓，须先由前端开发落地。仅剩 H（响应结构抽验）为非代码核对项。
 
 ### 0.1 测试环境准备
 
@@ -54,30 +79,24 @@ bash scripts/dev.sh
 
 ---
 
-## 1. 已知阻断缺陷（P0 — 测试前必须处理）
+## 1. 残留待确认点（A/B/C/E 已修，以下为剩余重点）
 
-> 以下均为**读实际代码确认**的缺陷，非推测。建议先修 A、B（改动极小）再开始测试。
+> 07-18 的阻断缺陷 A、B 已在 #212 修复；C（语音双扣）、E（TTS 免费闸门）本轮修复。以下是实读代码后仍需 mimo 重点**实测跑通**的点（非已知缺陷）。
 
-### 缺陷 A（阻断）— 会员查询读了不存在的列，聊天全崩
-- 现象：迁移 034 应用后，任何聊天 turn 都被拦为 `BILLING_CHECK_FAILED`，`GET /api/membership` 返回 500。
-- 根因：`034_memberships.py` 只建 `user_id / tier / expires_at`，**无 `status` 列**；但 `heart/membership/__init__.py:83` 查询含 `AND status = 'active'` → `UndefinedColumn`。
-- 最小修法（二选一）：① 去掉查询里的 `AND status = 'active'`（推荐，惰性过期只需 `expires_at > now()`）；② 或给 034 加 `status` 列并回填（若 034 尚未在任何环境应用）。
-- 验证：修后 `GET /api/membership`（免费用户）返回 200 且 `tier=free`；聊天可正常发出。
+### 已修 C — 语音双扣（本轮修复，须实测确认）
+- 修法：`_derive_segments_and_cost` 返回 per-message cost = 0；`_precheck_billing` 余额下限改为 `LLM(模型) + TTS(provider)`，不再用旧 `credits_cost_voice_message`。
+- 实测判定：一条 mimo 语音 turn 的 `credit_transactions` 只出现 `turn:{id}:tts`（5 币）+（付费模型时）`turn:{id}:llm`；**无 `msg:{i}` 扣费行**。DeepSeek 纯文本 turn 扣 0 币。
 
-### 缺陷 B（阻断）— 默认模型 `deepseek` 未注册，免费主链路路由失败
-- 现象：无 Grok/Claude key 时默认 turn 报 `All models exhausted`；有 key 时**免费用户的 deepseek 消息被 Claude 承接并扣 1200 fen**，绕过免费权益。
-- 根因：`registry.py` 只注册了 `deepseek-chat`/`deepseek-reasoner`，未注册裸 slug `deepseek`；而全栈默认 `model="deepseek"`（`ss07_orchestration/models.py:27`）。Grok/Claude 反而注册了裸 slug。
-- 最小修法：在 `registry.py` 把 `deepseek` 加入某个 DeepSeek provider 的 `models=[...]`（与 grok/claude 一致）。
-- 验证：免费用户发消息由 DeepSeek 承接，`turn_end.served_model=="deepseek"`，扣 0 币。
+### 已修 E — Fish TTS 免费闸门（本轮修复，须实测确认）
+- 修法：`_precheck_billing` 在语音开启时读取当前 TTS primary provider，`assert_tts_allowed(tier, provider)` 失败则该 turn `effective_voice=False`（**降级纯文本，不阻塞、不报错**），日志 `voice_downgraded_tier_forbidden`。
+- 实测判定：免费用户 + Fish 为 primary → 收到纯文本回复、无语音、无扣 TTS 费、无技术错误；plus/immersive 用户 + Fish → 正常出语音扣 8 币。
+- 局限：TTS provider 是进程级单例、非按用户选择，故闸门在"当前 primary 不被 tier 允许"时触发；克隆侧走 `assert_clone_allowed`（独立路径）。
 
-### 其余高优缺陷（不阻断启动，但影响验收结论；见对应章节）
-- **C（高）** TTS 未按 provider 计费：`routes_chat_ws.py:290` 仍扣旧的 `credits_cost_voice_message`，从不调用 `tts_cost_fen`（mimo 5 / fish 8 差异不生效）。→ §4/§7
-- **D（高）** 会员月度赠币从未发放：`activate_or_extend` 不调 `billing.grant`。→ §5/§8
-- **E（高）** 克隆恒走 MiniMax、不按 provider 路由；`assert_tts_allowed/assert_clone_allowed` 定义了但**零调用**（Fish 对免费用户无服务端拦截）。→ §7
-- **F（中）** `activate_or_extend` 非幂等、非 upsert，重复 webhook 会插多行会员。→ §8
-- **G（中）** 邀请端点是 `GET /api/invite` + `POST /api/invite/use`，与契约 `GET /status` + `POST /bind` 不符；无 counts/stages。→ §9
-- **H（中）** `/api/credits/pricing`、`/api/membership` 返回结构与 `api_contract.md` 不一致（SKU 命名、字段名、缺 `binding_code`/`expires_at`/`entitlements` 嵌套）。→ §3
-- **I（前端）** F1–F6 全部未提交、未开 PR；多页硬编码颜色；F6 预设未按性别分组。→ §10
+### 残留 H（中）— pricing/membership 响应结构须抽验
+- #213 声称已对齐 `api_contract.md §1.1–1.4`。mimo 须抽验 `GET /api/credits/pricing`、`GET /api/membership` 的实际 JSON 结构（字段名、SKU 命名、`binding_code`/`expires_at`/`entitlements` 嵌套）是否与契约逐字对齐——前端联调以此为准。
+
+### 缺陷 I（前端）— F1–F6 无代码
+- 仓库内**不存在** membership/wallet/invite 页面，`web/src/services/api.ts` 无 `getMembership/getInviteStatus/getShopTiers`。§10 暂无可测对象，须先由前端开发落地并开 PR。
 
 ---
 
@@ -85,13 +104,13 @@ bash scripts/dev.sh
 
 | # | 步骤 | 期望 | 已知 |
 |---|------|------|------|
-| S1 | `alembic upgrade 037_invites` | 无报错，`alembic current` 含 `037_invites (head)` | ✅（迁移本身干净） |
+| S1 | `alembic upgrade 038_mimo_preset_seeds`（**勿用 `head`**，多头会报错） | 无报错，`alembic current` 含 `038_mimo_preset_seeds` | ✅ 迁移干净；脚本已 pin 038 |
 | S2 | 完全重启后端，`curl /health/live` | 200 | ✅ |
-| S3 | 免费用户发一条文字消息 | 正常回复，扣 0 币，`served_model=deepseek` | ❌ 缺陷 A/B 未修则失败 |
-| S4 | `GET /api/membership`（免费用户） | 200 `tier=free` | ❌ 缺陷 A 未修则 500 |
-| S5 | 前端 `npm run build` | 通过 | ✅ |
+| S3 | 免费用户发一条文字消息 | 正常回复，扣 0 币，`served_model=deepseek` | ✅ A/B 已修，应通过 |
+| S4 | `GET /api/membership`（免费用户） | 200 `tier=free` | ✅ A 已修，应通过 |
+| S5 | `SELECT count(*) FROM preset_voices WHERE provider='mimo'` | = 10（每性别 5 个） | ⚠️ 须确认 038 已应用，否则为 0 |
 
-> S3/S4 失败即回到 §1 修 A/B，勿继续。
+> S3/S4 现应通过（A/B 已修）。若仍失败，先确认 §0.3 的迁移/重启事项，再登记为回退缺陷。
 
 ---
 
@@ -102,11 +121,11 @@ bash scripts/dev.sh
 | # | 端点 | 步骤 | 期望（契约） | 已知 |
 |---|------|------|-------------|------|
 | A1 | `GET /api/credits/pricing` | 匿名/登录调用 | 含 `signup_grant, models[], actions[], membership_tiers[], shop[], afdian_url` | ⚠️ H：shop SKU 名/币值、tts 位置、membership 字段名与契约不符 |
-| A2 | `GET /api/membership` | 三种 tier 各调 | `{tier, expires_at, entitlements{models,tts,clone}, monthly_grant, binding_code}` | ⚠️ H：实际扁平、缺 `expires_at/entitlements/binding_code`；❌ A：未修则 500 |
-| A3 | `GET /api/invite/status` | 登录调用 | `{invite_code, invite_url, invited_count, pending_count, total_reward, stages[]}` | ❌ G：实际是 `GET /api/invite`，无 counts/stages |
-| A4 | `POST /api/invite/bind {code}` | 新用户绑定 | 200，自邀/重复绑定报结构化错误 | ❌ G：实际是 `POST /api/invite/use` |
+| A2 | `GET /api/membership` | 三种 tier 各调 | `{tier, expires_at, entitlements{models,tts,clone}, monthly_grant, binding_code}` | ✅ A 已修（应 200）；◑ H：结构须抽验对齐契约 |
+| A3 | `GET /api/invite/status` | 登录调用 | `{invite_code, invite_url, invited_count, pending_count, total_reward, stages[]}` | ✅ G 已修（`/status` 已实现）；抽验字段齐全 |
+| A4 | `POST /api/invite/bind {code}` | 新用户绑定 | 200，自邀/重复绑定报结构化错误 | ✅ G 已修（`/bind` 已实现） |
 | A5 | `POST /api/webhooks/afdian` | 见 §8 | sign 校验 + 幂等落单 + 履约 | ⚠️ 见 §8 |
-| A6 | `POST /api/admin/afdian/fulfill` | admin 手动履约 unmatched | 按 `{out_trade_no, user_id}` 指定用户履约 | ⚠️ 缺陷：实际按 remark 重解析，无法对无绑定码订单指定 user |
+| A6 | `POST /api/admin/afdian/fulfill` | admin 手动履约 unmatched | 按 `{out_trade_no, user_id}` 指定用户履约 | ✅ P6 已修（收 user_id 跳过 remark）；⚠️ 代码在 **PR #218，未合并**，测前须合入 main |
 
 ---
 
@@ -114,11 +133,11 @@ bash scripts/dev.sh
 
 | # | 场景 | 步骤 | 期望 | 已知 |
 |---|------|------|------|------|
-| B1 | DeepSeek 文本免费 | 免费用户发文字 | 扣 0 币 | ❌ 依赖缺陷 B |
-| B2 | Grok 扣费 | 进阶用户选 Grok 发消息 | 每 turn 扣 3 币，`turn:{id}:llm` 幂等键 | 需 B 修复后测 |
-| B3 | Claude 扣费 | 沉浸用户选 Claude | 每 turn 扣 12 币 | 同上 |
-| B4 | 降级按实际模型计费 | 造 Claude 失败 | 降级 DeepSeek→扣 0；`degraded_to` 回传 | 同上 |
-| B5 | **TTS 按 provider 扣** | 出一条 mimo 语音气泡 / fish 语音气泡 | mimo 扣 5、fish 扣 8 | ❌ **缺陷 C：仍扣旧 voice_message 价，provider 差异不生效** |
+| B1 | DeepSeek 文本免费 | 免费用户发文字 | 扣 0 币 | ✅ B 已修，应通过 |
+| B2 | Grok 扣费 | 进阶用户选 Grok 发消息 | 每 turn 扣 3 币，`turn:{id}:llm` 幂等键 | 应通过（B 已修） |
+| B3 | Claude 扣费 | 沉浸用户选 Claude | 每 turn 扣 12 币 | 应通过 |
+| B4 | 降级按实际模型计费 | 造 Claude 失败 | 降级 DeepSeek→扣 0；`degraded_to` 回传 | 需实测 |
+| B5 | **TTS 按 provider 扣** | 出一条 mimo 语音气泡 / fish 语音气泡 | mimo 扣 5、fish 扣 8，**且不双扣**；文本 turn 0 币 | ✅ C 已修，须实测：`credit_transactions` 只有 `tts`/`llm` 行，无 `msg:{i}` 行 |
 | B6 | 幂等不双扣 | 同一 turn 重放 | 余额只扣一次 | 需实测 |
 | B7 | 对账一致 | 跑 `credit_reconciliation_worker` | `credits_balance == SUM(delta)` | ✅ ledger 本身成熟 |
 | B8 | 余额不足 | 造低余额发付费模型 | `insufficient_credits{needed,balance}`，不生成、不扣 | 需实测 |
@@ -129,11 +148,11 @@ bash scripts/dev.sh
 
 | # | 场景 | 步骤 | 期望 | 已知 |
 |---|------|------|------|------|
-| M1 | 惰性过期 | 造 `expires_at < now` 的会员 | 判定为 free | ❌ 缺陷 A 未修则崩 |
-| M2 | 越权模型拒 | 免费用户请求 Grok | `model_forbidden{required_tier}`，不生成不扣 | 需 A/B 修复后测 |
+| M1 | 惰性过期 | 造 `expires_at < now` 的会员 | 判定为 free | ✅ A 已修，应通过 |
+| M2 | 越权模型拒 | 免费用户请求 Grok | `model_forbidden{required_tier}`，不生成不扣 | 应通过（`model_forbidden` 已接） |
 | M3 | 权益矩阵 | 三档各查 entitlements | free=[deepseek]/[mimo]/[]；plus 加 grok+fish+clone；immersive 加 claude | 校验 `MEMBERSHIP_TIERS_CONFIG` 生效 |
-| M4 | **月度赠币** | 激活/续费进阶 | 到账 +400 币（沉浸 +800） | ❌ **缺陷 D：从不赠币** |
-| M5 | 续费延期 | 对已有会员再激活 | `expires_at = max(now,expires_at)+30d`，**不新增行** | ❌ 缺陷 F：实际每次插新行 |
+| M4 | **月度赠币** | 激活/续费进阶 | 到账 +400 币（沉浸 +800） | ✅ **D 已修**，须实测到账（幂等键 `membership_grant:*`） |
+| M5 | 续费延期 | 对已有会员再激活 | `expires_at = max(now,expires_at)+30d`，**不新增行** | ✅ **F 已修**（upsert），须实测不插新行 |
 
 ---
 
@@ -155,10 +174,10 @@ bash scripts/dev.sh
 | V1 | MiMo 导演为主 | 语音走 MiMo 优先 | ⚠️ wiring 已改 MiMo-primary，但 `voice_provider` 默认仍 `minimax`；确认实际 primary |
 | V2 | 全 TTS 失败只回文本 | 语音失败不阻塞文本、不扣 TTS 费 | 需实测 |
 | V3 | Fish 未配置 | `FISH_API_KEY` 空 → 走降级链，不崩 | ✅ 应成立 |
-| V4 | **Fish 对免费用户拒** | 免费用户请求 Fish TTS/克隆 → 403 `tier_forbidden` | ❌ **缺陷 E：`assert_tts_allowed/assert_clone_allowed` 零调用，无拦截** |
-| V5 | **克隆按 provider 路由** | 选 mimo→MiMo 克隆；选 fish→Fish 克隆 | ❌ **缺陷 E：恒走 MiniMax；Fish 无克隆实现** |
-| V6 | 克隆计费 | MiMo 克隆 50 币 / Fish 100 币，成功才扣 | 部分：费用读 config 了，但 provider 路由未落地 |
-| V7 | 每性别 5 个 MiMo 预设 | 第 3 步按性别返回 5 个预设 | ❌ 缺陷：迁移 036 **未种子任何预设**（只加列） |
+| V4 | **Fish 对免费用户拒** | 免费用户克隆 Fish → 403；免费用户 Fish TTS → 降级纯文本 | ✅ E 已修：克隆侧 `assert_clone_allowed` 403；TTS 侧 precheck 降级纯文本（不阻塞、不报错），须实测 |
+| V5 | **克隆按 provider 路由** | 选 mimo→MiMo 克隆；选 fish→Fish 克隆 | ✅ E 已修（provider 路由 + `voice_provider` 列 036），须实测两条路由 |
+| V6 | 克隆计费 | MiMo 克隆 50 币 / Fish 100 币，成功才扣 | 应通过（费用 config + provider 路由已落地） |
+| V7 | 每性别 5 个 MiMo 预设 | 第 3 步按性别返回 5 个预设 | ✅ 已修（种子在 `038`），**前提 038 已应用**（见 §0.3/S5） |
 
 ---
 
@@ -170,8 +189,8 @@ bash scripts/dev.sh
 | P2 | 幂等落单 | 同 `out_trade_no` 重放 | 不重复履约 | 需实测 |
 | P3 | remark 绑定 | 备注填 binding_code | 正确绑定 user | 需实测 |
 | P4 | 无匹配不丢单 | 备注留空 | `unmatched` 落库、等人工 | 需实测 |
-| P5 | SKU→会员/币包 | 配 `AFDIAN_SKU_MAP` | 会员延期 + **赠币** / 币包到账 | ❌ 会员分支不赠币（缺陷 D）；币包分支 OK |
-| P6 | admin 手动履约 | 对 unmatched 指定 user | 成功 | ⚠️ 缺陷：无法对无绑定码订单指定 user |
+| P5 | SKU→会员/币包 | 配 `AFDIAN_SKU_MAP` | 会员延期 + **赠币** / 币包到账 | ✅ D 已修，会员分支现应赠币；须实测 |
+| P6 | admin 手动履约 | 对 unmatched `{out_trade_no, user_id}` 指定 user | 成功履约、`fulfilled_at` 落库 | ✅ 已修（`admin_fulfill_order`）；⚠️ 在 **PR #218 未合并**，须先合入 |
 
 > SKU JSON 示例（`AFDIAN_SKU_MAP`，注意币包用 `coins` 不是 `credits`）：
 > `{"plan_plus":{"type":"membership","tier":"plus","days":30},"pack_18":{"type":"coins","coins":220}}`
@@ -182,16 +201,16 @@ bash scripts/dev.sh
 
 | # | 场景 | 期望 | 已知 |
 |---|------|------|------|
-| I1 | 绑定校验 | 自邀拒、重复绑拒、invitee 唯一 | 逻辑在，但端点名不符契约（缺陷 G） |
+| I1 | 绑定校验 | 自邀拒、重复绑拒、invitee 唯一 | ✅ G 已修（`/bind` 已实现），须实测三类拒绝 |
 | I2 | 首聊双向奖励 | 新人 +100、邀请人 +100，幂等 | 需实测 |
 | I3 | 阶段奖励 | 满 5 → +300；满 10 → +1000，幂等 | 需实测 |
-| I4 | status 展示 | 邀请码/链接/已邀数/进度/累计币 | ❌ 缺陷 G：`/status` 未实现 |
+| I4 | status 展示 | 邀请码/链接/已邀数/进度/累计币 | ✅ G 已修（`/status` 已实现），须实测字段齐全 |
 
 ---
 
 ## 10. 前端 UI（逐页 + 双主题）
 
-> ⚠️ 前端代码**尚未提交**（缺陷 I）。测前先让前端 commit + 开 PR，或在当前工作区直接测。每页均需 **light + dark 双主题**。
+> 🔴 **前端商业化 UI 在仓库内不存在**（缺陷 I）：无 membership/wallet/invite 页面，`api.ts` 无 `getMembership/getInviteStatus/getShopTiers`。**本节暂无可测对象**，须先由前端开发落地并开 PR，再按下表（含 light+dark 双主题）验收。下表为落地后的验收标准，非当前状态。
 
 | # | 页面 | 验收点 | 已知 |
 |---|------|--------|------|
@@ -225,11 +244,14 @@ bash scripts/dev.sh
 
 ---
 
-## 附：建议的修复顺序（若决定先修再测）
-1. **A**（membership 去 status 过滤）→ **B**（注册 deepseek slug）：解锁全部聊天，~10 行改动。
-2. **C**（TTS 按 provider 计费）+ **E**（Fish/克隆权益拦截 + provider 路由）：付费语音价值点。
-3. **D**（会员月度赠币）+ **F**（activate_or_extend 幂等 upsert）：付费核心权益。
-4. **G**（邀请 /status + /bind 契约）+ **H**（pricing/membership 结构对齐契约）：前后端联调前必须。
-5. **036 预设种子**（每性别 5 个 MiMo）+ 前端 **I**（提交/开 PR + 去硬编码色 + F6 分组）。
-</content>
-</invoke>
+## 附 A：当前剩余工作（2026-07-19 重新验收后）
+后端逻辑残留已清空，剩下的是"合并 + 实测 + 前端落地"：
+1. **合并 PR #218**（P6 admin 手动履约）→ 否则 §8/A6 无法测。（需 owner 授权合并）
+2. **实测 C/E**：按 §1 的实测判定跑通（不再是代码缺陷，是验证）。
+3. **抽验 H**：pricing/membership 响应结构逐字对齐 `api_contract.md`（非代码核对项）。
+4. **前端 F1–F6**：从零落地（当前仓库无代码），开 PR 后再走 §10。
+
+> 本轮（fix/yuoyuo-coin-billing-residuals）已修：C 语音双扣、E TTS 免费闸门、脚本迁移目标 037→038。
+
+## 附 B：修复历史（供追溯）
+- #212 修 A/B（阻断）· #213 修 G/H · #214 修 D/F · #215 修 C（turn-end 侧）· #216 修 E（克隆侧）· #217 P5 预设种子（038）· #218 P6 admin 履约（**待合并**）· 本轮 fix/yuoyuo-coin-billing-residuals：C 双扣归零 + E TTS 闸门 + 脚本 038。
