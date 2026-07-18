@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 from typing import Any, Dict, List, Optional
 
 import structlog
@@ -77,7 +78,7 @@ class VoiceService:
                 request_id=result.request_id,
                 duration_ms=result.duration_ms,
             )
-            return result
+            return dataclasses.replace(result, provider_name=self._provider.name)
         except Exception as e:
             logger.warning(
                 "primary_tts_failed",
@@ -98,7 +99,7 @@ class VoiceService:
                     duration_ms=result.duration_ms,
                     via_fallback=True,
                 )
-                return result
+                return dataclasses.replace(result, provider_name=self._fallback.name)
             raise
 
     async def synthesize_for_character(
