@@ -200,6 +200,11 @@ class Settings(BaseSettings):
     # Each entry: {"type":"membership","tier":"plus","days":30} or {"type":"coins","coins":220}
     afdian_sku_map: str = "{}"
 
+    # Invite rewards (display coins; ×100 = fen internally)
+    invite_referral_grant_coins: int = 100  # per inviter + per invitee on first chat
+    invite_milestone_5_coins: int = 300  # bonus after 5 valid invites
+    invite_milestone_10_coins: int = 1000  # bonus after 10 valid invites
+
     # Push Notifications (V1)
     fcm_credentials_path: str = ""
     apns_credentials_path: str = ""
