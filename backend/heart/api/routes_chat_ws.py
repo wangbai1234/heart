@@ -186,13 +186,19 @@ async def _precheck_billing(
     character_id: str,
     turn_id: str,
     ws: WebSocket,
+    model: str = "deepseek",
 ) -> tuple[bool, bool]:
-    """Pre-check voice setting and balance. Returns (effective_voice, can_proceed)."""
+    """Pre-check voice setting, membership entitlement, and balance.
+
+    Returns (effective_voice, can_proceed).
+    """
     try:
         from sqlalchemy.ext.asyncio import AsyncSession
 
         from heart.billing import get_balance
+        from heart.billing.pricing import llm_cost_fen
         from heart.core.config import settings as cfg
+        from heart.membership import ModelForbiddenError, assert_model_allowed, get_effective_tier
 
         from .wiring import _get_engine
 
@@ -206,24 +212,43 @@ async def _precheck_billing(
             row = result.scalar_one_or_none()
             effective_voice = row if row is not None else False
 
+            # Membership tier → model entitlement
+            tier = await get_effective_tier(db, user_uuid)
+            try:
+                assert_model_allowed(tier, model)
+            except ModelForbiddenError:
+                await ws.send_json(
+                    {
+                        "type": "model_forbidden",
+                        "turn_id": turn_id,
+                        "model": model,
+                        "tier": tier,
+                    }
+                )
+                return effective_voice, False
+
+            # Balance check: require enough for LLM cost + at least one bubble
             balance = await get_balance(db, user_uuid)
-            expected_cost = (
+            llm_cost = llm_cost_fen(model)
+            bubble_cost = (
                 cfg.credits_cost_voice_message if effective_voice else cfg.credits_cost_text_message
             )
+            min_required = llm_cost + bubble_cost
 
-            if balance < expected_cost:
+            if balance < min_required:
                 await ws.send_json(
                     {
                         "type": "insufficient_credits",
                         "turn_id": turn_id,
-                        "needed": expected_cost / 100,
+                        "needed": min_required / 100,
                         "balance": balance / 100,
                     }
                 )
                 return effective_voice, False
+
             return effective_voice, True
     except Exception as e:
-        logger.warning("billing_precheck_failed", error=str(e))
+        logger.exception("billing_precheck_failed", error=str(e))
         await ws.send_json(
             {"type": "error", "code": "BILLING_CHECK_FAILED", "msg": "Billing check failed"}
         )
@@ -336,6 +361,46 @@ def _derive_segments_and_cost(
     return [{"kind": "text", "content": full_text}], cfg.credits_cost_voice_message
 
 
+async def _upload_turn_audio(
+    stream_session: Any, user_uuid: uuid.UUID, turn_id: str
+) -> tuple[Optional[str], Optional[int]]:
+    """Upload voice audio to S3 if available. Returns (audio_url, duration_ms)."""
+    if not (stream_session and stream_session.full_audio):
+        return None, None
+    try:
+        from heart.infra.storage import is_s3_configured, upload_file
+
+        if not is_s3_configured():
+            return None, None
+        audio_bytes = stream_session.full_audio
+        key = f"chat_audio/{user_uuid}/{turn_id}.wav"
+        audio_url = await upload_file(audio_bytes, key, "audio/wav")
+        audio_duration_ms = int(len(audio_bytes) / (24000 * 2) * 1000)
+        return audio_url, audio_duration_ms
+    except Exception as e:
+        logger.warning("audio_upload_failed", error=str(e))
+        return None, None
+
+
+async def _charge_llm_cost(
+    db: Any,
+    user_uuid: uuid.UUID,
+    turn_id: str,
+    served_model: str,
+) -> tuple[int, int]:
+    """Deduct LLM per-turn cost. Returns (cost_charged, new_balance). 0,0 if free."""
+    from heart.billing import deduct_credits
+    from heart.billing.pricing import llm_cost_fen
+
+    llm_cost = llm_cost_fen(served_model)
+    if llm_cost == 0:
+        return 0, 0
+    new_balance = await deduct_credits(
+        db, user_uuid, llm_cost, f"turn:{turn_id}:llm", "consume_llm"
+    )
+    return llm_cost, new_balance
+
+
 async def _post_turn_billing(
     ws: WebSocket,
     user_uuid: uuid.UUID,
@@ -346,6 +411,8 @@ async def _post_turn_billing(
     actual_modality: str,
     turn_safety_blocked: bool,
     stream_session: Any = None,
+    served_model: str = "deepseek",
+    degraded_to: Optional[str] = None,
 ) -> None:
     """Charge credits and persist chat messages after turn completes.
 
@@ -359,21 +426,11 @@ async def _post_turn_billing(
 
     from .wiring import _get_engine
 
-    audio_url = None
-    audio_duration_ms = None
+    audio_url: Optional[str] = None
+    audio_duration_ms: Optional[int] = None
 
-    # ── Upload audio (voice turns only) ──────────────────────────────────────
-    if actual_modality == "voice" and stream_session and stream_session.full_audio:
-        try:
-            from heart.infra.storage import is_s3_configured, upload_file
-
-            if is_s3_configured():
-                audio_bytes = stream_session.full_audio
-                key = f"chat_audio/{user_uuid}/{turn_id}.wav"
-                audio_url = await upload_file(audio_bytes, key, "audio/wav")
-                audio_duration_ms = int(len(audio_bytes) / (24000 * 2) * 1000)
-        except Exception as e:
-            logger.warning("audio_upload_failed", error=str(e))
+    if actual_modality == "voice":
+        audio_url, audio_duration_ms = await _upload_turn_audio(stream_session, user_uuid, turn_id)
 
     full_text = "".join(collected_text)
     segments, per_message_cost = _derive_segments_and_cost(full_text, actual_modality, cfg)
@@ -413,6 +470,21 @@ async def _post_turn_billing(
                 if total_charged == -1:
                     return  # InsufficientCreditsError already handled
 
+                # LLM per-turn billing (idempotent key turn:{id}:llm)
+                try:
+                    llm_cost, _bal = await _charge_llm_cost(db, user_uuid, turn_id, served_model)
+                    if llm_cost > 0:
+                        total_charged += llm_cost
+                        new_balance = _bal
+                except Exception as _llm_err:
+                    logger.exception(
+                        "llm_billing_failed",
+                        turn_id=turn_id,
+                        model=served_model,
+                        error=str(_llm_err),
+                    )
+                    raise
+
             await db.commit()
 
         # ── Send WS events ────────────────────────────────────────────────────
@@ -436,6 +508,8 @@ async def _post_turn_billing(
                 "modality": actual_modality,
                 "credits_charged": total_charged / 100,
                 "balance": new_balance / 100,
+                "served_model": served_model,
+                "degraded_to": degraded_to,
             }
         )
 
@@ -467,12 +541,18 @@ async def _run_orchestrator(
     character_id: str,
     active_turns: dict[str, Any],
     db_session: AsyncSession,
-) -> tuple[bool, bool, bool, list[str]]:
-    """Run orchestrator stream. Returns (turn_completed, safety_blocked, audio_produced, collected_text)."""
+) -> tuple[bool, bool, bool, list[str], str, Optional[str]]:
+    """Run orchestrator stream.
+
+    Returns (turn_completed, safety_blocked, audio_produced, collected_text,
+             served_model, degraded_to).
+    """
     turn_completed = False
     safety_blocked = False
     collected_text: list[str] = []
     turn_path = "normal"
+    served_model: str = getattr(req, "model", "deepseek")
+    degraded_to: Optional[str] = None
 
     if stream_session:
         active_turns[turn_id] = stream_session
@@ -488,6 +568,8 @@ async def _run_orchestrator(
             if etype == "turn_end":
                 turn_completed = True
                 turn_path = event.get("path", "normal")
+                served_model = event.get("served_model", served_model)
+                degraded_to = event.get("degraded_to")
                 if turn_path in ("care", "reject", "fallback"):
                     safety_blocked = True
 
@@ -511,7 +593,7 @@ async def _run_orchestrator(
         active_turns.pop(turn_id, None)
 
     audio_produced = stream_session.audio_produced if stream_session else False
-    return turn_completed, safety_blocked, audio_produced, collected_text
+    return turn_completed, safety_blocked, audio_produced, collected_text, served_model, degraded_to
 
 
 async def _handle_chat_message(
@@ -529,6 +611,8 @@ async def _handle_chat_message(
     turn_id = msg.get("turn_id") or str(uuid.uuid4())
     user_text = msg.get("text", "")
     character_id = msg.get("character_id", "rin")
+    # Requested LLM model — default to deepseek (free, unlimited).
+    model = msg.get("model", "deepseek") or "deepseek"
 
     if not user_text:
         await ws.send_json({"type": "error", "code": "MISSING_TEXT", "msg": "Missing text"})
@@ -544,8 +628,10 @@ async def _handle_chat_message(
 
     user_uuid = uuid.UUID(user_id)
 
-    # ── 1. Pre-check: voice setting + balance ──
-    effective_voice, can_proceed = await _precheck_billing(user_uuid, character_id, turn_id, ws)
+    # ── 1. Pre-check: voice setting + membership entitlement + balance ──
+    effective_voice, can_proceed = await _precheck_billing(
+        user_uuid, character_id, turn_id, ws, model=model
+    )
     if not can_proceed:
         return
 
@@ -597,6 +683,7 @@ async def _handle_chat_message(
             user_message=user_text,
             history=history,
             trace_id=uuid.UUID(turn_id),
+            model=model,
         )
 
         await ws.send_json({"type": "turn_start", "turn_id": turn_id})
@@ -605,6 +692,8 @@ async def _handle_chat_message(
             turn_safety_blocked,
             audio_produced,
             collected_text,
+            served_model,
+            degraded_to,
         ) = await _run_orchestrator(
             ws,
             orch,
@@ -641,6 +730,8 @@ async def _handle_chat_message(
             actual_modality,
             turn_safety_blocked,
             stream_session,
+            served_model=served_model,
+            degraded_to=degraded_to,
         )
     else:
         # Turn didn't complete (cancelled) — send basic turn_end
