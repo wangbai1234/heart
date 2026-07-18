@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import uuid
-from typing import Optional
+from typing import Any, Optional
 
 import structlog
 from sqlalchemy import text
@@ -110,18 +110,7 @@ async def fulfill_order(
 
     ftype = fulfillment.get("type")
     try:
-        if ftype == "membership":
-            tier = fulfillment["tier"]
-            days = int(fulfillment["days"])
-            await activate_or_extend(db, user_id, tier, days, granted_by=f"afdian:{out_trade_no}")
-        elif ftype == "coins":
-            coins = int(fulfillment["coins"])
-            fen = coins * 100
-            await grant_credits(
-                db, user_id, fen, f"afdian:{out_trade_no}", ref_type="afdian_purchase"
-            )
-        else:
-            raise ValueError(f"unknown fulfillment type: {ftype!r}")
+        await _apply_sku(db, user_id, ftype, fulfillment, out_trade_no)
 
         await db.execute(
             text(
@@ -157,4 +146,85 @@ async def fulfill_order(
     except Exception:
         await db.rollback()
         logger.exception("afdian_fulfill_error", out_trade_no=out_trade_no)
+        raise
+
+
+async def _apply_sku(
+    db: AsyncSession,
+    user_id: uuid.UUID,
+    ftype: str | None,
+    fulfillment: dict,
+    out_trade_no: str,
+) -> dict[str, Any]:
+    """Execute the SKU action (membership or coins). Returns detail dict."""
+    if ftype == "membership":
+        tier = fulfillment["tier"]
+        days = int(fulfillment["days"])
+        await activate_or_extend(db, user_id, tier, days, granted_by=f"afdian:{out_trade_no}")
+        return {"type": "membership", "tier": tier, "days": days}
+    elif ftype == "coins":
+        coins = int(fulfillment["coins"])
+        fen = coins * 100
+        await grant_credits(db, user_id, fen, f"afdian:{out_trade_no}", ref_type="afdian_purchase")
+        return {"type": "coins", "coins": coins}
+    else:
+        raise ValueError(f"unknown fulfillment type: {ftype!r}")
+
+
+async def admin_fulfill_order(
+    db: AsyncSession,
+    out_trade_no: str,
+    user_id: uuid.UUID,
+) -> dict[str, Any]:
+    """Admin override: fulfill an order for an explicitly supplied user_id.
+
+    Bypasses binding-code resolution — intended for 'unmatched' orders where the
+    customer didn't include a valid binding code in the Afdian remark.
+
+    Returns a detail dict with the fulfillment result. Raises ValueError for
+    unknown plan or already-fulfilled orders; raises on any DB / billing error.
+    """
+    row = await db.execute(
+        text("SELECT fulfilled_at, plan_id, remark FROM afdian_orders WHERE out_trade_no = :otn"),
+        {"otn": out_trade_no},
+    )
+    existing = row.fetchone()
+    if existing is None:
+        raise ValueError(f"order not found: {out_trade_no!r}")
+    if existing[0] is not None:
+        raise ValueError(f"order already fulfilled: {out_trade_no!r}")
+
+    plan_id: str = existing[1] or ""
+    sku_map = _parse_sku_map()
+    fulfillment = sku_map.get(plan_id)
+    if fulfillment is None:
+        raise ValueError(f"unknown plan_id {plan_id!r} for order {out_trade_no!r}")
+
+    ftype = fulfillment.get("type")
+    try:
+        detail = await _apply_sku(db, user_id, ftype, fulfillment, out_trade_no)
+
+        await db.execute(
+            text(
+                """
+                UPDATE afdian_orders
+                SET fulfilled_at = NOW(),
+                    resolved_user_id = :uid,
+                    fulfillment_error = NULL
+                WHERE out_trade_no = :otn
+                """
+            ),
+            {"otn": out_trade_no, "uid": user_id},
+        )
+        await db.commit()
+        logger.info(
+            "afdian_admin_fulfilled",
+            out_trade_no=out_trade_no,
+            user_id=str(user_id),
+            ftype=ftype,
+        )
+        return detail
+    except Exception:
+        await db.rollback()
+        logger.exception("afdian_admin_fulfill_error", out_trade_no=out_trade_no)
         raise
