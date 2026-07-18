@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useThemeStore } from '../stores/themeStore'
 import { useCharactersStore } from '../stores/charactersStore'
 import { useToastStore } from '../stores/toastStore'
+import { useMembershipStore } from '../stores/membershipStore'
 import {
   ApiError,
   uploadCharacterAvatar,
@@ -12,6 +13,7 @@ import {
   getCharacterDraft,
   uploadVoiceClone,
   getCharacterVoice,
+  getPricing,
   type CharacterDraftDTO,
   type PresetVoiceDTO,
 } from '../services/api'
@@ -210,7 +212,15 @@ export function CreateCharacterPage() {
   // Clone voice upload state
   const cloneInputRef = useRef<HTMLInputElement>(null)
   const [cloneStatus, setCloneStatus] = useState<'idle' | 'uploading' | 'processing' | 'ready' | 'failed'>('idle')
+  const [cloneProvider, setCloneProvider] = useState<'mimo' | 'fish'>('mimo')
+  const pendingCloneProviderRef = useRef<'mimo' | 'fish'>('mimo')
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  // Clone entitlement + pricing (F6): Fish clone is gated by membership tier.
+  const cloneEntitlements = useMembershipStore((s) => s.entitlements.clone)
+  const refreshMembership = useMembershipStore((s) => s.refresh)
+  const [cloneCosts, setCloneCosts] = useState<{ mimo: number; fish: number }>({ mimo: 50, fish: 100 })
+  const canCloneFish = cloneEntitlements.includes('fish')
 
   // ?voice=<cid> mode: configure voice for an already-created character
   const voiceOnlyId = searchParams.get('voice') ?? ''
@@ -230,6 +240,14 @@ export function CreateCharacterPage() {
       // and fall back to showing all voices.
       const genderFilter = isVoiceOnly ? undefined : form.gender
       getPresetVoices(genderFilter).then((res) => setPresets(res.presets)).catch(() => {})
+      refreshMembership()
+      getPricing()
+        .then((p) => {
+          const mimo = p.actions.find((a) => a.id === 'clone_mimo')?.cost
+          const fish = p.actions.find((a) => a.id === 'clone_fish')?.cost
+          setCloneCosts({ mimo: mimo ?? 50, fish: fish ?? 100 })
+        })
+        .catch(() => {})
     }
     // Stop preview audio when leaving voice step
     if (step !== 3 && previewAudioRef.current) {
@@ -450,7 +468,8 @@ export function CreateCharacterPage() {
     }
   }
 
-  async function handleCloneUpload(file: File) {
+  async function handleCloneUpload(file: File, provider: 'mimo' | 'fish' = 'mimo') {
+    setCloneProvider(provider)
     // Ensure the character exists before uploading; in the create flow this
     // finalizes creation so the clone binds to a real row (E1-1 side effect).
     const cid = await ensureCharacterCreated()
@@ -481,7 +500,7 @@ export function CreateCharacterPage() {
     }
     setCloneStatus('uploading')
     try {
-      await uploadVoiceClone(cid, file)
+      await uploadVoiceClone(cid, file, provider)
       setCloneStatus('processing')
       // Poll until ready or failed (max 2 min)
       let attempts = 0
@@ -514,6 +533,84 @@ export function CreateCharacterPage() {
       showToast(msg, 'error')
       setCloneStatus('failed')
     }
+  }
+
+  function renderCloneCard(provider: 'mimo' | 'fish', label: string, cost: number, locked: boolean) {
+    const active = cloneProvider === provider
+    const status = active ? cloneStatus : 'idle'
+    const busy = status === 'uploading' || status === 'processing'
+    const onClick = () => {
+      if (locked) { navigate('/membership'); return }
+      if (busy) return
+      pendingCloneProviderRef.current = provider
+      cloneInputRef.current?.click()
+    }
+    return (
+      <button
+        key={provider}
+        onClick={onClick}
+        disabled={busy}
+        className={`w-full flex items-center gap-4 px-5 py-4 rounded-[16px] border transition-all duration-[180ms] active:scale-[0.98] backdrop-blur-[12px] ${locked ? 'opacity-60 ' : ''}${
+          status === 'ready'
+            ? 'bg-[rgba(75,200,130,0.12)] border-[rgba(75,200,130,0.40)]'
+            : status === 'failed'
+            ? 'bg-[rgba(255,90,90,0.10)] border-[rgba(255,90,90,0.35)]'
+            : isDark
+            ? 'bg-[var(--color-surface-card)] border-[var(--color-border-subtle)]'
+            : 'bg-[rgba(255,255,255,0.72)] border-[rgba(255,255,255,0.60)]'
+        }`}
+      >
+        <div className={`w-[42px] h-[42px] rounded-full flex items-center justify-center shrink-0 ${
+          status === 'ready' ? 'bg-[rgba(75,200,130,0.20)]' :
+          status === 'failed' ? 'bg-[rgba(255,90,90,0.15)]' :
+          'bg-[rgba(255,183,197,0.18)]'
+        }`}>
+          {busy ? (
+            <svg className="animate-spin w-5 h-5 text-[#FF7DA1]" viewBox="0 0 24 24" fill="none">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+            </svg>
+          ) : status === 'ready' ? (
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#4BC882" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="20,6 9,17 4,12" />
+            </svg>
+          ) : status === 'failed' ? (
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FF5A5A" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          ) : locked ? (
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#B0A8B4" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" />
+            </svg>
+          ) : (
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FF7DA1" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="17,8 12,3 7,8" />
+              <line x1="12" y1="3" x2="12" y2="15" />
+            </svg>
+          )}
+        </div>
+        <div className="flex-1 min-w-0 text-left">
+          <p className={`text-[15px] font-semibold ${
+            status === 'ready' ? 'text-[#4BC882]' :
+            status === 'failed' ? 'text-[#FF5A5A]' :
+            'text-[var(--color-ink)]'
+          }`}>
+            {status === 'idle' && label}
+            {status === 'uploading' && '上传中…'}
+            {status === 'processing' && '克隆中，请稍候…'}
+            {status === 'ready' && '克隆完成 ✓'}
+            {status === 'failed' && '克隆失败，点击重试'}
+          </p>
+          <p className="text-[12px] text-[var(--color-text-muted)] mt-[2px]">
+            {locked ? '升级会员可使用' : `${cost} yuoyuo币 · WAV / MP3，10–30 秒`}
+          </p>
+        </div>
+        {locked && (
+          <span className="text-[11px] font-medium text-[var(--color-primary)] shrink-0">升级</span>
+        )}
+      </button>
+    )
   }
 
   async function handleSubmit() {
@@ -867,9 +964,16 @@ export function CreateCharacterPage() {
                         </svg>
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className={`text-[15px] font-semibold ${active ? 'text-[#E86083]' : 'text-[var(--color-ink)]'}`}>
-                          {preset.name}
-                        </p>
+                        <div className="flex items-center gap-2">
+                          <p className={`text-[15px] font-semibold ${active ? 'text-[#E86083]' : 'text-[var(--color-ink)]'}`}>
+                            {preset.name}
+                          </p>
+                          {preset.provider && (
+                            <span className="text-[10px] px-1.5 py-[1px] rounded-full bg-[rgba(199,182,255,0.20)] text-[var(--color-accent)] uppercase tracking-wide shrink-0">
+                              {preset.provider}
+                            </span>
+                          )}
+                        </div>
                         {preset.description && (
                           <p className="text-[12px] text-[var(--color-text-muted)] mt-[2px]">
                             {preset.description}
@@ -918,77 +1022,26 @@ export function CreateCharacterPage() {
                 `createdCharacterId &&`, which after E1-1 was empty during the
                 whole voice step in the create flow, so the section vanished
                 (TEST_REPORT_20260712 §4.3 follow-up). */}
-            {(
-              <>
-                <SectionTitle>或者克隆音色（选填）</SectionTitle>
-                <input
-                  ref={cloneInputRef}
-                  type="file"
-                  accept="audio/wav,audio/mpeg,audio/mp3,audio/ogg,audio/webm,audio/mp4"
-                  className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0]
-                    if (file) { e.target.value = ''; handleCloneUpload(file) }
-                  }}
-                />
-                <button
-                  onClick={() => cloneInputRef.current?.click()}
-                  disabled={cloneStatus === 'uploading' || cloneStatus === 'processing'}
-                  className={`w-full flex items-center gap-4 px-5 py-4 rounded-[16px] border transition-all duration-[180ms] active:scale-[0.98] backdrop-blur-[12px] ${
-                    cloneStatus === 'ready'
-                      ? 'bg-[rgba(75,200,130,0.12)] border-[rgba(75,200,130,0.40)]'
-                      : cloneStatus === 'failed'
-                      ? 'bg-[rgba(255,90,90,0.10)] border-[rgba(255,90,90,0.35)]'
-                      : isDark
-                      ? 'bg-[var(--color-surface-card)] border-[var(--color-border-subtle)]'
-                      : 'bg-[rgba(255,255,255,0.72)] border-[rgba(255,255,255,0.60)]'
-                  }`}
-                >
-                  <div className={`w-[42px] h-[42px] rounded-full flex items-center justify-center shrink-0 ${
-                    cloneStatus === 'ready' ? 'bg-[rgba(75,200,130,0.20)]' :
-                    cloneStatus === 'failed' ? 'bg-[rgba(255,90,90,0.15)]' :
-                    'bg-[rgba(255,183,197,0.18)]'
-                  }`}>
-                    {cloneStatus === 'uploading' || cloneStatus === 'processing' ? (
-                      <svg className="animate-spin w-5 h-5 text-[#FF7DA1]" viewBox="0 0 24 24" fill="none">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                      </svg>
-                    ) : cloneStatus === 'ready' ? (
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#4BC882" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                        <polyline points="20,6 9,17 4,12" />
-                      </svg>
-                    ) : cloneStatus === 'failed' ? (
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FF5A5A" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                        <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-                      </svg>
-                    ) : (
-                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FF7DA1" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                        <polyline points="17,8 12,3 7,8" />
-                        <line x1="12" y1="3" x2="12" y2="15" />
-                      </svg>
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0 text-left">
-                    <p className={`text-[15px] font-semibold ${
-                      cloneStatus === 'ready' ? 'text-[#4BC882]' :
-                      cloneStatus === 'failed' ? 'text-[#FF5A5A]' :
-                      'text-[var(--color-ink)]'
-                    }`}>
-                      {cloneStatus === 'idle' && '上传音频克隆音色'}
-                      {cloneStatus === 'uploading' && '上传中…'}
-                      {cloneStatus === 'processing' && '克隆中，请稍候…'}
-                      {cloneStatus === 'ready' && '克隆完成 ✓'}
-                      {cloneStatus === 'failed' && '克隆失败，点击重试'}
-                    </p>
-                    <p className="text-[12px] text-[var(--color-text-muted)] mt-[2px]">
-                      WAV / MP3，10–30 秒，最大 20MB
-                    </p>
-                  </div>
-                </button>
-              </>
-            )}
+            <>
+              <SectionTitle>或者克隆音色（选填）</SectionTitle>
+              <input
+                ref={cloneInputRef}
+                type="file"
+                accept="audio/wav,audio/mpeg,audio/mp3,audio/ogg,audio/webm,audio/mp4"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0]
+                  if (file) { e.target.value = ''; handleCloneUpload(file, pendingCloneProviderRef.current) }
+                }}
+              />
+              <div className="space-y-2.5">
+                {renderCloneCard('mimo', 'MiMo 克隆', cloneCosts.mimo, false)}
+                {renderCloneCard('fish', 'Fish 克隆', cloneCosts.fish, !canCloneFish)}
+              </div>
+              <p className="text-[11px] text-[var(--color-text-muted)] mt-2 text-center">
+                WAV / MP3，10–30 秒，最大 20MB · 克隆成功才扣费
+              </p>
+            </>
           </>
         )}
 

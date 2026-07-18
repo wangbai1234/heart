@@ -5,6 +5,7 @@ import { useThemeStore } from '../stores/themeStore'
 import { useAppStore } from '../stores/appStore'
 import { useAuthStore } from '../stores/authStore'
 import { useCreditsStore } from '../stores/creditsStore'
+import { useMembershipStore } from '../stores/membershipStore'
 import { Avatar } from '../components/ui/Avatar'
 import { Switch } from '../components/ui/Switch'
 import { Slider } from '../components/ui/Slider'
@@ -24,6 +25,8 @@ export function SettingsPage() {
   const refreshToken = useAuthStore((s) => s.refreshToken)
   const clearSession = useAuthStore((s) => s.clearSession)
   const { balance, refresh: refreshCredits } = useCreditsStore()
+  const membershipTier = useMembershipStore((s) => s.tier)
+  const refreshMembership = useMembershipStore((s) => s.refresh)
   const [showLogoutDialog, setShowLogoutDialog] = useState(false)
   const [showDeleteDialog, setShowDeleteDialog] = useState(false)
   const [deleteStep, setDeleteStep] = useState<1 | 2>(1)
@@ -33,6 +36,9 @@ export function SettingsPage() {
   const [toast, setToast] = useState({ visible: false, message: '' })
 
   useEffect(() => { refreshCredits() }, [refreshCredits])
+  useEffect(() => { refreshMembership() }, [refreshMembership])
+
+  const TIER_LABELS: Record<string, string> = { free: '体验版', plus: '进阶版', immersive: '沉浸版' }
 
   const themeLabel = theme === 'light' ? '浅色' : theme === 'dark' ? '深色' : '自动'
 
@@ -132,7 +138,7 @@ export function SettingsPage() {
               {displayName}
             </ScaledText>
             <ScaledText as="span" className="inline-block mt-1 text-[12px] font-medium text-[var(--color-primary)] bg-[rgba(255,183,197,0.20)] rounded-full px-3 py-[2px]">
-              {balance} 积分
+              {balance} yuoyuo币
             </ScaledText>
           </div>
           <span className="text-[var(--color-chevron)]">{'>'}</span>
@@ -141,8 +147,10 @@ export function SettingsPage() {
         {/* 我的会员 */}
         <SectionLabel>我的会员</SectionLabel>
         <GroupCard>
-          <SettingRow icon={<GiftIcon />} label="兑换积分" chevron onClick={() => navigate('/redeem')} />
-          <SettingRow icon={<CrownIcon />} label="积分余额" value={`${balance}`} onClick={() => navigate('/credits/transactions')} chevron />
+          <SettingRow icon={<CrownIcon />} label="会员中心" value={TIER_LABELS[membershipTier] ?? '体验版'} chevron onClick={() => navigate('/membership')} />
+          <SettingRow icon={<WalletIcon />} label="yuoyuo币钱包" value={`${balance}`} chevron onClick={() => navigate('/wallet')} />
+          <SettingRow icon={<InviteIcon />} label="邀请好友" chevron onClick={() => navigate('/invite')} />
+          <SettingRow icon={<GiftIcon />} label="兑换码" chevron onClick={() => navigate('/redeem')} />
         </GroupCard>
 
         {/* 角色创作 */}
@@ -266,10 +274,10 @@ export function SettingsPage() {
         {deleteStep === 1 ? (
           <>
             <ScaledText as="p" className="text-[14px] text-[var(--color-text-secondary)] leading-[1.7]">
-              注销后，yuoyuo 会在 30 天后永久删除你的全部数据：聊天记录、TA 对你的所有记忆、情绪与关系进展、你的积分余额。此后无法恢复。
+              注销后，yuoyuo 会在 30 天后永久删除你的全部数据：聊天记录、TA 对你的所有记忆、情绪与关系进展、你的 yuoyuo币余额。此后无法恢复。
             </ScaledText>
             <ScaledText as="p" className="text-[14px] text-[var(--color-danger)] leading-[1.7] mt-2">
-              你当前还有 {balance} 积分，注销后将一并清空且不予退还。
+              你当前还有 {balance} yuoyuo币，注销后将一并清空且不予退还。
             </ScaledText>
             <div className="flex gap-3 mt-4">
               <Button variant="ghost" size="sm" onClick={() => setShowDeleteDialog(false)} className="flex-1">
@@ -420,6 +428,12 @@ function GiftIcon() {
 }
 function CrownIcon() {
   return <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--color-primary)" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M2 20h20L19 8l-5 5-2-7-2 7-5-5-3 12z" /></svg>
+}
+function WalletIcon() {
+  return <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--color-primary)" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z" /><path d="M16 12h2" /><path d="M3 8h14" /></svg>
+}
+function InviteIcon() {
+  return <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--color-primary)" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><line x1="19" y1="8" x2="19" y2="14" /><line x1="22" y1="11" x2="16" y2="11" /></svg>
 }
 function PaletteIcon() {
   return <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--color-primary)" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><circle cx="12" cy="8" r="1.5" fill="var(--color-primary)" /><circle cx="8" cy="12" r="1.5" fill="var(--color-primary)" /><circle cx="16" cy="12" r="1.5" fill="var(--color-primary)" /><circle cx="12" cy="16" r="1.5" fill="var(--color-primary)" /></svg>

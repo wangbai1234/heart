@@ -167,7 +167,7 @@ export function RedeemPage() {
 
       {/* Success Dialog */}
       <Dialog open={showSuccess} onClose={() => { setShowSuccess(false); navigate(-1) }} title="激活成功">
-        <p>兑换成功！当前余额 {creditsStore.balance} 积分，尽情享受吧！</p>
+        <p>兑换成功！当前余额 {creditsStore.balance} yuoyuo币，尽情享受吧！</p>
         <Button
           variant="primary"
           size="sm"

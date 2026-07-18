@@ -13,6 +13,7 @@ import { Dialog } from './ui/Dialog'
 import { Button } from './ui/Button'
 import { Avatar } from './ui/Avatar'
 import VoiceMessageBubble from './VoiceMessageBubble'
+import { ChatModelSelector } from './ChatModelSelector'
 import { useSwipeNavigation } from '../hooks/useSwipeNavigation'
 
 const EMPTY_MESSAGES: Message[] = []
@@ -60,6 +61,8 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
   const isGenerating = useChatStore((s) => s.isGenerating[currentCharacterId as CharacterId] ?? false)
   const insufficientCredits = useChatStore((s) => s.insufficientCredits)
   const clearInsufficientCredits = useChatStore((s) => s.clearInsufficientCredits)
+  const modelForbidden = useChatStore((s) => s.modelForbidden)
+  const clearModelForbidden = useChatStore((s) => s.clearModelForbidden)
 
   const { sendMessage, interrupt } = useWebSocket()
 
@@ -470,6 +473,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
             </span>
           </div>
         </div>
+        <ChatModelSelector characterId={currentCharacterId} isDark={isDark} />
         <button onClick={() => navigate('/character-backstage')} className="w-[44px] h-[44px] flex items-center justify-center" aria-label="打开角色后台">
           <span className={`text-[20px] ${isDark ? 'text-[#E4E4E7]' : 'text-[var(--color-ink)]'}`}>···</span>
         </button>
@@ -567,16 +571,31 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
       </div>
 
       {/* Insufficient credits dialog */}
-      <Dialog open={!!insufficientCredits} onClose={clearInsufficientCredits} title="积分不足">
+      <Dialog open={!!insufficientCredits} onClose={clearInsufficientCredits} title="yuoyuo币不足">
         <p className="text-[14px] text-[var(--color-text-secondary)] mb-4">
-          你的积分不足以继续对话。请兑换积分后继续。
+          你的 yuoyuo币不足以继续对话。前往钱包充值后继续。
         </p>
         <div className="flex gap-3">
           <Button variant="ghost" size="sm" onClick={clearInsufficientCredits} className="flex-1">
             取消
           </Button>
-          <Button variant="primary" size="sm" onClick={() => { clearInsufficientCredits(); navigate('/redeem') }} className="flex-1">
-            去兑换
+          <Button variant="primary" size="sm" onClick={() => { clearInsufficientCredits(); navigate('/wallet') }} className="flex-1">
+            去充值
+          </Button>
+        </div>
+      </Dialog>
+
+      {/* Model requires higher tier */}
+      <Dialog open={!!modelForbidden} onClose={clearModelForbidden} title="该模型需会员">
+        <p className="text-[14px] text-[var(--color-text-secondary)] mb-4">
+          当前等级暂不能使用该模型，升级会员即可解锁更强的对话模型。
+        </p>
+        <div className="flex gap-3">
+          <Button variant="ghost" size="sm" onClick={clearModelForbidden} className="flex-1">
+            取消
+          </Button>
+          <Button variant="primary" size="sm" onClick={() => { clearModelForbidden(); navigate('/membership') }} className="flex-1">
+            去升级
           </Button>
         </div>
       </Dialog>

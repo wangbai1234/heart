@@ -162,7 +162,7 @@ export function CharacterBackstagePage() {
                 </h2>
                 <p className={`max-w-[210px] text-[14px] leading-[1.55] ${subtleTextClassName}`}>
                   {hasVoice
-                    ? '开启后 AI 回复将转为语音，语音回复消耗 5 积分/条'
+                    ? '开启后 AI 回复将转为语音，会额外消耗 yuoyuo币'
                     : '先选择预设音色或克隆专属音色，才能开启语音聊天'}
                 </p>
               </div>
