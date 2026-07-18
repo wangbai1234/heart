@@ -309,8 +309,14 @@ class TestPricingEndpoint:
         from heart.api.routes_credits import pricing
         result = await pricing()
         assert "membership_tiers" in result
-        tier_ids = {t["id"] for t in result["membership_tiers"]}
+        # field renamed: id → tier (api_contract.md §1.1)
+        tier_ids = {t["tier"] for t in result["membership_tiers"]}
         assert tier_ids == {"free", "plus", "immersive"}
+        # each tier has sku and benefits
+        for t in result["membership_tiers"]:
+            assert "sku" in t
+            assert "benefits" in t
+            assert "price" in t  # renamed from price_monthly
 
     @pytest.mark.asyncio
     async def test_shop_present(self):
@@ -318,9 +324,16 @@ class TestPricingEndpoint:
         result = await pricing()
         assert "shop" in result
         assert len(result["shop"]) == 4
+        # SKU names aligned to contract
+        skus = {s["sku"] for s in result["shop"]}
+        assert skus == {"pack_6", "pack_18", "pack_48", "pack_128"}
 
     @pytest.mark.asyncio
-    async def test_legacy_tiers_still_present(self):
+    async def test_actions_include_tts(self):
         from heart.api.routes_credits import pricing
         result = await pricing()
-        assert "tiers" in result  # backwards compat
+        action_ids = {a["id"] for a in result["actions"]}
+        assert "tts_mimo" in action_ids
+        assert "tts_fish" in action_ids
+        assert "clone_mimo" in action_ids
+        assert "clone_fish" in action_ids

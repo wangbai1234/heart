@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import random
+import secrets
 import string
 import uuid
 
@@ -20,9 +20,39 @@ logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix="/api/membership", tags=["membership"])
 
+_CODE_ALPHABET = string.ascii_uppercase + string.digits
+
 
 def _gen_binding_code() -> str:
-    return "".join(random.choices(string.ascii_uppercase + string.digits, k=8))
+    return "".join(secrets.choice(_CODE_ALPHABET) for _ in range(8))
+
+
+async def _get_or_create_binding_code(db: AsyncSession, user_id: uuid.UUID) -> str:
+    """Return the most recent valid binding code, creating one if none exists."""
+    row = (
+        await db.execute(
+            text(
+                "SELECT code FROM user_binding_codes "
+                "WHERE user_id = :uid AND expires_at > NOW() "
+                "ORDER BY expires_at DESC LIMIT 1"
+            ),
+            {"uid": user_id},
+        )
+    ).scalar_one_or_none()
+    if row:
+        return str(row)
+
+    code = _gen_binding_code()
+    await db.execute(
+        text(
+            "INSERT INTO user_binding_codes (id, user_id, code, created_at, expires_at) "
+            "VALUES (:id, :uid, :code, NOW(), NOW() + INTERVAL '7 days') "
+            "ON CONFLICT (code) DO NOTHING"
+        ),
+        {"id": uuid.uuid4(), "uid": user_id, "code": code},
+    )
+    await db.commit()
+    return code
 
 
 @router.get("")
@@ -30,15 +60,35 @@ async def get_membership(
     current_user: TokenData = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
-    """Return the current user's effective membership tier and entitlements."""
-    tier = await get_effective_tier(db, uuid.UUID(current_user.user_id))
+    """Return effective membership per api_contract.md §1.2."""
+    uid = uuid.UUID(current_user.user_id)
+    tier = await get_effective_tier(db, uid)
     ent = get_entitlements(tier)
+
+    expires_row = (
+        await db.execute(
+            text(
+                "SELECT expires_at FROM user_memberships "
+                "WHERE user_id = :uid AND expires_at > NOW() "
+                "ORDER BY expires_at DESC LIMIT 1"
+            ),
+            {"uid": uid},
+        )
+    ).scalar_one_or_none()
+    expires_at = expires_row.isoformat() if expires_row else None
+
+    binding_code = await _get_or_create_binding_code(db, uid)
+
     return {
         "tier": tier,
-        "models": ent.models,
-        "tts": ent.tts,
-        "clone": ent.clone,
-        "monthly_grant_coins": ent.monthly_grant_fen // 100,
+        "expires_at": expires_at,
+        "monthly_grant": ent.monthly_grant_fen // 100,
+        "entitlements": {
+            "models": ent.models,
+            "tts": ent.tts,
+            "clone": ent.clone,
+        },
+        "binding_code": binding_code,
     }
 
 
@@ -47,18 +97,13 @@ async def create_binding_code(
     current_user: TokenData = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
-    """Generate a binding code to embed in an afdian order remark.
-
-    Code is unique, 8-char uppercase alphanumeric, valid for 7 days.
-    """
+    """Generate a fresh binding code to embed in an afdian order remark."""
     code = _gen_binding_code()
     await db.execute(
         text(
-            """
-            INSERT INTO user_binding_codes (id, user_id, code, created_at, expires_at)
-            VALUES (:id, :uid, :code, NOW(), NOW() + INTERVAL '7 days')
-            ON CONFLICT (code) DO NOTHING
-            """
+            "INSERT INTO user_binding_codes (id, user_id, code, created_at, expires_at) "
+            "VALUES (:id, :uid, :code, NOW(), NOW() + INTERVAL '7 days') "
+            "ON CONFLICT (code) DO NOTHING"
         ),
         {"id": uuid.uuid4(), "uid": uuid.UUID(current_user.user_id), "code": code},
     )

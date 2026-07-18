@@ -85,40 +85,57 @@ async def test_get_or_create_code_is_8_chars():
 
 
 @pytest.mark.asyncio
-async def test_record_invite_signup_unknown_code_returns_false():
+async def test_record_invite_signup_unknown_code_returns_invalid_code():
     from heart.invite.service import record_invite_signup
 
     db = _mock_db(_empty_mapping_result())
     result = await record_invite_signup(db, uuid.uuid4(), "NOTEXIST")
 
-    assert result is False
+    assert result == "invalid_code"
     assert db.execute.await_count == 1  # only SELECT
 
 
 @pytest.mark.asyncio
-async def test_record_invite_signup_self_invite_returns_false():
+async def test_record_invite_signup_self_invite_returns_self_invite():
     from heart.invite.service import record_invite_signup
 
     user_id = uuid.uuid4()
     db = _mock_db(_mapping_result({"user_id": user_id}))
     result = await record_invite_signup(db, user_id, "SELFCODE")
 
-    assert result is False
+    assert result == "self_invite"
 
 
 @pytest.mark.asyncio
-async def test_record_invite_signup_valid_returns_true():
+async def test_record_invite_signup_already_bound_returns_already_bound():
+    from heart.invite.service import record_invite_signup
+
+    inviter_id = uuid.uuid4()
+    # SELECT inviter → found; SELECT existing use → found (already bound)
+    db = _mock_db(
+        _mapping_result({"user_id": inviter_id}),
+        _fetchone_result((99,)),  # existing binding exists
+    )
+    result = await record_invite_signup(db, uuid.uuid4(), "GOODCODE")
+
+    assert result == "already_bound"
+    assert db.execute.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_record_invite_signup_valid_returns_ok():
     from heart.invite.service import record_invite_signup
 
     inviter_id = uuid.uuid4()
     db = _mock_db(
         _mapping_result({"user_id": inviter_id}),  # SELECT inviter
+        _fetchone_result(None),                     # SELECT existing → not bound
         MagicMock(),                                # INSERT
     )
     result = await record_invite_signup(db, uuid.uuid4(), "GOODCODE")
 
-    assert result is True
-    assert db.execute.await_count == 2
+    assert result == "ok"
+    assert db.execute.await_count == 3
 
 
 # ── handle_first_chat ─────────────────────────────────────────────────────────
@@ -247,7 +264,7 @@ async def test_use_invite_code_accepts_valid():
     mock_user.user_id = str(uuid.uuid4())
     mock_db = AsyncMock()
 
-    with patch("heart.api.routes_invite.record_invite_signup", new_callable=AsyncMock, return_value=True):
+    with patch("heart.api.routes_invite.record_invite_signup", new_callable=AsyncMock, return_value="ok"):
         result = await use_invite_code(
             body=UseInviteRequest(code="GOODCODE"),
             current_user=mock_user,

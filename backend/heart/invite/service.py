@@ -60,8 +60,11 @@ async def get_or_create_code(db: AsyncSession, user_id: uuid.UUID) -> str:
     return str(row2["code"]) if row2 else code
 
 
-async def record_invite_signup(db: AsyncSession, invitee_id: uuid.UUID, code: str) -> bool:
-    """Record that invitee used an invite code at signup. Idempotent."""
+async def record_invite_signup(db: AsyncSession, invitee_id: uuid.UUID, code: str) -> str:
+    """Record that invitee used an invite code at signup. Idempotent.
+
+    Returns one of: "ok" | "invalid_code" | "already_bound" | "self_invite".
+    """
     upper_code = code.upper()
     row = (
         (
@@ -75,10 +78,20 @@ async def record_invite_signup(db: AsyncSession, invitee_id: uuid.UUID, code: st
     )
     if not row:
         logger.info("invite_code_not_found", code=upper_code)
-        return False
+        return "invalid_code"
     inviter_id = uuid.UUID(str(row["user_id"]))
     if inviter_id == invitee_id:
-        return False  # can't invite yourself
+        return "self_invite"
+
+    # Check if invitee already bound to any inviter
+    existing = (
+        await db.execute(
+            text("SELECT id FROM user_invite_uses WHERE invitee_id = :invitee"),
+            {"invitee": invitee_id},
+        )
+    ).fetchone()
+    if existing:
+        return "already_bound"
 
     await db.execute(
         text(
@@ -89,7 +102,7 @@ async def record_invite_signup(db: AsyncSession, invitee_id: uuid.UUID, code: st
         {"inviter": inviter_id, "invitee": invitee_id, "code": upper_code},
     )
     logger.info("invite_signup_recorded", inviter=str(inviter_id), invitee=str(invitee_id))
-    return True
+    return "ok"
 
 
 async def handle_first_chat(db: AsyncSession, user_id: uuid.UUID) -> None:
@@ -139,6 +152,8 @@ async def handle_first_chat(db: AsyncSession, user_id: uuid.UUID) -> None:
         user_id,
         grant_fen,
         idempotency_key=f"invite:invitee:{use_id}",
+        type_str="invite",
+        ref_type="invite",
     )
     # Inviter reward
     await grant_credits(
@@ -146,6 +161,8 @@ async def handle_first_chat(db: AsyncSession, user_id: uuid.UUID) -> None:
         inviter_id,
         grant_fen,
         idempotency_key=f"invite:inviter:{use_id}",
+        type_str="invite",
+        ref_type="invite",
     )
     logger.info(
         "invite_first_chat_rewarded",
@@ -194,6 +211,8 @@ async def handle_first_chat(db: AsyncSession, user_id: uuid.UUID) -> None:
                     inviter_id,
                     bonus_fen,
                     idempotency_key=f"invite:milestone:{threshold}:{inviter_id}",
+                    type_str="invite",
+                    ref_type="invite",
                 )
                 logger.info(
                     "invite_milestone_granted",
