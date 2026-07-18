@@ -22,6 +22,9 @@ class TurnRequest:
     history: list[dict]  # [{"role": "user/assistant", "content": "..."}, ...]
     trace_id: UUID
     modality: str = "text"
+    # Requested LLM model; orchestrator/composer will use stream_for with failover.
+    # Defaults to "deepseek" (free tier default).
+    model: str = "deepseek"
 
 
 @dataclass

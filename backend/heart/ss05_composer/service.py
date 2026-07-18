@@ -158,6 +158,11 @@ class CompositionContext:
     # None = regular chat turn.
     proactive_hint: Optional[str] = None
 
+    # Multi-model: which LLM model to use for this turn.  Empty / "deepseek" = default.
+    model: str = "deepseek"
+    # Populated by compose_stream with served_model / degraded_to after streaming.
+    stream_meta: Dict[str, Any] = field(default_factory=dict)
+
 
 @dataclass
 class CompositionResult:
@@ -482,12 +487,7 @@ class ComposerService:
             return
 
         full_response = ""
-        async for chunk in self._model_router.stream_main(
-            messages=messages,
-            temperature=temperature,
-            max_tokens=ctx.max_tokens,
-            agent_name=f"Composer.{ctx.character_id}",
-        ):
+        async for chunk in self._do_stream(ctx, messages, temperature):
             full_response += chunk
             yield chunk
 
@@ -509,6 +509,39 @@ class ComposerService:
         # the LLM chunks have already been delivered. This is a known
         # limitation; the upstream LLM prompt and the non-streaming
         # compose() path are the primary defenses.
+
+    async def _do_stream(
+        self,
+        ctx: "CompositionContext",
+        messages: List[Dict[str, str]],
+        temperature: float,
+    ) -> AsyncGenerator[str, None]:
+        """Route streaming to stream_for (multi-model) or legacy stream_main."""
+        _model = ctx.model if ctx.model else "deepseek"
+        _has_stream_for = hasattr(self._model_router, "stream_for")
+        if _model and _has_stream_for:
+            from heart.infra.llm_providers.router import DEFAULT_FAILOVER
+
+            async for chunk in self._model_router.stream_for(  # type: ignore[attr-defined]
+                _model,
+                messages,
+                failover=DEFAULT_FAILOVER,
+                temperature=temperature,
+                max_tokens=ctx.max_tokens,
+                agent_name=f"Composer.{ctx.character_id}",
+                meta=ctx.stream_meta,
+            ):
+                yield chunk
+        else:
+            ctx.stream_meta["served_model"] = getattr(self._model_router, "_main_model", "deepseek")
+            ctx.stream_meta["degraded_to"] = None
+            async for chunk in self._model_router.stream_main(
+                messages=messages,
+                temperature=temperature,
+                max_tokens=ctx.max_tokens,
+                agent_name=f"Composer.{ctx.character_id}",
+            ):
+                yield chunk
 
     # ── Context Block Builders ────────────────────────────────
 

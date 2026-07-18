@@ -362,8 +362,16 @@ class Orchestrator:
 
         # Stream compose
         full_text = ""
+        stream_meta: dict = {}
         async for event in self._stream_compose(
-            req, composer, session.session_id, vad, intimacy, active_emotions, cancel_token
+            req,
+            composer,
+            session.session_id,
+            vad,
+            intimacy,
+            active_emotions,
+            cancel_token,
+            stream_meta=stream_meta,
         ):
             if event["type"] == "text_delta":
                 full_text += event["delta"]
@@ -385,7 +393,13 @@ class Orchestrator:
         # Fire cold path (fire-and-forget, uses own session internally)
         self._fire_cold_path(req, TurnProfiler(), full_text, days_since_last)
 
-        yield {"type": "turn_end", "full_text": full_text, "path": "normal"}
+        yield {
+            "type": "turn_end",
+            "full_text": full_text,
+            "path": "normal",
+            "served_model": stream_meta.get("served_model", getattr(req, "model", "deepseek")),
+            "degraded_to": stream_meta.get("degraded_to"),
+        }
 
     async def _stream_compose(
         self,
@@ -396,10 +410,12 @@ class Orchestrator:
         intimacy: float,
         active_emotions: list[dict[str, Any]] | None = None,
         cancel_token: Optional[asyncio.Event] = None,
+        stream_meta: Optional[dict] = None,
     ) -> AsyncGenerator[dict, None]:
         """Stream compose and yield events."""
         from heart.ss05_composer.service import CompositionContext
 
+        _meta: dict = stream_meta if stream_meta is not None else {}
         ctx = CompositionContext(
             user_id=req.user_id,
             character_id=req.character_id,
@@ -407,6 +423,8 @@ class Orchestrator:
             session_id=session_id,
             user_message=req.user_message,
             max_tokens=2000,
+            model=getattr(req, "model", "deepseek"),
+            stream_meta=_meta,
         )
 
         splitter = SentenceSplitter()
