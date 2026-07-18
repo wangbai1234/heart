@@ -83,6 +83,7 @@ class StreamSession:
         self._paused = False
         self._current_response: Optional[Any] = None
         self.audio_produced = False
+        self.tts_provider_name: str = ""
         self._all_audio_chunks: list[bytes] = []
         self._text_parts: list[str] = []
         self._last_turn_id: str | None = None
@@ -195,6 +196,7 @@ class StreamSession:
             return
         self._all_audio_chunks = [result.audio]
         self.audio_produced = True
+        self.tts_provider_name = result.provider_name
         await self._send(
             self._last_turn_id,
             self._global_seq,

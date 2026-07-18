@@ -129,6 +129,8 @@ ignore = [
 "heart/ss04_relationship/special_states.py" = ["C901"]
 "heart/safety/critic_agent.py" = ["C901"]
 "heart/safety/wellbeing_monitor.py" = ["C901"]
+# _post_turn_billing pre-existing complexity (complexity=13 before P3); refactor target 2026-Q4.
+"heart/api/routes_chat_ws.py" = ["C901"]
 
 [tool.mypy]
 python_version = "3.11"

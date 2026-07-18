@@ -35,3 +35,4 @@ class TTSResult:
     format: str
     duration_ms: int
     request_id: str
+    provider_name: str = ""

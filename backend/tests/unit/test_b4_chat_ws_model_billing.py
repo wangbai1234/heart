@@ -258,3 +258,82 @@ class TestUploadTurnAudio:
 
         assert url is None
         assert dur is None
+
+
+# ---------------------------------------------------------------------------
+# _charge_tts_cost
+# ---------------------------------------------------------------------------
+
+
+class TestChargeTtsCost:
+    @pytest.mark.asyncio
+    async def test_minimax_returns_zero_no_deduction(self):
+        from heart.api.routes_chat_ws import _charge_tts_cost
+
+        db = AsyncMock()
+        cost, bal = await _charge_tts_cost(db, uuid.uuid4(), str(uuid.uuid4()), "minimax")
+        assert cost == 0
+        assert bal == 0
+        db.execute.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_unknown_provider_returns_zero(self):
+        from heart.api.routes_chat_ws import _charge_tts_cost
+
+        db = AsyncMock()
+        cost, bal = await _charge_tts_cost(db, uuid.uuid4(), str(uuid.uuid4()), "")
+        assert cost == 0
+        assert bal == 0
+
+    @pytest.mark.asyncio
+    async def test_mimo_deducts_with_consume_tts_type(self):
+        from heart.api.routes_chat_ws import _charge_tts_cost
+
+        db = AsyncMock()
+        turn_id = str(uuid.uuid4())
+        user_id = uuid.uuid4()
+
+        with patch("heart.billing.deduct_credits", new=AsyncMock(return_value=9500)) as mock_deduct:
+            cost, bal = await _charge_tts_cost(db, user_id, turn_id, "mimo")
+
+        assert cost == 500  # mimo_tts_cost_credits=5 → 500 fen
+        assert bal == 9500
+        mock_deduct.assert_called_once_with(
+            db, user_id, 500, f"turn:{turn_id}:tts", "consume_tts"
+        )
+
+    @pytest.mark.asyncio
+    async def test_fish_deducts_800_fen(self):
+        from heart.api.routes_chat_ws import _charge_tts_cost
+
+        db = AsyncMock()
+        turn_id = str(uuid.uuid4())
+        user_id = uuid.uuid4()
+
+        with patch("heart.billing.deduct_credits", new=AsyncMock(return_value=8000)) as mock_deduct:
+            cost, bal = await _charge_tts_cost(db, user_id, turn_id, "fish")
+
+        assert cost == 800  # fish_tts_cost_credits=8 → 800 fen
+        assert bal == 8000
+        mock_deduct.assert_called_once_with(
+            db, user_id, 800, f"turn:{turn_id}:tts", "consume_tts"
+        )
+
+    @pytest.mark.asyncio
+    async def test_idempotency_key_format(self):
+        from heart.api.routes_chat_ws import _charge_tts_cost
+
+        captured = {}
+
+        async def fake_deduct(db, user_id, amount, idempotency_key, reason):
+            captured["key"] = idempotency_key
+            captured["reason"] = reason
+            return 0
+
+        db = AsyncMock()
+        turn_id = "xyz-789"
+        with patch("heart.billing.deduct_credits", new=fake_deduct):
+            await _charge_tts_cost(db, uuid.uuid4(), turn_id, "mimo")
+
+        assert captured["key"] == "turn:xyz-789:tts"
+        assert captured["reason"] == "consume_tts"

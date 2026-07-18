@@ -401,6 +401,25 @@ async def _charge_llm_cost(
     return llm_cost, new_balance
 
 
+async def _charge_tts_cost(
+    db: Any,
+    user_uuid: uuid.UUID,
+    turn_id: str,
+    tts_provider: str,
+) -> tuple[int, int]:
+    """Deduct TTS per-turn cost. Returns (cost_charged, new_balance). 0,0 if free provider."""
+    from heart.billing import deduct_credits
+    from heart.billing.pricing import tts_cost_fen
+
+    tts_cost = tts_cost_fen(tts_provider)
+    if tts_cost == 0:
+        return 0, 0
+    new_balance = await deduct_credits(
+        db, user_uuid, tts_cost, f"turn:{turn_id}:tts", "consume_tts"
+    )
+    return tts_cost, new_balance
+
+
 async def _post_turn_billing(
     ws: WebSocket,
     user_uuid: uuid.UUID,
@@ -413,6 +432,7 @@ async def _post_turn_billing(
     stream_session: Any = None,
     served_model: str = "deepseek",
     degraded_to: Optional[str] = None,
+    tts_provider: str = "",
 ) -> None:
     """Charge credits and persist chat messages after turn completes.
 
@@ -484,6 +504,24 @@ async def _post_turn_billing(
                         error=str(_llm_err),
                     )
                     raise
+
+                # TTS per-turn billing (idempotent key turn:{id}:tts)
+                if actual_modality == "voice" and tts_provider:
+                    try:
+                        tts_cost, _bal = await _charge_tts_cost(
+                            db, user_uuid, turn_id, tts_provider
+                        )
+                        if tts_cost > 0:
+                            total_charged += tts_cost
+                            new_balance = _bal
+                    except Exception as _tts_err:
+                        logger.exception(
+                            "tts_billing_failed",
+                            turn_id=turn_id,
+                            provider=tts_provider,
+                            error=str(_tts_err),
+                        )
+                        raise
 
             await db.commit()
 
@@ -742,6 +780,7 @@ async def _handle_chat_message(
             stream_session,
             served_model=served_model,
             degraded_to=degraded_to,
+            tts_provider=stream_session.tts_provider_name if stream_session else "",
         )
     else:
         # Turn didn't complete (cancelled) — send basic turn_end
