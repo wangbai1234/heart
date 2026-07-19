@@ -495,6 +495,21 @@ export async function clearCharacterConversations(characterId: string): Promise<
   })
 }
 
+/**
+ * Switch which TTS engine (日常语音 'mimo' / 真人语音 'fish') the current user
+ * hears for a character. Instant, per-user — the target engine must already have
+ * a ready voice (409 otherwise); Fish requires a paid tier (403).
+ */
+export async function setCharacterVoiceProvider(
+  characterId: string,
+  provider: 'mimo' | 'fish',
+): Promise<{ voice_provider: string }> {
+  return request(`/characters/${characterId}/voice-provider`, {
+    method: 'PATCH',
+    body: JSON.stringify({ provider }),
+  })
+}
+
 // ── Voice management ──────────────────────────────────────────────────────────
 
 export interface PresetVoiceDTO {
@@ -516,6 +531,10 @@ export interface CharacterVoiceDTO {
   // TTS provider that owns this voice (mimo/fish/minimax). Drives the backstage
   // 语音聊天 tier highlight. Absent until the per-character-provider backend ships.
   voice_provider?: string | null
+  // Providers with a ready voice the user can switch between (mimo/fish), and the
+  // user's current per-character selection. Drive the 日常/真人 toggle state.
+  available_providers?: string[]
+  selected_provider?: string | null
   has_voice?: boolean
   // Populated by the backend only when clone_status='failed' — surfaces the
   // real reason (missing GroupId / unreachable audio URL / MiniMax quota)
