@@ -399,7 +399,8 @@ export function CreateCharacterPage() {
   }
 
   async function handlePresetPlay(preset: PresetVoiceDTO) {
-    if (!preset.sample_url) return
+    // No sample_url gate: MiMo presets have no static CDN clip — the sample
+    // endpoint synthesizes on demand (MiMo → WAV), so every preset is previewable.
     if (playingPresetId === preset.id) {
       stopPreview()
       return
@@ -980,7 +981,7 @@ export function CreateCharacterPage() {
                           </p>
                         )}
                       </div>
-                      {preset.sample_url && (
+                      {(
                         <button
                           onClick={(e) => { e.stopPropagation(); handlePresetPlay(preset) }}
                           className={`w-[36px] h-[36px] rounded-full flex items-center justify-center shrink-0 transition-colors ${

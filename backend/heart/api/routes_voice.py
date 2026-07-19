@@ -59,10 +59,32 @@ def _check_clone_provider_available(provider: str) -> None:
             )
 
 
-# Preset voice sample cache: preset_id -> MP3 bytes.  Filled on first request
-# so we hit MiniMax at most once per preset per process.  Preset voices are
-# static rows, so cache TTL is process lifetime.
-_PRESET_SAMPLE_CACHE: dict[str, bytes] = {}
+# Preset voice sample cache: preset_id -> (media_type, audio_bytes).  Filled on
+# first request so we hit the TTS provider at most once per preset per process.
+# Preset voices are static rows, so cache TTL is process lifetime. media_type
+# varies by provider (MiMo → audio/wav, MiniMax → audio/mpeg).
+_PRESET_SAMPLE_CACHE: dict[str, tuple[str, bytes]] = {}
+
+
+def _pcm16_to_wav(pcm: bytes, sample_rate: int = 24000, channels: int = 1) -> bytes:
+    """Wrap raw PCM16LE samples in a minimal WAV container.
+
+    MiMo returns headerless PCM16 @ 24 kHz mono; browsers can't play that from
+    an <audio> element, so the preview endpoint wraps it into WAV (which every
+    browser decodes) rather than shipping a separate decoder to the client.
+    """
+    import struct
+
+    data_size = len(pcm)
+    byte_rate = sample_rate * channels * 2
+    block_align = channels * 2
+    header = b"RIFF" + struct.pack("<I", 36 + data_size) + b"WAVE"
+    header += b"fmt " + struct.pack(
+        "<IHHIIHH", 16, 1, channels, sample_rate, byte_rate, block_align, 16
+    )
+    header += b"data" + struct.pack("<I", data_size)
+    return header + pcm
+
 
 # Audio upload constraints
 _MAX_AUDIO_BYTES = 20 * 1024 * 1024  # 20 MB
@@ -134,12 +156,15 @@ async def list_preset_voices(
     """
     if gender not in (None, "male", "female"):
         raise HTTPException(status_code=400, detail="gender must be 'male' or 'female'")
+    # MiMo-only: MiniMax presets are hidden (MiniMax is being retired). The
+    # character-creation picker now shows MiMo voices grouped by gender, each
+    # previewable on demand via /presets/{id}/sample (MiMo synth → WAV).
     if gender is None:
         result = await db.execute(
             text("""
                 SELECT id, name, voice_id, provider, description, sample_url, gender
                 FROM preset_voices
-                WHERE is_active = TRUE
+                WHERE is_active = TRUE AND provider = 'mimo'
                 ORDER BY gender, id
             """)
         )
@@ -148,7 +173,7 @@ async def list_preset_voices(
             text("""
                 SELECT id, name, voice_id, provider, description, sample_url, gender
                 FROM preset_voices
-                WHERE is_active = TRUE AND gender = :gender
+                WHERE is_active = TRUE AND provider = 'mimo' AND gender = :gender
                 ORDER BY id
             """),
             {"gender": gender},
@@ -167,24 +192,24 @@ async def get_preset_voice_sample(
 ):
     """Synthesize a short sample clip for a preset voice.
 
-    Returns MP3 audio bytes so the character-creation UI can play a preview
-    when the user taps the ▶ button.  Cached per preset_id for the lifetime
-    of the process so we hit the TTS provider at most once per voice.
+    Returns playable audio bytes so the character-creation UI can preview a
+    voice when the user taps ▶.  The clip is synthesized by the preset's own
+    provider — MiMo (returns PCM16, wrapped to WAV here) for the mimo catalog,
+    or MiniMax (MP3) for legacy rows.  Cached per preset_id for the process
+    lifetime so we hit the provider at most once per voice.
     """
     from fastapi.responses import Response
 
-    if not settings.minimax_api_key:
-        raise HTTPException(status_code=503, detail="TTS provider not configured")
-
     cached = _PRESET_SAMPLE_CACHE.get(preset_id)
     if cached is not None:
-        return Response(content=cached, media_type="audio/mpeg")
+        media_type, audio = cached
+        return Response(content=audio, media_type=media_type)
 
     row = (
         (
             await db.execute(
                 text("""
-                SELECT id, name, voice_id
+                SELECT id, name, voice_id, provider
                 FROM preset_voices
                 WHERE id = :pid AND is_active = TRUE
             """),
@@ -198,24 +223,48 @@ async def get_preset_voice_sample(
         raise HTTPException(status_code=404, detail="预设音色不存在")
 
     sample_text = f"你好，我是{row['name']}，很高兴认识你，希望我们能聊得愉快。"
+    provider_name = row["provider"]
 
     from heart.ss08_voice.errors import TTSProviderError
-    from heart.ss08_voice.minimax_provider import MiniMaxProvider
     from heart.ss08_voice.types import TTSRequest
 
-    provider = MiniMaxProvider(
-        api_key=settings.minimax_api_key,
-        group_id=settings.minimax_group_id or "",
-        base_url=settings.minimax_base_url,
-    )
     try:
-        result = await provider.synthesize(TTSRequest(text=sample_text, voice_id=row["voice_id"]))
+        if provider_name == "mimo":
+            from heart.api.wiring import get_tts_provider_registry
+
+            mimo = get_tts_provider_registry().get("mimo")
+            if mimo is None:
+                raise HTTPException(status_code=503, detail="MiMo 语音服务未配置")
+            # MiMo selects its voice description by character_id/voice_id; the
+            # preset's voice_id (e.g. "mimo_female_gentle") is a known key.
+            result = await mimo.synthesize(
+                TTSRequest(text=sample_text, voice_id=row["voice_id"]),
+                character_id=row["voice_id"],
+            )
+            audio = _pcm16_to_wav(result.audio)
+            media_type = "audio/wav"
+        else:
+            # Legacy MiniMax presets (hidden from the picker, but the endpoint
+            # still serves a preview if one is requested directly).
+            if not settings.minimax_api_key:
+                raise HTTPException(status_code=503, detail="TTS provider not configured")
+            from heart.ss08_voice.minimax_provider import MiniMaxProvider
+
+            provider = MiniMaxProvider(
+                api_key=settings.minimax_api_key,
+                group_id=settings.minimax_group_id or "",
+                base_url=settings.minimax_base_url,
+            )
+            result = await provider.synthesize(
+                TTSRequest(text=sample_text, voice_id=row["voice_id"])
+            )
+            audio = result.audio
+            media_type = "audio/mpeg"
     except TTSProviderError as exc:
-        # Surface the provider's real error to the client so the UI can show a
-        # useful message ("voice_id female-wenrou not found") instead of a
-        # generic "please try again". Truncate the raw provider payload to
-        # 320 chars — enough to spot the failure mode without leaking a full
-        # stack trace or huge JSON body.
+        # Surface the provider's real error so the UI shows something actionable
+        # ("voice_id X not found") instead of a generic retry prompt. Truncate
+        # to 320 chars — enough to spot the failure mode without leaking a huge
+        # payload.
         provider_msg = str(exc)
         if len(provider_msg) > 320:
             provider_msg = provider_msg[:317] + "..."
@@ -223,7 +272,8 @@ async def get_preset_voice_sample(
             "preset_sample_synthesize_failed",
             preset_id=preset_id,
             voice_id=row["voice_id"],
-            status_code=exc.status_code,
+            provider=provider_name,
+            status_code=getattr(exc, "status_code", None),
             error=provider_msg,
         )
         raise HTTPException(
@@ -231,13 +281,15 @@ async def get_preset_voice_sample(
             detail=f"试听合成失败：{provider_msg}",
         ) from exc
 
-    _PRESET_SAMPLE_CACHE[preset_id] = result.audio
+    _PRESET_SAMPLE_CACHE[preset_id] = (media_type, audio)
     logger.info(
         "preset_sample_synthesized",
         preset_id=preset_id,
-        bytes=len(result.audio),
+        provider=provider_name,
+        media_type=media_type,
+        bytes=len(audio),
     )
-    return Response(content=result.audio, media_type="audio/mpeg")
+    return Response(content=audio, media_type=media_type)
 
 
 @router.get("/{character_id}")
