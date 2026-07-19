@@ -3,12 +3,26 @@ import { useNavigate } from 'react-router-dom'
 import { useAppStore } from '../stores/appStore'
 import { useChatStore } from '../stores/chatStore'
 import { useThemeStore } from '../stores/themeStore'
+import { useMembershipStore } from '../stores/membershipStore'
 import { resolveCharacterProfile } from '../data/uiContent'
 import { useCharactersStore } from '../stores/charactersStore'
 import { Dialog } from '../components/ui/Dialog'
 import { Switch } from '../components/ui/Switch'
 import { getCharacterSettings, updateCharacterSettings, getCharacterVoice, clearCharacterConversations } from '../services/api'
 import { useToastStore } from '../stores/toastStore'
+
+// 文字聊天三档 → LLM 模型。私密/情感为会员模型，按 membership 权益门控。
+const TEXT_TIERS = [
+  { key: 'daily', model: 'deepseek', title: '日常陪伴', sub: '无限畅聊，适合日常交流与轻松陪伴' },
+  { key: 'private', model: 'grok', title: '私密陪伴', sub: '更懂你的私人想法，支持长期记忆交流' },
+  { key: 'emotional', model: 'claude', title: '情感陪伴', sub: '更细腻自然的表达，真人陪伴你，支持长期记忆交流' },
+] as const
+
+// 语音聊天两档 → TTS provider（角色配置的 voice_provider）。真人语音=Fish 为会员能力。
+const VOICE_TIERS = [
+  { key: 'daily', provider: 'mimo', title: '日常语音', sub: '清晰自然，满足日常聊天需求' },
+  { key: 'real', provider: 'fish', title: '真人语音', sub: '更有情绪和温度，带来真人般交流体验' },
+] as const
 
 export function CharacterBackstagePage() {
   const navigate = useNavigate()
@@ -25,11 +39,23 @@ export function CharacterBackstagePage() {
   const [hasVoice, setHasVoice] = useState(
     currentCharacter?.has_voice ?? false
   )
+  const [voiceConfigured, setVoiceConfigured] = useState(false)
+  const [voiceProvider, setVoiceProvider] = useState<string | null>(null)
+
+  // 文字模型（后台设定，聊天页据此发送）+ 会员权益
+  const chatModel = useAppStore((s) => s.chatModel[currentCharacterId] ?? 'deepseek')
+  const setChatModel = useAppStore((s) => s.setChatModel)
+  const allowedModels = useMembershipStore((s) => s.entitlements.models)
+  const allowedTts = useMembershipStore((s) => s.entitlements.tts)
+  const membershipLoaded = useMembershipStore((s) => s.loaded)
+  const refreshMembership = useMembershipStore((s) => s.refresh)
 
   const profile = resolveCharacterProfile(currentCharacterId, displayName, avatarUrl)
 
   // Hydrate voice setting + voice config from backend on mount
   useEffect(() => {
+    if (!membershipLoaded) refreshMembership()
+
     getCharacterSettings(currentCharacterId)
       .then((res) => {
         setVoiceChatEnabled(currentCharacterId, res.voice_enabled)
@@ -39,9 +65,39 @@ export function CharacterBackstagePage() {
     getCharacterVoice(currentCharacterId)
       .then((res) => {
         setHasVoice(res.has_voice ?? res.clone_status === 'ready')
+        setVoiceConfigured(res.configured ?? false)
+        setVoiceProvider(res.voice_provider ?? null)
       })
       .catch(() => { /* keep local value */ })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentCharacterId])
+
+  // 文字档位门控：DeepSeek 永久免费；其余看会员权益。
+  const isModelAllowed = (model: string) => model === 'deepseek' || allowedModels.includes(model)
+  // 语音档位门控：MiMo 通用；Fish 看会员权益。
+  const isVoiceAllowed = (provider: string) => provider === 'mimo' || allowedTts.includes(provider)
+  // 当前使用中的语音档位（mimo→日常 / fish→真人；其它 provider 不高亮）。
+  const currentVoiceKey = voiceProvider === 'fish' ? 'real' : voiceProvider === 'mimo' ? 'daily' : null
+
+  const handleTextTier = (model: string) => {
+    if (!isModelAllowed(model)) {
+      navigate('/membership')
+      return
+    }
+    setChatModel(currentCharacterId, model)
+  }
+
+  const handleVoiceTier = (tier: (typeof VOICE_TIERS)[number]) => {
+    if (!voiceChatEnabled) return // greyed — no-op until voice is switched on
+    if (!isVoiceAllowed(tier.provider)) {
+      navigate('/membership')
+      return
+    }
+    if (currentVoiceKey === tier.key) return // already using this engine
+    // One voice row per character: switching engine means configuring a voice
+    // for that provider (MiMo preset / Fish clone), so route to the config flow.
+    navigate(`/characters/new?voice=${currentCharacterId}&provider=${tier.provider}`)
+  }
 
   const handleVoiceToggle = async (value: boolean) => {
     // Reason we need a toast here: previous UX silently navigated the user
@@ -147,6 +203,48 @@ export function CharacterBackstagePage() {
         </section>
 
         <div className="space-y-9">
+          {/* 文字聊天：三档语义化陪伴 → 三个 LLM 模型 */}
+          <section className={`rounded-[34px] border px-6 py-7 backdrop-blur-[24px] ${cardClassName}`}>
+            <h2 className={`mb-1 text-[18px] font-semibold tracking-[-0.02em] ${resolvedTheme === 'dark' ? 'text-[#F3EFF8]' : 'text-[#2D3248]'}`}>
+              文字聊天
+            </h2>
+            <p className={`mb-4 text-[13px] leading-[1.5] ${subtleTextClassName}`}>选择陪伴风格，进阶风格按会员解锁</p>
+            <div className="space-y-2.5">
+              {TEXT_TIERS.map((t) => {
+                const allowed = isModelAllowed(t.model)
+                const selected = chatModel === t.model
+                return (
+                  <button
+                    key={t.key}
+                    onClick={() => handleTextTier(t.model)}
+                    className={`w-full rounded-[18px] border px-4 py-3.5 text-left transition-transform active:scale-[0.99] ${
+                      resolvedTheme === 'dark' ? 'bg-[rgba(255,255,255,0.05)]' : 'bg-[rgba(255,255,255,0.5)]'
+                    }`}
+                    style={{ borderColor: selected ? '#FF8FAB' : (resolvedTheme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.4)') }}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2">
+                        {!allowed && (
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={resolvedTheme === 'dark' ? 'rgba(236,233,244,0.5)' : 'rgba(47,54,74,0.42)'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <rect x="3" y="11" width="18" height="11" rx="2" />
+                            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                          </svg>
+                        )}
+                        <span className={`text-[15px] font-medium ${allowed ? (resolvedTheme === 'dark' ? 'text-[#F3EFF8]' : 'text-[#2D3248]') : subtleTextClassName}`}>{t.title}</span>
+                      </div>
+                      {selected ? (
+                        <span className="text-[12px] font-semibold text-[#FF7DA1]">使用中</span>
+                      ) : allowed ? null : (
+                        <span className="text-[12px] font-medium text-[#FF7DA1]">升级会员解锁</span>
+                      )}
+                    </div>
+                    <p className={`mt-1 text-[12.5px] leading-[1.5] ${subtleTextClassName}`}>{t.sub}</p>
+                  </button>
+                )
+              })}
+            </div>
+          </section>
+
           <section className={`rounded-[34px] border px-6 py-8 backdrop-blur-[24px] ${cardClassName}`}>
             <div className="flex items-center gap-4">
               <div className={`flex h-[56px] w-[56px] items-center justify-center rounded-full ${iconBubbleClassName}`}>
@@ -180,6 +278,55 @@ export function CharacterBackstagePage() {
               </div>
             </div>
           </section>
+
+          {/* 语音聊天两档：日常语音(MiMo)/真人语音(Fish)。未配置音色则整段隐藏；
+              未开启语音则置灰；真人语音对免费用户锁定。 */}
+          {voiceConfigured && (
+            <section className={`rounded-[34px] border px-6 py-7 backdrop-blur-[24px] ${cardClassName}`}>
+              <h2 className={`mb-1 text-[18px] font-semibold tracking-[-0.02em] ${resolvedTheme === 'dark' ? 'text-[#F3EFF8]' : 'text-[#2D3248]'}`}>
+                语音聊天
+              </h2>
+              <p className={`mb-4 text-[13px] leading-[1.5] ${subtleTextClassName}`}>
+                {voiceChatEnabled ? '选择语音音质，真人语音需会员' : '先开启上方语音聊天开关'}
+              </p>
+              <div className="space-y-2.5">
+                {VOICE_TIERS.map((t) => {
+                  const allowed = isVoiceAllowed(t.provider)
+                  const active = currentVoiceKey === t.key
+                  const disabled = !voiceChatEnabled
+                  return (
+                    <button
+                      key={t.key}
+                      onClick={() => handleVoiceTier(t)}
+                      disabled={disabled}
+                      className={`w-full rounded-[18px] border px-4 py-3.5 text-left transition-transform active:scale-[0.99] ${
+                        disabled ? 'opacity-45' : ''
+                      } ${resolvedTheme === 'dark' ? 'bg-[rgba(255,255,255,0.05)]' : 'bg-[rgba(255,255,255,0.5)]'}`}
+                      style={{ borderColor: active && !disabled ? '#FF8FAB' : (resolvedTheme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.4)') }}
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                          {!allowed && (
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={resolvedTheme === 'dark' ? 'rgba(236,233,244,0.5)' : 'rgba(47,54,74,0.42)'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <rect x="3" y="11" width="18" height="11" rx="2" />
+                              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                            </svg>
+                          )}
+                          <span className={`text-[15px] font-medium ${resolvedTheme === 'dark' ? 'text-[#F3EFF8]' : 'text-[#2D3248]'}`}>{t.title}</span>
+                        </div>
+                        {active && !disabled ? (
+                          <span className="text-[12px] font-semibold text-[#FF7DA1]">使用中</span>
+                        ) : !allowed ? (
+                          <span className="text-[12px] font-medium text-[#FF7DA1]">升级会员解锁</span>
+                        ) : null}
+                      </div>
+                      <p className={`mt-1 text-[12.5px] leading-[1.5] ${subtleTextClassName}`}>{t.sub}</p>
+                    </button>
+                  )
+                })}
+              </div>
+            </section>
+          )}
 
           <section
             className={`rounded-[34px] border px-6 py-8 backdrop-blur-[24px] ${cardClassName}`}
