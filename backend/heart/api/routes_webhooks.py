@@ -119,7 +119,7 @@ async def afdian_webhook(
     try:
         from heart.afdian.fulfillment import fulfill_order
 
-        await fulfill_order(db, out_trade_no, plan_id, remark)
+        await fulfill_order(db, out_trade_no, plan_id, remark, order.get("sku_detail"))
     except Exception:
         logger.exception("afdian_auto_fulfill_error", out_trade_no=out_trade_no)
         # Ack anyway — admin can reconcile unmatched/failed orders manually.

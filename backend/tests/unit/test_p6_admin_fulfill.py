@@ -45,11 +45,11 @@ class TestAdminFulfillOrder:
 
         db = AsyncMock()
         fetch = MagicMock()
-        fetch.fetchone.return_value = (None, "plan-unknown", "no code")
+        fetch.fetchone.return_value = (None, "plan-unknown", "no code", None)
         db.execute = AsyncMock(return_value=fetch)
 
         with patch("heart.core.config.settings.afdian_sku_map", "{}"):
-            with pytest.raises(ValueError, match="unknown plan_id"):
+            with pytest.raises(ValueError, match="no matching plan_id/sku_id"):
                 await admin_fulfill_order(db, "order-002", uuid.uuid4())
 
     @pytest.mark.asyncio
@@ -59,7 +59,7 @@ class TestAdminFulfillOrder:
         user_id = uuid.uuid4()
         db = AsyncMock()
         fetch = MagicMock()
-        fetch.fetchone.return_value = (None, "pack-220", "no code in remark")
+        fetch.fetchone.return_value = (None, "pack-220", "no code in remark", None)
         db.execute = AsyncMock(return_value=fetch)
         db.commit = AsyncMock()
 
@@ -67,11 +67,13 @@ class TestAdminFulfillOrder:
 
         with (
             patch("heart.core.config.settings.afdian_sku_map", sku_map),
-            patch("heart.afdian.fulfillment.grant_credits", new=AsyncMock(return_value=22000)) as mock_grant,
+            patch(
+                "heart.afdian.fulfillment.grant_credits", new=AsyncMock(return_value=22000)
+            ) as mock_grant,
         ):
             detail = await admin_fulfill_order(db, "order-coins", user_id)
 
-        assert detail == {"type": "coins", "coins": 220}
+        assert detail == {"type": "coins", "coins": 220, "quantity": 1}
         mock_grant.assert_called_once()
         call_args = mock_grant.call_args[0]
         assert call_args[1] == user_id
@@ -84,7 +86,7 @@ class TestAdminFulfillOrder:
         user_id = uuid.uuid4()
         db = AsyncMock()
         fetch = MagicMock()
-        fetch.fetchone.return_value = (None, "plan-plus30", "no code in remark")
+        fetch.fetchone.return_value = (None, "plan-plus30", "no code in remark", None)
         db.execute = AsyncMock(return_value=fetch)
         db.commit = AsyncMock()
 
@@ -112,7 +114,7 @@ class TestAdminFulfillOrder:
         db = AsyncMock()
         fetch = MagicMock()
         # remark is empty — this would fail the regular fulfill_order
-        fetch.fetchone.return_value = (None, "plan-plus30", "")
+        fetch.fetchone.return_value = (None, "plan-plus30", "", None)
         db.execute = AsyncMock(return_value=fetch)
         db.commit = AsyncMock()
 
@@ -133,7 +135,7 @@ class TestAdminFulfillOrder:
         user_id = uuid.uuid4()
         db = AsyncMock()
         fetch = MagicMock()
-        fetch.fetchone.return_value = (None, "pack-60", "")
+        fetch.fetchone.return_value = (None, "pack-60", "", None)
         db.execute = AsyncMock(return_value=fetch)
         db.rollback = AsyncMock()
 
@@ -141,7 +143,10 @@ class TestAdminFulfillOrder:
 
         with (
             patch("heart.core.config.settings.afdian_sku_map", sku_map),
-            patch("heart.afdian.fulfillment.grant_credits", new=AsyncMock(side_effect=RuntimeError("ledger down"))),
+            patch(
+                "heart.afdian.fulfillment.grant_credits",
+                new=AsyncMock(side_effect=RuntimeError("ledger down")),
+            ),
         ):
             with pytest.raises(RuntimeError, match="ledger down"):
                 await admin_fulfill_order(db, "order-err", user_id)
@@ -171,7 +176,7 @@ class TestApplySku:
         with patch("heart.afdian.fulfillment.grant_credits", new=AsyncMock(return_value=6000)):
             detail = await _apply_sku(db, uuid.uuid4(), "coins", {"coins": 60}, "order-c")
 
-        assert detail == {"type": "coins", "coins": 60}
+        assert detail == {"type": "coins", "coins": 60, "quantity": 1}
 
     @pytest.mark.asyncio
     async def test_membership_returns_detail(self):
