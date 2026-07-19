@@ -72,21 +72,39 @@ async function request<T>(
 
   if (!res.ok) {
     const errorBody = await res.json().catch(() => ({ detail: 'Request failed' }))
-    let message: string
-    if (Array.isArray(errorBody.detail)) {
-      // Pydantic v2 validation errors return an array of {loc, msg, type} objects
-      message = errorBody.detail
-        .map((d: any) => (d?.msg ?? JSON.stringify(d)))
-        .join('; ')
-    } else if (typeof errorBody.detail === 'string') {
-      message = errorBody.detail
-    } else {
-      message = 'Request failed'
-    }
-    throw new ApiError(res.status, message)
+    throw new ApiError(res.status, detailToMessage(errorBody?.detail, 'Request failed'))
   }
 
   return res.json()
+}
+
+/**
+ * Normalize a FastAPI error `detail` into a human-readable string.
+ *
+ * `detail` can be:
+ *   - a string (plain HTTPException)
+ *   - an array of {loc, msg, type} (Pydantic v2 validation errors)
+ *   - an object with a `code` (our structured errors, e.g. tier_forbidden)
+ * Passing an object/array straight into an Error message renders as
+ * "[object Object]", which is exactly the clone-upload bug this fixes.
+ */
+export function detailToMessage(detail: unknown, fallback: string): string {
+  if (typeof detail === 'string') return detail || fallback
+  if (Array.isArray(detail)) {
+    return (
+      detail.map((d: any) => (d?.msg ?? JSON.stringify(d))).join('; ') || fallback
+    )
+  }
+  if (detail && typeof detail === 'object') {
+    const d = detail as Record<string, any>
+    if (d.code === 'tier_forbidden') {
+      const label = d.provider === 'fish' ? '真人语音（Fish）' : '音色'
+      return `${label}克隆需要会员权限，请先升级会员后再试。`
+    }
+    if (typeof d.message === 'string') return d.message
+    if (typeof d.msg === 'string') return d.msg
+  }
+  return fallback
 }
 
 export class ApiError extends Error {
@@ -310,7 +328,7 @@ export async function uploadAvatar(file: File): Promise<{ avatar_url: string }> 
 
   const data = await res.json().catch(() => null)
   if (!res.ok || !data) {
-    throw new Error(data?.detail || `上传失败 (${res.status})`)
+    throw new Error(detailToMessage(data?.detail, `上传失败 (${res.status})`))
   }
   return data
 }
@@ -433,7 +451,7 @@ export async function uploadCharacterAvatar(file: File): Promise<{ avatar_url: s
     body: formData,
   })
   const data = await res.json().catch(() => null)
-  if (!res.ok || !data) throw new Error(data?.detail || `上传失败 (${res.status})`)
+  if (!res.ok || !data) throw new Error(detailToMessage(data?.detail, `上传失败 (${res.status})`))
   return data
 }
 
@@ -608,8 +626,8 @@ export async function uploadVoiceClone(
       body: formData,
     },
   )
-  const data = await res.json()
-  if (!res.ok) throw new ApiError(res.status, data.detail || '上传失败')
+  const data = await res.json().catch(() => null)
+  if (!res.ok) throw new ApiError(res.status, detailToMessage(data?.detail, '上传失败'))
   return data
 }
 
