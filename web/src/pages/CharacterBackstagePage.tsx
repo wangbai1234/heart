@@ -8,7 +8,7 @@ import { resolveCharacterProfile } from '../data/uiContent'
 import { useCharactersStore } from '../stores/charactersStore'
 import { Dialog } from '../components/ui/Dialog'
 import { Switch } from '../components/ui/Switch'
-import { getCharacterSettings, updateCharacterSettings, getCharacterVoice, clearCharacterConversations } from '../services/api'
+import { getCharacterSettings, updateCharacterSettings, getCharacterVoice, clearCharacterConversations, setCharacterVoiceProvider } from '../services/api'
 import { useToastStore } from '../stores/toastStore'
 
 // 文字聊天三档 → LLM 模型。私密/情感为会员模型，按 membership 权益门控。
@@ -40,7 +40,10 @@ export function CharacterBackstagePage() {
     currentCharacter?.has_voice ?? false
   )
   const [voiceConfigured, setVoiceConfigured] = useState(false)
-  const [voiceProvider, setVoiceProvider] = useState<string | null>(null)
+  // Providers this character has a ready voice for + the user's current pick.
+  const [availableProviders, setAvailableProviders] = useState<string[]>([])
+  const [selectedProvider, setSelectedProvider] = useState<string | null>(null)
+  const [switchingProvider, setSwitchingProvider] = useState(false)
 
   // 文字模型（后台设定，聊天页据此发送）+ 会员权益
   const chatModel = useAppStore((s) => s.chatModel[currentCharacterId] ?? 'deepseek')
@@ -66,7 +69,10 @@ export function CharacterBackstagePage() {
       .then((res) => {
         setHasVoice(res.has_voice ?? res.clone_status === 'ready')
         setVoiceConfigured(res.configured ?? false)
-        setVoiceProvider(res.voice_provider ?? null)
+        setAvailableProviders(res.available_providers ?? [])
+        // Fall back to voice_provider (primary row) when the per-user selection
+        // isn't set yet, then default to mimo.
+        setSelectedProvider(res.selected_provider ?? res.voice_provider ?? 'mimo')
       })
       .catch(() => { /* keep local value */ })
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -77,7 +83,8 @@ export function CharacterBackstagePage() {
   // 语音档位门控：MiMo 通用；Fish 看会员权益。
   const isVoiceAllowed = (provider: string) => provider === 'mimo' || allowedTts.includes(provider)
   // 当前使用中的语音档位（mimo→日常 / fish→真人；其它 provider 不高亮）。
-  const currentVoiceKey = voiceProvider === 'fish' ? 'real' : voiceProvider === 'mimo' ? 'daily' : null
+  const currentVoiceKey =
+    selectedProvider === 'fish' ? 'real' : selectedProvider === 'mimo' ? 'daily' : null
 
   const handleTextTier = (model: string) => {
     if (!isModelAllowed(model)) {
@@ -87,16 +94,33 @@ export function CharacterBackstagePage() {
     setChatModel(currentCharacterId, model)
   }
 
-  const handleVoiceTier = (tier: (typeof VOICE_TIERS)[number]) => {
-    if (!voiceChatEnabled) return // greyed — no-op until voice is switched on
+  const handleVoiceTier = async (tier: (typeof VOICE_TIERS)[number]) => {
+    if (!voiceChatEnabled || switchingProvider) return // greyed until voice is on
     if (!isVoiceAllowed(tier.provider)) {
-      navigate('/membership')
+      navigate('/membership') // 真人语音需会员
       return
     }
     if (currentVoiceKey === tier.key) return // already using this engine
-    // One voice row per character: switching engine means configuring a voice
-    // for that provider (MiMo preset / Fish clone), so route to the config flow.
-    navigate(`/characters/new?voice=${currentCharacterId}&provider=${tier.provider}`)
+    if (!availableProviders.includes(tier.provider)) {
+      // This engine has no ready voice for the character — send them to config.
+      useToastStore.getState().show('该语音尚未配置，请先配置音色', 'info')
+      navigate(`/characters/new?voice=${currentCharacterId}&provider=${tier.provider}`)
+      return
+    }
+    // Both clones pre-exist → instant per-user switch, no re-configuration.
+    setSwitchingProvider(true)
+    const prev = selectedProvider
+    setSelectedProvider(tier.provider) // optimistic
+    try {
+      await setCharacterVoiceProvider(currentCharacterId, tier.provider as 'mimo' | 'fish')
+      useToastStore.getState().show(`已切换到${tier.title}`, 'success')
+    } catch (err: any) {
+      setSelectedProvider(prev) // rollback
+      if (err?.status === 403) navigate('/membership')
+      else useToastStore.getState().show('切换失败，请稍后重试', 'error')
+    } finally {
+      setSwitchingProvider(false)
+    }
   }
 
   const handleVoiceToggle = async (value: boolean) => {
@@ -293,7 +317,7 @@ export function CharacterBackstagePage() {
                 {VOICE_TIERS.map((t) => {
                   const allowed = isVoiceAllowed(t.provider)
                   const active = currentVoiceKey === t.key
-                  const disabled = !voiceChatEnabled
+                  const disabled = !voiceChatEnabled || switchingProvider
                   return (
                     <button
                       key={t.key}
