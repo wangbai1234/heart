@@ -18,6 +18,11 @@ const TYPE_LABELS: Record<string, string> = {
   redeem: '兑换码充值',
   consume_text: '文本对话',
   consume_voice: '语音对话',
+  consume_llm: '模型对话',
+  consume_tts: '语音合成',
+  consume_clone: '声音克隆',
+  membership_grant: '会员赠币',
+  invite: '邀请奖励',
   refund: '退款',
   adjust: '手动调整',
 }
@@ -77,12 +82,12 @@ export function TransactionsPage() {
         <button onClick={() => navigate(-1 as any)} className="text-[var(--color-ink)] text-[14px] active:opacity-60">
           ← 返回
         </button>
-        <h2 className="flex-1 text-center text-[17px] font-semibold text-[var(--color-ink)] pr-10">积分明细</h2>
+        <h2 className="flex-1 text-center text-[17px] font-semibold text-[var(--color-ink)] pr-10">yuoyuo币明细</h2>
       </div>
 
       {/* Balance card */}
       <div className="mx-5 mb-4 p-4 rounded-[16px] bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-accent)]">
-        <p className="text-[13px] text-white/70">当前积分</p>
+        <p className="text-[13px] text-white/70">当前 yuoyuo币</p>
         <p className="text-[32px] font-bold text-white mt-1">{balance}</p>
       </div>
 
@@ -107,7 +112,7 @@ export function TransactionsPage() {
           </div>
         ) : items.length === 0 ? (
           <div className="text-center py-12">
-            <p className="text-[var(--color-text-muted)] text-[14px]">暂无积分记录</p>
+            <p className="text-[var(--color-text-muted)] text-[14px]">暂无 yuoyuo币记录</p>
           </div>
         ) : (
           <div className="space-y-0">

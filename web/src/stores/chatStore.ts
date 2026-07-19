@@ -41,6 +41,7 @@ interface ChatState {
   vad: VadState
   characterId: string
   insufficientCredits: { needed: number; balance: number } | null
+  modelForbidden: { model: string; tier: string } | null
   clearedCharacters: Set<CharacterId>
 
   isGenerating: Record<string, boolean>
@@ -74,6 +75,8 @@ interface ChatState {
   setCharacterId: (id: string) => void
   setInsufficientCredits: (needed: number, balance: number) => void
   clearInsufficientCredits: () => void
+  setModelForbidden: (model: string, tier: string) => void
+  clearModelForbidden: () => void
   clear: () => void
   clearMessages: (characterId: CharacterId) => void
 }
@@ -103,6 +106,7 @@ export const useChatStore = create<ChatState>()(
   vad: { energy: 0, mood: 'neutral', intimacy: 0 },
   characterId: 'rin',
   insufficientCredits: null,
+  modelForbidden: null,
   clearedCharacters: new Set<CharacterId>(),
 
   setLastFetchedAt: (characterId, ts) =>
@@ -198,6 +202,8 @@ export const useChatStore = create<ChatState>()(
   setCharacterId: (id) => set({ characterId: id }),
   setInsufficientCredits: (needed, balance) => set({ insufficientCredits: { needed, balance } }),
   clearInsufficientCredits: () => set({ insufficientCredits: null }),
+  setModelForbidden: (model, tier) => set({ modelForbidden: { model, tier } }),
+  clearModelForbidden: () => set({ modelForbidden: null }),
   clear: () => set((s) => ({ messages: emptyMessages(), isStreaming: false, isPlaying: false, currentTurnId: null, characterId: s.characterId, insufficientCredits: null })),
   clearMessages: (characterId) =>
     set((s) => {

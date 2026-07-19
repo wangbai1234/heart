@@ -181,14 +181,100 @@ export async function redeemCode(code: string): Promise<{ ok: boolean; credited:
   })
 }
 
-export async function getPricing(): Promise<{
+// ── Pricing / Membership / Shop (yuoyuo 商业化) ─────────────────────
+// Shapes mirror docs/upgrade/yuoyuo_coin/api_contract.md §1.1–1.2.
+// All amounts are display units (yuoyuo币, integer); backend already ÷100.
+
+export interface PricingModel {
+  id: string // 'deepseek' | 'grok' | 'claude'
+  label: string
+  cost: number // 币 per LLM turn
+  tiers_allowed: string[]
+}
+
+export interface PricingAction {
+  id: string // 'tts_mimo' | 'tts_fish' | 'clone_mimo' | 'clone_fish'
+  label: string
+  cost: number
+}
+
+export interface MembershipTierInfo {
+  tier: string // 'free' | 'plus' | 'immersive'
+  label: string
+  price: number // ¥ / month
+  sku: string | null
+  benefits: string[]
+  models: string[]
+  tts: string[]
+  clone: string[]
+  monthly_grant: number
+}
+
+export interface ShopItem {
+  sku: string
+  label: string
+  price: number // ¥
+  credits: number // 到账总币数（已含 bonus）
+  bonus: number
+}
+
+export interface Pricing {
   signup_grant: number
-  per_text: number
-  per_voice: number
   afdian_url: string
-  tiers: Array<{ label: string; price: number; credits: number }>
-}> {
+  models: PricingModel[]
+  actions: PricingAction[]
+  membership_tiers: MembershipTierInfo[]
+  shop: ShopItem[]
+}
+
+export async function getPricing(): Promise<Pricing> {
   return request('/credits/pricing')
+}
+
+export interface MembershipEntitlements {
+  models: string[]
+  tts: string[]
+  clone: string[]
+}
+
+export interface Membership {
+  tier: string
+  expires_at: string | null // null for free
+  monthly_grant: number
+  entitlements: MembershipEntitlements
+  binding_code: string
+}
+
+export async function getMembership(): Promise<Membership> {
+  return request('/membership')
+}
+
+// ── Invite (yuoyuo 邀请系统) ────────────────────────────────────────
+
+export interface InviteStage {
+  threshold: number
+  bonus: number
+  reached: boolean
+}
+
+export interface InviteStatus {
+  invite_code: string
+  invite_url: string
+  invited_count: number
+  pending_count: number
+  total_reward: number
+  stages: InviteStage[]
+}
+
+export async function getInviteStatus(): Promise<InviteStatus> {
+  return request('/invite/status')
+}
+
+export async function bindInvite(code: string): Promise<{ ok: boolean }> {
+  return request('/invite/bind', {
+    method: 'POST',
+    body: JSON.stringify({ code }),
+  })
 }
 
 // ── Profile API ────────────────────────────────────────────────────
@@ -486,16 +572,20 @@ export async function setPresetVoice(
 export async function uploadVoiceClone(
   characterId: string,
   file: File,
+  provider: string = 'mimo',
 ): Promise<{ ok: boolean; clone_status: string; balance: number }> {
   const { accessToken } = (await import('../stores/authStore')).useAuthStore.getState()
   if (!accessToken) throw new Error('未登录')
   const formData = new FormData()
   formData.append('file', file)
-  const res = await fetch(`/api/voice/clone?character_id=${encodeURIComponent(characterId)}`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${accessToken}` },
-    body: formData,
-  })
+  const res = await fetch(
+    `/api/voice/clone?character_id=${encodeURIComponent(characterId)}&provider=${encodeURIComponent(provider)}`,
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}` },
+      body: formData,
+    },
+  )
   const data = await res.json()
   if (!res.ok) throw new ApiError(res.status, data.detail || '上传失败')
   return data

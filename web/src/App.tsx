@@ -16,6 +16,9 @@ import { SettingsPage } from './pages/SettingsPage'
 import { ProfileEditPage } from './pages/ProfileEditPage'
 import { TransactionsPage } from './pages/TransactionsPage'
 import { RedeemPage } from './pages/RedeemPage'
+import { MembershipPage } from './pages/MembershipPage'
+import { WalletPage } from './pages/WalletPage'
+import { InvitePage } from './pages/InvitePage'
 import { AgeGatePage } from './pages/AgeGatePage'
 import { LegalPage } from './pages/LegalPage'
 import { UIStatePreviewPage } from './pages/UIStatePreviewPage'
@@ -95,6 +98,23 @@ export function App() {
     if (accessToken) void loadCharacters()
   }, [accessToken, loadCharacters])
 
+  // Capture ?invite=<code> from any entry URL (e.g. /login?invite=XXX) so it
+  // survives the login redirect.
+  useEffect(() => {
+    const code = new URLSearchParams(location.search).get('invite')
+    if (code) sessionStorage.setItem('yuoyuo-pending-invite', code)
+  }, [location.search])
+
+  // Once authenticated, bind any pending invite code (F5). Best-effort: self-
+  // invite / already-bound errors are silently ignored.
+  useEffect(() => {
+    if (!accessToken) return
+    const code = sessionStorage.getItem('yuoyuo-pending-invite')
+    if (!code) return
+    sessionStorage.removeItem('yuoyuo-pending-invite')
+    void import('./services/api').then(({ bindInvite }) => bindInvite(code).catch(() => {}))
+  }, [accessToken])
+
   useEffect(() => {
     const nextScale = (0.92 + fontScale * 0.0016).toFixed(3)
     document.documentElement.style.setProperty('--app-font-scale', nextScale)
@@ -117,6 +137,9 @@ export function App() {
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/settings/profile" element={<ProfileEditPage />} />
         <Route path="/credits/transactions" element={<TransactionsPage />} />
+        <Route path="/membership" element={<MembershipPage />} />
+        <Route path="/wallet" element={<WalletPage />} />
+        <Route path="/invite" element={<InvitePage />} />
         <Route path="/age-gate" element={<AgeGatePage />} />
         <Route path="/legal/:type" element={<LegalPage />} />
         <Route path="/qa/states" element={<UIStatePreviewPage />} />

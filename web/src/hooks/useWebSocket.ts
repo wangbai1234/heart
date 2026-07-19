@@ -30,6 +30,19 @@ interface WsMessage {
   balance?: number
   needed?: number
   kind?: 'text' | 'action'
+  model?: string
+  served_model?: string
+  degraded_to?: string
+  tier?: string
+}
+
+const MODEL_LABELS: Record<string, string> = {
+  deepseek: 'DeepSeek',
+  grok: 'Grok',
+  claude: 'Claude',
+}
+function modelLabel(slug: string): string {
+  return MODEL_LABELS[slug] ?? slug
 }
 
 function b64ToArrayBuffer(b64: string): ArrayBuffer {
@@ -260,6 +273,11 @@ export function useWebSocket() {
             const { setBalance } = (await import('../stores/creditsStore')).useCreditsStore.getState()
             setBalance(msg.balance)
           }
+          // Silent model degradation: tell the user which model actually served
+          // the turn (never surface a technical error).
+          if (msg.degraded_to) {
+            useToastStore.getState().show(`已切换到 ${modelLabel(msg.degraded_to)}`, 'info')
+          }
           pendingVoiceTurnRef.current = false
           break
         case 'insufficient_credits':
@@ -273,6 +291,19 @@ export function useWebSocket() {
           {
             const { setInsufficientCredits } = useChatStore.getState()
             setInsufficientCredits(msg.needed ?? 0, msg.balance ?? 0)
+          }
+          break
+        case 'model_forbidden':
+          clearWatchdog()
+          setGenerating(cid, false)
+          setStreaming(false)
+          setPlaying(false)
+          setCurrentTurnId(null)
+          setPendingAssistantTurnId(null)
+          pendingVoiceTurnRef.current = false
+          {
+            const { setModelForbidden } = useChatStore.getState()
+            setModelForbidden(msg.model ?? '', msg.tier ?? 'free')
           }
           break
         case 'interrupted':
@@ -369,8 +400,9 @@ export function useWebSocket() {
       const { currentCharacterId } = useAppStore.getState()
       const characterId = currentCharacterId
       activeCharRef.current = characterId
-      const { voiceChatEnabled } = useAppStore.getState()
+      const { voiceChatEnabled, chatModel } = useAppStore.getState()
       const voiceEnabled = voiceChatEnabled?.[characterId] ?? false
+      const model = chatModel?.[characterId] ?? 'deepseek'
       pendingVoiceTurnRef.current = voiceEnabled
       const turnId = crypto.randomUUID()
       addMessage(characterId, {
@@ -400,6 +432,7 @@ export function useWebSocket() {
           character_id: characterId,
           turn_id: turnId,
           voice_enabled: voiceEnabled,
+          model,
         }),
       )
     },

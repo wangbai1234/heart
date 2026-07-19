@@ -16,6 +16,7 @@ interface AppState {
   muteEndMin: string
   isMuteNever: boolean
   voiceChatEnabled: Record<CharacterId, boolean>
+  chatModel: Record<CharacterId, string>
   pushEnabled: boolean
   inboxUnreadTotal: number
 
@@ -27,6 +28,7 @@ interface AppState {
   setMuteTime: (start: string, startMin: string, end: string, endMin: string) => void
   setMuteNever: (v: boolean) => void
   setVoiceChatEnabled: (id: CharacterId, enabled: boolean) => void
+  setChatModel: (id: CharacterId, model: string) => void
   setPushEnabled: (v: boolean) => void
   setInboxUnreadTotal: (n: number) => void
 }
@@ -48,6 +50,7 @@ export const useAppStore = create<AppState>()(
         rin: false,
         dorothy: false,
       },
+      chatModel: {},
       pushEnabled: false,
       inboxUnreadTotal: 0,
 
@@ -69,6 +72,13 @@ export const useAppStore = create<AppState>()(
           voiceChatEnabled: {
             ...state.voiceChatEnabled,
             [id]: enabled,
+          },
+        })),
+      setChatModel: (id, model) =>
+        set((state) => ({
+          chatModel: {
+            ...state.chatModel,
+            [id]: model,
           },
         })),
       setPushEnabled: (v) => set({ pushEnabled: v }),
