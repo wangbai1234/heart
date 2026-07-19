@@ -53,6 +53,12 @@ class ProviderRegistry:
         self.circuit_breaker = circuit_breaker
         self._providers: Dict[str, LLMProvider] = {}
         self._model_to_provider: Dict[str, str] = {}
+        # Maps every registered model name (including bare slugs like "deepseek")
+        # to the provider's canonical API model name (the first entry in its
+        # ``models`` list). The vendor APIs reject slugs — DeepSeek only accepts
+        # "deepseek-chat"/"deepseek-reasoner" — so the router must translate the
+        # routing slug to this canonical name before building the request body.
+        self._model_canonical: Dict[str, str] = {}
 
     def register_provider(
         self,
@@ -79,10 +85,13 @@ class ProviderRegistry:
         )
         self._providers[provider_name] = provider
 
-        # Register model mappings
+        # Register model mappings. The first model in the list is the canonical
+        # API model name; every alias (incl. bare slugs) resolves to it.
         if models:
+            canonical = models[0]
             for model in models:
                 self._model_to_provider[model] = provider_name
+                self._model_canonical[model] = canonical
 
     def register_provider_instance(
         self,
@@ -93,8 +102,10 @@ class ProviderRegistry:
         """Register a pre-built provider instance (e.g. a PooledLLMProvider)."""
         self._providers[provider_name] = provider
         if models:
+            canonical = models[0]
             for model in models:
                 self._model_to_provider[model] = provider_name
+                self._model_canonical[model] = canonical
 
     def get_provider(self, provider_name: str) -> LLMProvider:
         """
@@ -131,6 +142,14 @@ class ProviderRegistry:
 
         provider_name = self._model_to_provider[model]
         return self.get_provider(provider_name)
+
+    def get_canonical_model(self, model: str) -> str:
+        """Resolve a routing slug/alias to the provider's canonical API model.
+
+        Falls back to the input unchanged when no mapping exists (e.g. a real
+        model name passed by the legacy stream_main path).
+        """
+        return self._model_canonical.get(model, model)
 
     async def close_all(self) -> None:
         """Close all provider connections."""

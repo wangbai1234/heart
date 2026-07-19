@@ -173,7 +173,7 @@ class Settings(BaseSettings):
     credits_cost_voice_message: int = 500  # 5 display credits per voice message
     afdian_user_id: str = ""
     afdian_webhook_token: str = ""
-    afdian_sponsor_url: str = "https://afdian.com/a/yuoyuo"
+    afdian_sponsor_url: str = "https://ifdian.net/a/yuoyuo"
 
     # Per-action pricing (display coins; ×100 = fen internally)
     grok_cost_credits: int = 3  # 300 fen per LLM turn

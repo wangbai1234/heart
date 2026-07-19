@@ -27,7 +27,6 @@ from heart.infra.llm_providers.base import (
 from heart.infra.llm_providers.registry import ProviderRegistry
 from heart.infra.llm_providers.router import DEFAULT_FAILOVER, ModelRouter
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -130,9 +129,7 @@ async def test_call_for_full_failover_chain_claude_grok_deepseek():
     )
     router = _router(reg)
 
-    content, served = await router.call_for(
-        "claude", _messages(), failover=["grok", "deepseek"]
-    )
+    content, served = await router.call_for("claude", _messages(), failover=["grok", "deepseek"])
     assert content == "deepseek fallback"
     assert served == "deepseek"
 
@@ -156,9 +153,7 @@ async def test_call_for_skips_unregistered_model_silently():
     router = _router(reg)
 
     # "claude" not registered — should skip to "deepseek"
-    content, served = await router.call_for(
-        "claude", _messages(), failover=["deepseek"]
-    )
+    content, served = await router.call_for("claude", _messages(), failover=["deepseek"])
     assert served == "deepseek"
     assert content == "ds ok"
 
@@ -214,9 +209,7 @@ async def test_stream_for_sets_degraded_to_when_failover_occurs():
 
     meta: dict = {}
     chunks = []
-    async for chunk in router.stream_for(
-        "claude", _messages(), failover=["grok"], meta=meta
-    ):
+    async for chunk in router.stream_for("claude", _messages(), failover=["grok"], meta=meta):
         chunks.append(chunk)
 
     assert meta["served_model"] == "grok"
@@ -415,3 +408,71 @@ def test_initialize_registry_registers_bare_deepseek_slug(monkeypatch):
 
     # Must resolve without raising KeyError.
     assert reg.get_provider_for_model("deepseek") is not None
+
+
+# ---------------------------------------------------------------------------
+# Canonical model translation — the slug must NOT reach the vendor API
+# ---------------------------------------------------------------------------
+
+
+class RecordingProvider(FakeProvider):
+    """Fake that records the request.model it was asked to serve."""
+
+    def __init__(self, content: str = "ok"):
+        super().__init__(content=content)
+        self.seen_models: list[str] = []
+
+    async def call(self, request: LLMRequest) -> LLMResponse:
+        self.seen_models.append(request.model)
+        return await super().call(request)
+
+    async def stream(self, request: LLMRequest) -> AsyncIterator[StreamChunk]:
+        self.seen_models.append(request.model)
+        async for chunk in super().stream(request):
+            yield chunk
+
+
+def test_registry_canonical_model_resolves_slug_to_first_model():
+    reg = ProviderRegistry()
+    reg.register_provider_instance(
+        "deepseek-v4-flash", FakeProvider(), models=["deepseek-chat", "deepseek"]
+    )
+    # Bare slug and alias both resolve to the canonical (first) model name.
+    assert reg.get_canonical_model("deepseek") == "deepseek-chat"
+    assert reg.get_canonical_model("deepseek-chat") == "deepseek-chat"
+    # Unknown model falls through unchanged.
+    assert reg.get_canonical_model("mystery") == "mystery"
+
+
+@pytest.mark.asyncio
+async def test_call_for_sends_canonical_model_not_slug():
+    """Regression (showstopper): DeepSeek API rejects the bare slug 'deepseek';
+    it only accepts 'deepseek-chat'/'deepseek-reasoner'. The router must translate
+    the routing slug to the canonical model before building the request body, while
+    still reporting the slug as served_model for billing/labels."""
+    rec = RecordingProvider(content="hi")
+    reg = ProviderRegistry()
+    reg.register_provider_instance("deepseek-v4-flash", rec, models=["deepseek-chat", "deepseek"])
+    router = _router(reg)
+
+    content, served = await router.call_for("deepseek", _messages(), failover=[])
+    assert content == "hi"
+    assert served == "deepseek"  # slug preserved for billing
+    assert rec.seen_models == ["deepseek-chat"]  # canonical reached the provider
+
+
+@pytest.mark.asyncio
+async def test_stream_for_sends_canonical_model_not_slug():
+    rec = RecordingProvider(content="hello world")
+    reg = ProviderRegistry()
+    reg.register_provider_instance("deepseek-v4-flash", rec, models=["deepseek-chat", "deepseek"])
+    router = _router(reg)
+
+    meta: dict = {}
+    chunks = []
+    async for chunk in router.stream_for("deepseek", _messages(), failover=[], meta=meta):
+        chunks.append(chunk)
+
+    assert "".join(chunks).strip() == "hello world"
+    assert meta["served_model"] == "deepseek"  # slug preserved
+    assert rec.seen_models == ["deepseek-chat"]  # canonical reached the provider
