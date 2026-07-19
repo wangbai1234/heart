@@ -383,35 +383,121 @@ def _build_fallback_voice_provider(primary_provider: Any) -> Any:
     return None
 
 
+def _build_mimo_provider() -> Any:
+    """Construct a MiMo TTS provider if MIMO_API_KEY is set, else None."""
+    if not settings.mimo_api_key:
+        return None
+    try:
+        from heart.ss08_voice.mimo_provider import MiMoProvider
+
+        return MiMoProvider(api_key=settings.mimo_api_key, base_url=settings.mimo_base_url)
+    except Exception as e:
+        logger.warning("wiring_mimo_provider_init_failed", error=str(e))
+        return None
+
+
+def _build_fish_provider() -> Any:
+    """Construct a Fish TTS provider if FISH_API_KEY is set, else None."""
+    if not settings.fish_api_key:
+        return None
+    try:
+        from heart.ss08_voice.fish_provider import FishProvider
+
+        return FishProvider(
+            api_key=settings.fish_api_key,
+            base_url=settings.fish_base_url,
+            model=settings.fish_model,
+        )
+    except Exception as e:
+        logger.warning("wiring_fish_provider_init_failed", error=str(e))
+        return None
+
+
+def _build_minimax_pooled_provider() -> Any:
+    """Construct the pooled MiniMax provider if any MiniMax key is set, else None."""
+    if not (settings.minimax_api_key or settings.minimax_api_keys):
+        return None
+    try:
+        from heart.ss08_voice.pooled_provider import PooledTTSProvider
+
+        members = _build_minimax_members()
+        if not members:
+            return None
+        return PooledTTSProvider(
+            members,
+            max_concurrency=settings.tts_max_concurrency,
+            max_retries=settings.tts_max_retries,
+            cooldown_seconds=settings.tts_key_cooldown_seconds,
+        )
+    except Exception as e:
+        logger.warning("wiring_minimax_provider_init_failed", error=str(e))
+        return None
+
+
+# Priority for the process-default primary (built-in / unconfigured characters).
+_PRIMARY_PRIORITY = ("mimo", "fish", "minimax")
+# Fallback order keyed by the primary provider name (mirrors the legacy rules).
+_FALLBACK_ORDER = {
+    "mimo": ("fish", "minimax"),
+    "fish": ("minimax",),
+    "minimax": ("mimo",),
+}
+
+
+@lru_cache
+def get_tts_provider_registry() -> dict:
+    """Process singleton: every configured TTS provider keyed by ``.name``.
+
+    Enables per-character provider selection (character_voices.voice_provider)
+    at synthesis time — a Fish-cloned voice must be rendered by Fish, not by the
+    process-default primary. Providers absent from the environment are simply
+    omitted; callers fall back to the default chain.
+    """
+    registry: dict = {}
+    for build in (_build_mimo_provider, _build_fish_provider, _build_minimax_pooled_provider):
+        provider = build()
+        if provider is not None:
+            registry[provider.name] = provider
+    return registry
+
+
 @lru_cache
 def get_voice_service():
-    """Process singleton: VoiceService with primary provider + fallback.
+    """Process singleton: VoiceService over the full TTS provider registry.
 
-    Supports two TTS providers:
-    - MiniMax: built-in voices or cloned voice_id
-    - MiMo: legacy fallback voice synthesis
-
-    The project now prefers MiniMax as primary whenever it is configured,
-    so cloned voices can be used directly in chat. MiMo remains fallback-only.
+    The primary is chosen by priority (MiMo → Fish → MiniMax) and drives the
+    default path for built-in / unconfigured characters. Per-character
+    synthesis routing (voice_provider) selects from the registry inside
+    VoiceService.synthesize_with_fallback.
     """
-    primary_provider = _build_primary_voice_provider()
-    if not primary_provider:
+    registry = get_tts_provider_registry()
+    if not registry:
         logger.warning(
             "wiring_no_voice_provider",
             hint="Set MIMO_API_KEY, FISH_API_KEY, or MINIMAX_API_KEY in .env",
         )
         return None
 
-    fallback_provider = _build_fallback_voice_provider(primary_provider)
+    primary_provider = next((registry[n] for n in _PRIMARY_PRIORITY if n in registry), None)
+    if not primary_provider:
+        primary_provider = next(iter(registry.values()))
+
+    fallback_provider = None
+    if settings.voice_fallback_enabled:
+        fallback_provider = next(
+            (registry[n] for n in _FALLBACK_ORDER.get(primary_provider.name, ()) if n in registry),
+            None,
+        )
 
     try:
         from heart.ss08_voice.service import VoiceService
 
-        svc = VoiceService(primary_provider, fallback=fallback_provider)
+        svc = VoiceService(primary_provider, fallback=fallback_provider, providers=registry)
         logger.info(
             "wiring_voice_service_initialized",
             primary=primary_provider.name,
             fallback=fallback_provider.name if fallback_provider else None,
+            providers=list(registry.keys()),
         )
         return svc
     except Exception as e:
