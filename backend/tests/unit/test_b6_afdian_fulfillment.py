@@ -63,9 +63,7 @@ class TestFulfillOrder:
         db = AsyncMock()
         # SELECT returns row with fulfilled_at set
         fulfilled_row = MagicMock()
-        fulfilled_row.fetchone.return_value = (
-            datetime(2026, 1, 1, tzinfo=timezone.utc),
-        )
+        fulfilled_row.fetchone.return_value = (datetime(2026, 1, 1, tzinfo=timezone.utc),)
         db.execute = AsyncMock(return_value=fulfilled_row)
 
         ok, msg = await fulfill_order(db, "order-001", "plan-a", "binding: XYZ")
@@ -106,9 +104,14 @@ class TestFulfillOrder:
         sku_map = '{"plan-coins": {"type": "coins", "coins": 220}}'
 
         with (
-            patch("heart.afdian.fulfillment.resolve_user_by_binding_code", new=AsyncMock(return_value=user_id)),
+            patch(
+                "heart.afdian.fulfillment.resolve_user_by_binding_code",
+                new=AsyncMock(return_value=user_id),
+            ),
             patch("heart.core.config.settings.afdian_sku_map", sku_map),
-            patch("heart.afdian.fulfillment.grant_credits", new=AsyncMock(return_value=22000)) as mock_grant,
+            patch(
+                "heart.afdian.fulfillment.grant_credits", new=AsyncMock(return_value=22000)
+            ) as mock_grant,
         ):
             ok, msg = await fulfill_order(db, "order-003", "plan-coins", "code: ABCD1234")
 
@@ -132,7 +135,10 @@ class TestFulfillOrder:
         sku_map = '{"plan-plus30": {"type": "membership", "tier": "plus", "days": 30}}'
 
         with (
-            patch("heart.afdian.fulfillment.resolve_user_by_binding_code", new=AsyncMock(return_value=user_id)),
+            patch(
+                "heart.afdian.fulfillment.resolve_user_by_binding_code",
+                new=AsyncMock(return_value=user_id),
+            ),
             patch("heart.core.config.settings.afdian_sku_map", sku_map),
             patch("heart.afdian.fulfillment.activate_or_extend", new=AsyncMock()) as mock_activate,
         ):
@@ -147,6 +153,97 @@ class TestFulfillOrder:
         assert mock_activate.call_args[0][3] == 30
 
     @pytest.mark.asyncio
+    async def test_grants_coins_for_sku_id_product(self):
+        """商品 (coin pack): plan_id empty, matched by sku_id in sku_detail."""
+        from heart.afdian.fulfillment import fulfill_order
+
+        user_id = uuid.uuid4()
+        db = AsyncMock()
+        not_fulfilled = MagicMock()
+        not_fulfilled.fetchone.return_value = (None,)
+        db.execute = AsyncMock(return_value=not_fulfilled)
+        db.commit = AsyncMock()
+
+        sku_map = '{"sku_6yuan": {"type": "coins", "coins": 60}}'
+        sku_detail = [{"sku_id": "sku_6yuan", "count": 1, "name": "6元yuoyuo币"}]
+
+        with (
+            patch(
+                "heart.afdian.fulfillment.resolve_user_by_binding_code",
+                new=AsyncMock(return_value=user_id),
+            ),
+            patch("heart.core.config.settings.afdian_sku_map", sku_map),
+            patch(
+                "heart.afdian.fulfillment.grant_credits", new=AsyncMock(return_value=6000)
+            ) as mock_grant,
+        ):
+            ok, msg = await fulfill_order(db, "order-sku-1", "", "code: ABCD1234", sku_detail)
+
+        assert ok is True
+        assert msg == "ok"
+        assert mock_grant.call_args[0][2] == 6000  # 60 coins × 100 fen
+
+    @pytest.mark.asyncio
+    async def test_coins_multiplied_by_purchase_count(self):
+        """商品 quantity: buying ×3 of a 6元 pack grants 3× the coins."""
+        from heart.afdian.fulfillment import fulfill_order
+
+        user_id = uuid.uuid4()
+        db = AsyncMock()
+        not_fulfilled = MagicMock()
+        not_fulfilled.fetchone.return_value = (None,)
+        db.execute = AsyncMock(return_value=not_fulfilled)
+        db.commit = AsyncMock()
+
+        sku_map = '{"sku_6yuan": {"type": "coins", "coins": 60}}'
+        sku_detail = [{"sku_id": "sku_6yuan", "count": 3}]
+
+        with (
+            patch(
+                "heart.afdian.fulfillment.resolve_user_by_binding_code",
+                new=AsyncMock(return_value=user_id),
+            ),
+            patch("heart.core.config.settings.afdian_sku_map", sku_map),
+            patch(
+                "heart.afdian.fulfillment.grant_credits", new=AsyncMock(return_value=18000)
+            ) as mock_grant,
+        ):
+            ok, msg = await fulfill_order(db, "order-sku-2", "", "code: ABCD1234", sku_detail)
+
+        assert ok is True
+        assert mock_grant.call_args[0][2] == 18000  # 60 × 3 × 100 fen
+
+    @pytest.mark.asyncio
+    async def test_sku_detail_accepts_json_string(self):
+        """admin re-fulfill reads sku_detail back from DB as a JSON string."""
+        from heart.afdian.fulfillment import fulfill_order
+
+        user_id = uuid.uuid4()
+        db = AsyncMock()
+        not_fulfilled = MagicMock()
+        not_fulfilled.fetchone.return_value = (None,)
+        db.execute = AsyncMock(return_value=not_fulfilled)
+        db.commit = AsyncMock()
+
+        sku_map = '{"sku_18": {"type": "coins", "coins": 198}}'
+        sku_detail_json = '[{"sku_id": "sku_18", "count": 1}]'
+
+        with (
+            patch(
+                "heart.afdian.fulfillment.resolve_user_by_binding_code",
+                new=AsyncMock(return_value=user_id),
+            ),
+            patch("heart.core.config.settings.afdian_sku_map", sku_map),
+            patch(
+                "heart.afdian.fulfillment.grant_credits", new=AsyncMock(return_value=19800)
+            ) as mock_grant,
+        ):
+            ok, msg = await fulfill_order(db, "order-sku-3", "", "code: ABCD1234", sku_detail_json)
+
+        assert ok is True
+        assert mock_grant.call_args[0][2] == 19800
+
+    @pytest.mark.asyncio
     async def test_returns_false_for_unknown_plan(self):
         from heart.afdian.fulfillment import fulfill_order
 
@@ -158,7 +255,10 @@ class TestFulfillOrder:
         db.commit = AsyncMock()
 
         with (
-            patch("heart.afdian.fulfillment.resolve_user_by_binding_code", new=AsyncMock(return_value=user_id)),
+            patch(
+                "heart.afdian.fulfillment.resolve_user_by_binding_code",
+                new=AsyncMock(return_value=user_id),
+            ),
             patch("heart.core.config.settings.afdian_sku_map", "{}"),
         ):
             ok, msg = await fulfill_order(db, "order-005", "plan-unknown", "code: ABCD")
