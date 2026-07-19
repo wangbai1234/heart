@@ -13,7 +13,6 @@ import { Dialog } from './ui/Dialog'
 import { Button } from './ui/Button'
 import { Avatar } from './ui/Avatar'
 import VoiceMessageBubble from './VoiceMessageBubble'
-import { ChatModelSelector } from './ChatModelSelector'
 import { useSwipeNavigation } from '../hooks/useSwipeNavigation'
 
 const EMPTY_MESSAGES: Message[] = []
@@ -473,7 +472,6 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
             </span>
           </div>
         </div>
-        <ChatModelSelector characterId={currentCharacterId} isDark={isDark} />
         <button onClick={() => navigate('/character-backstage')} className="w-[44px] h-[44px] flex items-center justify-center" aria-label="打开角色后台">
           <span className={`text-[20px] ${isDark ? 'text-[#E4E4E7]' : 'text-[var(--color-ink)]'}`}>···</span>
         </button>

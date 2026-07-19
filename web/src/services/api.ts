@@ -513,6 +513,9 @@ export interface CharacterVoiceDTO {
   clone_status?: 'pending' | 'processing' | 'ready' | 'failed'
   preset_voice_id?: string | null
   preset_name?: string | null
+  // TTS provider that owns this voice (mimo/fish/minimax). Drives the backstage
+  // 语音聊天 tier highlight. Absent until the per-character-provider backend ships.
+  voice_provider?: string | null
   has_voice?: boolean
   // Populated by the backend only when clone_status='failed' — surfaces the
   // real reason (missing GroupId / unreachable audio URL / MiniMax quota)
