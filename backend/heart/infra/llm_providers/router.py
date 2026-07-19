@@ -127,7 +127,11 @@ class ModelRouter:
                 logger.debug("call_for_no_provider", model=candidate)
                 continue
 
-            request = self._build_request(messages, candidate, temperature, max_tokens)
+            # candidate is a routing slug (e.g. "deepseek"); the vendor API needs
+            # the canonical model name (e.g. "deepseek-chat"). served_model stays
+            # the slug for billing/label purposes.
+            api_model = self._registry.get_canonical_model(candidate)
+            request = self._build_request(messages, api_model, temperature, max_tokens)
             try:
                 logger.info(
                     "call_for_attempt",
@@ -191,7 +195,11 @@ class ModelRouter:
                 logger.debug("stream_for_no_provider", model=candidate)
                 continue
 
-            request = self._build_request(messages, candidate, temperature, max_tokens, stream=True)
+            # candidate is a routing slug (e.g. "deepseek"); the vendor API needs
+            # the canonical model name (e.g. "deepseek-chat"). served_model stays
+            # the slug for billing/label purposes.
+            api_model = self._registry.get_canonical_model(candidate)
+            request = self._build_request(messages, api_model, temperature, max_tokens, stream=True)
             try:
                 logger.info(
                     "stream_for_attempt",
