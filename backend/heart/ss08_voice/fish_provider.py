@@ -1,9 +1,13 @@
-"""Fish Audio TTS Provider.
+"""Fish Audio TTS Provider (fishaudio.org open API gateway).
 
-Fish Audio uses a REST API with multipart/form-data for synthesis and
-a WebSocket-based streaming endpoint.  We implement the non-streaming
-synthesize path (mp3) here; stream_synthesize falls back to chunking
-the full synthesis result.
+Targets the ``/api/open/v1`` gateway contract:
+  - Synthesis:   POST {base}/speech/tts  (JSON: text/voiceId/modelId/format)
+                 → binary audio (audio/mpeg | audio/wav)
+  - Voice clone: POST {base}/voices      (multipart: name + audioFiles[])
+                 → JSON { voiceId }
+
+``base`` is expected to already include the ``/api/open/v1`` prefix
+(FISH_BASE_URL). ``model`` is the backbone modelId (e.g. fishaudio-s21pro-flash).
 """
 
 from __future__ import annotations
@@ -19,12 +23,12 @@ from heart.ss08_voice.types import AudioChunk, TTSRequest, TTSResult
 
 logger = structlog.get_logger(__name__)
 
-_DEFAULT_BASE_URL = "https://api.fish.audio"
-_DEFAULT_MODEL = "speech-1.6"
+_DEFAULT_BASE_URL = "https://fishaudio.org/api/open/v1"
+_DEFAULT_MODEL = "fishaudio-s21pro-flash"
 
 
 class FishProvider:
-    """Fish Audio TTS provider (non-streaming synthesis via REST API)."""
+    """Fish Audio TTS provider (synchronous REST synthesis + voice clone)."""
 
     def __init__(
         self,
@@ -46,29 +50,25 @@ class FishProvider:
         return 0.0
 
     async def synthesize(self, req: TTSRequest) -> TTSResult:
-        """Synthesize speech using Fish Audio TTS API."""
-        audio_format: str = req.format if req.format in ("mp3", "wav", "opus") else "mp3"
-        payload = {
-            "text": req.text,
-            "format": audio_format,
-            "mp3_bitrate": 128,
-            "normalize": True,
-            "latency": "balanced",
-        }
+        """Synthesize speech via POST {base}/speech/tts (returns binary audio)."""
+        audio_format: str = req.format if req.format in ("mp3", "wav") else "mp3"
+        payload: dict = {"text": req.text, "format": audio_format}
+        # The cloned voice is selected by voiceId; the backbone engine by modelId.
         if req.voice_id and req.voice_id != "default":
-            payload["reference_id"] = req.voice_id
+            payload["voiceId"] = req.voice_id
+        if self._model:
+            payload["modelId"] = self._model
+        if req.speed and req.speed != 1.0:
+            payload["speed"] = req.speed
 
         headers = {
             "Authorization": f"Bearer {self._api_key}",
             "Content-Type": "application/json",
-            # Backbone TTS model (e.g. fishaudio-s21pro-flash). Fish selects the
-            # engine from this header; reference_id (above) selects the voice.
-            "model": self._model,
         }
         try:
             async with httpx.AsyncClient(timeout=self._timeout) as client:
                 resp = await client.post(
-                    f"{self._base_url}/v1/tts",
+                    f"{self._base_url}/speech/tts",
                     json=payload,
                     headers=headers,
                 )
@@ -82,6 +82,7 @@ class FishProvider:
         except httpx.HTTPError as e:
             raise TTSProviderError(f"Fish Audio TTS HTTP error: {e}") from e
 
+        # mp3 @ ~128 kbps estimate; wav is PCM so this is a loose upper bound.
         duration_ms = max(1, int(len(audio_bytes) / (128 * 1000 / 8) * 1000))
         return TTSResult(
             audio=audio_bytes,
@@ -98,26 +99,28 @@ class FishProvider:
     async def clone_from_bytes(
         self, audio: bytes, title: str, filename: str = "sample.wav", mime: str = "audio/wav"
     ) -> str:
-        """Create a Fish Audio voice model from raw audio bytes; return its model_id.
+        """Create a Fish voice model from raw audio bytes; return its voiceId.
 
-        Uploads directly to the ``/model`` endpoint (multipart) — no public URL
-        needed, so this works for local seed files. Raises TTSProviderError on
-        failure. Used by the built-in clone seeder (scripts/seed_builtin_clones.py).
+        POSTs multipart to {base}/voices (field ``name`` + file field
+        ``audioFiles``) — no public URL needed, so it works for local seed
+        files. Raises TTSProviderError on failure. Used by the built-in clone
+        seeder (scripts/seed_builtin_clones.py).
         """
         try:
             async with httpx.AsyncClient(timeout=120.0) as client:
                 resp = await client.post(
-                    f"{self._base_url}/model",
+                    f"{self._base_url}/voices",
                     headers={"Authorization": f"Bearer {self._api_key}"},
-                    data={"title": title, "train_mode": "fast", "enhance_audio": "true"},
-                    files={"voices": (filename, audio, mime)},
+                    data={"name": title},
+                    files={"audioFiles": (filename, audio, mime)},
                 )
         except httpx.HTTPError as e:
             raise TTSProviderError(f"Fish clone HTTP error: {e}") from e
 
         if resp.status_code not in (200, 201):
             raise TTSProviderError(f"Fish clone error {resp.status_code}: {resp.text[:300]}")
-        model_id = resp.json().get("_id")
-        if not model_id:
-            raise TTSProviderError(f"Fish clone returned no model_id: {resp.text[:200]}")
-        return model_id
+        body = resp.json()
+        voice_id = body.get("voiceId") or body.get("_id")
+        if not voice_id:
+            raise TTSProviderError(f"Fish clone returned no voiceId: {resp.text[:200]}")
+        return voice_id

@@ -22,8 +22,9 @@ def test_fish_provider_name():
 
 def test_fish_provider_init_defaults():
     p = FishProvider(api_key="key")
-    assert p._base_url == "https://api.fish.audio"
-    assert p._model == "speech-1.6"
+    # fishaudio.org open-API gateway contract (/speech/tts, /voices).
+    assert p._base_url == "https://fishaudio.org/api/open/v1"
+    assert p._model == "fishaudio-s21pro-flash"
     assert p._timeout == 60.0
 
 

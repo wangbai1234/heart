@@ -205,12 +205,12 @@ class TestMiMoVoicecloneBody:
         assert body["audio"]["optimize_text_preview"] is False
 
 
-# ── Fish backbone model header ───────────────────────────────────────────────
+# ── Fish gateway synth contract (/speech/tts) ────────────────────────────────
 
 
-class TestFishModelHeader:
+class TestFishSynthContract:
     @pytest.mark.asyncio
-    async def test_synthesize_sends_model_header(self):
+    async def test_synthesize_posts_speech_tts_with_voiceid_and_modelid(self):
         from heart.ss08_voice import fish_provider
 
         captured: dict = {}
@@ -236,10 +236,14 @@ class TestFishModelHeader:
                 return _FakeResp()
 
         p = fish_provider.FishProvider(
-            api_key="k", base_url="https://api.fish.audio", model="fishaudio-s21pro-flash"
+            api_key="k",
+            base_url="https://fishaudio.org/api/open/v1",
+            model="fishaudio-s21pro-flash",
         )
         with patch.object(fish_provider.httpx, "AsyncClient", _FakeClient):
-            await p.synthesize(TTSRequest(text="hi", voice_id="fish-123"))
+            await p.synthesize(TTSRequest(text="hi", voice_id="voice-123"))
 
-        assert captured["headers"]["model"] == "fishaudio-s21pro-flash"
-        assert captured["json"]["reference_id"] == "fish-123"
+        assert captured["url"].endswith("/speech/tts")
+        assert captured["json"]["voiceId"] == "voice-123"
+        assert captured["json"]["modelId"] == "fishaudio-s21pro-flash"
+        assert captured["headers"]["Authorization"] == "Bearer k"
