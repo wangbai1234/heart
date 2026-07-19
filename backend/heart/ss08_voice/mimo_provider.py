@@ -256,18 +256,51 @@ class MiMoProvider:
         self._api_key = api_key
         self._base_url = base_url.rstrip("/")
         self._client = httpx.AsyncClient(timeout=60.0)
+        # handle → "data:<mime>;base64,..." for zero-shot clone references, so a
+        # multi-MB sample is read + encoded once per process, not per turn.
+        self._ref_cache: dict[str, str] = {}
 
-    def _build_body(self, req: TTSRequest, character_id: str, stream: bool = False) -> dict:
+    async def _reference_data_uri(self, handle: str) -> str | None:
+        """Load a clone reference (local path or http URL) as a data: URI.
+
+        MiMo voiceclone is zero-shot — the reference audio IS the timbre and must
+        ride along on every synth call. Returns None (→ caller degrades to
+        voicedesign) if the handle can't be loaded.
+        """
+        if not handle:
+            return None
+        cached = self._ref_cache.get(handle)
+        if cached:
+            return cached
+        try:
+            if handle.startswith(("http://", "https://")):
+                resp = await self._client.get(handle)
+                resp.raise_for_status()
+                data = resp.content
+                mime = resp.headers.get("content-type", "audio/wav").split(";")[0].strip()
+                if mime not in ("audio/mpeg", "audio/mp3", "audio/wav"):
+                    mime = "audio/wav"
+            else:
+                path = handle[len("file://") :] if handle.startswith("file://") else handle
+                with open(path, "rb") as f:
+                    data = f.read()
+                mime = "audio/mpeg" if path.lower().endswith(".mp3") else "audio/wav"
+        except Exception as e:
+            logger.warning("mimo_reference_load_failed", handle=handle[:80], error=str(e))
+            return None
+
+        uri = f"data:{mime};base64,{base64.b64encode(data).decode('ascii')}"
+        self._ref_cache[handle] = uri
+        return uri
+
+    def _build_body(
+        self,
+        req: TTSRequest,
+        character_id: str,
+        stream: bool = False,
+        reference_data_uri: str | None = None,
+    ) -> dict:
         emotion = req.emotion if req.emotion in _VALID_EMOTIONS else "neutral"
-
-        voice_desc = (
-            _VOICE_DESCRIPTIONS.get(character_id)
-            or _VOICE_DESCRIPTIONS.get(req.voice_id)
-            or _VOICE_DESCRIPTIONS["rin"]
-        )
-        emotion_directive = _EMOTION_DIRECTIVES.get(emotion, "用自然平和的语气")
-        user_content = f"{voice_desc} {emotion_directive}"
-
         emotion_tag = _EMOTION_TAGS.get(emotion, "")
         assistant_content = f"{emotion_tag}{req.text}" if emotion_tag else req.text
 
@@ -282,14 +315,34 @@ class MiMoProvider:
         if req.volume != 1.0:
             audio_config["volume"] = req.volume
 
-        body: dict[str, Any] = {
-            "model": "mimo-v2.5-tts-voicedesign",
-            "messages": [
-                {"role": "user", "content": user_content},
-                {"role": "assistant", "content": assistant_content},
-            ],
-            "audio": audio_config,
-        }
+        if reference_data_uri:
+            # Zero-shot voice clone: reference audio in audio.voice, text spoken
+            # by the assistant message (per MiMo voiceclone spec).
+            audio_config["voice"] = reference_data_uri
+            body: dict[str, Any] = {
+                "model": "mimo-v2.5-tts-voiceclone",
+                "messages": [
+                    {"role": "user", "content": ""},
+                    {"role": "assistant", "content": assistant_content},
+                ],
+                "audio": audio_config,
+            }
+        else:
+            # voicedesign: natural-language voice description drives the timbre.
+            voice_desc = (
+                _VOICE_DESCRIPTIONS.get(character_id)
+                or _VOICE_DESCRIPTIONS.get(req.voice_id)
+                or _VOICE_DESCRIPTIONS["rin"]
+            )
+            emotion_directive = _EMOTION_DIRECTIVES.get(emotion, "用自然平和的语气")
+            body = {
+                "model": "mimo-v2.5-tts-voicedesign",
+                "messages": [
+                    {"role": "user", "content": f"{voice_desc} {emotion_directive}"},
+                    {"role": "assistant", "content": assistant_content},
+                ],
+                "audio": audio_config,
+            }
         if stream:
             body["stream"] = True
 
@@ -297,7 +350,10 @@ class MiMoProvider:
 
     async def synthesize(self, req: TTSRequest, character_id: str = "rin") -> TTSResult:
         """Synthesize speech from text (non-streaming)."""
-        body = self._build_body(req, character_id, stream=False)
+        reference = (
+            await self._reference_data_uri(req.clone_reference) if req.clone_reference else None
+        )
+        body = self._build_body(req, character_id, stream=False, reference_data_uri=reference)
 
         try:
             response = await self._client.post(
@@ -336,7 +392,10 @@ class MiMoProvider:
 
         Returns a MiMoCancellableStream that chunks the full response.
         """
-        body = self._build_body(req, character_id, stream=True)
+        reference = (
+            await self._reference_data_uri(req.clone_reference) if req.clone_reference else None
+        )
+        body = self._build_body(req, character_id, stream=True, reference_data_uri=reference)
         response_cm = self._client.stream(
             "POST",
             f"{self._base_url}/chat/completions",

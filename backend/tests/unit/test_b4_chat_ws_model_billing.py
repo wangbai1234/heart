@@ -167,29 +167,36 @@ _TIERS_CFG = (
 )
 
 
-def _precheck_mock_db(character_provider=None):
+def _precheck_mock_db():
+    # resolve_effective_voice is patched per-test, so _precheck only issues two
+    # db.execute calls itself: voice_enabled lookup + balance floor.
     mock_db = AsyncMock()
     mock_db.__aenter__ = AsyncMock(return_value=mock_db)
     mock_db.__aexit__ = AsyncMock(return_value=False)
     voice_result = MagicMock()
     voice_result.scalar_one_or_none.return_value = True  # voice enabled
-    # resolve_voice_provider: None → gate falls back to _active_tts_provider_name()
-    # (patched per-test); a concrete value → the character's own voice provider
-    # drives the gate regardless of the process-default primary.
-    voice_provider_result = MagicMock()
-    voice_provider_result.scalar_one_or_none.return_value = character_provider
     balance_result = MagicMock()
     balance_result.scalar_one_or_none.return_value = 100000  # ample balance
-    mock_db.execute = AsyncMock(
-        side_effect=[voice_result, voice_provider_result, balance_result]
-    )
+    mock_db.execute = AsyncMock(side_effect=[voice_result, balance_result])
     return mock_db
 
 
+def _ev(provider: str):
+    from heart.ss08_voice.voice_resolver import EffectiveVoice
+
+    return EffectiveVoice(
+        provider=provider, voice_type="clone", voice_id="v", reference_ref=None
+    )
+
+
 class TestPrecheckTtsGate:
+    """The TTS gate now trusts resolve_effective_voice: it already tier-degrades
+    Fish→MiMo for free users (still voice), so _precheck only degrades to TEXT
+    when no tier-allowed ready voice exists (resolver returns None)."""
+
     @pytest.mark.asyncio
-    async def test_free_user_fish_primary_downgrades_to_text(self):
-        """Free tier (tts=[mimo]) with Fish primary → voice degraded, turn NOT blocked."""
+    async def test_no_usable_voice_degrades_to_text(self):
+        """resolve_effective_voice → None → voice off, turn NOT blocked."""
         from heart.api.routes_chat_ws import _precheck_billing
 
         ws = AsyncMock()
@@ -201,7 +208,10 @@ class TestPrecheckTtsGate:
             patch("heart.membership.get_effective_tier", new=AsyncMock(return_value="free")),
             patch("heart.api.routes_chat_ws._get_engine"),
             patch("sqlalchemy.ext.asyncio.AsyncSession", return_value=mock_db),
-            patch("heart.api.routes_chat_ws._active_tts_provider_name", return_value="fish"),
+            patch(
+                "heart.ss08_voice.voice_resolver.resolve_effective_voice",
+                new=AsyncMock(return_value=None),
+            ),
             patch("heart.core.config.settings.membership_tiers_config", _TIERS_CFG),
         ):
             effective_voice, can_proceed = await _precheck_billing(
@@ -210,13 +220,12 @@ class TestPrecheckTtsGate:
 
         assert effective_voice is False  # degraded to text
         assert can_proceed is True  # never block the text turn
-        # No model_forbidden / hard error emitted
         for call in ws.send_json.call_args_list:
             assert call[0][0].get("type") not in ("model_forbidden", "error")
 
     @pytest.mark.asyncio
-    async def test_free_user_mimo_primary_keeps_voice(self):
-        """Free tier allows mimo → voice preserved."""
+    async def test_free_user_effective_mimo_keeps_voice(self):
+        """Free tier resolved to MiMo (e.g. Fish selection degraded) → voice kept."""
         from heart.api.routes_chat_ws import _precheck_billing
 
         ws = AsyncMock()
@@ -228,7 +237,10 @@ class TestPrecheckTtsGate:
             patch("heart.membership.get_effective_tier", new=AsyncMock(return_value="free")),
             patch("heart.api.routes_chat_ws._get_engine"),
             patch("sqlalchemy.ext.asyncio.AsyncSession", return_value=mock_db),
-            patch("heart.api.routes_chat_ws._active_tts_provider_name", return_value="mimo"),
+            patch(
+                "heart.ss08_voice.voice_resolver.resolve_effective_voice",
+                new=AsyncMock(return_value=_ev("mimo")),
+            ),
             patch("heart.core.config.settings.membership_tiers_config", _TIERS_CFG),
         ):
             effective_voice, can_proceed = await _precheck_billing(
@@ -239,8 +251,8 @@ class TestPrecheckTtsGate:
         assert can_proceed is True
 
     @pytest.mark.asyncio
-    async def test_plus_user_fish_primary_keeps_voice(self):
-        """Plus tier allows fish → voice preserved even with Fish primary."""
+    async def test_plus_user_effective_fish_keeps_voice(self):
+        """Plus tier resolved to Fish → voice preserved."""
         from heart.api.routes_chat_ws import _precheck_billing
 
         ws = AsyncMock()
@@ -252,7 +264,10 @@ class TestPrecheckTtsGate:
             patch("heart.membership.get_effective_tier", new=AsyncMock(return_value="plus")),
             patch("heart.api.routes_chat_ws._get_engine"),
             patch("sqlalchemy.ext.asyncio.AsyncSession", return_value=mock_db),
-            patch("heart.api.routes_chat_ws._active_tts_provider_name", return_value="fish"),
+            patch(
+                "heart.ss08_voice.voice_resolver.resolve_effective_voice",
+                new=AsyncMock(return_value=_ev("fish")),
+            ),
             patch("heart.core.config.settings.membership_tiers_config", _TIERS_CFG),
         ):
             effective_voice, can_proceed = await _precheck_billing(
@@ -260,32 +275,6 @@ class TestPrecheckTtsGate:
             )
 
         assert effective_voice is True
-        assert can_proceed is True
-
-    @pytest.mark.asyncio
-    async def test_free_user_character_fish_voice_downgrades_even_if_primary_mimo(self):
-        """Character's own voice_provider=fish must gate a free user even when the
-        process-default primary is mimo (per-character routing, not singleton)."""
-        from heart.api.routes_chat_ws import _precheck_billing
-
-        ws = AsyncMock()
-        ws.send_json = AsyncMock()
-        turn_id = str(uuid.uuid4())
-        mock_db = _precheck_mock_db(character_provider="fish")
-
-        with (
-            patch("heart.membership.get_effective_tier", new=AsyncMock(return_value="free")),
-            patch("heart.api.routes_chat_ws._get_engine"),
-            patch("sqlalchemy.ext.asyncio.AsyncSession", return_value=mock_db),
-            # Primary singleton is mimo, but the character's voice is a Fish clone.
-            patch("heart.api.routes_chat_ws._active_tts_provider_name", return_value="mimo"),
-            patch("heart.core.config.settings.membership_tiers_config", _TIERS_CFG),
-        ):
-            effective_voice, can_proceed = await _precheck_billing(
-                uuid.uuid4(), "char1", turn_id, ws, model="deepseek"
-            )
-
-        assert effective_voice is False  # gated on fish → degraded to text
         assert can_proceed is True
 
 

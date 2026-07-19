@@ -77,6 +77,7 @@ def _create_stream_session(
     ws: WebSocket,
     cache: Any = None,
     preferred_provider_name: Optional[str] = None,
+    clone_reference: Optional[str] = None,
 ) -> Any:
     """Create a StreamSession if voice service is available."""
     if not voice_service:
@@ -101,7 +102,11 @@ def _create_stream_session(
         )
 
     session = StreamSession(
-        voice_service, send_audio, cache=cache, preferred_provider_name=preferred_provider_name
+        voice_service,
+        send_audio,
+        cache=cache,
+        preferred_provider_name=preferred_provider_name,
+        clone_reference=clone_reference,
     )
     return session
 
@@ -223,12 +228,10 @@ async def _precheck_billing(
         from heart.billing.pricing import llm_cost_fen, tts_cost_fen
         from heart.membership import (
             ModelForbiddenError,
-            TtsForbiddenError,
             assert_model_allowed,
-            assert_tts_allowed,
             get_effective_tier,
         )
-        from heart.ss08_voice.voice_resolver import resolve_voice_provider
+        from heart.ss08_voice.voice_resolver import resolve_effective_voice
 
         from .wiring import _get_engine
 
@@ -257,29 +260,20 @@ async def _precheck_billing(
                 )
                 return effective_voice, False
 
-            # Voice TTS entitlement (E): gate on the character's OWN configured
-            # provider (character_voices.voice_provider) — a Fish-cloned voice is
-            # synthesized by Fish, so a free user must be gated on "fish" even
-            # though the process-default primary is MiMo. Built-in characters
-            # with no DB voice row fall back to the process primary. If the
-            # provider isn't allowed for this tier, silently degrade this turn to
-            # text — never block text.
+            # Voice TTS entitlement (E): resolve the user's EFFECTIVE voice for
+            # this character — resolve_effective_voice reads their per-character
+            # provider choice and tier-gates it (free tier can't use Fish, so it
+            # degrades to MiMo, still voice). We then bill by that provider. If no
+            # tier-allowed ready voice exists, degrade this turn to text — never
+            # block text.
             tts_cost = 0
             if effective_voice:
-                provider_name = (
-                    await resolve_voice_provider(character_id, db) or _active_tts_provider_name()
-                )
-                try:
-                    assert_tts_allowed(tier, provider_name)
-                    tts_cost = tts_cost_fen(provider_name)
-                except TtsForbiddenError:
-                    logger.info(
-                        "voice_downgraded_tier_forbidden",
-                        tier=tier,
-                        provider=provider_name,
-                        turn_id=turn_id,
-                    )
+                ev = await resolve_effective_voice(character_id, user_uuid, db)
+                if ev is None:
+                    logger.info("voice_downgraded_no_usable_voice", tier=tier, turn_id=turn_id)
                     effective_voice = False
+                else:
+                    tts_cost = tts_cost_fen(ev.provider)
 
             # Balance floor (C): LLM (per model) + TTS (per provider). There is no
             # legacy per-message charge — text bubbles are free; a turn costs only
@@ -760,26 +754,26 @@ async def _handle_chat_message(
     # Provider that owns this character's voice (None → process-default chain);
     # threaded into the StreamSession so synthesis routes to the right engine.
     voice_provider: Optional[str] = None
+    clone_reference: Optional[str] = None
     if effective_voice:
-        from heart.ss08_voice.voice_catalog import VoiceNotConfigured, register_voice
-        from heart.ss08_voice.voice_resolver import resolve_voice_id, resolve_voice_provider
+        from heart.ss08_voice.voice_catalog import register_voice
+        from heart.ss08_voice.voice_resolver import resolve_effective_voice
 
         async with AsyncSession(_get_engine(), expire_on_commit=False) as _vdb:
-            _resolved_voice_id = await resolve_voice_id(character_id, _vdb)
-            voice_provider = await resolve_voice_provider(character_id, _vdb)
+            ev = await resolve_effective_voice(character_id, user_uuid, _vdb)
 
-        if _resolved_voice_id:
-            register_voice(character_id, "default", _resolved_voice_id)
+        if ev is None:
+            # No tier-allowed ready voice (matches _precheck degrade). Keep the
+            # turn text-only rather than erroring — user still gets the reply.
+            effective_voice = False
         else:
-            await ws.send_json(
-                {
-                    "type": "error",
-                    "code": "VOICE_NOT_CONFIGURED",
-                    "msg": "该角色暂未配置音色",
-                    "character_id": character_id,
-                }
-            )
-            return
+            voice_provider = ev.provider
+            clone_reference = ev.reference_ref
+            # Register a voice_id for the director. Fish/MiniMax use their id;
+            # a MiMo zero-shot clone has none (the reference audio is the voice),
+            # so register the character_id as a stable per-character key (keeps
+            # the TTS cache from colliding across characters).
+            register_voice(character_id, "default", ev.voice_id or character_id)
 
     # ── 2. Run orchestrator ──
     orch = get_orchestrator()
@@ -795,6 +789,7 @@ async def _handle_chat_message(
         ws,
         cache=cache,
         preferred_provider_name=voice_provider,
+        clone_reference=clone_reference,
     )
     if stream_session:
         await stream_session.start()

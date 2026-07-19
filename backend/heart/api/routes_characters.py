@@ -37,6 +37,10 @@ class VoiceSettingUpdate(BaseModel):
     voice_enabled: bool
 
 
+class VoiceProviderUpdate(BaseModel):
+    provider: str  # 'mimo' (日常语音) | 'fish' (真人语音)
+
+
 def _require_known_character(character_id: str) -> None:
     """Reject a ``character_id`` that has no loaded Soul Spec (boundary guard)."""
     if not is_known_character(character_id):
@@ -168,6 +172,65 @@ async def update_character_settings(
         voice_enabled=body.voice_enabled,
     )
     return {"voice_enabled": body.voice_enabled}
+
+
+@router.patch("/{character_id}/voice-provider")
+async def set_voice_provider(
+    character_id: str,
+    body: VoiceProviderUpdate,
+    current_user: TokenData = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Switch which TTS engine (日常语音 mimo / 真人语音 fish) this user hears.
+
+    Per-user, per-character: writes ``user_character_settings.voice_provider``.
+    Fish is gated to paid tiers; the target provider must already have a ready
+    voice row (both are pre-cloned for built-in rin/dorothy), so switching is
+    instant — no re-configuration.
+    """
+    _require_known_character(character_id)
+    uid = uuid.UUID(current_user.user_id)
+
+    provider = body.provider
+    if provider not in ("mimo", "fish"):
+        raise HTTPException(status_code=400, detail="provider 只能是 mimo 或 fish")
+
+    # Tier gate — 真人语音 (Fish) requires paid membership.
+    from heart.membership import TtsForbiddenError, assert_tts_allowed, get_effective_tier
+
+    tier = await get_effective_tier(db, uid)
+    try:
+        assert_tts_allowed(tier, provider)
+    except TtsForbiddenError as e:
+        raise HTTPException(
+            status_code=403,
+            detail={"code": "tier_forbidden", "provider": e.provider, "tier": e.tier},
+        ) from e
+
+    # The target engine must have a ready voice for this character.
+    from heart.ss08_voice.voice_resolver import list_ready_voice_providers
+
+    ready = await list_ready_voice_providers(character_id, db)
+    if provider not in ready:
+        raise HTTPException(status_code=409, detail="该角色暂未配置该语音，请先配置音色")
+
+    await db.execute(
+        text("""
+            INSERT INTO user_character_settings (user_id, character_id, voice_provider, updated_at)
+            VALUES (:uid, :cid, :prov, NOW())
+            ON CONFLICT (user_id, character_id)
+            DO UPDATE SET voice_provider = :prov, updated_at = NOW()
+        """),
+        {"uid": uid, "cid": character_id, "prov": provider},
+    )
+    await db.commit()
+    logger.info(
+        "character_voice_provider_updated",
+        user_id=str(uid),
+        character_id=character_id,
+        voice_provider=provider,
+    )
+    return {"voice_provider": provider}
 
 
 @router.post("/{character_id}/clear-conversations")
