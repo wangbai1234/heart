@@ -113,6 +113,16 @@ services:
     command: ["uvicorn", "heart.api.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
     env_file:
       - .env.prod
+    # soul_specs/ and config/ live at the REPO ROOT, not under backend/, so the
+    # image (build context ./backend) does not contain them. In-container the code
+    # resolves them to /soul_specs and /config (Path(__file__) walked 4 levels up
+    # = /). Without these mounts the SoulRegistry loads zero characters and every
+    # chat message fails with SOUL_NOT_LOADED ("角色加载中，请稍后重试"); the safety
+    # crisis lexicon + memory_promoter config also go missing. Read-only so the
+    # container can't mutate versioned specs; update = git pull + restart.
+    volumes:
+      - ./soul_specs:/soul_specs:ro
+      - ./config:/config:ro
     environment:
       - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-heart}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-heart}
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
@@ -150,6 +160,11 @@ services:
     command: ["uvicorn", "heart.api.main:app", "--host", "0.0.0.0", "--port", "8080"]
     env_file:
       - .env.prod
+    # Same repo-root soul_specs/ + config/ as the api container — the background
+    # workers (memory_promoter, safety) read them too. See the api service above.
+    volumes:
+      - ./soul_specs:/soul_specs:ro
+      - ./config:/config:ro
     environment:
       - HEART_WORKERS_ENABLED=true
       - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-heart}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-heart}
