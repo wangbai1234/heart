@@ -47,6 +47,9 @@ htmlcov/
 .env
 .env.local
 .env.*.local
+# Production secrets — .env.prod is NOT covered by the patterns above; ignore explicitly.
+.env.prod
+.env.prod.bak
 
 # Database
 *.db
