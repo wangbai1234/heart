@@ -51,13 +51,31 @@ async def resolve_voice_id(character_id: str, db: AsyncSession) -> str | None:
     return None
 
 
+async def resolve_voice_provider(character_id: str, db: AsyncSession) -> str | None:
+    """Return the TTS provider that owns this character's configured voice.
+
+    Reads ``character_voices.voice_provider`` (added in migration 036). Returns
+    None when the character has no DB voice row — callers then fall back to the
+    process-default provider chain, preserving built-in (rin/dorothy) behaviour.
+    A Fish-cloned voice must be synthesized by the Fish engine (its clone
+    voice_id is meaningless to MiMo/MiniMax), so this value is authoritative for
+    per-character synthesis routing and the per-turn TTS tier gate.
+    """
+    result = await db.execute(
+        text("SELECT voice_provider FROM character_voices WHERE character_id = :cid"),
+        {"cid": character_id},
+    )
+    provider = result.scalar_one_or_none()
+    return provider or None
+
+
 async def get_voice_config(character_id: str, db: AsyncSession) -> dict | None:
     """Return full voice config dict for a character, or None if unconfigured."""
     result = await db.execute(
         text("""
             SELECT cv.id, cv.voice_type, cv.preset_voice_id,
                    cv.clone_audio_url, cv.clone_voice_id, cv.clone_status,
-                   cv.error_msg, cv.created_at,
+                   cv.error_msg, cv.created_at, cv.voice_provider,
                    pv.name AS preset_name, pv.voice_id AS preset_voice_id_value,
                    pv.description AS preset_description
             FROM character_voices cv

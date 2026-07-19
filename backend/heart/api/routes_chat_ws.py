@@ -72,7 +72,12 @@ async def _load_recent_conversation_history(
     return history
 
 
-def _create_stream_session(voice_service: Any, ws: WebSocket, cache: Any = None) -> Any:
+def _create_stream_session(
+    voice_service: Any,
+    ws: WebSocket,
+    cache: Any = None,
+    preferred_provider_name: Optional[str] = None,
+) -> Any:
     """Create a StreamSession if voice service is available."""
     if not voice_service:
         return None
@@ -95,7 +100,9 @@ def _create_stream_session(voice_service: Any, ws: WebSocket, cache: Any = None)
             }
         )
 
-    session = StreamSession(voice_service, send_audio, cache=cache)
+    session = StreamSession(
+        voice_service, send_audio, cache=cache, preferred_provider_name=preferred_provider_name
+    )
     return session
 
 
@@ -182,11 +189,12 @@ async def _process_stream_events(
 
 
 def _active_tts_provider_name() -> str:
-    """Name of the primary TTS provider (process singleton), or '' if none.
+    """Name of the process-default primary TTS provider, or '' if none.
 
-    Used to gate voice turns by tier: the provider is not user-selectable
-    (VoiceService is a process singleton), so we check the primary the turn
-    would actually use.
+    Used as the tier-gate fallback for characters with no per-character
+    voice_provider (built-in rin/dorothy): the default path synthesizes via this
+    primary. UGC characters override it with their configured voice_provider
+    (see _precheck_billing / resolve_voice_provider).
     """
     try:
         from .wiring import get_voice_service
@@ -220,6 +228,7 @@ async def _precheck_billing(
             assert_tts_allowed,
             get_effective_tier,
         )
+        from heart.ss08_voice.voice_resolver import resolve_voice_provider
 
         from .wiring import _get_engine
 
@@ -248,11 +257,18 @@ async def _precheck_billing(
                 )
                 return effective_voice, False
 
-            # Voice TTS entitlement (E): if the active TTS provider isn't allowed
-            # for this tier, silently degrade this turn to text — never block text.
+            # Voice TTS entitlement (E): gate on the character's OWN configured
+            # provider (character_voices.voice_provider) — a Fish-cloned voice is
+            # synthesized by Fish, so a free user must be gated on "fish" even
+            # though the process-default primary is MiMo. Built-in characters
+            # with no DB voice row fall back to the process primary. If the
+            # provider isn't allowed for this tier, silently degrade this turn to
+            # text — never block text.
             tts_cost = 0
             if effective_voice:
-                provider_name = _active_tts_provider_name()
+                provider_name = (
+                    await resolve_voice_provider(character_id, db) or _active_tts_provider_name()
+                )
                 try:
                     assert_tts_allowed(tier, provider_name)
                     tts_cost = tts_cost_fen(provider_name)
@@ -741,12 +757,16 @@ async def _handle_chat_message(
     # ── 1b. Pre-populate voice catalog for UGC characters ──
     # VoiceDirector.derive() uses the in-memory VOICE_CATALOG which only has built-ins.
     # Resolve DB-backed voice for UGC characters now (async) and register before orchestrator starts.
+    # Provider that owns this character's voice (None → process-default chain);
+    # threaded into the StreamSession so synthesis routes to the right engine.
+    voice_provider: Optional[str] = None
     if effective_voice:
         from heart.ss08_voice.voice_catalog import VoiceNotConfigured, register_voice
-        from heart.ss08_voice.voice_resolver import resolve_voice_id
+        from heart.ss08_voice.voice_resolver import resolve_voice_id, resolve_voice_provider
 
         async with AsyncSession(_get_engine(), expire_on_commit=False) as _vdb:
             _resolved_voice_id = await resolve_voice_id(character_id, _vdb)
+            voice_provider = await resolve_voice_provider(character_id, _vdb)
 
         if _resolved_voice_id:
             register_voice(character_id, "default", _resolved_voice_id)
@@ -771,7 +791,10 @@ async def _handle_chat_message(
 
     voice_service = get_voice_service()
     stream_session = _create_stream_session(
-        voice_service if effective_voice else None, ws, cache=cache
+        voice_service if effective_voice else None,
+        ws,
+        cache=cache,
+        preferred_provider_name=voice_provider,
     )
     if stream_session:
         await stream_session.start()

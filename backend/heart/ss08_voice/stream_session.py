@@ -67,6 +67,7 @@ class StreamSession:
         voice_service: VoiceService,
         ws_send_audio: Callable[..., Any],
         cache: Optional[VoiceCache] = None,
+        preferred_provider_name: Optional[str] = None,
     ):
         """Initialize stream session.
 
@@ -74,10 +75,15 @@ class StreamSession:
             voice_service: VoiceService instance.
             ws_send_audio: async callable(turn_id, seq, audio_bytes, is_last)
             cache: Optional VoiceCache for short audio clips.
+            preferred_provider_name: The character's configured TTS provider
+                (character_voices.voice_provider). Passed to
+                synthesize_with_fallback so a Fish-cloned voice renders via Fish
+                rather than the process-default primary. None → default chain.
         """
         self._voice = voice_service
         self._send = ws_send_audio
         self._cache = cache
+        self._preferred_provider_name = preferred_provider_name
         self._global_seq = 0
         self._cancelled = False
         self._paused = False
@@ -191,7 +197,9 @@ class StreamSession:
             self._global_seq += 1
             return
 
-        result = await self._voice.synthesize_with_fallback(req, self._last_character_id)
+        result = await self._voice.synthesize_with_fallback(
+            req, self._last_character_id, self._preferred_provider_name
+        )
         if self._cancelled or not result.audio:
             return
         self._all_audio_chunks = [result.audio]

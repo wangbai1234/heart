@@ -26,10 +26,20 @@ class VoiceService:
         provider: TTSProvider,
         fallback: Optional[TTSProvider] = None,
         director: Optional[VoiceDirector] = None,
+        providers: Optional[Dict[str, TTSProvider]] = None,
     ):
         self._provider = provider
         self._fallback = fallback
         self._director = director or VoiceDirector()
+        # Registry of all configured TTS providers keyed by name (mimo/fish/
+        # minimax). Enables per-character provider selection in
+        # synthesize_with_fallback. Defaults to primary (+fallback) so callers
+        # that don't wire a registry keep single-provider behaviour.
+        registry: Dict[str, TTSProvider] = dict(providers or {})
+        registry.setdefault(provider.name, provider)
+        if fallback is not None:
+            registry.setdefault(fallback.name, fallback)
+        self._providers = registry
 
     @property
     def director(self) -> VoiceDirector:
@@ -65,41 +75,56 @@ class VoiceService:
         return await provider.synthesize(req)
 
     async def synthesize_with_fallback(
-        self, req: TTSRequest, character_id: str = "rin"
+        self,
+        req: TTSRequest,
+        character_id: str = "rin",
+        preferred_provider_name: Optional[str] = None,
     ) -> TTSResult:
-        """Synthesize with primary provider, falling back on failure."""
+        """Synthesize with the primary provider, falling back on failure.
+
+        When ``preferred_provider_name`` names a registered provider (e.g. the
+        character's configured ``voice_provider``), it is used as the primary for
+        this call — a Fish-cloned voice must be synthesized by Fish, not by the
+        process-default MiMo. Unknown / None → the process-default primary. On
+        failure we fall back to the global fallback provider so voice turns never
+        hard-fail (the caller degrades to text above this layer).
+        """
+        primary = self._providers.get(preferred_provider_name or "") or self._provider
         try:
-            result = await self._synthesize_with_provider(self._provider, req, character_id)
+            result = await self._synthesize_with_provider(primary, req, character_id)
             logger.info(
                 "tts_provider_success",
-                provider=self._provider.name,
+                provider=primary.name,
                 character_id=character_id,
                 voice_id=req.voice_id,
                 request_id=result.request_id,
                 duration_ms=result.duration_ms,
             )
-            return dataclasses.replace(result, provider_name=self._provider.name)
+            return dataclasses.replace(result, provider_name=primary.name)
         except Exception as e:
             logger.warning(
                 "primary_tts_failed",
-                provider=self._provider.name,
+                provider=primary.name,
                 character_id=character_id,
                 voice_id=req.voice_id,
                 error=str(e),
             )
-            if self._fallback:
-                logger.info("tts_fallback_to", provider=self._fallback.name)
-                result = await self._synthesize_with_provider(self._fallback, req, character_id)
+            # Fall back to the global fallback (skip if it's the same instance we
+            # just tried).
+            fallback = self._fallback if self._fallback is not primary else None
+            if fallback is not None:
+                logger.info("tts_fallback_to", provider=fallback.name)
+                result = await self._synthesize_with_provider(fallback, req, character_id)
                 logger.info(
                     "tts_provider_success",
-                    provider=self._fallback.name,
+                    provider=fallback.name,
                     character_id=character_id,
                     voice_id=req.voice_id,
                     request_id=result.request_id,
                     duration_ms=result.duration_ms,
                     via_fallback=True,
                 )
-                return dataclasses.replace(result, provider_name=self._fallback.name)
+                return dataclasses.replace(result, provider_name=fallback.name)
             raise
 
     async def synthesize_for_character(

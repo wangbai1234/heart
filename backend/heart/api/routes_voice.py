@@ -263,6 +263,9 @@ async def get_character_voice(
             "clone_status": config["clone_status"],
             "preset_voice_id": config["preset_voice_id"],
             "preset_name": config.get("preset_name"),
+            # TTS provider that owns this voice (mimo/fish/minimax) — drives the
+            # backstage 语音聊天 tier highlight (mimo→日常, fish→真人).
+            "voice_provider": config.get("voice_provider"),
             "has_voice": config["clone_status"] == "ready",
             # Surface the DB error_msg only for failed clones. The frontend
             # shows this in a toast so the user can act on it (missing
@@ -279,6 +282,7 @@ async def get_character_voice(
             "clone_status": "ready",
             "preset_voice_id": None,
             "preset_name": None,
+            "voice_provider": None,
             "has_voice": True,
         }
     return {"configured": False}
