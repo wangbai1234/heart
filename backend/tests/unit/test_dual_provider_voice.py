@@ -112,7 +112,9 @@ class TestResolveEffectiveVoice:
             patch.object(
                 vr,
                 "_ready_row",
-                new=AsyncMock(side_effect=lambda cid, d, prov: _mimo_row() if prov == "mimo" else None),
+                new=AsyncMock(
+                    side_effect=lambda cid, d, prov: _mimo_row() if prov == "mimo" else None
+                ),
             ),
         ):
             ev = await vr.resolve_effective_voice("rin", uuid.uuid4(), db)
@@ -129,7 +131,9 @@ class TestResolveEffectiveVoice:
             patch.object(
                 vr,
                 "_ready_row",
-                new=AsyncMock(side_effect=lambda cid, d, prov: _fish_row() if prov == "fish" else None),
+                new=AsyncMock(
+                    side_effect=lambda cid, d, prov: _fish_row() if prov == "fish" else None
+                ),
             ),
         ):
             ev = await vr.resolve_effective_voice("rin", uuid.uuid4(), db)
@@ -182,6 +186,8 @@ class TestMiMoVoicecloneBody:
 
         assert body["model"] == "mimo-v2.5-tts-voiceclone"
         assert body["audio"]["voice"] == data_uri
+        # optimize_text_preview is voicedesign-only — MiMo 400s if sent to voiceclone.
+        assert "optimize_text_preview" not in body["audio"]
         # user message empty, assistant carries the text to speak
         assert body["messages"][0]["role"] == "user"
         assert body["messages"][0]["content"] == ""
@@ -196,6 +202,7 @@ class TestMiMoVoicecloneBody:
         body = p._build_body(req, "rin")
         assert body["model"] == "mimo-v2.5-tts-voicedesign"
         assert "voice" not in body["audio"]
+        assert body["audio"]["optimize_text_preview"] is False
 
 
 # ── Fish backbone model header ───────────────────────────────────────────────

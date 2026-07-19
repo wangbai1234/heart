@@ -304,10 +304,7 @@ class MiMoProvider:
         emotion_tag = _EMOTION_TAGS.get(emotion, "")
         assistant_content = f"{emotion_tag}{req.text}" if emotion_tag else req.text
 
-        audio_config: dict[str, Any] = {
-            "format": "pcm16",
-            "optimize_text_preview": False,
-        }
+        audio_config: dict[str, Any] = {"format": "pcm16"}
         if req.speed != 1.0:
             audio_config["speed"] = req.speed
         if req.pitch != 0:
@@ -317,7 +314,9 @@ class MiMoProvider:
 
         if reference_data_uri:
             # Zero-shot voice clone: reference audio in audio.voice, text spoken
-            # by the assistant message (per MiMo voiceclone spec).
+            # by the assistant message (per MiMo voiceclone spec). NOTE:
+            # optimize_text_preview is voicedesign-only — MiMo rejects it on the
+            # voiceclone model (400 Param Incorrect), so it must NOT be set here.
             audio_config["voice"] = reference_data_uri
             body: dict[str, Any] = {
                 "model": "mimo-v2.5-tts-voiceclone",
@@ -329,6 +328,7 @@ class MiMoProvider:
             }
         else:
             # voicedesign: natural-language voice description drives the timbre.
+            audio_config["optimize_text_preview"] = False
             voice_desc = (
                 _VOICE_DESCRIPTIONS.get(character_id)
                 or _VOICE_DESCRIPTIONS.get(req.voice_id)
