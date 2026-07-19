@@ -1,19 +1,39 @@
 # Production Docker Compose for Heart/yuoyuo
 # Usage: docker compose -f docker-compose.prod.yml up -d
 #
+# Prefer the wrapper: `bash scripts/deploy-prod.sh` (handles env, frontend build,
+# ordered bring-up, and migrations). The steps below are the manual equivalent.
+#
 # Prerequisites:
 # 1. Create .env.prod with production secrets (see .env.prod.example)
 # 2. Run: cd web && npm run build (generates web/dist)
 # 3. Run: docker compose -f docker-compose.prod.yml up -d
-# 4. Run DB migrations (two Alembic heads — run separately):
-#    docker compose -f docker-compose.prod.yml exec api alembic upgrade 022_identity_narrative_backfill
-#    docker compose -f docker-compose.prod.yml exec api alembic upgrade 033_chat_messages_is_proactive
+# 4. Run DB migrations — this is a multi-head Alembic DAG, so upgrade to ALL heads
+#    at once (plural `heads`; singular `head` errors out on multiple heads):
+#    docker compose -f docker-compose.prod.yml exec api python -m alembic upgrade heads
+#    docker compose -f docker-compose.prod.yml exec api python -m alembic current  # expect two (head) lines
 
 services:
   # PostgreSQL 15+ with pgvector extension
   postgres:
     image: pgvector/pgvector:pg15
     container_name: heart-postgres-prod
+    # Tuned for a 4GB VPS shared with redis + 2 app containers. shared_buffers is
+    # a hard allocation; effective_cache_size is only a planner hint. Adjust up if
+    # you move to a bigger box. max_connections=50 comfortably covers api(2 workers)
+    # + encoder-worker asyncpg pools.
+    command:
+      - postgres
+      - -c
+      - shared_buffers=384MB
+      - -c
+      - effective_cache_size=1GB
+      - -c
+      - work_mem=16MB
+      - -c
+      - maintenance_work_mem=96MB
+      - -c
+      - max_connections=50
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-heart}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -26,6 +46,7 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    mem_limit: 1g
     networks:
       - heart-network
 
@@ -33,7 +54,13 @@ services:
   redis:
     image: redis:7-alpine
     container_name: heart-redis-prod
-    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+    # maxmemory is an OOM backstop for the 4GB host (launch-scale traffic won't
+    # approach it). Policy = volatile-lru: only keys WITH a TTL are eligible for
+    # eviction, so persistent state is never dropped, and among TTL keys the cold
+    # ones go first — in practice the large TTS audio blobs (tts:*), not the hot
+    # OTP-cooldown / dispatch-lock keys. Do NOT switch to allkeys-lru: it could
+    # evict a live dispatch lock or rate-limit key and silently break correctness.
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD} --maxmemory 256mb --maxmemory-policy volatile-lru
     volumes:
       - redis_data:/data
     healthcheck:
@@ -42,6 +69,7 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    mem_limit: 320m
     networks:
       - heart-network
 
@@ -51,6 +79,11 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: heart-api-prod
+    # 2 uvicorn workers for the 2-vCPU box. SAFE here because HEART_WORKERS_ENABLED=false
+    # in this container — the in-process background workers do NOT run, so multiple
+    # uvicorn processes cannot duplicate them. (The encoder-worker container, which
+    # DOES run them, must stay single-process — see below.)
+    command: ["uvicorn", "heart.api.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
     env_file:
       - .env.prod
     environment:
@@ -69,6 +102,7 @@ services:
       start_period: 15s
       retries: 3
     restart: unless-stopped
+    mem_limit: 900m
     networks:
       - heart-network
 
@@ -81,6 +115,9 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: heart-encoder-worker-prod
+    # MUST stay single-process (no --workers): it runs HEART_WORKERS_ENABLED=true
+    # background jobs (memory_encoder/extractor/promoter, account_purge,
+    # credit_reconciliation). A second worker process would run every job twice.
     command: ["uvicorn", "heart.api.main:app", "--host", "0.0.0.0", "--port", "8080"]
     env_file:
       - .env.prod
@@ -100,6 +137,7 @@ services:
       start_period: 15s
       retries: 3
     restart: unless-stopped
+    mem_limit: 800m
     networks:
       - heart-network
 
@@ -115,10 +153,14 @@ services:
       - ./web/dist:/srv/web:ro
       - caddy_data:/data
       - caddy_config:/config
+      # Caddyfile writes JSON access logs to /var/log/caddy/access.log; persist them
+      # so they survive container recreation (they'd otherwise be lost in the layer).
+      - caddy_logs:/var/log/caddy
     depends_on:
       api:
         condition: service_healthy
     restart: unless-stopped
+    mem_limit: 128m
     networks:
       - heart-network
 
@@ -130,6 +172,8 @@ volumes:
   caddy_data:
     driver: local
   caddy_config:
+    driver: local
+  caddy_logs:
     driver: local
 
 networks:
