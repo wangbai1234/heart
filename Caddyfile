@@ -8,7 +8,10 @@
 # - Security headers
 # - Compression
 
-yuoyuo.app, www.yuoyuo.app {
+# Apex domain serves the app. www is handled by the redirect block below —
+# do NOT list www.yuoyuo.app here too, or Caddy errors with
+# "ambiguous site definition: www.yuoyuo.app" and refuses to start.
+yuoyuo.app {
 	# API reverse proxy
 	handle /api/* {
 		reverse_proxy api:8000
