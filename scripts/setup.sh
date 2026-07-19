@@ -239,14 +239,13 @@ setup_db() {
         sleep 1
     done
 
-    log "运行数据库迁移（两个 head）..."
+    log "运行数据库迁移（多 head DAG，升到全部 head）..."
     cd "$BACKEND_DIR"
-    .venv/bin/python -m alembic upgrade 022_identity_narrative_backfill
-    .venv/bin/python -m alembic upgrade 033_chat_messages_is_proactive
-    # 商业化 V1（docs/upgrade/yuoyuo_coin）迁移 034-038 线性串在 033 之后（单头 038_mimo_preset_seeds）。
-    # 038 种子 10 个 MiMo 预设音色 —— 必须升到 038，否则建角色第 3 步预设为空。
-    # 追加新迁移时把下面的 revision 改成新的最新 head。
-    .venv/bin/python -m alembic upgrade 038_mimo_preset_seeds
+    # 本项目是多 head Alembic DAG（022_identity_narrative_backfill 是一条悬挂 head，
+    # 主线走到 039_dual_provider_voices）。用 `upgrade heads`（复数）一次升到所有 head，
+    # 避免"新加迁移忘了改硬编码版本号"导致 dev DB 落后代码的老坑（曾漏升 039）。
+    # 注意：`upgrade head`（单数）会因多 head 报 "Multiple head revisions" —— 必须用复数。
+    .venv/bin/python -m alembic upgrade heads
 
     echo ""
     .venv/bin/python -m alembic current
