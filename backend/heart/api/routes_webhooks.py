@@ -1,13 +1,25 @@
-"""Webhook routes — /api/webhooks/*"""
+"""Webhook routes — /api/webhooks/*
+
+Afdian (爱发电) webhook contract — see https://guide.afdian.com/creator/developer :
+  - Afdian POSTs JSON: {"ec":200,"em":"ok","data":{"type":"order","order":{...}}}
+    The order fields (out_trade_no / plan_id / sku_detail / remark /
+    total_amount) live under ``data.order`` — NOT directly under ``data``.
+  - The webhook body carries **no signature**. (The md5 ``sign`` scheme belongs
+    to the query-order *API*, not the webhook.) Afdian's own guidance is to keep
+    the webhook URL secret and make the handler idempotent. We therefore
+    authenticate with a secret token carried in the URL query string
+    (``?token=<AFDIAN_WEBHOOK_TOKEN>``) that only we and Afdian's config know.
+  - The handler must respond ``{"ec":200}`` or Afdian treats it as failed and
+    may re-push, so we always return 200 once the request is authenticated.
+"""
 
 from __future__ import annotations
 
-import hashlib
+import hmac
 import json
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,32 +32,20 @@ logger = structlog.get_logger(__name__)
 router = APIRouter(prefix="/api/webhooks", tags=["webhooks"])
 
 
-class AfdianWebhookPayload(BaseModel):
-    """Afdian webhook payload (simplified)."""
+def _authenticate(request: Request) -> bool:
+    """Authenticate an Afdian webhook via the secret token in the URL.
 
-    out_trade_no: str = ""
-    plan_id: str = ""
-    sku_detail: dict | list | None = None
-    total_amount: float | str = 0
-    remark: str = ""
-    # Afdian sends many more fields; we capture in raw_payload
-
-
-def _verify_afdian_sign(params: dict, token: str) -> bool:
-    """Verify Afdian webhook signature.
-
-    Afdian sign = md5(user_id + params_json_sorted + token)
+    Afdian does not sign webhook bodies, so we rely on a shared secret embedded
+    in the configured callback URL: ``.../api/webhooks/afdian?token=<secret>``.
+    Uses a constant-time compare. When no token is configured we refuse (fail
+    closed) rather than accept unauthenticated callbacks.
     """
-    sign = params.pop("sign", None)
-    if not sign:
+    expected = (settings.afdian_webhook_token or "").strip()
+    if not expected:
+        logger.error("afdian_webhook_token_unset")
         return False
-
-    # Sort params, concatenate
-    sorted_keys = sorted(params.keys())
-    params_str = "".join(f"{k}{params[k]}" for k in sorted_keys)
-    raw = f"{params.get('user_id', '')}{params_str}{token}"
-    expected = hashlib.md5(raw.encode()).hexdigest()
-    return sign == expected
+    provided = request.query_params.get("token", "")
+    return hmac.compare_digest(provided, expected)
 
 
 @router.post("/afdian")
@@ -53,42 +53,56 @@ async def afdian_webhook(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ) -> dict:
-    """Handle Afdian webhook for order reconciliation.
+    """Handle Afdian order webhook: record for audit + auto-fulfill.
 
-    Does NOT directly add credits — only records order for audit.
-    Credits are added via redemption codes.
+    Fulfillment (grant membership/coins) is driven by a binding code the user
+    embeds in the Afdian order remark — see heart.afdian.fulfillment.
     """
+    if not _authenticate(request):
+        logger.warning("afdian_webhook_unauthorized")
+        raise HTTPException(status_code=403, detail="Invalid token")
+
     try:
         body = await request.json()
     except Exception as e:
         raise HTTPException(status_code=400, detail="Invalid JSON") from e
 
-    # Verify sign
-    params = dict(body)
-    if not _verify_afdian_sign(params, settings.afdian_webhook_token):
-        logger.warning("afdian_webhook_invalid_sign")
-        raise HTTPException(status_code=403, detail="Invalid signature")
+    data = body.get("data") if isinstance(body, dict) else None
+    data = data if isinstance(data, dict) else {}
 
-    data = body.get("data", {})
-    out_trade_no = data.get("out_trade_no", "")
+    # data.type is currently only "order"; ack anything else so Afdian stops.
+    if data.get("type") not in (None, "", "order"):
+        logger.info("afdian_webhook_ignored_type", type=data.get("type"))
+        return {"ec": 200, "em": "ignored"}
 
+    # Order fields live under data.order (NOT directly under data).
+    order = data.get("order")
+    order = order if isinstance(order, dict) else {}
+
+    out_trade_no = str(order.get("out_trade_no") or "").strip()
     if not out_trade_no:
+        logger.warning("afdian_webhook_missing_out_trade_no", body_preview=str(body)[:200])
         raise HTTPException(status_code=400, detail="Missing out_trade_no")
 
-    # Idempotent insert
+    plan_id = str(order.get("plan_id") or "")
+    remark = str(order.get("remark") or "")
+
+    # Idempotent insert for audit (duplicate pushes are expected — Afdian may
+    # re-push; ON CONFLICT keeps the first row).
     try:
         await db.execute(
             text("""
-                INSERT INTO afdian_orders (out_trade_no, plan_id, sku_detail, total_amount, remark, raw_payload)
+                INSERT INTO afdian_orders
+                    (out_trade_no, plan_id, sku_detail, total_amount, remark, raw_payload)
                 VALUES (:otn, :plan, :sku, :amount, :remark, :raw)
                 ON CONFLICT (out_trade_no) DO NOTHING
             """),
             {
                 "otn": out_trade_no,
-                "plan": data.get("plan_id", ""),
-                "sku": json.dumps(data.get("sku_detail")),
-                "amount": float(data.get("total_amount", 0)),
-                "remark": data.get("remark", ""),
+                "plan": plan_id,
+                "sku": json.dumps(order.get("sku_detail")),
+                "amount": _to_float(order.get("total_amount")),
+                "remark": remark,
                 "raw": json.dumps(body),
             },
         )
@@ -96,19 +110,26 @@ async def afdian_webhook(
     except Exception as e:
         await db.rollback()
         logger.error("afdian_webhook_db_error", error=str(e))
-        # Still return 200 to avoid Afdian retry
+        # Still ack — Afdian only retries on non-200; a DB blip shouldn't cause
+        # an unbounded retry storm. The row can be reconciled from raw_payload.
 
-    logger.info("afdian_webhook_received", out_trade_no=out_trade_no)
+    logger.info("afdian_webhook_received", out_trade_no=out_trade_no, plan_id=plan_id)
 
-    # Auto-fulfill: match remark binding code → grant membership/coins
+    # Auto-fulfill: match remark binding code → grant membership/coins.
     try:
         from heart.afdian.fulfillment import fulfill_order
 
-        plan_id = data.get("plan_id", "")
-        remark = data.get("remark", "")
         await fulfill_order(db, out_trade_no, plan_id, remark)
     except Exception:
         logger.exception("afdian_auto_fulfill_error", out_trade_no=out_trade_no)
-        # Return 200 anyway — Afdian will not retry on 200
+        # Ack anyway — admin can reconcile unmatched/failed orders manually.
 
     return {"ec": 200, "em": "success"}
+
+
+def _to_float(value: object) -> float:
+    """Best-effort parse of Afdian's amount (sent as a string like '5.00')."""
+    try:
+        return float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return 0.0

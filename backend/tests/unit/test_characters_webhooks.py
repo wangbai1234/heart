@@ -73,17 +73,74 @@ class TestChatHistory:
 
 
 class TestAfdianWebhook:
+    """Afdian webhook auth (URL token) + payload parsing (data.order nesting)."""
+
+    _TOKEN = "test-webhook-token"
+
+    def _patch_token(self):
+        from unittest.mock import patch
+
+        return patch("heart.api.routes_webhooks.settings.afdian_webhook_token", self._TOKEN)
+
+    def test_webhook_missing_token_rejected(self, client):
+        # No ?token= → 403 before any body parsing (afdian carries no sign, so
+        # the URL secret is the only auth).
+        with self._patch_token():
+            response = client.post(
+                "/api/webhooks/afdian",
+                json={"data": {"type": "order", "order": {"out_trade_no": "t1"}}},
+            )
+        assert response.status_code == 403
+
+    def test_webhook_wrong_token_rejected(self, client):
+        with self._patch_token():
+            response = client.post(
+                "/api/webhooks/afdian?token=wrong",
+                json={"data": {"type": "order", "order": {"out_trade_no": "t1"}}},
+            )
+        assert response.status_code == 403
+
     def test_webhook_invalid_json(self, client):
-        response = client.post(
-            "/api/webhooks/afdian",
-            content="not json",
-            headers={"Content-Type": "application/json"},
-        )
+        with self._patch_token():
+            response = client.post(
+                f"/api/webhooks/afdian?token={self._TOKEN}",
+                content="not json",
+                headers={"Content-Type": "application/json"},
+            )
         assert response.status_code in (400, 422)
 
-    def test_webhook_missing_sign(self, client):
-        response = client.post(
-            "/api/webhooks/afdian",
-            json={"data": {"out_trade_no": "test-001"}},
-        )
-        assert response.status_code in (400, 403)
+    def test_webhook_missing_out_trade_no(self, client):
+        # Valid token but order lacks out_trade_no → 400.
+        with self._patch_token():
+            response = client.post(
+                f"/api/webhooks/afdian?token={self._TOKEN}",
+                json={"data": {"type": "order", "order": {}}},
+            )
+        assert response.status_code == 400
+
+    def test_webhook_valid_order_acked(self, client):
+        # Correctly nested order under data.order → 200 {"ec":200}. Unmatched
+        # remark just leaves the order unfulfilled (SKU map empty in tests).
+        import uuid as _uuid
+
+        otn = f"test-{_uuid.uuid4().hex}"
+        with self._patch_token():
+            response = client.post(
+                f"/api/webhooks/afdian?token={self._TOKEN}",
+                json={
+                    "ec": 200,
+                    "em": "ok",
+                    "data": {
+                        "type": "order",
+                        "order": {
+                            "out_trade_no": otn,
+                            "plan_id": "plan_test",
+                            "total_amount": "5.00",
+                            "remark": "",
+                            "sku_detail": [],
+                        },
+                    },
+                },
+            )
+        assert response.status_code == 200
+        assert response.json().get("ec") == 200
