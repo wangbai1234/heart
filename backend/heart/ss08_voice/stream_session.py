@@ -68,6 +68,7 @@ class StreamSession:
         ws_send_audio: Callable[..., Any],
         cache: Optional[VoiceCache] = None,
         preferred_provider_name: Optional[str] = None,
+        clone_reference: Optional[str] = None,
     ):
         """Initialize stream session.
 
@@ -79,11 +80,15 @@ class StreamSession:
                 (character_voices.voice_provider). Passed to
                 synthesize_with_fallback so a Fish-cloned voice renders via Fish
                 rather than the process-default primary. None → default chain.
+            clone_reference: MiMo zero-shot clone reference handle (the
+                character's clone_audio_url). When set, threaded onto the
+                TTSRequest so MiMo speaks in the referenced timbre.
         """
         self._voice = voice_service
         self._send = ws_send_audio
         self._cache = cache
         self._preferred_provider_name = preferred_provider_name
+        self._clone_reference = clone_reference
         self._global_seq = 0
         self._cancelled = False
         self._paused = False
@@ -172,6 +177,12 @@ class StreamSession:
             active_emotions=self._last_active_emotions,
             stage_directions=stage_directions,
         )
+        if self._clone_reference:
+            # Zero-shot MiMo clone: carry the reference audio handle so the MiMo
+            # provider switches to the voiceclone model (TTSRequest is frozen).
+            import dataclasses
+
+            req = dataclasses.replace(req, clone_reference=self._clone_reference)
         logger.info(
             "tts_request_prepared",
             character_id=self._last_character_id,

@@ -61,6 +61,9 @@ class FishProvider:
         headers = {
             "Authorization": f"Bearer {self._api_key}",
             "Content-Type": "application/json",
+            # Backbone TTS model (e.g. fishaudio-s21pro-flash). Fish selects the
+            # engine from this header; reference_id (above) selects the voice.
+            "model": self._model,
         }
         try:
             async with httpx.AsyncClient(timeout=self._timeout) as client:
@@ -91,3 +94,30 @@ class FishProvider:
         """Streaming via chunked synthesis — yields single chunk with full audio."""
         result = await self.synthesize(req)
         yield AudioChunk(seq=0, data=result.audio, format=result.format, is_last=True)
+
+    async def clone_from_bytes(
+        self, audio: bytes, title: str, filename: str = "sample.wav", mime: str = "audio/wav"
+    ) -> str:
+        """Create a Fish Audio voice model from raw audio bytes; return its model_id.
+
+        Uploads directly to the ``/model`` endpoint (multipart) — no public URL
+        needed, so this works for local seed files. Raises TTSProviderError on
+        failure. Used by the built-in clone seeder (scripts/seed_builtin_clones.py).
+        """
+        try:
+            async with httpx.AsyncClient(timeout=120.0) as client:
+                resp = await client.post(
+                    f"{self._base_url}/model",
+                    headers={"Authorization": f"Bearer {self._api_key}"},
+                    data={"title": title, "train_mode": "fast", "enhance_audio": "true"},
+                    files={"voices": (filename, audio, mime)},
+                )
+        except httpx.HTTPError as e:
+            raise TTSProviderError(f"Fish clone HTTP error: {e}") from e
+
+        if resp.status_code not in (200, 201):
+            raise TTSProviderError(f"Fish clone error {resp.status_code}: {resp.text[:300]}")
+        model_id = resp.json().get("_id")
+        if not model_id:
+            raise TTSProviderError(f"Fish clone returned no model_id: {resp.text[:200]}")
+        return model_id

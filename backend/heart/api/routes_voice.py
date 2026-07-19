@@ -305,7 +305,17 @@ async def get_character_voice(
       2. In-memory `VOICE_CATALOG` (rin/dorothy built-ins)
     """
     from heart.ss08_voice.voice_catalog import VOICE_CATALOG
-    from heart.ss08_voice.voice_resolver import get_voice_config
+    from heart.ss08_voice.voice_resolver import (
+        get_selected_voice_provider,
+        get_voice_config,
+        list_ready_voice_providers,
+    )
+
+    uid = uuid.UUID(current_user.user_id)
+    # Providers with a ready voice (drives the backstage 日常/真人 toggle) + the
+    # user's current selection (which button is highlighted "使用中").
+    available_providers = await list_ready_voice_providers(character_id, db)
+    selected_provider = await get_selected_voice_provider(character_id, uid, db)
 
     config = await get_voice_config(character_id, db)
     if config is not None:
@@ -315,9 +325,11 @@ async def get_character_voice(
             "clone_status": config["clone_status"],
             "preset_voice_id": config["preset_voice_id"],
             "preset_name": config.get("preset_name"),
-            # TTS provider that owns this voice (mimo/fish/minimax) — drives the
-            # backstage 语音聊天 tier highlight (mimo→日常, fish→真人).
+            # TTS provider that owns the *primary* row (mimo/fish/minimax).
             "voice_provider": config.get("voice_provider"),
+            # All providers the user can switch between + their current choice.
+            "available_providers": available_providers,
+            "selected_provider": selected_provider,
             "has_voice": config["clone_status"] == "ready",
             # Surface the DB error_msg only for failed clones. The frontend
             # shows this in a toast so the user can act on it (missing
@@ -335,6 +347,8 @@ async def get_character_voice(
             "preset_voice_id": None,
             "preset_name": None,
             "voice_provider": None,
+            "available_providers": available_providers,
+            "selected_provider": selected_provider,
             "has_voice": True,
         }
     return {"configured": False}
@@ -354,13 +368,16 @@ async def set_preset_voice(
     """Set a preset voice for a character owned by the current user."""
     uid = uuid.UUID(current_user.user_id)
 
-    # Validate preset exists
+    # Validate preset exists + capture its provider (drives which voice_provider
+    # row this preset occupies — see the compound unique key since migration 039).
     result = await db.execute(
-        text("SELECT id FROM preset_voices WHERE id = :pid AND is_active = TRUE"),
+        text("SELECT id, provider FROM preset_voices WHERE id = :pid AND is_active = TRUE"),
         {"pid": body.preset_voice_id},
     )
-    if result.scalar_one_or_none() is None:
+    preset_row = result.mappings().fetchone()
+    if preset_row is None:
         raise HTTPException(status_code=404, detail="预设音色不存在")
+    preset_provider = preset_row["provider"] or "mimo"
 
     # Ownership check — built-in characters (owner_user_id IS NULL) may be
     # configured by any user who owns a character-level settings row, but for
@@ -378,15 +395,20 @@ async def set_preset_voice(
     await db.execute(
         text("""
             INSERT INTO character_voices
-                (character_id, user_id, voice_type, preset_voice_id, clone_status)
-            VALUES (:cid, :uid, 'preset', :pid, 'ready')
-            ON CONFLICT (character_id) DO UPDATE
+                (character_id, user_id, voice_type, preset_voice_id, clone_status, voice_provider)
+            VALUES (:cid, :uid, 'preset', :pid, 'ready', :prov)
+            ON CONFLICT (character_id, voice_provider) DO UPDATE
                 SET voice_type      = 'preset',
                     preset_voice_id = :pid,
                     clone_status    = 'ready',
                     updated_at      = NOW()
         """),
-        {"cid": body.character_id, "uid": uid, "pid": body.preset_voice_id},
+        {
+            "cid": body.character_id,
+            "uid": uid,
+            "pid": body.preset_voice_id,
+            "prov": preset_provider,
+        },
     )
     await db.execute(
         text("UPDATE characters SET has_voice = TRUE WHERE id = :cid"),
@@ -481,13 +503,14 @@ async def clone_voice(
         character_id=character_id,
     )
 
-    # Upsert character_voices row with status = 'processing'
+    # Upsert the character_voices row for THIS provider (compound key since 039,
+    # so a mimo clone and a fish clone coexist for the same character).
     await db.execute(
         text("""
             INSERT INTO character_voices
-                (character_id, user_id, voice_type, clone_audio_url, clone_status)
-            VALUES (:cid, :uid, 'clone', :url, 'processing')
-            ON CONFLICT (character_id) DO UPDATE
+                (character_id, user_id, voice_type, clone_audio_url, clone_status, voice_provider)
+            VALUES (:cid, :uid, 'clone', :url, 'processing', :prov)
+            ON CONFLICT (character_id, voice_provider) DO UPDATE
                 SET voice_type      = 'clone',
                     clone_audio_url = :url,
                     clone_voice_id  = NULL,
@@ -495,7 +518,7 @@ async def clone_voice(
                     error_msg       = NULL,
                     updated_at      = NOW()
         """),
-        {"cid": character_id, "uid": uid, "url": audio_source},
+        {"cid": character_id, "uid": uid, "url": audio_source, "prov": provider},
     )
     await db.commit()
 
@@ -617,9 +640,9 @@ async def _run_clone_job(
                         SET clone_voice_id = :vid, clone_status = 'ready',
                             error_msg = NULL,
                             updated_at = NOW()
-                        WHERE character_id = :cid
+                        WHERE character_id = :cid AND voice_provider = :prov
                     """),
-                    {"vid": clone_voice_id, "cid": character_id},
+                    {"vid": clone_voice_id, "cid": character_id, "prov": provider},
                 )
                 await db.execute(
                     text("UPDATE characters SET has_voice = TRUE WHERE id = :cid"),
@@ -632,9 +655,9 @@ async def _run_clone_job(
                     text("""
                         UPDATE character_voices
                         SET clone_status = 'failed', error_msg = :err, updated_at = NOW()
-                        WHERE character_id = :cid
+                        WHERE character_id = :cid AND voice_provider = :prov
                     """),
-                    {"cid": character_id, "err": reason},
+                    {"cid": character_id, "err": reason, "prov": provider},
                 )
                 logger.warning(
                     "voice_clone_failed",
@@ -650,9 +673,9 @@ async def _run_clone_job(
                     text("""
                         UPDATE character_voices
                         SET clone_status = 'failed', error_msg = :err, updated_at = NOW()
-                        WHERE character_id = :cid
+                        WHERE character_id = :cid AND voice_provider = :prov
                     """),
-                    {"cid": character_id, "err": str(exc)[:200]},
+                    {"cid": character_id, "err": str(exc)[:200], "prov": provider},
                 )
                 await db.commit()
             except Exception:
