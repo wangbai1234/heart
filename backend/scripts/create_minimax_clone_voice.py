@@ -18,7 +18,7 @@ import httpx
 
 from heart.core.config import settings
 
-DEFAULT_SOURCE = Path("assets/reference_voices/rin.wav")
+DEFAULT_SOURCE = Path("assets/reference_voices/rin.mp3")
 DEFAULT_PROMPT_SECONDS = 7.5
 DEFAULT_DEMO_TEXT = "(breath)别担心，我会认真听你说。如果你现在有一点累，我们就慢一点，好吗？"
 

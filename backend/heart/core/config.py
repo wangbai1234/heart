@@ -248,7 +248,7 @@ class Settings(BaseSettings):
     # MiMo TTS (voiceclone v2.5)
     mimo_api_key: str | None = None
     mimo_base_url: str = "https://api.xiaomimimo.com/v1"
-    mimo_reference_audio_path: str = "assets/reference_voices/rin.wav"
+    mimo_reference_audio_path: str = "assets/reference_voices/rin.mp3"
     mimo_model: str = "mimo-v2.5-tts-voiceclone"
     voice_provider: str = "minimax"  # "mimo" | "minimax"
     voice_fallback_enabled: bool = True
