@@ -51,7 +51,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
 
   const messages = useChatStore((s) => s.messages[currentCharacterId as CharacterId] ?? EMPTY_MESSAGES)
   const isCleared = useChatStore((s) => s.clearedCharacters.has(currentCharacterId as CharacterId))
-  const isStreaming = useChatStore((s) => s.isStreaming)
+  const isStreaming = useChatStore((s) => s.isStreaming[currentCharacterId as CharacterId] ?? false)
   const isPlaying = useChatStore((s) => s.isPlaying)
   const addMessage = useChatStore((s) => s.addMessage)
   const setCharacterId = useChatStore((s) => s.setCharacterId)

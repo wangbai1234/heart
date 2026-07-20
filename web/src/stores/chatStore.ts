@@ -34,7 +34,10 @@ interface ChatState {
   // Per-character streaming messages
   messages: Record<CharacterId, Message[]>
   lastFetchedAt: Record<string, number>
-  isStreaming: boolean
+  // Per-character: a turn is in flight (from turn_start until turn_end/error).
+  // Keyed by characterId so one character's turn never drives another's page
+  // indicator or blocks sending to a different character.
+  isStreaming: Record<string, boolean>
   isPlaying: boolean
   currentTurnId: string | null
   pendingAssistantTurnId: string | null
@@ -67,7 +70,7 @@ interface ChatState {
     format: 'wav' | 'mp3',
   ) => void
   finalizeMessageAudio: (characterId: CharacterId, turnId: string) => void
-  setStreaming: (v: boolean) => void
+  setStreaming: (cid: string, v: boolean) => void
   setPlaying: (v: boolean) => void
   setCurrentTurnId: (id: string | null) => void
   setPendingAssistantTurnId: (id: string | null) => void
@@ -99,7 +102,7 @@ export const useChatStore = create<ChatState>()(
   messages: emptyMessages(),
   lastFetchedAt: {},
   isGenerating: {},
-  isStreaming: false,
+  isStreaming: {},
   isPlaying: false,
   currentTurnId: null,
   pendingAssistantTurnId: null,
@@ -194,7 +197,8 @@ export const useChatStore = create<ChatState>()(
         }),
       },
     })),
-  setStreaming: (v) => set({ isStreaming: v }),
+  setStreaming: (cid, v) =>
+    set((s) => ({ isStreaming: { ...s.isStreaming, [cid]: v } })),
   setPlaying: (v) => set({ isPlaying: v }),
   setCurrentTurnId: (id) => set({ currentTurnId: id }),
   setPendingAssistantTurnId: (id) => set({ pendingAssistantTurnId: id }),
@@ -204,7 +208,7 @@ export const useChatStore = create<ChatState>()(
   clearInsufficientCredits: () => set({ insufficientCredits: null }),
   setModelForbidden: (model, tier) => set({ modelForbidden: { model, tier } }),
   clearModelForbidden: () => set({ modelForbidden: null }),
-  clear: () => set((s) => ({ messages: emptyMessages(), isStreaming: false, isPlaying: false, currentTurnId: null, characterId: s.characterId, insufficientCredits: null })),
+  clear: () => set((s) => ({ messages: emptyMessages(), isStreaming: {}, isPlaying: false, currentTurnId: null, characterId: s.characterId, insufficientCredits: null })),
   clearMessages: (characterId) =>
     set((s) => {
       const cleared = new Set(s.clearedCharacters)
@@ -212,7 +216,7 @@ export const useChatStore = create<ChatState>()(
       return {
         messages: { ...s.messages, [characterId]: [] },
         clearedCharacters: cleared,
-        isStreaming: false,
+        isStreaming: { ...s.isStreaming, [characterId]: false },
         isPlaying: false,
         isGenerating: { ...s.isGenerating, [characterId]: false },
         currentTurnId: null,

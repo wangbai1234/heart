@@ -450,3 +450,89 @@ class TestChargeTtsCost:
 
         assert captured["key"] == "turn:xyz-789:tts"
         assert captured["reason"] == "consume_tts"
+
+
+# ---------------------------------------------------------------------------
+# Cross-character routing: every server→client frame must carry character_id so
+# the client can route it to the right character (regression: chat bleed bug).
+# ---------------------------------------------------------------------------
+
+
+class TestFramesCarryCharacterId:
+    @pytest.mark.asyncio
+    async def test_text_delta_frame_tags_character(self):
+        from heart.api.routes_chat_ws import _send_text_delta
+
+        ws = AsyncMock()
+        await _send_text_delta(ws, "turn-1", "hello", "dorothy")
+        sent = ws.send_json.call_args[0][0]
+        assert sent["type"] == "text_delta"
+        assert sent["turn_id"] == "turn-1"
+        assert sent["character_id"] == "dorothy"
+        assert sent["delta"] == "hello"
+
+    @pytest.mark.asyncio
+    async def test_sentence_frame_tags_character(self):
+        from heart.api.routes_chat_ws import _send_sentence
+
+        ws = AsyncMock()
+        await _send_sentence(ws, "turn-2", {"text": "hi"}, "rin")
+        sent = ws.send_json.call_args[0][0]
+        assert sent["type"] == "sentence"
+        assert sent["character_id"] == "rin"
+
+    @pytest.mark.asyncio
+    async def test_turn_end_frame_tags_character(self):
+        from heart.api.routes_chat_ws import _send_turn_end
+
+        ws = AsyncMock()
+        await _send_turn_end(ws, "turn-3", "dorothy")
+        sent = ws.send_json.call_args[0][0]
+        assert sent["type"] == "turn_end"
+        assert sent["turn_id"] == "turn-3"
+        assert sent["character_id"] == "dorothy"
+
+    @pytest.mark.asyncio
+    async def test_audio_chunk_frame_tags_character(self):
+        """The StreamSession's send_audio closure must stamp character_id."""
+        from heart.api.routes_chat_ws import _create_stream_session
+
+        ws = AsyncMock()
+        voice_service = MagicMock()  # truthy → session created
+
+        # Grab the send_audio closure the session was built with.
+        with patch("heart.ss08_voice.stream_session.StreamSession") as mock_session:
+            _create_stream_session(voice_service, ws, character_id="dorothy")
+            send_audio = mock_session.call_args[0][1]
+
+        await send_audio("turn-4", 0, b"\x00\x01", True, "pcm16")
+        sent = ws.send_json.call_args[0][0]
+        assert sent["type"] == "audio_chunk"
+        assert sent["character_id"] == "dorothy"
+        assert sent["turn_id"] == "turn-4"
+
+    @pytest.mark.asyncio
+    async def test_model_forbidden_frame_tags_character(self):
+        from heart.api.routes_chat_ws import _precheck_billing
+
+        ws = AsyncMock()
+        user_id = uuid.uuid4()
+        turn_id = str(uuid.uuid4())
+
+        mock_db = AsyncMock()
+        mock_db.__aenter__ = AsyncMock(return_value=mock_db)
+        mock_db.__aexit__ = AsyncMock(return_value=False)
+        voice_result = MagicMock()
+        voice_result.scalar_one_or_none.return_value = False
+        mock_db.execute = AsyncMock(side_effect=[voice_result])
+
+        with (
+            patch("heart.membership.get_effective_tier", new=AsyncMock(return_value="free")),
+            patch("heart.api.routes_chat_ws._get_engine"),
+            patch("sqlalchemy.ext.asyncio.AsyncSession", return_value=mock_db),
+        ):
+            await _precheck_billing(user_id, "dorothy", turn_id, ws, model="grok")
+
+        sent = ws.send_json.call_args[0][0]
+        assert sent["type"] == "model_forbidden"
+        assert sent["character_id"] == "dorothy"

@@ -1,5 +1,6 @@
 import { useState, type KeyboardEvent } from 'react'
 import { useChatStore } from '../stores/chatStore'
+import { useAppStore } from '../stores/appStore'
 
 interface Props {
   onSend: (text: string) => void
@@ -8,7 +9,8 @@ interface Props {
 
 export function ChatInput({ onSend, onInterrupt }: Props) {
   const [text, setText] = useState('')
-  const isStreaming = useChatStore((s) => s.isStreaming)
+  const currentCharacterId = useAppStore((s) => s.currentCharacterId)
+  const isStreaming = useChatStore((s) => s.isStreaming[currentCharacterId] ?? false)
 
   const handleSend = () => {
     const trimmed = text.trim()
