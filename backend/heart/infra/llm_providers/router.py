@@ -118,14 +118,15 @@ class ModelRouter:
         actually produced the response (may differ from requested model if failover occurred).
         """
         chain = self._get_failover_chain(model, failover or DEFAULT_FAILOVER)
+        # Narrow to candidates with a registered provider so we know which
+        # attempt is genuinely last (empty-response failover must not "continue"
+        # past the final usable provider).
+        usable = [c for c in chain if self._registry.has_model(c)]
         last_error: Optional[Exception] = None
 
-        for candidate in chain:
-            try:
-                provider = self._registry.get_provider_for_model(candidate)
-            except KeyError:
-                logger.debug("call_for_no_provider", model=candidate)
-                continue
+        for i, candidate in enumerate(usable):
+            provider = self._registry.get_provider_for_model(candidate)
+            is_last = i == len(usable) - 1
 
             # candidate is a routing slug (e.g. "deepseek"); the vendor API needs
             # the canonical model name (e.g. "deepseek-chat"). served_model stays
@@ -140,6 +141,23 @@ class ModelRouter:
                     requested=model,
                 )
                 response = await provider.call(request)
+                # An error-free but empty response is useless to the user — treat
+                # it as a soft failure and fail over to the next model (the
+                # "deepseek 兜底"). Only the last usable candidate is allowed to
+                # return empty, so the caller can surface a clean error.
+                if not (response.content and response.content.strip()) and not is_last:
+                    logger.warning(
+                        "call_for_empty_failover",
+                        from_model=candidate,
+                        requested=model,
+                    )
+                    last_error = ProviderError(
+                        f"empty response from {candidate}",
+                        provider=candidate,
+                        model=candidate,
+                        retriable=True,
+                    )
+                    continue
                 if candidate != model:
                     logger.info(
                         "call_for_degraded",
@@ -182,18 +200,22 @@ class ModelRouter:
           meta["served_model"] = actual model that produced the response
           meta["degraded_to"]  = served_model if failover occurred, else None
 
-        Failover only triggers on connection/status errors (ProviderError raised
-        before any chunks are yielded). Mid-stream errors propagate as-is.
+        Failover triggers on (a) connection/status errors (ProviderError raised
+        before any chunk is yielded) and (b) an error-free stream that produces
+        no content — an empty response is useless, so we fall through to the next
+        model (the "deepseek 兜底"). Once real content has been yielded, a
+        mid-stream error propagates as-is (we cannot un-send bytes).
         """
         chain = self._get_failover_chain(model, failover or DEFAULT_FAILOVER)
+        # Narrow to candidates with a registered provider so we know which
+        # attempt is genuinely last (empty-response failover must not "continue"
+        # past the final usable provider).
+        usable = [c for c in chain if self._registry.has_model(c)]
         last_error: Optional[Exception] = None
 
-        for i, candidate in enumerate(chain):
-            try:
-                provider = self._registry.get_provider_for_model(candidate)
-            except KeyError:
-                logger.debug("stream_for_no_provider", model=candidate)
-                continue
+        for i, candidate in enumerate(usable):
+            provider = self._registry.get_provider_for_model(candidate)
+            is_last = i == len(usable) - 1
 
             # candidate is a routing slug (e.g. "deepseek"); the vendor API needs
             # the canonical model name (e.g. "deepseek-chat"). served_model stays
@@ -207,22 +229,40 @@ class ModelRouter:
                     model=candidate,
                     requested=model,
                 )
-                first_chunk = True
+                yielded_content = False
                 async for chunk in provider.stream(request):  # type: ignore[attr-defined]
-                    if first_chunk:
-                        # Record which model actually responded
-                        if meta is not None:
-                            meta["served_model"] = candidate
-                            meta["degraded_to"] = candidate if i > 0 else None
-                        first_chunk = False
                     if chunk.content:
+                        if not yielded_content:
+                            # Lock in served_model on the first *content* chunk
+                            # (not the first raw frame) so a stream that emits
+                            # only a finish-reason frame still counts as empty
+                            # and can fail over.
+                            if meta is not None:
+                                meta["served_model"] = candidate
+                                meta["degraded_to"] = candidate if i > 0 else None
+                            yielded_content = True
                         yield chunk.content
-                # Stream completed successfully
-                if first_chunk:
-                    # Empty response — still record served_model
-                    if meta is not None:
-                        meta["served_model"] = candidate
-                        meta["degraded_to"] = candidate if i > 0 else None
+                if yielded_content:
+                    return
+                # Stream finished without any content.
+                if not is_last:
+                    logger.warning(
+                        "stream_for_empty_failover",
+                        from_model=candidate,
+                        requested=model,
+                    )
+                    last_error = ProviderError(
+                        f"empty response from {candidate}",
+                        provider=candidate,
+                        model=candidate,
+                        retriable=True,
+                    )
+                    continue
+                # Last usable candidate also empty — record it and return so the
+                # caller surfaces the graceful "生成失败，请重试" path.
+                if meta is not None:
+                    meta["served_model"] = candidate
+                    meta["degraded_to"] = candidate if i > 0 else None
                 return
             except ProviderError as e:
                 logger.warning(

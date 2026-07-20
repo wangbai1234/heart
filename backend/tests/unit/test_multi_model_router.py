@@ -230,6 +230,116 @@ async def test_stream_for_exhaustion_raises():
     assert "exhausted" in str(exc_info.value).lower()
 
 
+# ---------------------------------------------------------------------------
+# Empty-response failover — the "deepseek 兜底" (bug: claude/grok returned an
+# error-free but empty stream; the turn "completed" empty and the user saw
+# "生成失败，请重试" instead of a deepseek fallback answer).
+# ---------------------------------------------------------------------------
+
+
+class EmptyFinishProvider:
+    """Streams a single content-less finish frame (no text_delta) then stops.
+
+    Mimics a provider that connects and completes cleanly but yields no content
+    (e.g. an api_style/proxy mismatch where the parser matches no text). Must be
+    treated as empty and fail over — first_chunk alone is not a reliable signal.
+    """
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    async def stream(self, request: LLMRequest) -> AsyncIterator[StreamChunk]:
+        self.calls += 1
+        yield StreamChunk(content="", finish_reason="stop")
+
+
+@pytest.mark.asyncio
+async def test_stream_for_empty_response_fails_over_to_deepseek():
+    """Claude yields an empty stream (no error) → must fall through to deepseek."""
+    claude_empty = FakeProvider(content="")  # split() -> [] -> zero chunks
+    deepseek_fake = FakeProvider(content="deepseek saved the turn")
+    reg = _make_registry(
+        ("claude", claude_empty, ["claude"]),
+        ("deepseek", deepseek_fake, ["deepseek", "deepseek-chat"]),
+    )
+    router = _router(reg)
+
+    meta: dict = {}
+    chunks = []
+    async for chunk in router.stream_for("claude", _messages(), failover=["deepseek"], meta=meta):
+        chunks.append(chunk)
+
+    assert "deepseek saved the turn" in "".join(chunks)
+    assert meta["served_model"] == "deepseek"
+    assert meta["degraded_to"] == "deepseek"
+    assert claude_empty.calls == 1
+    assert deepseek_fake.calls == 1
+
+
+@pytest.mark.asyncio
+async def test_stream_for_finish_only_frame_counts_as_empty_and_fails_over():
+    claude_empty = EmptyFinishProvider()
+    deepseek_fake = FakeProvider(content="fallback text")
+    reg = _make_registry(
+        ("claude", claude_empty, ["claude"]),
+        ("deepseek", deepseek_fake, ["deepseek"]),
+    )
+    router = _router(reg)
+
+    chunks = []
+    async for chunk in router.stream_for("claude", _messages(), failover=["deepseek"]):
+        chunks.append(chunk)
+
+    assert "fallback text" in "".join(chunks)
+    assert claude_empty.calls == 1
+
+
+@pytest.mark.asyncio
+async def test_stream_for_last_candidate_empty_returns_empty_gracefully():
+    """When even the terminal provider is empty, stream_for returns empty (no
+    raise) so the WS layer emits the clean "生成失败，请重试" instead of a stuck
+    bubble."""
+    deepseek_empty = FakeProvider(content="")
+    reg = _make_registry(("deepseek", deepseek_empty, ["deepseek"]))
+    router = _router(reg)
+
+    meta: dict = {}
+    chunks = []
+    async for chunk in router.stream_for("deepseek", _messages(), failover=[], meta=meta):
+        chunks.append(chunk)
+
+    assert chunks == []
+    assert meta["served_model"] == "deepseek"
+
+
+@pytest.mark.asyncio
+async def test_call_for_empty_response_fails_over_to_deepseek():
+    claude_empty = FakeProvider(content="   ")  # whitespace-only == empty
+    deepseek_fake = FakeProvider(content="real answer")
+    reg = _make_registry(
+        ("claude", claude_empty, ["claude"]),
+        ("deepseek", deepseek_fake, ["deepseek"]),
+    )
+    router = _router(reg)
+
+    content, served = await router.call_for("claude", _messages(), failover=["deepseek"])
+    assert content == "real answer"
+    assert served == "deepseek"
+    assert claude_empty.calls == 1
+    assert deepseek_fake.calls == 1
+
+
+@pytest.mark.asyncio
+async def test_call_for_last_candidate_empty_returns_empty():
+    deepseek_empty = FakeProvider(content="")
+    reg = _make_registry(("deepseek", deepseek_empty, ["deepseek"]))
+    router = _router(reg)
+
+    content, served = await router.call_for("deepseek", _messages(), failover=[])
+    assert content == ""
+    assert served == "deepseek"
+
+
 @pytest.mark.asyncio
 async def test_stream_for_meta_not_required():
     fake = FakeProvider(content="ok")
