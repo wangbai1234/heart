@@ -1,6 +1,14 @@
 # Heart (心屿) - AI Companion Project
 
+## 支持我的独立开发
+
+如果我的项目对你有帮助，欢迎支持我的持续开发：
+
+爱发电：
+https://afdian.com/a/yuoyuo
 An emotionally authentic AI companion system built on 8 specialized subsystems.
+
+
 
 > 🚨 **新 AI session 必读**：[`docs/PROJECT_STATUS.md`](docs/PROJECT_STATUS.md) — 当前 phase / blocker / 下一步。
 > 文档导航：[`docs/README.md`](docs/README.md)。历史归档：[`archive/`](archive/)。
