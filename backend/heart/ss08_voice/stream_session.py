@@ -95,6 +95,7 @@ class StreamSession:
         self._current_response: Optional[Any] = None
         self.audio_produced = False
         self.tts_provider_name: str = ""
+        self.audio_format: str = ""
         self._all_audio_chunks: list[bytes] = []
         self._text_parts: list[str] = []
         self._last_turn_id: str | None = None
@@ -128,7 +129,11 @@ class StreamSession:
 
     @property
     def full_audio(self) -> bytes:
-        """Get all accumulated audio as a single bytes object (WAV format)."""
+        """Accumulated audio as one bytes object, in ``self.audio_format``.
+
+        Note: this is the raw provider payload (e.g. headerless PCM16 for MiMo,
+        mp3 for Fish) — callers persisting it must consult ``audio_format`` and
+        wrap/label accordingly (see ``_upload_turn_audio``)."""
         if not self._all_audio_chunks:
             return b""
         return b"".join(self._all_audio_chunks)
@@ -204,6 +209,7 @@ class StreamSession:
             )
             self._all_audio_chunks = [cached_audio]
             self.audio_produced = True
+            self.audio_format = req.format
             await self._send(self._last_turn_id, self._global_seq, cached_audio, True, req.format)
             self._global_seq += 1
             return
@@ -216,6 +222,7 @@ class StreamSession:
         self._all_audio_chunks = [result.audio]
         self.audio_produced = True
         self.tts_provider_name = result.provider_name
+        self.audio_format = result.format
         await self._send(
             self._last_turn_id,
             self._global_seq,
