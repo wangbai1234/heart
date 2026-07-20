@@ -28,6 +28,12 @@ redis>=5.0.0
 # Direct SDK imports are prohibited; use heart.infra.llm.router instead
 httpx>=0.27.0
 
+# Fish Audio realtime TTS (WebSocket + MessagePack). Only used when
+# FISH_REALTIME_ENABLED=true; both ship prebuilt wheels (pure-python websockets,
+# msgpack C-ext with manylinux wheels) so no build toolchain is pulled in.
+websockets>=12.0
+msgpack>=1.0.0
+
 # Embedding — production uses a hosted OpenAI-compatible /embeddings API
 # (heart/infra/embeddings.py::HostedEmbeddingService, via httpx). The local
 # sentence-transformers path is NOT wired anywhere (grep: zero imports of

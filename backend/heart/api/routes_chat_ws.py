@@ -86,8 +86,16 @@ def _create_stream_session(
     preferred_provider_name: Optional[str] = None,
     clone_reference: Optional[str] = None,
     character_id: str = "",
+    allow_realtime: bool = True,
 ) -> Any:
-    """Create a StreamSession if voice service is available."""
+    """Create a stream session if voice service is available.
+
+    When ``allow_realtime`` and FISH_REALTIME_ENABLED and the character's
+    provider is Fish, returns a RealtimeStreamSession (incremental WebSocket
+    synth). Otherwise — or when realtime construction fails — returns the REST
+    ``StreamSession``. The caller retries with ``allow_realtime=False`` if a
+    realtime ``start()`` fails, so voice never hard-fails on a realtime hiccup.
+    """
     if not voice_service:
         return None
 
@@ -109,6 +117,28 @@ def _create_stream_session(
                 "is_last": is_last,
             }
         )
+
+    from heart.core.config import settings
+
+    if (
+        allow_realtime
+        and settings.fish_realtime_enabled
+        and preferred_provider_name == "fish"
+        and settings.fish_api_key
+    ):
+        try:
+            from heart.ss08_voice.realtime_stream_session import RealtimeStreamSession
+
+            return RealtimeStreamSession(
+                send_audio,
+                api_key=settings.fish_api_key,
+                url=settings.fish_realtime_url,
+                character_id=character_id,
+                fmt="mp3",
+            )
+        except Exception as e:
+            logger.warning("fish_realtime_session_init_failed", error=str(e))
+            # fall through to the REST StreamSession below
 
     session = StreamSession(
         voice_service,
@@ -846,7 +876,26 @@ async def _handle_chat_message(
         character_id=character_id,
     )
     if stream_session:
-        await stream_session.start()
+        try:
+            await stream_session.start()
+        except Exception as e:
+            # A realtime (Fish WebSocket) start() failure must not degrade the
+            # turn to text — rebuild the REST StreamSession and start that
+            # instead. No audio has been streamed yet at this point.
+            logger.warning("stream_session_start_failed_fallback_rest", error=str(e))
+            with contextlib.suppress(Exception):
+                stream_session.cancel()
+            stream_session = _create_stream_session(
+                voice_service if effective_voice else None,
+                ws,
+                cache=cache,
+                preferred_provider_name=voice_provider,
+                clone_reference=clone_reference,
+                character_id=character_id,
+                allow_realtime=False,
+            )
+            if stream_session:
+                await stream_session.start()
 
     # A turn MUST always end with exactly one terminal frame for the client so
     # neither the "正在回复中" indicator nor a voice bubble's "加载中" can hang.

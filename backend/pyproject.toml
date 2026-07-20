@@ -164,6 +164,12 @@ module = [
 ]
 ignore_errors = true
 
+# Third-party libs without published type stubs / py.typed (NOT our debt — no
+# tracking issue needed). msgpack is used only by the Fish realtime provider.
+[[tool.mypy.overrides]]
+module = ["msgpack"]
+ignore_missing_imports = true
+
 [tool.coverage.run]
 source = ["heart"]
 omit = ["*/tests/*", "*/migrations/*"]

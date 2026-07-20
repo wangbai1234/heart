@@ -244,6 +244,13 @@ class Settings(BaseSettings):
     fish_api_key: str = ""
     fish_base_url: str = "https://api.fish.audio"
     fish_model: str = "speech-1.6"
+    # Fish realtime (WebSocket + MessagePack) streaming TTS. Fish's selling
+    # point is being faster than MiMo; the realtime endpoint feeds text
+    # sentence-by-sentence and returns audio incrementally (much lower
+    # time-to-first-audio than the blocking REST synth). Default OFF: needs a
+    # live Fish key to validate, and any realtime error falls back to REST.
+    fish_realtime_enabled: bool = False
+    fish_realtime_url: str = "wss://realtime.fishaudio.org/v1/tts/live"
 
     # MiMo TTS (voiceclone v2.5)
     mimo_api_key: str | None = None
