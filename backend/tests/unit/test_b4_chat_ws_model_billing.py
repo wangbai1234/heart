@@ -536,3 +536,72 @@ class TestFramesCarryCharacterId:
         sent = ws.send_json.call_args[0][0]
         assert sent["type"] == "model_forbidden"
         assert sent["character_id"] == "dorothy"
+
+
+class TestLockedWS:
+    """_LockedWS serialises sends across concurrent turn tasks and forwards
+    every other attribute to the real socket transparently."""
+
+    @pytest.mark.asyncio
+    async def test_send_json_forwards_under_lock(self):
+        import asyncio
+
+        from heart.api.routes_chat_ws import _LockedWS
+
+        real = AsyncMock()
+        locked = _LockedWS(real, asyncio.Lock())
+        await locked.send_json({"type": "turn_end", "turn_id": "t1"})
+        real.send_json.assert_awaited_once_with({"type": "turn_end", "turn_id": "t1"})
+
+    @pytest.mark.asyncio
+    async def test_concurrent_sends_do_not_interleave(self):
+        """Two tasks sending concurrently must each complete a whole send while
+        holding the lock — no partial interleaving on the shared socket."""
+        import asyncio
+
+        from heart.api.routes_chat_ws import _LockedWS
+
+        order: list[str] = []
+
+        class RecordingWS:
+            async def send_json(self, data):
+                order.append(f"start:{data['id']}")
+                await asyncio.sleep(0)  # yield so a naive impl would interleave
+                order.append(f"end:{data['id']}")
+
+        locked = _LockedWS(RecordingWS(), asyncio.Lock())
+        await asyncio.gather(
+            locked.send_json({"id": "a"}),
+            locked.send_json({"id": "b"}),
+        )
+        # Each send's start is immediately followed by its own end.
+        assert order in (
+            ["start:a", "end:a", "start:b", "end:b"],
+            ["start:b", "end:b", "start:a", "end:a"],
+        )
+
+    def test_forwards_other_attributes(self):
+        import asyncio
+
+        from heart.api.routes_chat_ws import _LockedWS
+
+        real = MagicMock()
+        real.client_state = "CONNECTED"
+        locked = _LockedWS(real, asyncio.Lock())
+        assert locked.client_state == "CONNECTED"
+
+
+class TestByTurnAudioRoute:
+    def test_by_turn_route_registered_before_message_id(self):
+        """The by-turn route must be declared before the /{message_id} catch-all
+        so `by-turn` is never captured as a message_id."""
+        from heart.api import routes_chat_ws as m
+
+        audio_paths = [
+            r.path for r in m.router.routes if "/api/chat/audio" in getattr(r, "path", "")
+        ]
+        assert "/api/chat/audio/by-turn/{turn_id}" in audio_paths
+        assert "/api/chat/audio/{message_id}" in audio_paths
+        assert audio_paths.index("/api/chat/audio/by-turn/{turn_id}") < audio_paths.index(
+            "/api/chat/audio/{message_id}"
+        )

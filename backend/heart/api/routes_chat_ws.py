@@ -11,7 +11,7 @@ import contextlib
 import json
 import random
 import uuid
-from typing import Any, Optional
+from typing import Any, Optional, cast
 from urllib.parse import urlparse
 
 import structlog
@@ -1006,6 +1006,30 @@ async def _handle_message(
         await _handle_resume(msg, active_turns)
 
 
+class _LockedWS:
+    """Serialise ``send_json`` across concurrent turn tasks on one connection.
+
+    Turns are now processed concurrently (a slow voice turn for one character
+    must not block another character's turn — the cross-character stall behind
+    the "正在回复中" indicator). Concurrent turns share a single WebSocket, so
+    without a lock two tasks' frames can interleave on the wire and corrupt the
+    stream. ``receive_text`` is only ever called on the raw socket in the accept
+    loop, so only sends need guarding. All other attributes forward to the real
+    socket transparently, so every ``ws.send_json`` downstream is serialised.
+    """
+
+    def __init__(self, ws: WebSocket, lock: asyncio.Lock) -> None:
+        self._ws = ws
+        self._lock = lock
+
+    async def send_json(self, data: Any) -> None:
+        async with self._lock:
+            await self._ws.send_json(data)
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._ws, name)
+
+
 # ── REST: Chat History ──────────────────────────────────────────────
 
 
@@ -1144,6 +1168,62 @@ async def mark_character_read(
     return {"ok": True}
 
 
+async def _serve_stored_audio(audio_url: Optional[str], log_ref: str) -> Response:
+    """Fetch a stored audio object by its S3/MinIO URL and return it inline."""
+    if not audio_url:
+        raise HTTPException(status_code=404, detail="Audio not found")
+
+    key = _extract_storage_key(audio_url)
+    if not key:
+        raise HTTPException(status_code=404, detail="Invalid audio URL")
+
+    try:
+        from heart.infra.storage import get_s3_object
+
+        data, content_type = await get_s3_object(key)
+    except Exception as exc:
+        logger.warning("chat_audio_fetch_failed", ref=log_ref, error=str(exc))
+        raise HTTPException(status_code=404, detail="Audio unavailable") from exc
+
+    return Response(content=data, media_type=content_type)
+
+
+@router.get("/api/chat/audio/by-turn/{turn_id}")
+async def get_chat_audio_by_turn(
+    turn_id: str,
+    current_user: TokenData = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    """Serve voice audio by turn_id.
+
+    A live-streamed message's client id IS its turn_id (see turn_start), but the
+    persisted row gets a fresh server id. After a page refresh the frontend only
+    holds the turn_id, so it replays via this endpoint — without it, rehydrated
+    voice bubbles hang in the "加载中" state forever.
+    """
+    uid = uuid.UUID(current_user.user_id)
+    try:
+        tid = uuid.UUID(turn_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail="Audio not found") from exc
+
+    result = await db.execute(
+        sql_text(
+            """
+            SELECT audio_url
+            FROM chat_messages
+            WHERE turn_id = :tid AND user_id = :uid
+              AND modality = 'voice' AND audio_url IS NOT NULL
+            ORDER BY created_at ASC
+            LIMIT 1
+            """
+        ),
+        {"tid": tid, "uid": uid},
+    )
+    row = result.mappings().first()
+    return await _serve_stored_audio(row["audio_url"] if row else None, f"turn:{turn_id}")
+
+
 @router.get("/api/chat/audio/{message_id}")
 async def get_chat_audio(
     message_id: str,
@@ -1164,22 +1244,7 @@ async def get_chat_audio(
         {"mid": uuid.UUID(message_id), "uid": uid},
     )
     row = result.mappings().first()
-    if not row or not row["audio_url"]:
-        raise HTTPException(status_code=404, detail="Audio not found")
-
-    key = _extract_storage_key(row["audio_url"])
-    if not key:
-        raise HTTPException(status_code=404, detail="Invalid audio URL")
-
-    try:
-        from heart.infra.storage import get_s3_object
-
-        data, content_type = await get_s3_object(key)
-    except Exception as exc:
-        logger.warning("chat_audio_fetch_failed", message_id=message_id, error=str(exc))
-        raise HTTPException(status_code=404, detail="Audio unavailable") from exc
-
-    return Response(content=data, media_type=content_type)
+    return await _serve_stored_audio(row["audio_url"] if row else None, f"msg:{message_id}")
 
 
 async def _check_age_verified(user_id: str) -> bool:
@@ -1241,10 +1306,23 @@ async def chat_ws(ws: WebSocket, token: Optional[str] = Query(None)):
 
     await ws.accept()
     active_turns: dict[str, Any] = {}
+    turn_tasks: set[asyncio.Task] = set()
+    # Serialise all outbound frames — turns run concurrently now (see below),
+    # so their sends must not interleave on the shared socket. The proxy forwards
+    # every non-send attribute to the real socket, so it stands in for WebSocket.
+    locked = cast(WebSocket, _LockedWS(ws, asyncio.Lock()))
 
     from heart.ss08_voice.voice_cache import VoiceCache
 
     cache = VoiceCache()
+
+    def _on_turn_done(task: asyncio.Task) -> None:
+        turn_tasks.discard(task)
+        if task.cancelled():
+            return
+        exc = task.exception()
+        if exc is not None:
+            logger.error("chat_turn_task_error", error=str(exc))
 
     try:
         while True:
@@ -1252,19 +1330,38 @@ async def chat_ws(ws: WebSocket, token: Optional[str] = Query(None)):
             try:
                 msg = json.loads(raw)
             except json.JSONDecodeError:
-                await ws.send_json({"type": "error", "msg": "Invalid JSON"})
+                await locked.send_json({"type": "error", "msg": "Invalid JSON"})
                 continue
-            await _handle_message(ws, msg, active_turns, cache, user_id)
+
+            if msg.get("type") == "chat":
+                # Run each turn as its own task so the receive loop stays
+                # responsive. A slow (voice) turn for one character therefore
+                # never blocks the socket — a second character's turn starts
+                # immediately instead of hanging behind it (cross-character
+                # isolation; the "桃乐丝生成时 rin 也显示正在回复中" stall).
+                task = asyncio.create_task(
+                    _handle_chat_message(locked, msg, active_turns, user_id, cache)
+                )
+                turn_tasks.add(task)
+                task.add_done_callback(_on_turn_done)
+            else:
+                # interrupt / backpressure / resume are quick control ops that
+                # must act on in-flight turns right away — handle inline.
+                await _handle_message(locked, msg, active_turns, cache, user_id)
 
     except WebSocketDisconnect:
         logger.info("chat_ws_disconnect")
+        for task in turn_tasks:
+            task.cancel()
         for session in active_turns.values():
             session.cancel()
     except Exception as e:
         logger.error("chat_ws_error", error=str(e))
+        for task in turn_tasks:
+            task.cancel()
         for session in active_turns.values():
             session.cancel()
         try:
-            await ws.send_json({"type": "error", "msg": str(e)})
+            await locked.send_json({"type": "error", "msg": str(e)})
         except Exception:
             pass
