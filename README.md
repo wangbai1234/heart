@@ -4,9 +4,11 @@
 
 如果我的项目对你有帮助，欢迎支持我的持续开发：
 
-爱发电：
+## 爱发电：
 https://afdian.com/a/yuoyuo
+
 An emotionally authentic AI companion system built on 8 specialized subsystems.
+
 
 
 
