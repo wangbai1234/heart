@@ -479,14 +479,36 @@ async def _upload_turn_audio(
     if not (stream_session and stream_session.full_audio):
         return None, None
     try:
+        from heart.api.routes_voice import _pcm16_to_wav
         from heart.infra.storage import is_s3_configured, upload_file
 
         if not is_s3_configured():
             return None, None
+
         audio_bytes = stream_session.full_audio
-        key = f"chat_audio/{user_uuid}/{turn_id}.wav"
-        audio_url = await upload_file(audio_bytes, key, "audio/wav")
-        audio_duration_ms = int(len(audio_bytes) / (24000 * 2) * 1000)
+        # The live stream tags each chunk with its real format; the persisted
+        # object must match it. MiMo emits headerless PCM16 @ 24 kHz mono — the
+        # frontend wraps that into WAV for live playback, so the stored copy
+        # must be wrapped too or an <audio> element can't decode it on replay
+        # (bug: replayed voice fails with "语音没能播放"). mp3 is already a
+        # self-describing container and must NOT be relabelled as wav.
+        fmt = (getattr(stream_session, "audio_format", "") or "").lower()
+        if fmt == "mp3":
+            key = f"chat_audio/{user_uuid}/{turn_id}.mp3"
+            content_type = "audio/mpeg"
+            # No cheap byte->duration for mp3; estimate at a nominal 128 kbps.
+            audio_duration_ms = int(len(audio_bytes) * 8 / 128000 * 1000)
+        else:
+            # pcm16 (default for MiMo) → wrap; already-wav bytes start with RIFF
+            # and are passed through untouched.
+            if not audio_bytes.startswith(b"RIFF"):
+                audio_bytes = _pcm16_to_wav(audio_bytes)
+            key = f"chat_audio/{user_uuid}/{turn_id}.wav"
+            content_type = "audio/wav"
+            pcm_len = max(0, len(audio_bytes) - 44)
+            audio_duration_ms = int(pcm_len / (24000 * 2) * 1000)
+
+        audio_url = await upload_file(audio_bytes, key, content_type)
         return audio_url, audio_duration_ms
     except Exception as e:
         logger.warning("audio_upload_failed", error=str(e))

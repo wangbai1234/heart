@@ -639,3 +639,101 @@ class TestByTurnAudioRoute:
         assert audio_paths.index("/api/chat/audio/by-turn/{turn_id}") < audio_paths.index(
             "/api/chat/audio/{message_id}"
         )
+
+
+# ---------------------------------------------------------------------------
+# _upload_turn_audio — persist in the provider's real format so replay decodes
+# ---------------------------------------------------------------------------
+
+
+class _FakeSession:
+    def __init__(self, audio: bytes, audio_format: str):
+        self.full_audio = audio
+        self.audio_format = audio_format
+
+
+class TestUploadTurnAudio:
+    """Regression for replayed voice failing with '语音没能播放': MiMo emits
+    headerless PCM16, which must be WAV-wrapped before upload; mp3 must stay
+    mp3 (not relabelled audio/wav)."""
+
+    @pytest.mark.asyncio
+    async def test_pcm16_is_wrapped_as_wav(self):
+        from heart.api import routes_chat_ws
+
+        captured: dict = {}
+
+        async def fake_upload(data, key, content_type):
+            captured["data"] = data
+            captured["key"] = key
+            captured["content_type"] = content_type
+            return f"s3://bucket/{key}"
+
+        uid = uuid.uuid4()
+        session = _FakeSession(b"\x01\x02" * 24000, "pcm16")
+        with (
+            patch("heart.infra.storage.is_s3_configured", return_value=True),
+            patch("heart.infra.storage.upload_file", new=fake_upload),
+        ):
+            url, dur = await routes_chat_ws._upload_turn_audio(session, uid, "turn-1")
+
+        assert captured["content_type"] == "audio/wav"
+        assert captured["key"].endswith(".wav")
+        assert captured["data"].startswith(b"RIFF")  # WAV header added
+        assert url is not None
+        assert dur == 1000  # 48000 bytes PCM @ 24kHz/16-bit mono = 1s
+
+    @pytest.mark.asyncio
+    async def test_mp3_kept_as_mpeg(self):
+        from heart.api import routes_chat_ws
+
+        captured: dict = {}
+
+        async def fake_upload(data, key, content_type):
+            captured["key"] = key
+            captured["content_type"] = content_type
+            return f"s3://bucket/{key}"
+
+        uid = uuid.uuid4()
+        session = _FakeSession(b"ID3\x03\x00fake-mp3-bytes", "mp3")
+        with (
+            patch("heart.infra.storage.is_s3_configured", return_value=True),
+            patch("heart.infra.storage.upload_file", new=fake_upload),
+        ):
+            url, dur = await routes_chat_ws._upload_turn_audio(session, uid, "turn-2")
+
+        assert captured["content_type"] == "audio/mpeg"
+        assert captured["key"].endswith(".mp3")
+        assert url is not None
+
+    @pytest.mark.asyncio
+    async def test_already_wav_not_double_wrapped(self):
+        from heart.api import routes_chat_ws
+        from heart.api.routes_voice import _pcm16_to_wav
+
+        captured: dict = {}
+
+        async def fake_upload(data, key, content_type):
+            captured["data"] = data
+            captured["content_type"] = content_type
+            return "s3://bucket/x.wav"
+
+        uid = uuid.uuid4()
+        wav = _pcm16_to_wav(b"\x00\x00" * 100)
+        session = _FakeSession(wav, "wav")
+        with (
+            patch("heart.infra.storage.is_s3_configured", return_value=True),
+            patch("heart.infra.storage.upload_file", new=fake_upload),
+        ):
+            await routes_chat_ws._upload_turn_audio(session, uid, "turn-3")
+
+        # RIFF bytes passed through untouched (no second header prepended)
+        assert captured["data"] == wav
+
+    @pytest.mark.asyncio
+    async def test_no_audio_returns_none(self):
+        from heart.api import routes_chat_ws
+
+        session = _FakeSession(b"", "pcm16")
+        url, dur = await routes_chat_ws._upload_turn_audio(session, uuid.uuid4(), "t")
+        assert url is None and dur is None
