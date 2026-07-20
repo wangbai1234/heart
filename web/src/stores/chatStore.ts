@@ -10,10 +10,15 @@ export interface Message {
   timestamp: number
   kind?: 'text' | 'voice' | 'action'
   duration?: string
+  // Live audio buffered during the streaming session (base64). NOT persisted —
+  // it is large and only needed for instant playback within the same session.
   audioData?: string
   audioDuration?: number
   audioFormat?: string
   audioChunks?: { dataB64: string; durationMs: number; seq: number; format: 'wav' | 'mp3' }[]
+  // Durable server pointer (/api/chat/audio/...). Persisted, so a voice message
+  // can still be replayed after a page refresh once audioData is discarded.
+  audioUrl?: string
 }
 
 export interface VadState {
@@ -61,6 +66,7 @@ interface ChatState {
   addMessage: (characterId: CharacterId, msg: Message) => void
   appendToLast: (characterId: CharacterId, delta: string) => void
   setMessageAudio: (characterId: CharacterId, turnId: string, audioData: string, duration: number, format: string) => void
+  setMessageAudioUrl: (characterId: CharacterId, turnId: string, audioUrl: string) => void
   appendMessageAudio: (
     characterId: CharacterId,
     turnId: string,
@@ -169,6 +175,15 @@ export const useChatStore = create<ChatState>()(
           m.id === turnId
             ? { ...m, audioData, audioDuration: duration, audioFormat: format }
             : m
+        ),
+      },
+    })),
+  setMessageAudioUrl: (characterId, turnId, audioUrl) =>
+    set((s) => ({
+      messages: {
+        ...s.messages,
+        [characterId]: (s.messages[characterId] ?? []).map(m =>
+          m.id === turnId ? { ...m, audioUrl } : m
         ),
       },
     })),

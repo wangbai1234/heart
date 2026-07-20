@@ -81,7 +81,14 @@ export function useWebSocket() {
   const seenChunks = useRef<Set<string>>(new Set())
   const activeCharRef = useRef<CharacterId>('rin')
   const pendingVoiceTurnRef = useRef(false)
-  const watchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Per-character watchdog timers. Concurrent turns each need their own backstop
+  // — a single timer would be clobbered when the second turn arms it, leaving
+  // the first character stuck at "正在回复中" if the backend goes silent.
+  const watchdogRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
+  // The in-flight turn id per character. Turns run concurrently on the backend
+  // now, so a single global "current turn" can no longer identify which turn a
+  // frame or an interrupt belongs to.
+  const activeTurnByCharRef = useRef<Record<string, string>>({})
 
   const addMessage = useChatStore(s => s.addMessage)
   const appendToLast = useChatStore(s => s.appendToLast)
@@ -93,6 +100,7 @@ export function useWebSocket() {
   const setVad = useChatStore(s => s.setVad)
   const appendMessageAudio = useChatStore(s => s.appendMessageAudio)
   const finalizeMessageAudio = useChatStore(s => s.finalizeMessageAudio)
+  const setMessageAudioUrl = useChatStore(s => s.setMessageAudioUrl)
 
   const connect = useCallback(() => {
     if (reconnectTimerRef.current) {
@@ -117,23 +125,26 @@ export function useWebSocket() {
     ws.onopen = () => {}
 
     const armWatchdog = (cid: CharacterId) => {
-      if (watchdogRef.current) clearTimeout(watchdogRef.current)
-      watchdogRef.current = setTimeout(() => {
-        watchdogRef.current = null
+      const existing = watchdogRef.current[cid]
+      if (existing) clearTimeout(existing)
+      watchdogRef.current[cid] = setTimeout(() => {
+        delete watchdogRef.current[cid]
         setGenerating(cid, false)
         setStreaming(cid, false)
         setPlaying(false)
         setCurrentTurnId(null)
         setPendingAssistantTurnId(null)
+        delete activeTurnByCharRef.current[cid]
         pendingVoiceTurnRef.current = false
         useToastStore.getState().show('响应超时，请重试', 'error')
       }, TURN_WATCHDOG_MS)
     }
 
-    const clearWatchdog = () => {
-      if (watchdogRef.current) {
-        clearTimeout(watchdogRef.current)
-        watchdogRef.current = null
+    const clearWatchdog = (cid: CharacterId) => {
+      const existing = watchdogRef.current[cid]
+      if (existing) {
+        clearTimeout(existing)
+        delete watchdogRef.current[cid]
       }
     }
 
@@ -146,7 +157,11 @@ export function useWebSocket() {
       const cid = (msg.character_id as CharacterId | undefined) ?? activeCharRef.current
       switch (msg.type) {
         case 'turn_start':
-          seenChunks.current.clear()
+          // Don't clear seenChunks here: with concurrent turns another
+          // character's turn_start would wipe this turn's dedup keys mid-stream
+          // and let its chunks replay. Keys are turn-scoped, so they never
+          // collide across turns and the set stays small for a session.
+          if (msg.turn_id) activeTurnByCharRef.current[cid] = msg.turn_id
           setPendingAssistantTurnId(null)
           setCurrentTurnId(msg.turn_id ?? null)
           addMessage(cid, {
@@ -180,19 +195,26 @@ export function useWebSocket() {
           })
           break
         case 'audio_chunk':
-          if (msg.data_b64) {
-            const currentTurnId = useChatStore.getState().currentTurnId
-            if (msg.turn_id !== currentTurnId) return
-            // Mark message as voice on first audio chunk
+          if (msg.data_b64 && msg.turn_id) {
+            // Route by the message THIS chunk's turn belongs to — not a global
+            // "current turn". Concurrent turns (different characters) would
+            // otherwise drop each other's audio. If no matching bubble exists
+            // (turn already cleared / wrong character), drop the chunk.
+            const turnId = msg.turn_id
             const msgs = useChatStore.getState().messages[cid] ?? []
-            const lastMsg = msgs[msgs.length - 1]
-            if (lastMsg && lastMsg.id === currentTurnId && lastMsg.kind !== 'voice') {
-              const updated = msgs.map(m => m.id === currentTurnId ? { ...m, kind: 'voice' as const } : m)
+            const target = msgs.find(m => m.id === turnId && m.role === 'assistant')
+            if (!target) return
+            if (target.kind !== 'voice') {
               useChatStore.setState((s) => ({
-                messages: { ...s.messages, [cid]: updated },
+                messages: {
+                  ...s.messages,
+                  [cid]: (s.messages[cid] ?? []).map(m =>
+                    m.id === turnId ? { ...m, kind: 'voice' as const } : m
+                  ),
+                },
               }))
             }
-            const key = `${msg.turn_id}:${msg.sentence_seq ?? 0}:${msg.seq}`
+            const key = `${turnId}:${msg.sentence_seq ?? 0}:${msg.seq}`
             if (seenChunks.current.has(key)) return
             seenChunks.current.add(key)
             const rawBuffer = b64ToArrayBuffer(msg.data_b64)
@@ -202,7 +224,7 @@ export function useWebSocket() {
             if (msg.format === 'pcm16') {
               storedB64 = arrayBufferToBase64(wrapPCM16AsWAV(rawBuffer))
             }
-            appendMessageAudio(cid, currentTurnId, storedB64, durationMs, msg.seq ?? 0, audioFormat)
+            appendMessageAudio(cid, turnId, storedB64, durationMs, msg.seq ?? 0, audioFormat)
           }
           break
         case 'message_bubble': {
@@ -239,10 +261,17 @@ export function useWebSocket() {
           break
         }
         case 'turn_end':
-          clearWatchdog()
+          clearWatchdog(cid)
           setGenerating(cid, false)
+          delete activeTurnByCharRef.current[cid]
           if (msg.turn_id) {
             finalizeMessageAudio(cid, msg.turn_id)
+            // Stamp a durable server pointer so the voice message survives a
+            // page refresh (audioData/audioChunks are dropped from persistence).
+            // The store message id === turn_id, so the by-turn endpoint resolves it.
+            if (msg.modality === 'voice') {
+              setMessageAudioUrl(cid, msg.turn_id, `/api/chat/audio/by-turn/${msg.turn_id}`)
+            }
             if (msg.modality) {
               const normalizedKind = msg.modality === 'voice' ? 'voice' : 'text'
               useChatStore.setState((s) => ({
@@ -293,12 +322,13 @@ export function useWebSocket() {
           pendingVoiceTurnRef.current = false
           break
         case 'insufficient_credits':
-          clearWatchdog()
+          clearWatchdog(cid)
           setGenerating(cid, false)
           setStreaming(cid, false)
           setPlaying(false)
           setCurrentTurnId(null)
           setPendingAssistantTurnId(null)
+          delete activeTurnByCharRef.current[cid]
           pendingVoiceTurnRef.current = false
           {
             const { setInsufficientCredits } = useChatStore.getState()
@@ -306,12 +336,13 @@ export function useWebSocket() {
           }
           break
         case 'model_forbidden':
-          clearWatchdog()
+          clearWatchdog(cid)
           setGenerating(cid, false)
           setStreaming(cid, false)
           setPlaying(false)
           setCurrentTurnId(null)
           setPendingAssistantTurnId(null)
+          delete activeTurnByCharRef.current[cid]
           pendingVoiceTurnRef.current = false
           {
             const { setModelForbidden } = useChatStore.getState()
@@ -319,20 +350,22 @@ export function useWebSocket() {
           }
           break
         case 'interrupted':
-          clearWatchdog()
+          clearWatchdog(cid)
           setGenerating(cid, false)
           setStreaming(cid, false)
           setPlaying(false)
           setCurrentTurnId(null)
           setPendingAssistantTurnId(null)
+          delete activeTurnByCharRef.current[cid]
           pendingVoiceTurnRef.current = false
           break
         case 'error': {
-          clearWatchdog()
+          clearWatchdog(cid)
           setGenerating(cid, false)
           setStreaming(cid, false)
           setPlaying(false)
           setPendingAssistantTurnId(null)
+          delete activeTurnByCharRef.current[cid]
           pendingVoiceTurnRef.current = false
           const errCode = msg.code
           let errMsg: string = FEEDBACK_COPY.streamError
@@ -400,7 +433,7 @@ export function useWebSocket() {
     ws.onerror = (err) => {
       console.error('[ws] error', err)
     }
-  }, [addMessage, appendMessageAudio, appendToLast, finalizeMessageAudio, setGenerating, setStreaming, setPlaying, setCurrentTurnId, setPendingAssistantTurnId, setVad])
+  }, [addMessage, appendMessageAudio, appendToLast, finalizeMessageAudio, setMessageAudioUrl, setGenerating, setStreaming, setPlaying, setCurrentTurnId, setPendingAssistantTurnId, setVad])
 
   useEffect(() => {
     connectRef.current = connect
@@ -456,7 +489,11 @@ export function useWebSocket() {
   )
 
   const interrupt = useCallback(() => {
-    const turnId = useChatStore.getState().currentTurnId
+    // Interrupt the in-flight turn of the character the user is looking at —
+    // not a global "current turn", which with concurrent turns could belong to
+    // a different character.
+    const { currentCharacterId } = useAppStore.getState()
+    const turnId = activeTurnByCharRef.current[currentCharacterId]
     if (!wsRef.current || !turnId) return
     wsRef.current.send(JSON.stringify({ type: 'interrupt', turn_id: turnId }))
   }, [])
@@ -468,10 +505,10 @@ export function useWebSocket() {
         clearTimeout(reconnectTimerRef.current)
         reconnectTimerRef.current = null
       }
-      if (watchdogRef.current) {
-        clearTimeout(watchdogRef.current)
-        watchdogRef.current = null
+      for (const timer of Object.values(watchdogRef.current)) {
+        clearTimeout(timer)
       }
+      watchdogRef.current = {}
       wsRef.current?.close()
       wsRef.current = null
     }

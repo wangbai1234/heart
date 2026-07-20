@@ -167,7 +167,10 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
             // TEST_REPORT_20260712 BUG-5). Falls back to modality when the
             // server response is old (no `kind` field).
             kind: item.kind === 'action' ? 'action' : item.modality === 'voice' ? 'voice' : 'text',
-            audioData: item.modality === 'voice' && item.audio_url ? `/api/chat/audio/${item.id}` : undefined,
+            // Durable pointer (persisted) rather than audioData, so the voice
+            // bubble survives the next refresh too. VoiceMessageBubble fetches
+            // /api/ URLs with auth.
+            audioUrl: item.modality === 'voice' && item.audio_url ? `/api/chat/audio/${item.id}` : undefined,
             audioDuration: item.audio_duration_ms ?? undefined,
             audioFormat: item.modality === 'voice' ? 'wav' : undefined,
           })
@@ -237,7 +240,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
               // TEST_REPORT_20260712 BUG-5). Falls back to modality when
               // the server response is old (no `kind` field).
               kind: item.kind === 'action' ? 'action' : item.modality === 'voice' ? 'voice' : 'text',
-              audioData: item.modality === 'voice' && item.audio_url ? `/api/chat/audio/${item.id}` : undefined,
+              audioUrl: item.modality === 'voice' && item.audio_url ? `/api/chat/audio/${item.id}` : undefined,
               audioDuration: item.audio_duration_ms ?? undefined,
             })
           }
@@ -305,8 +308,10 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
       )
     }
 
-    // Voice mode loading bubble uses the same shell as text loading
-    if (msg.kind === 'voice' && !msg.audioData) {
+    // Voice mode loading bubble uses the same shell as text loading. Only a
+    // voice message with NEITHER live audio NOR a durable server pointer is
+    // genuinely still loading; a rehydrated/historical one has audioUrl.
+    if (msg.kind === 'voice' && !msg.audioData && !msg.audioUrl) {
       return (
         <div className={`flex items-start gap-2 ${isAI ? 'self-start' : 'self-end flex-row-reverse'}`}>
           {showAvatar ? (
@@ -367,8 +372,9 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
       )
     }
 
-    // Voice message with audio
-    if (msg.kind === 'voice' && msg.audioData) {
+    // Voice message with audio — live base64 (this session) or a durable
+    // server URL (rehydrated after refresh / loaded from history).
+    if (msg.kind === 'voice' && (msg.audioData || msg.audioUrl)) {
       const transcriptExpanded = expandedVoiceTextIds.has(msg.id)
       return (
         <div className={`flex items-start gap-2 ${isAI ? 'self-start' : 'self-end flex-row-reverse'}`}>
@@ -381,7 +387,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
             <div className="flex items-end gap-2">
               <div className="flex-1">
                 <VoiceMessageBubble
-                  audioData={msg.audioData}
+                  audioData={msg.audioData ?? msg.audioUrl ?? ''}
                   duration={msg.audioDuration ?? 3000}
                   format={msg.audioFormat ?? 'wav'}
                   isDark={isDark}
