@@ -12,6 +12,7 @@ const WS_BASE = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.h
 interface WsMessage {
   type: string
   turn_id?: string
+  character_id?: string
   delta?: string
   text?: string
   content?: string
@@ -92,7 +93,6 @@ export function useWebSocket() {
   const setVad = useChatStore(s => s.setVad)
   const appendMessageAudio = useChatStore(s => s.appendMessageAudio)
   const finalizeMessageAudio = useChatStore(s => s.finalizeMessageAudio)
-  const isStreaming = useChatStore(s => s.isStreaming)
 
   const connect = useCallback(() => {
     if (reconnectTimerRef.current) {
@@ -121,7 +121,7 @@ export function useWebSocket() {
       watchdogRef.current = setTimeout(() => {
         watchdogRef.current = null
         setGenerating(cid, false)
-        setStreaming(false)
+        setStreaming(cid, false)
         setPlaying(false)
         setCurrentTurnId(null)
         setPendingAssistantTurnId(null)
@@ -139,7 +139,11 @@ export function useWebSocket() {
 
     ws.onmessage = async (ev) => {
       const msg: WsMessage = JSON.parse(ev.data)
-      const cid = activeCharRef.current
+      // Route every frame by the character_id the SERVER stamped on it — never by
+      // "whichever character is on screen now". Falling back to activeCharRef only
+      // covers older frames that predate character_id (or a truly missing field).
+      // This is what stops one character's stream bleeding into another's bubble.
+      const cid = (msg.character_id as CharacterId | undefined) ?? activeCharRef.current
       switch (msg.type) {
         case 'turn_start':
           seenChunks.current.clear()
@@ -153,13 +157,21 @@ export function useWebSocket() {
             kind: pendingVoiceTurnRef.current ? 'voice' : 'text',
           })
           setGenerating(cid, true)
-          setStreaming(true)
+          setStreaming(cid, true)
           setPlaying(false)
           armWatchdog(cid)
           break
-        case 'text_delta':
-          appendToLast(cid, msg.delta ?? '')
+        case 'text_delta': {
+          // Only append to the bubble that belongs to THIS turn — guards against
+          // a late delta from a previous/other turn overwriting the wrong bubble
+          // (mirrors the turn_id guard the audio path already has).
+          const dmsgs = useChatStore.getState().messages[cid] ?? []
+          const dlast = dmsgs[dmsgs.length - 1]
+          if (dlast && dlast.role === 'assistant' && dlast.id === msg.turn_id) {
+            appendToLast(cid, msg.delta ?? '')
+          }
           break
+        }
         case 'sentence':
           setVad({
             energy: msg.vad?.energy ?? 0,
@@ -247,7 +259,7 @@ export function useWebSocket() {
               }))
             }
           }
-          setStreaming(false)
+          setStreaming(cid, false)
           setPlaying(false)
           setCurrentTurnId(null)
           setPendingAssistantTurnId(null)
@@ -283,7 +295,7 @@ export function useWebSocket() {
         case 'insufficient_credits':
           clearWatchdog()
           setGenerating(cid, false)
-          setStreaming(false)
+          setStreaming(cid, false)
           setPlaying(false)
           setCurrentTurnId(null)
           setPendingAssistantTurnId(null)
@@ -296,7 +308,7 @@ export function useWebSocket() {
         case 'model_forbidden':
           clearWatchdog()
           setGenerating(cid, false)
-          setStreaming(false)
+          setStreaming(cid, false)
           setPlaying(false)
           setCurrentTurnId(null)
           setPendingAssistantTurnId(null)
@@ -309,7 +321,7 @@ export function useWebSocket() {
         case 'interrupted':
           clearWatchdog()
           setGenerating(cid, false)
-          setStreaming(false)
+          setStreaming(cid, false)
           setPlaying(false)
           setCurrentTurnId(null)
           setPendingAssistantTurnId(null)
@@ -318,7 +330,7 @@ export function useWebSocket() {
         case 'error': {
           clearWatchdog()
           setGenerating(cid, false)
-          setStreaming(false)
+          setStreaming(cid, false)
           setPlaying(false)
           setPendingAssistantTurnId(null)
           pendingVoiceTurnRef.current = false
@@ -346,6 +358,8 @@ export function useWebSocket() {
             errMsg = '生成失败，请重试'
           } else if (errCode === 'PERSIST_FAILED') {
             errMsg = '消息保存失败，请重试'
+          } else if (errCode === 'TURN_TIMEOUT') {
+            errMsg = '响应超时，请重试'
           }
           useToastStore.getState().show(errMsg, 'error')
           break
@@ -395,10 +409,12 @@ export function useWebSocket() {
   const sendMessage = useCallback(
     (text: string) => {
       if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
-      if (isStreaming) return
 
       const { currentCharacterId } = useAppStore.getState()
       const characterId = currentCharacterId
+      // Gate per-character: block only if THIS character already has a turn in
+      // flight. A turn for a different character must not block this send.
+      if (useChatStore.getState().isStreaming[characterId]) return
       activeCharRef.current = characterId
       const { voiceChatEnabled, chatModel } = useAppStore.getState()
       const voiceEnabled = voiceChatEnabled?.[characterId] ?? false
@@ -422,7 +438,7 @@ export function useWebSocket() {
           kind: 'text',
         })
       }
-      setStreaming(true)
+      setStreaming(characterId, true)
       setPendingAssistantTurnId(turnId)
 
       wsRef.current.send(
@@ -436,7 +452,7 @@ export function useWebSocket() {
         }),
       )
     },
-    [addMessage, setStreaming, setPendingAssistantTurnId, isStreaming],
+    [addMessage, setStreaming, setPendingAssistantTurnId],
   )
 
   const interrupt = useCallback(() => {

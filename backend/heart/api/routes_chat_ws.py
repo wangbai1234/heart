@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import contextlib
 import json
 import random
 import uuid
@@ -31,6 +32,12 @@ router = APIRouter()
 # continuity. 50 aligns with the commercial spec (docs/upgrade/commercial).
 # Beyond this window, continuity relies on SS02 long-term recall.
 RECENT_HISTORY_LIMIT = 50
+
+# Wall-clock ceiling for a single turn's orchestration+synthesis. Kept BELOW the
+# frontend watchdog (60s) so the backend always emits a proper terminal frame
+# (turn_end / TURN_TIMEOUT error) before the client force-clears its own state.
+# A hung/slow TTS provider therefore can never wedge the turn "forever".
+_TURN_TIMEOUT_S = 45.0
 
 
 def _extract_storage_key(audio_url: str) -> str | None:
@@ -78,6 +85,7 @@ def _create_stream_session(
     cache: Any = None,
     preferred_provider_name: Optional[str] = None,
     clone_reference: Optional[str] = None,
+    character_id: str = "",
 ) -> Any:
     """Create a StreamSession if voice service is available."""
     if not voice_service:
@@ -93,6 +101,7 @@ def _create_stream_session(
             {
                 "type": "audio_chunk",
                 "turn_id": t_id,
+                "character_id": character_id,
                 "sentence_seq": 0,
                 "seq": seq,
                 "format": fmt,
@@ -111,17 +120,20 @@ def _create_stream_session(
     return session
 
 
-async def _send_text_delta(ws: WebSocket, turn_id: str, delta: str) -> None:
+async def _send_text_delta(ws: WebSocket, turn_id: str, delta: str, character_id: str) -> None:
     """Send text delta event."""
-    await ws.send_json({"type": "text_delta", "turn_id": turn_id, "delta": delta})
+    await ws.send_json(
+        {"type": "text_delta", "turn_id": turn_id, "character_id": character_id, "delta": delta}
+    )
 
 
-async def _send_sentence(ws: WebSocket, turn_id: str, event: dict) -> None:
+async def _send_sentence(ws: WebSocket, turn_id: str, event: dict, character_id: str) -> None:
     """Send sentence event."""
     await ws.send_json(
         {
             "type": "sentence",
             "turn_id": turn_id,
+            "character_id": character_id,
             "text": event["text"],
             "vad": event.get("vad"),
             "intimacy": event.get("intimacy", 0.0),
@@ -130,9 +142,9 @@ async def _send_sentence(ws: WebSocket, turn_id: str, event: dict) -> None:
     )
 
 
-async def _send_turn_end(ws: WebSocket, turn_id: str) -> None:
+async def _send_turn_end(ws: WebSocket, turn_id: str, character_id: str) -> None:
     """Send turn end event."""
-    await ws.send_json({"type": "turn_end", "turn_id": turn_id})
+    await ws.send_json({"type": "turn_end", "turn_id": turn_id, "character_id": character_id})
 
 
 async def _handle_event(
@@ -145,9 +157,9 @@ async def _handle_event(
     """Handle a single stream event. Returns True if turn ended."""
     event_type = event.get("type")
     if event_type == "text_delta":
-        await _send_text_delta(ws, turn_id, event["delta"])
+        await _send_text_delta(ws, turn_id, event["delta"], character_id)
     elif event_type == "sentence":
-        await _send_sentence(ws, turn_id, event)
+        await _send_sentence(ws, turn_id, event, character_id)
         if stream_session:
             await stream_session.submit(
                 turn_id=turn_id,
@@ -254,6 +266,7 @@ async def _precheck_billing(
                     {
                         "type": "model_forbidden",
                         "turn_id": turn_id,
+                        "character_id": character_id,
                         "model": model,
                         "tier": tier,
                     }
@@ -287,6 +300,7 @@ async def _precheck_billing(
                     {
                         "type": "insufficient_credits",
                         "turn_id": turn_id,
+                        "character_id": character_id,
                         "needed": min_required / 100,
                         "balance": balance / 100,
                     }
@@ -297,7 +311,13 @@ async def _precheck_billing(
     except Exception as e:
         logger.exception("billing_precheck_failed", error=str(e))
         await ws.send_json(
-            {"type": "error", "code": "BILLING_CHECK_FAILED", "msg": "Billing check failed"}
+            {
+                "type": "error",
+                "code": "BILLING_CHECK_FAILED",
+                "turn_id": turn_id,
+                "character_id": character_id,
+                "msg": "Billing check failed",
+            }
         )
         return False, False
 
@@ -381,11 +401,14 @@ async def _charge_and_insert_bubbles(
                 {
                     "type": "insufficient_credits",
                     "turn_id": turn_id,
+                    "character_id": character_id,
                     "needed": ice.needed / 100,
                     "balance": ice.balance / 100,
                 }
             )
-            await ws.send_json({"type": "turn_end", "turn_id": turn_id})
+            await ws.send_json(
+                {"type": "turn_end", "turn_id": turn_id, "character_id": character_id}
+            )
             return -1, 0  # sentinel: caller should return early
 
     return total_charged, new_balance
@@ -606,6 +629,7 @@ async def _post_turn_billing(
                 {
                     "type": "message_bubble",
                     "turn_id": turn_id,
+                    "character_id": character_id,
                     "sequence_id": i,
                     "kind": seg["kind"],
                     "content": seg["content"],
@@ -618,6 +642,7 @@ async def _post_turn_billing(
             {
                 "type": "turn_end",
                 "turn_id": turn_id,
+                "character_id": character_id,
                 "modality": actual_modality,
                 "credits_charged": total_charged / 100,
                 "balance": new_balance / 100,
@@ -628,16 +653,22 @@ async def _post_turn_billing(
 
     except Exception as e:
         logger.error("chat_persist_failed", error=str(e))
-        import contextlib
 
         with contextlib.suppress(Exception):
             await ws.send_json(
-                {"type": "error", "code": "PERSIST_FAILED", "msg": "消息保存失败，请重试"}
+                {
+                    "type": "error",
+                    "code": "PERSIST_FAILED",
+                    "turn_id": turn_id,
+                    "character_id": character_id,
+                    "msg": "消息保存失败，请重试",
+                }
             )
             await ws.send_json(
                 {
                     "type": "turn_end",
                     "turn_id": turn_id,
+                    "character_id": character_id,
                     "modality": actual_modality,
                     "credits_charged": 0,
                     "balance": 0,
@@ -699,6 +730,8 @@ async def _run_orchestrator(
             {
                 "type": "error",
                 "code": "VOICE_NOT_CONFIGURED" if _is_vcfg else "STREAM_ERROR",
+                "turn_id": turn_id,
+                "character_id": character_id,
                 "msg": "该角色暂未配置音色" if _is_vcfg else str(e),
             }
         )
@@ -728,14 +761,28 @@ async def _handle_chat_message(
     model = msg.get("model", "deepseek") or "deepseek"
 
     if not user_text:
-        await ws.send_json({"type": "error", "code": "MISSING_TEXT", "msg": "Missing text"})
+        await ws.send_json(
+            {
+                "type": "error",
+                "code": "MISSING_TEXT",
+                "turn_id": turn_id,
+                "character_id": character_id,
+                "msg": "Missing text",
+            }
+        )
         return
 
     # Boundary guard: reject ids with no loaded Soul Spec (in-memory, no DB hit)
     # before they reach billing / orchestrator / persistence.
     if not is_known_character(character_id):
         await ws.send_json(
-            {"type": "error", "code": "SOUL_NOT_LOADED", "msg": f"未知角色: {character_id}"}
+            {
+                "type": "error",
+                "code": "SOUL_NOT_LOADED",
+                "turn_id": turn_id,
+                "character_id": character_id,
+                "msg": f"未知角色: {character_id}",
+            }
         )
         return
 
@@ -779,7 +826,13 @@ async def _handle_chat_message(
     orch = get_orchestrator()
     if orch is None:
         await ws.send_json(
-            {"type": "error", "code": "SERVICE_UNAVAILABLE", "msg": "Orchestrator not available"}
+            {
+                "type": "error",
+                "code": "SERVICE_UNAVAILABLE",
+                "turn_id": turn_id,
+                "character_id": character_id,
+                "msg": "Orchestrator not available",
+            }
         )
         return
 
@@ -790,74 +843,123 @@ async def _handle_chat_message(
         cache=cache,
         preferred_provider_name=voice_provider,
         clone_reference=clone_reference,
+        character_id=character_id,
     )
     if stream_session:
         await stream_session.start()
 
-    async with AsyncSession(_get_engine(), expire_on_commit=False) as db:
-        from heart.ss07_orchestration.models import TurnRequest
+    # A turn MUST always end with exactly one terminal frame for the client so
+    # neither the "正在回复中" indicator nor a voice bubble's "加载中" can hang.
+    # _terminal_sent tracks whether a turn_end (or terminal error carrying its
+    # own turn_end) has gone out; the finally guarantees one otherwise.
+    turn_completed = False
+    turn_safety_blocked = False
+    audio_produced = False
+    collected_text: list[str] = []
+    served_model = model
+    degraded_to: Optional[str] = None
+    _terminal_sent = False
+    try:
+        async with AsyncSession(_get_engine(), expire_on_commit=False) as db:
+            from heart.ss07_orchestration.models import TurnRequest
 
-        history = await _load_recent_conversation_history(db, user_uuid, character_id)
-        req = TurnRequest(
-            user_id=user_uuid,
-            character_id=character_id,
-            user_message=user_text,
-            history=history,
-            trace_id=uuid.UUID(turn_id),
-            model=model,
-        )
+            history = await _load_recent_conversation_history(db, user_uuid, character_id)
+            req = TurnRequest(
+                user_id=user_uuid,
+                character_id=character_id,
+                user_message=user_text,
+                history=history,
+                trace_id=uuid.UUID(turn_id),
+                model=model,
+            )
 
-        await ws.send_json({"type": "turn_start", "turn_id": turn_id})
-        (
-            turn_completed,
-            turn_safety_blocked,
-            audio_produced,
-            collected_text,
-            served_model,
-            degraded_to,
-        ) = await _run_orchestrator(
-            ws,
-            orch,
-            req,
-            stream_session,
-            turn_id,
-            character_id,
-            active_turns,
-            db,
-        )
+            await ws.send_json(
+                {"type": "turn_start", "turn_id": turn_id, "character_id": character_id}
+            )
+            try:
+                (
+                    turn_completed,
+                    turn_safety_blocked,
+                    audio_produced,
+                    collected_text,
+                    served_model,
+                    degraded_to,
+                ) = await asyncio.wait_for(
+                    _run_orchestrator(
+                        ws,
+                        orch,
+                        req,
+                        stream_session,
+                        turn_id,
+                        character_id,
+                        active_turns,
+                        db,
+                    ),
+                    timeout=_TURN_TIMEOUT_S,
+                )
+            except asyncio.TimeoutError:
+                # Slow/hung provider — cancel synthesis and surface a clean error.
+                # turn_completed stays False, so the finally emits turn_end.
+                logger.error("chat_ws_turn_timeout", turn_id=turn_id, character_id=character_id)
+                if stream_session:
+                    stream_session.cancel()
+                with contextlib.suppress(Exception):
+                    await ws.send_json(
+                        {
+                            "type": "error",
+                            "code": "TURN_TIMEOUT",
+                            "turn_id": turn_id,
+                            "character_id": character_id,
+                            "msg": "响应超时，请重试",
+                        }
+                    )
 
-    # ── 3. Post-turn: charge + persist ──
-    _full_text_empty = not "".join(collected_text).strip()
-    if turn_completed and _full_text_empty:
-        await ws.send_json({"type": "error", "code": "EMPTY_RESPONSE", "msg": "生成失败，请重试"})
-        await ws.send_json(
-            {
-                "type": "turn_end",
-                "turn_id": turn_id,
-                "modality": "text",
-                "credits_charged": 0,
-                "balance": 0,
-            }
-        )
-    elif turn_completed:
-        actual_modality = "voice" if audio_produced else "text"
-        await _post_turn_billing(
-            ws,
-            user_uuid,
-            turn_id,
-            character_id,
-            user_text,
-            collected_text,
-            actual_modality,
-            turn_safety_blocked,
-            stream_session,
-            served_model=served_model,
-            degraded_to=degraded_to,
-            tts_provider=stream_session.tts_provider_name if stream_session else "",
-        )
-    else:
-        # Turn didn't complete (cancelled) — send basic turn_end
-        await _send_turn_end(ws, turn_id)
+        # ── 3. Post-turn: charge + persist ──
+        _full_text_empty = not "".join(collected_text).strip()
+        if turn_completed and _full_text_empty:
+            await ws.send_json(
+                {
+                    "type": "error",
+                    "code": "EMPTY_RESPONSE",
+                    "turn_id": turn_id,
+                    "character_id": character_id,
+                    "msg": "生成失败，请重试",
+                }
+            )
+            await ws.send_json(
+                {
+                    "type": "turn_end",
+                    "turn_id": turn_id,
+                    "character_id": character_id,
+                    "modality": "text",
+                    "credits_charged": 0,
+                    "balance": 0,
+                }
+            )
+            _terminal_sent = True
+        elif turn_completed:
+            actual_modality = "voice" if audio_produced else "text"
+            await _post_turn_billing(
+                ws,
+                user_uuid,
+                turn_id,
+                character_id,
+                user_text,
+                collected_text,
+                actual_modality,
+                turn_safety_blocked,
+                stream_session,
+                served_model=served_model,
+                degraded_to=degraded_to,
+                tts_provider=stream_session.tts_provider_name if stream_session else "",
+            )
+            _terminal_sent = True
+    finally:
+        # Cancelled, timed out, or any unexpected failure: the client still gets
+        # a terminal frame so its per-character state clears.
+        if not _terminal_sent:
+            with contextlib.suppress(Exception):
+                await _send_turn_end(ws, turn_id, character_id)
 
 
 async def _handle_interrupt(ws: WebSocket, msg: dict[str, Any], active_turns: dict) -> None:
