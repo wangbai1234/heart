@@ -151,6 +151,15 @@ class ProviderRegistry:
         """
         return self._model_canonical.get(model, model)
 
+    def has_model(self, model: str) -> bool:
+        """True if a provider is registered for this model/slug.
+
+        Lets the router pre-filter a failover chain down to attempts that can
+        actually run, so empty-response failover knows which candidate is the
+        genuinely last usable one.
+        """
+        return model in self._model_to_provider
+
     async def close_all(self) -> None:
         """Close all provider connections."""
         for provider in self._providers.values():
