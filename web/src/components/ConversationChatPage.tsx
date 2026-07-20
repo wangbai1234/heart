@@ -216,8 +216,11 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
         setMessageAudioUrl(cid, m.id, `/api/chat/audio/by-turn/${m.id}`)
       }
     }
+    // Re-runs when isStreaming flips false too: on reconnect the WS layer clears
+    // the orphaned turn's streaming state (useWebSocket onopen), and only then is
+    // the placeholder no longer the "current turn" and safe to resolve.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentCharacterId])
+  }, [currentCharacterId, isStreaming])
 
   // Surface any pending proactive messages (SS06) once history has loaded, then
   // ack them so they are not re-served. Injected after history to preserve order

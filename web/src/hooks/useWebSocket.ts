@@ -122,7 +122,26 @@ export function useWebSocket() {
     const ws = new WebSocket(`${WS_BASE}?token=${accessToken}`)
     wsRef.current = ws
 
-    ws.onopen = () => {}
+    ws.onopen = () => {
+      // A fresh connection carries no in-flight turns — the server never resumes
+      // a turn on a new socket. Any turn that was "streaming" when the previous
+      // connection dropped (e.g. the user left the chat page mid-generation, or
+      // the socket blipped) is now orphaned on the client: its turn_end went to
+      // the old/detached socket and will never arrive here. Clear the stale
+      // live-turn state so the "正在回复中" indicator can't hang and so the
+      // orphaned voice bubble stops being treated as the streaming turn — it is
+      // then resolved from storage via the by-turn endpoint (see
+      // ConversationChatPage). The turn itself still finished + persisted
+      // server-side (background generation), so no reply is lost.
+      useChatStore.setState({
+        isStreaming: {},
+        isGenerating: {},
+        currentTurnId: null,
+        pendingAssistantTurnId: null,
+      })
+      activeTurnByCharRef.current = {}
+      pendingVoiceTurnRef.current = false
+    }
 
     const armWatchdog = (cid: CharacterId) => {
       const existing = watchdogRef.current[cid]
