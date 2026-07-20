@@ -73,7 +73,7 @@ export function HomePage() {
               {/* Quick Actions */}
               <div className="flex gap-3 mb-5">
                 {[
-                  { icon: GiftIcon, label: '兑换会员', color: '#FFB7C5', path: '/redeem' },
+                  { icon: GiftIcon, label: '兑换会员', color: '#FFB7C5', path: '/membership' },
                   { icon: PersonIcon, label: '切换角色', color: '#C8B6FF', path: '/character' },
                   { icon: GearIcon, label: '设置', color: '#A7C7E7', path: '/settings' },
                 ].map((action) => (

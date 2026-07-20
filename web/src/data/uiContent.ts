@@ -83,7 +83,7 @@ export const CHARACTER_PROFILES: Record<string, CharacterProfile> = {
     id: 'rin',
     name: '神无月凛',
     shortName: '凛',
-    statusLabel: '温柔在线',
+    statusLabel: '在线',
     moodLabel: '温柔',
     avatar: '/assets/characters/character_shenwuyue_avatar.png',
     tag: '御姐型',
@@ -96,7 +96,7 @@ export const CHARACTER_PROFILES: Record<string, CharacterProfile> = {
     id: 'dorothy',
     name: '桃乐丝',
     shortName: '桃乐丝',
-    statusLabel: '元气在线',
+    statusLabel: '在线',
     moodLabel: '元气',
     avatar: '/assets/characters/character_taolesi_avatar.png',
     tag: '元气型',
@@ -129,7 +129,7 @@ export const DEFAULT_CHARACTER_PROFILE: Omit<CharacterProfile, 'id' | 'name' | '
  * @param id          Character id
  * @param displayName Server-provided display name (optional)
  * @param avatarUrl   Server-provided avatar URL for UGC characters (optional).
- * @param opts.isOwner When true, renders the character as user-created (shows '自建' tag).
+   * @param opts.isOwner When true, renders the character as user-created (shows '私密' tag).
  */
 export function resolveCharacterProfile(
   id: string,
@@ -149,7 +149,7 @@ export function resolveCharacterProfile(
     name,
     shortName: name,
     avatar: avatarUrl || DEFAULT_CHARACTER_PROFILE.avatar,
-    tag: isOwner ? '自建' : DEFAULT_CHARACTER_PROFILE.tag,
+    tag: isOwner ? '私密' : DEFAULT_CHARACTER_PROFILE.tag,
     tagColor: isOwner ? '#5A88F8' : DEFAULT_CHARACTER_PROFILE.tagColor,
     tagBg: isOwner ? 'rgba(120,150,255,0.24)' : DEFAULT_CHARACTER_PROFILE.tagBg,
   }

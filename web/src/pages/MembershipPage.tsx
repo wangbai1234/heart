@@ -12,6 +12,11 @@ const TIER_ACCENT: Record<string, string> = {
   immersive: 'var(--color-accent)',
 }
 
+const SKU_LABELS: Record<string, string> = {
+  plan_plus: '进阶版',
+  plan_immersive: '沉浸版',
+}
+
 function formatExpiry(iso: string | null): string | null {
   if (!iso) return null
   try {
@@ -143,7 +148,7 @@ export function MembershipPage() {
             <AfdianBindingCard
               bindingCode={membership.bindingCode}
               afdianUrl={pricing.afdian_url}
-              skuHint={paidBindingTier ? `进阶版（${paidBindingTier.sku}）/ 沉浸版` : undefined}
+              skuHint={paidBindingTier?.sku ? SKU_LABELS[paidBindingTier.sku] ?? paidBindingTier.sku : undefined}
             />
             <p className="text-center text-[12px] text-[var(--color-text-muted)] mt-3">
               付款后系统自动开通，通常几分钟内到账。

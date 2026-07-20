@@ -45,12 +45,12 @@ const SLIDER_FIELDS: SliderField[] = [
   { key: 'steadiness',    label: '稳定度',   leftLabel: '情绪化', rightLabel: '淡定' },
 ]
 
-const GREETING_STYLES: { value: GreetingStyle; label: string; desc: string; emoji: string }[] = [
-  { value: 'warm',     label: '温柔',   desc: '体贴入微，关怀满满',   emoji: '🌸' },
-  { value: 'cool',     label: '清冷',   desc: '不急不躁，距离感有魅力', emoji: '🌙' },
-  { value: 'playful',  label: '俏皮',   desc: '跳脱有趣，笑声不断',   emoji: '✨' },
-  { value: 'reserved', label: '内敛',   desc: '话不多，但句句走心',   emoji: '🍃' },
-  { value: 'intense',  label: '浓烈',   desc: '情感丰沛，全情投入',   emoji: '🔥' },
+const GREETING_STYLES: { value: GreetingStyle; label: string; desc: string }[] = [
+  { value: 'warm',     label: '温柔',   desc: '体贴入微，关怀满满' },
+  { value: 'cool',     label: '清冷',   desc: '不急不躁，距离感有魅力' },
+  { value: 'playful',  label: '俏皮',   desc: '跳脱有趣，笑声不断' },
+  { value: 'reserved', label: '内敛',   desc: '话不多，但句句走心' },
+  { value: 'intense',  label: '浓烈',   desc: '情感丰沛，全情投入' },
 ]
 
 const MAX_PERSONA = 1500
@@ -817,13 +817,13 @@ export function CreateCharacterPage() {
             {/* Gender */}
             <SectionTitle>角色性别</SectionTitle>
             <div className="flex gap-3">
-              {([['female', '女性', '👩'], ['male', '男性', '👨']] as const).map(([value, label, emoji]) => {
+              {([['female', '女性'], ['male', '男性']] as const).map(([value, label]) => {
                 const active = form.gender === value
                 return (
                   <button
                     key={value}
                     onClick={() => setForm((prev) => ({ ...prev, gender: value }))}
-                    className={`flex-1 flex items-center justify-center gap-2 py-3.5 rounded-[16px] border transition-all duration-[180ms] active:scale-[0.98] ${
+                    className={`flex-1 flex items-center justify-center py-3.5 rounded-[16px] border transition-all duration-[180ms] active:scale-[0.98] ${
                       active
                         ? 'bg-[rgba(255,183,197,0.22)] border-[rgba(255,183,197,0.55)] shadow-[0_2px_12px_rgba(255,143,171,0.15)]'
                         : isDark
@@ -831,7 +831,6 @@ export function CreateCharacterPage() {
                         : 'bg-[rgba(255,255,255,0.72)] border-[rgba(255,255,255,0.60)]'
                     } backdrop-blur-[12px]`}
                   >
-                    <span className="text-[20px]">{emoji}</span>
                     <span className={`text-[15px] font-semibold ${active ? 'text-[#E86083]' : 'text-[var(--color-ink)]'}`}>{label}</span>
                   </button>
                 )
@@ -885,7 +884,7 @@ export function CreateCharacterPage() {
             {/* Greeting style */}
             <SectionTitle>相处风格</SectionTitle>
             <div className="grid grid-cols-1 gap-2.5">
-              {GREETING_STYLES.map(({ value, label, desc, emoji }) => {
+              {GREETING_STYLES.map(({ value, label, desc }) => {
                 const active = form.greetingStyle === value
                 return (
                   <button
@@ -900,7 +899,6 @@ export function CreateCharacterPage() {
                     } backdrop-blur-[12px]`}
                   >
                     <div className="flex items-center gap-3">
-                      <span className="text-[22px]">{emoji}</span>
                       <div className="flex-1 min-w-0">
                         <span className={`text-[15px] font-semibold ${active ? 'text-[#E86083]' : 'text-[var(--color-ink)]'}`}>
                           {label}
@@ -1082,9 +1080,10 @@ export function CreateCharacterPage() {
                           {form.nameZh.trim().slice(-1)}
                         </span>
                       ) : (
-                        <span className="text-[22px]">
-                          {GREETING_STYLES.find((s) => s.value === form.greetingStyle)?.emoji ?? '✨'}
-                        </span>
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                          <circle cx="12" cy="8" r="4" />
+                          <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
+                        </svg>
                       )}
                     </div>
                   )}

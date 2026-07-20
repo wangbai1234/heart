@@ -78,12 +78,15 @@ export function TransactionsPage() {
   return (
     <div className="relative w-full h-full flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="flex items-center px-5 pt-4 pb-3" style={{ paddingTop: 'var(--safe-top)' }}>
-        <button onClick={() => navigate(-1 as any)} className="text-[var(--color-ink)] text-[14px] active:opacity-60">
-          ← 返回
+      <nav className="relative z-20 flex items-center justify-between px-5 h-[44px] shrink-0" style={{ paddingTop: 'var(--safe-top)' }}>
+        <button onClick={() => navigate(-1)} className="w-[44px] h-[44px] flex items-center justify-center">
+          <svg width="12" height="20" viewBox="0 0 12 20" fill="none" stroke="var(--color-ink)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="10,2 2,10 10,18" />
+          </svg>
         </button>
-        <h2 className="flex-1 text-center text-[17px] font-semibold text-[var(--color-ink)] pr-10">yuoyuo币明细</h2>
-      </div>
+        <span className="text-[17px] font-medium text-[var(--color-ink)]">yuoyuo币明细</span>
+        <div className="w-[44px]" />
+      </nav>
 
       {/* Balance card */}
       <div className="mx-5 mb-4 p-4 rounded-[16px] bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-accent)]">

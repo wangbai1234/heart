@@ -280,13 +280,7 @@ export function LoginPage() {
           <Link to="/legal/privacy" className="text-[var(--color-primary)]">《隐私政策》</Link>
         </p>
 
-        {/* Redeem link */}
-        <button
-          onClick={() => navigate('/redeem')}
-          className="w-full text-center text-[14px] text-[var(--color-ink)] py-3 active:opacity-60"
-        >
-          我有兑换码，直接激活 →
-        </button>
+
       </div>
 
       {/* Bottom safe area */}
