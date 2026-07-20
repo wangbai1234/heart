@@ -6,23 +6,31 @@ For each built-in character this creates TWO ``character_voices`` rows:
     ``assets/reference_voices/`` and stores its path in ``clone_audio_url``.
     The MiMo provider base64-encodes it at synth time (voiceclone model). No API
     call, no cost.
-  - **fish** clone (真人语音): uploads the audio to Fish ``/model`` → a
-    persistent ``model_id`` stored in ``clone_voice_id``. This is a LIVE, PAID
-    Fish Audio call.
+  - **fish** clone (真人语音): uploads the audio to Fish ``POST /voices``
+    (multipart field ``audioFiles``) → a persistent ``voiceId`` stored in
+    ``clone_voice_id``. This is a LIVE, PAID Fish Audio call.
 
-Any pre-existing rows for the character (e.g. the legacy MiniMax preset seeded
-in migration 025) are removed first, so the character ends up with exactly the
-mimo + fish rows.
+Idempotent: rows are upserted per provider (compound key since migration 039),
+so re-running is safe. A character that already has a ``ready`` fish row keeps
+its existing ``clone_voice_id`` — the paid Fish clone is skipped unless
+``--force`` is passed. Nothing is deleted.
 
 Usage (from backend/):
+    # Built-in rin + dorothy:
     python scripts/seed_builtin_clones.py \
-        --rin /Users/wanglixun/Downloads/test/rin.wav \
-        --dorothy /Users/wanglixun/Downloads/test/dorothy.mp3
+        --rin /path/to/rin.wav \
+        --dorothy /path/to/dorothy.mp3
+
+    # Any single character (for backend-added characters):
+    python scripts/seed_builtin_clones.py --character <char_id> --audio /path/to/timbre.wav
 
     # Only (re)stage the MiMo reference rows, skip the paid Fish clone:
     python scripts/seed_builtin_clones.py --rin ... --dorothy ... --skip-fish
 
-Prerequisites: dev DB migrated to >= 039; FISH_API_KEY/FISH_BASE_URL/FISH_MODEL
+    # Re-clone Fish even if a ready row exists (pays again):
+    python scripts/seed_builtin_clones.py --rin ... --dorothy ... --force
+
+Prerequisites: DB migrated to >= 039; FISH_API_KEY/FISH_BASE_URL/FISH_MODEL
 set in .env (unless --skip-fish).
 """
 
@@ -81,7 +89,22 @@ async def _fish_clone(character_id: str, source: Path) -> str:
     return model_id
 
 
-async def _seed_character(db, character_id: str, source: Path, skip_fish: bool) -> None:
+async def _existing_ready_fish_voice_id(db, character_id: str) -> str | None:
+    """Return the clone_voice_id of a ready fish row, if one already exists."""
+    row = await db.execute(
+        text("""
+            SELECT clone_voice_id FROM character_voices
+            WHERE character_id = :cid AND voice_provider = 'fish'
+              AND clone_status = 'ready' AND clone_voice_id IS NOT NULL
+        """),
+        {"cid": character_id},
+    )
+    return row.scalar_one_or_none()
+
+
+async def _seed_character(
+    db, character_id: str, source: Path, skip_fish: bool, force: bool
+) -> None:
     # Verify the character exists (FK target).
     exists = await db.execute(
         text("SELECT 1 FROM characters WHERE id = :cid"), {"cid": character_id}
@@ -90,70 +113,98 @@ async def _seed_character(db, character_id: str, source: Path, skip_fish: bool) 
         print(f"  ! 角色 {character_id} 不存在，跳过")
         return
 
+    # MiMo reference (zero-shot): stage the file and upsert the mimo row. Free.
     mimo_ref = _stage_mimo_reference(character_id, source)
-    fish_model_id = None if skip_fish else await _fish_clone(character_id, source)
-
-    # Replace any existing rows for this character with the mimo (+ fish) clones.
-    await db.execute(
-        text("DELETE FROM character_voices WHERE character_id = :cid"),
-        {"cid": character_id},
-    )
     await db.execute(
         text("""
             INSERT INTO character_voices
                 (character_id, user_id, voice_type, clone_audio_url,
                  clone_status, voice_provider)
             VALUES (:cid, NULL, 'clone', :ref, 'ready', 'mimo')
+            ON CONFLICT (character_id, voice_provider) DO UPDATE
+                SET voice_type = 'clone', clone_audio_url = :ref,
+                    clone_status = 'ready', error_msg = NULL, updated_at = NOW()
         """),
         {"cid": character_id, "ref": mimo_ref},
     )
-    if fish_model_id:
+
+    # Fish clone (真人语音): reuse an existing ready voiceId unless --force, so
+    # re-runs don't re-pay. Only clone (paid) when there's nothing to reuse.
+    fish_voice_id: str | None = None
+    reused = False
+    if not skip_fish:
+        if not force:
+            fish_voice_id = await _existing_ready_fish_voice_id(db, character_id)
+            reused = fish_voice_id is not None
+        if fish_voice_id is None:
+            fish_voice_id = await _fish_clone(character_id, source)
+
+    if fish_voice_id:
         await db.execute(
             text("""
                 INSERT INTO character_voices
                     (character_id, user_id, voice_type, clone_voice_id,
                      clone_status, voice_provider)
                 VALUES (:cid, NULL, 'clone', :vid, 'ready', 'fish')
+                ON CONFLICT (character_id, voice_provider) DO UPDATE
+                    SET voice_type = 'clone', clone_voice_id = :vid,
+                        clone_status = 'ready', error_msg = NULL, updated_at = NOW()
             """),
-            {"cid": character_id, "vid": fish_model_id},
+            {"cid": character_id, "vid": fish_voice_id},
         )
     await db.execute(
         text("UPDATE characters SET has_voice = TRUE WHERE id = :cid"),
         {"cid": character_id},
     )
     await db.commit()
-    print(f"  ✓ {character_id}: mimo(ref={Path(mimo_ref).name}) fish({fish_model_id or 'skipped'})")
+    _fish_note = (
+        f"{fish_voice_id}{' (reused)' if reused else ''}" if fish_voice_id else "skipped"
+    )
+    print(f"  ✓ {character_id}: mimo(ref={Path(mimo_ref).name}) fish({_fish_note})")
 
 
-async def _main(rin: Path, dorothy: Path, skip_fish: bool) -> None:
+async def _main(targets: list[tuple[str, Path]], skip_fish: bool, force: bool) -> None:
     from heart.api.wiring import get_db_session_factory
 
     factory = get_db_session_factory()
     if factory is None:
         raise SystemExit("DB session factory 不可用（检查 DATABASE_URL）")
 
-    targets = [("rin", rin), ("dorothy", dorothy)]
     async with factory() as db:
         for character_id, source in targets:
             if not source.exists():
                 print(f"  ! 音频文件不存在: {source}，跳过 {character_id}")
                 continue
             print(f"→ 播种 {character_id} ← {source}")
-            await _seed_character(db, character_id, source, skip_fish)
+            await _seed_character(db, character_id, source, skip_fish, force)
     print("完成。")
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="Seed rin/dorothy mimo+fish clones")
+    ap = argparse.ArgumentParser(description="Seed built-in / new-character mimo+fish clones")
     ap.add_argument("--rin", default="/Users/wanglixun/Downloads/test/rin.wav")
     ap.add_argument("--dorothy", default="/Users/wanglixun/Downloads/test/dorothy.mp3")
+    ap.add_argument("--character", help="单个角色 id（配合 --audio，用于后台新增角色）")
+    ap.add_argument("--audio", help="单个角色的音色文件路径（配合 --character）")
     ap.add_argument(
         "--skip-fish",
         action="store_true",
         help="只播种 MiMo 参考音色，不做付费 Fish 克隆",
     )
+    ap.add_argument(
+        "--force",
+        action="store_true",
+        help="即使已有 ready 的 fish 行也重新克隆（会再次付费）",
+    )
     args = ap.parse_args()
-    asyncio.run(_main(Path(args.rin), Path(args.dorothy), args.skip_fish))
+
+    if args.character:
+        if not args.audio:
+            raise SystemExit("--character 需要配合 --audio 指定音色文件")
+        targets = [(args.character, Path(args.audio))]
+    else:
+        targets = [("rin", Path(args.rin)), ("dorothy", Path(args.dorothy))]
+    asyncio.run(_main(targets, args.skip_fish, args.force))
 
 
 if __name__ == "__main__":

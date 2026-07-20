@@ -16,8 +16,9 @@ class TTSRequest:
     format: str = "mp3"  # mp3/pcm
     sample_rate: int = 24000
     # MiMo zero-shot clone: handle to the reference audio (character_voices
-    # .clone_audio_url — a local path or http URL). When set, the MiMo provider
-    # switches to the voiceclone model and speaks in the referenced timbre.
+    # .clone_audio_url — a local path, http(s) URL, or s3://<key> read with
+    # backend credentials). When set, the MiMo provider switches to the
+    # voiceclone model and speaks in the referenced timbre.
     clone_reference: str | None = None
 
 
