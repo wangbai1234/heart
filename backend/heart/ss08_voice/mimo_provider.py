@@ -273,7 +273,17 @@ class MiMoProvider:
         if cached:
             return cached
         try:
-            if handle.startswith(("http://", "https://")):
+            if handle.startswith("s3://"):
+                # Backend-owned object — read with credentials, so a private
+                # bucket works (no public-read ACL / presign needed). This is how
+                # UGC MiMo clones are staged (see routes_voice._stage_audio_for_clone).
+                from heart.infra.storage import get_s3_object
+
+                data, ctype = await get_s3_object(handle[len("s3://") :])
+                mime = (ctype or "audio/wav").split(";")[0].strip()
+                if mime not in ("audio/mpeg", "audio/mp3", "audio/wav"):
+                    mime = "audio/wav"
+            elif handle.startswith(("http://", "https://")):
                 resp = await self._client.get(handle)
                 resp.raise_for_status()
                 data = resp.content

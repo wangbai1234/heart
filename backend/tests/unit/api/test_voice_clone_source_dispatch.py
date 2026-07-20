@@ -320,18 +320,18 @@ def test_clone_voice_id_for_handles_ugly_ids():
 
 
 # ---------------------------------------------------------------------------
-# Fish provider routing (P4 — defect E)
+# Fish provider routing — clone by direct bytes upload (fixes the 403)
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_fish_provider_routes_to_fish_clone():
-    """provider='fish' must call _fish_clone_by_source, never MiniMax."""
+async def test_fish_provider_routes_to_fish_clone_from_bytes():
+    """provider='fish' must clone from the raw bytes, never MiniMax, never a re-download."""
     with (
         patch.object(
             routes_voice,
-            "_fish_clone_by_source",
-            new=AsyncMock(return_value=("fish-model-id", None)),
+            "_fish_clone_from_bytes",
+            new=AsyncMock(return_value=("fish-voice-id", None)),
         ) as mock_fish,
         patch.object(
             routes_voice,
@@ -340,102 +340,74 @@ async def test_fish_provider_routes_to_fish_clone():
         ) as mock_mm,
     ):
         voice_id, err = await routes_voice._call_tts_clone_api(
-            "https://cdn.example.com/sample.wav", "char_xyz", provider="fish"
+            "upload://sample.wav",
+            "char_xyz",
+            provider="fish",
+            audio_bytes=b"RIFFxxxx",
+            mime="audio/wav",
         )
 
-    assert voice_id == "fish-model-id"
+    assert voice_id == "fish-voice-id"
     assert err is None
-    mock_fish.assert_awaited_once_with("https://cdn.example.com/sample.wav", "char_xyz")
+    # Cloned from the bytes we passed — no URL download step.
+    mock_fish.assert_awaited_once_with(b"RIFFxxxx", "audio/wav", "char_xyz")
     mock_mm.assert_not_called()
-
-
-@pytest.mark.asyncio
-async def test_fish_clone_minimax_file_scheme_returns_error():
-    """minimax_file:// scheme is dev-only; Fish clone can't download from MiniMax files."""
-    with patch.object(routes_voice.settings, "fish_api_key", "sk-fish"):
-        voice_id, err = await routes_voice._fish_clone_by_source("minimax_file://999", "ch")
-    assert voice_id is None
-    assert err and "Fish" in err and "minimax_file://" in err
 
 
 @pytest.mark.asyncio
 async def test_fish_clone_no_api_key_returns_error():
     with patch.object(routes_voice.settings, "fish_api_key", ""):
-        voice_id, err = await routes_voice._fish_clone_by_source(
-            "https://cdn.example.com/x.wav", "ch"
-        )
+        voice_id, err = await routes_voice._fish_clone_from_bytes(b"audio", "audio/wav", "ch")
     assert voice_id is None
     assert err and "FISH_API_KEY" in err
 
 
 @pytest.mark.asyncio
-async def test_fish_clone_success(monkeypatch):
-    """Happy path: Fish Audio returns model_id → returned as voice_id."""
-    import httpx
-
-    download_resp = type("R", (), {"status_code": 200, "content": b"audio"})()
-    model_resp = type(
-        "R",
-        (),
-        {
-            "status_code": 200,
-            "text": "",
-            "json": lambda self: {"_id": "fish-model-abc"},
-        },
-    )()
-
-    class _StubClient:
-        def __init__(self, *a, **kw):
-            pass
-
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, *a):
-            return False
-
-        async def get(self, url, **kw):
-            return download_resp
-
-        async def post(self, url, **kw):
-            return model_resp
-
-    monkeypatch.setattr(httpx, "AsyncClient", _StubClient)
+async def test_fish_clone_missing_bytes_returns_error():
     with patch.object(routes_voice.settings, "fish_api_key", "sk-fish"):
-        voice_id, err = await routes_voice._fish_clone_by_source(
-            "https://cdn.example.com/sample.wav", "char_abc123"
-        )
-    assert voice_id == "fish-model-abc"
-    assert err is None
+        voice_id, err = await routes_voice._fish_clone_from_bytes(None, "audio/wav", "ch")
+    assert voice_id is None
+    assert err and "bytes" in err
 
 
 @pytest.mark.asyncio
-async def test_fish_clone_bad_status_returns_error(monkeypatch):
-    import httpx
+async def test_fish_clone_success_uses_clone_from_bytes():
+    """Happy path: FishProvider.clone_from_bytes voiceId is returned; the bytes we
+    were handed are what get uploaded (no anonymous URL fetch → no HTTP 403)."""
+    from heart.ss08_voice.fish_provider import FishProvider
 
-    download_resp = type("R", (), {"status_code": 200, "content": b"audio"})()
-    bad_resp = type("R", (), {"status_code": 400, "text": "invalid audio"})()
+    with (
+        patch.object(routes_voice.settings, "fish_api_key", "sk-fish"),
+        patch.object(
+            FishProvider,
+            "clone_from_bytes",
+            new=AsyncMock(return_value="fish-voice-xyz"),
+        ) as mock_clone,
+    ):
+        voice_id, err = await routes_voice._fish_clone_from_bytes(
+            b"audio-bytes", "audio/mpeg", "char_abc123"
+        )
+    assert voice_id == "fish-voice-xyz"
+    assert err is None
+    args, _kwargs = mock_clone.await_args
+    assert args[0] == b"audio-bytes"
 
-    class _StubClient:
-        def __init__(self, *a, **kw):
-            pass
 
-        async def __aenter__(self):
-            return self
+@pytest.mark.asyncio
+async def test_fish_clone_provider_error_returns_reason():
+    from heart.ss08_voice.errors import TTSProviderError
+    from heart.ss08_voice.fish_provider import FishProvider
 
-        async def __aexit__(self, *a):
-            return False
-
-        async def get(self, url, **kw):
-            return download_resp
-
-        async def post(self, url, **kw):
-            return bad_resp
-
-    monkeypatch.setattr(httpx, "AsyncClient", _StubClient)
-    with patch.object(routes_voice.settings, "fish_api_key", "sk-fish"):
-        voice_id, err = await routes_voice._fish_clone_by_source(
-            "https://cdn.example.com/sample.wav", "char_abc123"
+    with (
+        patch.object(routes_voice.settings, "fish_api_key", "sk-fish"),
+        patch.object(
+            FishProvider,
+            "clone_from_bytes",
+            new=AsyncMock(side_effect=TTSProviderError("Fish clone error 400: invalid audio")),
+        ),
+    ):
+        voice_id, err = await routes_voice._fish_clone_from_bytes(
+            b"audio", "audio/wav", "char_abc123"
         )
     assert voice_id is None
     assert err and "400" in err
@@ -476,3 +448,42 @@ async def test_assert_clone_allowed_permits_immersive_fish():
     from heart.membership import assert_clone_allowed
 
     assert_clone_allowed("immersive", "fish")  # must not raise
+
+
+# ---------------------------------------------------------------------------
+# Clone provider availability gate — MiMo is zero-shot, gated by MIMO_API_KEY
+# (NOT MINIMAX_API_KEY): that mis-gate was the "音色克隆服务未配置" seen by
+# plus/immersive users uploading a MiMo clone.
+# ---------------------------------------------------------------------------
+
+
+def test_mimo_gate_uses_mimo_api_key_not_minimax():
+    """MiMo clone available when MIMO_API_KEY is set, even with no MiniMax key."""
+    with (
+        patch.object(routes_voice.settings, "mimo_api_key", "tp-xxx"),
+        patch.object(routes_voice.settings, "minimax_api_key", ""),
+    ):
+        routes_voice._check_clone_provider_available("mimo")  # must not raise
+
+
+def test_mimo_gate_blocks_when_mimo_key_missing():
+    from fastapi import HTTPException
+
+    with (
+        patch.object(routes_voice.settings, "mimo_api_key", ""),
+        patch.object(routes_voice.settings, "minimax_api_key", "mm-key"),
+    ):
+        with pytest.raises(HTTPException) as exc:
+            routes_voice._check_clone_provider_available("mimo")
+    assert exc.value.status_code == 503
+
+
+def test_fish_gate_uses_fish_api_key():
+    from fastapi import HTTPException
+
+    with patch.object(routes_voice.settings, "fish_api_key", ""):
+        with pytest.raises(HTTPException) as exc:
+            routes_voice._check_clone_provider_available("fish")
+    assert exc.value.status_code == 503
+    with patch.object(routes_voice.settings, "fish_api_key", "sk-fish"):
+        routes_voice._check_clone_provider_available("fish")  # must not raise

@@ -334,3 +334,32 @@ def test_emotion_tags(provider, sample_request, emotion, expected_tag):
         assert assistant.startswith(expected_tag)
     else:
         assert assistant == "测试文本"
+
+
+# ── Reference-audio handle resolution (zero-shot clone) ──
+
+
+@pytest.mark.asyncio
+async def test_reference_data_uri_reads_s3_handle_with_credentials(provider):
+    """s3://<key> handles are read via authenticated storage (private bucket OK),
+    not an anonymous GET — this is how UGC MiMo clones are staged."""
+    with patch(
+        "heart.infra.storage.get_s3_object",
+        new=AsyncMock(return_value=(b"\x00\x01\x02", "audio/mpeg")),
+    ) as mock_get:
+        uri = await provider._reference_data_uri("s3://voice-samples/char_x/abc.mp3")
+
+    assert uri is not None
+    assert uri.startswith("data:audio/mpeg;base64,")
+    mock_get.assert_awaited_once_with("voice-samples/char_x/abc.mp3")
+
+
+@pytest.mark.asyncio
+async def test_reference_data_uri_s3_failure_returns_none(provider):
+    """A storage read failure degrades gracefully (caller falls back to voicedesign)."""
+    with patch(
+        "heart.infra.storage.get_s3_object",
+        new=AsyncMock(side_effect=RuntimeError("access denied")),
+    ):
+        uri = await provider._reference_data_uri("s3://voice-samples/char_x/abc.mp3")
+    assert uri is None

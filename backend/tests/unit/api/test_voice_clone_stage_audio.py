@@ -32,6 +32,7 @@ async def test_stage_audio_uses_minimax_upload_when_s3_endpoint_is_private():
             filename="sample.wav",
             mime="audio/wav",
             character_id="char_xyz",
+            provider="minimax",
         )
     assert got == "minimax_file://987654321"
     mock_upload.assert_awaited_once()
@@ -58,7 +59,69 @@ async def test_stage_audio_uses_s3_when_endpoint_is_public():
             filename="sample.wav",
             mime="audio/wav",
             character_id="char_xyz",
+            provider="minimax",
         )
     assert got == fake_url
     mock_s3.assert_awaited_once()
     mock_minimax.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_stage_audio_fish_returns_upload_marker_without_touching_storage():
+    """Fish clones by direct bytes upload → staging must NOT hit S3/MiniMax and
+    must return a plain ``upload://`` record marker (no fetchable URL to 403 on)."""
+    with (
+        patch("heart.infra.storage._upload_to_s3", new=AsyncMock()) as mock_s3,
+        patch.object(routes_voice, "_upload_audio_to_minimax", new=AsyncMock()) as mock_mm,
+    ):
+        got = await routes_voice._stage_audio_for_clone(
+            data=b"\x00" * 4096,
+            filename="my sample.wav",
+            mime="audio/wav",
+            character_id="char_xyz",
+            provider="fish",
+        )
+    assert got == "upload://my sample.wav"
+    mock_s3.assert_not_called()
+    mock_mm.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_stage_audio_mimo_returns_s3_key_handle():
+    """MiMo reference must stay backend-readable → stored as ``s3://<key>`` (auth read,
+    private bucket OK), never a public URL and never MiniMax."""
+    captured: dict = {}
+
+    async def _fake_upload(key, data, mime):
+        captured["key"] = key
+
+    with (
+        patch("heart.infra.storage.is_s3_configured", return_value=True),
+        patch("heart.infra.storage._upload_to_s3", new=_fake_upload),
+    ):
+        got = await routes_voice._stage_audio_for_clone(
+            data=b"\x00" * 4096,
+            filename="sample.wav",
+            mime="audio/wav",
+            character_id="char_xyz",
+            provider="mimo",
+        )
+    assert got.startswith("s3://voice-samples/char_xyz/")
+    assert got == f"s3://{captured['key']}"
+
+
+@pytest.mark.asyncio
+async def test_stage_audio_mimo_requires_object_storage():
+    """No object storage configured → MiMo clone can't persist a re-readable ref → 503."""
+    from fastapi import HTTPException
+
+    with patch("heart.infra.storage.is_s3_configured", return_value=False):
+        with pytest.raises(HTTPException) as exc:
+            await routes_voice._stage_audio_for_clone(
+                data=b"\x00" * 4096,
+                filename="sample.wav",
+                mime="audio/wav",
+                character_id="char_xyz",
+                provider="mimo",
+            )
+    assert exc.value.status_code == 503
