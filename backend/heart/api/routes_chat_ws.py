@@ -1070,10 +1070,30 @@ class _LockedWS:
     def __init__(self, ws: WebSocket, lock: asyncio.Lock) -> None:
         self._ws = ws
         self._lock = lock
+        self._detached = False
+
+    def detach(self) -> None:
+        """Stop sending frames but let in-flight turns keep running.
+
+        When the client navigates away / closes the tab, the socket is gone but
+        the turn must NOT be aborted: voice synthesis should finish and persist
+        so the audio is there when the user returns (background generation — the
+        "退出页面语音卡在加载态" bug). After detach, ``send_json`` is a no-op.
+        """
+        self._detached = True
 
     async def send_json(self, data: Any) -> None:
+        if self._detached:
+            return
         async with self._lock:
-            await self._ws.send_json(data)
+            try:
+                await self._ws.send_json(data)
+            except Exception:
+                # Peer vanished mid-turn, before the receive loop raised
+                # WebSocketDisconnect. Detach so the turn keeps synthesising and
+                # persists its audio in the background instead of aborting on the
+                # first failed send.
+                self._detached = True
 
     def __getattr__(self, name: str) -> Any:
         return getattr(self._ws, name)
@@ -1359,7 +1379,8 @@ async def chat_ws(ws: WebSocket, token: Optional[str] = Query(None)):
     # Serialise all outbound frames — turns run concurrently now (see below),
     # so their sends must not interleave on the shared socket. The proxy forwards
     # every non-send attribute to the real socket, so it stands in for WebSocket.
-    locked = cast(WebSocket, _LockedWS(ws, asyncio.Lock()))
+    locked_impl = _LockedWS(ws, asyncio.Lock())
+    locked = cast(WebSocket, locked_impl)
 
     from heart.ss08_voice.voice_cache import VoiceCache
 
@@ -1399,18 +1420,22 @@ async def chat_ws(ws: WebSocket, token: Optional[str] = Query(None)):
                 await _handle_message(locked, msg, active_turns, cache, user_id)
 
     except WebSocketDisconnect:
-        logger.info("chat_ws_disconnect")
-        for task in turn_tasks:
-            task.cancel()
-        for session in active_turns.values():
-            session.cancel()
+        # Client navigated away / closed the tab. Do NOT abort in-flight turns:
+        # detach the (now dead) socket so sends no-op, then let the turns finish
+        # so voice synthesis completes and persists to storage — the audio is
+        # then available when the user returns (background generation). The
+        # per-turn 45s timeout bounds each task, so nothing leaks. Awaiting the
+        # tasks here also keeps a strong reference to them until they complete.
+        logger.info("chat_ws_disconnect_detach", pending_turns=len(turn_tasks))
+        locked_impl.detach()
+        pending = [t for t in turn_tasks if not t.done()]
+        if pending:
+            await asyncio.gather(*pending, return_exceptions=True)
     except Exception as e:
+        # Same policy on an unexpected socket-side error: keep the turns alive to
+        # finish + persist rather than dropping a nearly-complete voice turn.
         logger.error("chat_ws_error", error=str(e))
-        for task in turn_tasks:
-            task.cancel()
-        for session in active_turns.values():
-            session.cancel()
-        try:
-            await locked.send_json({"type": "error", "msg": str(e)})
-        except Exception:
-            pass
+        locked_impl.detach()
+        pending = [t for t in turn_tasks if not t.done()]
+        if pending:
+            await asyncio.gather(*pending, return_exceptions=True)

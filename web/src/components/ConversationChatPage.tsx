@@ -57,6 +57,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
   const setCharacterId = useChatStore((s) => s.setCharacterId)
   const appendMessage = useChatStore((s) => s.appendMessage)
   const setLastFetchedAt = useChatStore((s) => s.setLastFetchedAt)
+  const setMessageAudioUrl = useChatStore((s) => s.setMessageAudioUrl)
   const isGenerating = useChatStore((s) => s.isGenerating[currentCharacterId as CharacterId] ?? false)
   const insufficientCredits = useChatStore((s) => s.insufficientCredits)
   const clearInsufficientCredits = useChatStore((s) => s.clearInsufficientCredits)
@@ -193,6 +194,30 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
         setHistoryLoaded(true)
       })
   }, [currentCharacterId, isAuthenticated, isCleared])
+
+  // Resolve voice bubbles that were still synthesising when the user left the
+  // page. The turn keeps generating server-side (background) and is persisted;
+  // the stuck placeholder's id === turn_id, so point it at the by-turn endpoint
+  // to pull the now-persisted audio. Without this the bubble sits on "加载中"
+  // forever (the reported "退出页面语音卡在加载态" bug). Never touches the turn
+  // that is streaming right now.
+  useEffect(() => {
+    const cid = currentCharacterId
+    const msgs = useChatStore.getState().messages[cid as CharacterId] ?? []
+    const streamingTurnId = useChatStore.getState().currentTurnId
+    for (const m of msgs) {
+      if (
+        m.role === 'assistant' &&
+        m.kind === 'voice' &&
+        !m.audioData &&
+        !m.audioUrl &&
+        m.id !== streamingTurnId
+      ) {
+        setMessageAudioUrl(cid, m.id, `/api/chat/audio/by-turn/${m.id}`)
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentCharacterId])
 
   // Surface any pending proactive messages (SS06) once history has loaded, then
   // ack them so they are not re-served. Injected after history to preserve order

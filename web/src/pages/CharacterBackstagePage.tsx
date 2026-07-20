@@ -146,8 +146,21 @@ export function CharacterBackstagePage() {
         navigate(`/characters/new?voice=${currentCharacterId}`)
         return
       }
-      useToastStore.getState().show('语音开关切换失败，请稍后重试', 'error')
-      setVoiceChatEnabled(currentCharacterId, !value)
+      // Reconcile against the server's real state before declaring failure. A
+      // transient network blip can reject the response even though the write
+      // actually applied; blindly rolling the switch back then leaves a
+      // misleading "切换失败" + wrong toggle position. Only surface the error if
+      // the server confirms the value did not change.
+      try {
+        const actual = await getCharacterSettings(currentCharacterId)
+        setVoiceChatEnabled(currentCharacterId, actual.voice_enabled)
+        if (actual.voice_enabled !== value) {
+          useToastStore.getState().show('语音开关切换失败，请稍后重试', 'error')
+        }
+      } catch {
+        setVoiceChatEnabled(currentCharacterId, !value)
+        useToastStore.getState().show('语音开关切换失败，请稍后重试', 'error')
+      }
     }
   }
   const pageBg = resolvedTheme === 'dark'

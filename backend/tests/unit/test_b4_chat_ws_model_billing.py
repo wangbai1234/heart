@@ -590,6 +590,40 @@ class TestLockedWS:
         locked = _LockedWS(real, asyncio.Lock())
         assert locked.client_state == "CONNECTED"
 
+    @pytest.mark.asyncio
+    async def test_detach_makes_send_a_noop(self):
+        """After detach, sends no-op so a departed client never aborts the turn —
+        the turn keeps synthesising + persisting voice in the background."""
+        import asyncio
+
+        from heart.api.routes_chat_ws import _LockedWS
+
+        real = AsyncMock()
+        locked = _LockedWS(real, asyncio.Lock())
+        locked.detach()
+        await locked.send_json({"type": "turn_end", "turn_id": "t1"})
+        real.send_json.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_send_failure_auto_detaches_and_swallows(self):
+        """A send that raises (peer gone before WebSocketDisconnect surfaced) is
+        swallowed and flips the proxy to detached, so the turn completes instead
+        of crashing on the first failed send."""
+        import asyncio
+
+        from heart.api.routes_chat_ws import _LockedWS
+
+        real = AsyncMock()
+        real.send_json.side_effect = RuntimeError("connection closed")
+        locked = _LockedWS(real, asyncio.Lock())
+        # Must not raise despite the underlying socket erroring.
+        await locked.send_json({"type": "text_delta", "turn_id": "t1"})
+        assert locked._detached is True
+        # Subsequent sends are no-ops (already detached).
+        real.send_json.reset_mock()
+        await locked.send_json({"type": "turn_end", "turn_id": "t1"})
+        real.send_json.assert_not_awaited()
+
 
 class TestByTurnAudioRoute:
     def test_by_turn_route_registered_before_message_id(self):
