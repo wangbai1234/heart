@@ -89,6 +89,7 @@ export function ChatInboxPage() {
   const threads = useChatStore((s) => s.threads)
   const messages = useChatStore((s) => s.messages)
   const pendingByChar = useProactiveStore((s) => s.pendingByChar)
+  const drainProactive = useProactiveStore((s) => s.drain)
   const setActiveCharacter = useChatStore((s) => s.setActiveCharacter)
   const clearThread = useChatStore((s) => s.clearThread)
   const clearMessages = useChatStore((s) => s.clearMessages)
@@ -197,6 +198,12 @@ export function ChatInboxPage() {
     }
     clearThread(characterId)
     clearMessages(characterId)
+    drainProactive(characterId)
+    setInboxSummary((prev) => {
+      const next = { ...prev }
+      delete next[characterId]
+      return next
+    })
     setDeleteTarget(null)
   }
 
@@ -269,16 +276,7 @@ export function ChatInboxPage() {
                             </span>
                           )}
                         </div>
-                        <button
-                          aria-label="更多操作"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            setDeleteTarget(conversation.characterId)
-                          }}
-                          className="ml-1 flex h-8 w-8 items-center justify-center rounded-full opacity-50 hover:opacity-100 hover:bg-[var(--color-glass-25)]"
-                        >
-                          <span className="text-lg leading-none">⋯</span>
-                        </button>
+                        {/* More button hidden per design request */}
                       </div>
                     </div>
 

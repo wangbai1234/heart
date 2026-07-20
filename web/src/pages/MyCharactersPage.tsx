@@ -328,7 +328,11 @@ function EmptyState({ onCreateClick }: { onCreateClick: () => void }) {
     <div className="flex flex-col items-center justify-center pt-20 pb-12 px-6 text-center">
       {/* Illustration bubble */}
       <div className={`w-[88px] h-[88px] rounded-full bg-gradient-to-br from-[rgba(255,183,197,0.28)] to-[rgba(200,182,255,0.20)] flex items-center justify-center mb-6 ${isDark ? 'border border-[var(--color-border-subtle)] shadow-[0_8px_24px_rgba(0,0,0,0.20)]' : 'border border-[rgba(255,255,255,0.70)] shadow-[0_8px_24px_rgba(255,183,197,0.18)]'}`}>
-        <span className="text-[40px]">✨</span>
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--color-primary)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 2L2 7l10 5 10-5-10-5z" />
+          <path d="M2 17l10 5 10-5" />
+          <path d="M2 12l10 5 10-5" />
+        </svg>
       </div>
       <h2 className="text-[20px] font-semibold text-[var(--color-ink)] mb-2">还没有自创角色</h2>
       <p className="text-[14px] text-[var(--color-text-secondary)] leading-[1.65] mb-8 max-w-[260px]">
