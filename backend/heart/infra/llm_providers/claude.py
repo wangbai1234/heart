@@ -77,7 +77,10 @@ class ClaudeProvider(LLMProvider):
                     "Content-Type": "application/json",
                 }
             else:
+                # Use Bearer auth to match Anthropic SDK behavior (ANTHROPIC_AUTH_TOKEN),
+                # which is required by proxies like micuapi. Real Anthropic API also accepts Bearer.
                 headers = {
+                    "Authorization": f"Bearer {self.api_key}",
                     "x-api-key": self.api_key,
                     "anthropic-version": self.ANTHROPIC_VERSION,
                     "Content-Type": "application/json",
@@ -102,7 +105,13 @@ class ClaudeProvider(LLMProvider):
             if m.role == MessageRole.SYSTEM:
                 system_parts.append(m.content)
             else:
-                chat.append({"role": m.role.value, "content": m.content})
+                # Use block array format to match Anthropic SDK behavior — proxies expect this
+                chat.append(
+                    {
+                        "role": m.role.value,
+                        "content": [{"type": "text", "text": m.content}],
+                    }
+                )
         return "\n\n".join(system_parts), chat
 
     def _prepare_anthropic_body(self, request: LLMRequest, stream: bool) -> Dict:
