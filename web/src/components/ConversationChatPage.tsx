@@ -607,7 +607,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
         {messages.map((msg, index) => {
           const prev = index > 0 ? messages[index - 1] : null
           const showTime = shouldShowTimestamp(msg, prev)
-          const showAvatar = !prev || prev.role !== msg.role || showTime
+          const showAvatar = !prev || prev.role !== msg.role || showTime || prev?.kind === 'action'
           const isLastAndGenerating = index === messages.length - 1 && isGenerating
 
           return (

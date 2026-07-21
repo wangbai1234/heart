@@ -8,7 +8,7 @@ import { resolveCharacterProfile } from '../data/uiContent'
 import { useCharactersStore } from '../stores/charactersStore'
 import { Dialog } from '../components/ui/Dialog'
 import { Switch } from '../components/ui/Switch'
-import { getCharacterSettings, updateCharacterSettings, getCharacterVoice, clearCharacterConversations, setCharacterVoiceProvider } from '../services/api'
+import { getCharacterSettings, updateCharacterSettings, getCharacterVoice, clearCharacterConversations, setCharacterVoiceProvider, getPricing } from '../services/api'
 import { useToastStore } from '../stores/toastStore'
 
 // 文字聊天三档 → LLM 模型。私密/情感为会员模型，按 membership 权益门控。
@@ -44,6 +44,12 @@ export function CharacterBackstagePage() {
   const [availableProviders, setAvailableProviders] = useState<string[]>([])
   const [selectedProvider, setSelectedProvider] = useState<string | null>(null)
   const [switchingProvider, setSwitchingProvider] = useState(false)
+  const [pricing, setPricing] = useState<{
+    grokCost: number
+    claudeCost: number
+    mimoTtsCost: number
+    fishTtsCost: number
+  } | null>(null)
 
   // 文字模型（后台设定，聊天页据此发送）+ 会员权益
   const chatModel = useAppStore((s) => s.chatModel[currentCharacterId] ?? 'deepseek')
@@ -75,6 +81,16 @@ export function CharacterBackstagePage() {
         setSelectedProvider(res.selected_provider ?? res.voice_provider ?? 'mimo')
       })
       .catch(() => { /* keep local value */ })
+
+    getPricing()
+      .then((data) => {
+        const grokCost = data.models.find(m => m.id === 'grok')?.cost ?? 3
+        const claudeCost = data.models.find(m => m.id === 'claude')?.cost ?? 12
+        const mimoTtsCost = data.actions.find(a => a.id === 'tts_mimo')?.cost ?? 5
+        const fishTtsCost = data.actions.find(a => a.id === 'tts_fish')?.cost ?? 8
+        setPricing({ grokCost, claudeCost, mimoTtsCost, fishTtsCost })
+      })
+      .catch(() => { /* keep default values */ })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentCharacterId])
 
@@ -85,6 +101,20 @@ export function CharacterBackstagePage() {
   // 当前使用中的语音档位（mimo→日常 / fish→真人；其它 provider 不高亮）。
   const currentVoiceKey =
     selectedProvider === 'fish' ? 'real' : selectedProvider === 'mimo' ? 'daily' : null
+
+  // 定价标签：日常陪伴免费，其他显示 X币/条
+  const getTextTierLabel = (key: string) => {
+    if (key === 'daily') return '免费'
+    if (key === 'private') return `${pricing?.grokCost ?? 3}币/条`
+    if (key === 'emotional') return `${pricing?.claudeCost ?? 12}币/条`
+    return ''
+  }
+
+  const getVoiceTierLabel = (key: string) => {
+    if (key === 'daily') return `${pricing?.mimoTtsCost ?? 5}币/条`
+    if (key === 'real') return `${pricing?.fishTtsCost ?? 8}币/条`
+    return ''
+  }
 
   const handleTextTier = (model: string) => {
     if (!isModelAllowed(model)) {
@@ -268,6 +298,15 @@ export function CharacterBackstagePage() {
                           </svg>
                         )}
                         <span className={`text-[15px] font-medium ${allowed ? (resolvedTheme === 'dark' ? 'text-[#F3EFF8]' : 'text-[#2D3248]') : subtleTextClassName}`}>{t.title}</span>
+                        <span
+                          className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                            resolvedTheme === 'dark'
+                              ? 'bg-[rgba(255,255,255,0.1)] text-[rgba(236,233,244,0.5)]'
+                              : 'bg-[rgba(0,0,0,0.06)] text-[rgba(47,54,74,0.45)]'
+                          }`}
+                        >
+                          {getTextTierLabel(t.key)}
+                        </span>
                       </div>
                       {selected ? (
                         <span className="text-[12px] font-semibold text-[#FF7DA1]">使用中</span>
@@ -350,6 +389,15 @@ export function CharacterBackstagePage() {
                             </svg>
                           )}
                           <span className={`text-[15px] font-medium ${resolvedTheme === 'dark' ? 'text-[#F3EFF8]' : 'text-[#2D3248]'}`}>{t.title}</span>
+                          <span
+                            className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                              resolvedTheme === 'dark'
+                                ? 'bg-[rgba(255,255,255,0.1)] text-[rgba(236,233,244,0.5)]'
+                                : 'bg-[rgba(0,0,0,0.06)] text-[rgba(47,54,74,0.45)]'
+                            }`}
+                          >
+                            {getVoiceTierLabel(t.key)}
+                          </span>
                         </div>
                         {active && !disabled ? (
                           <span className="text-[12px] font-semibold text-[#FF7DA1]">使用中</span>
