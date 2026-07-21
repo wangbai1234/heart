@@ -5,6 +5,7 @@ OpenAI-compatible /v1/chat/completions endpoint — mirrors deepseek.py structur
 """
 
 import json
+import re
 from typing import AsyncIterator, Dict, Optional
 
 import httpx
@@ -74,6 +75,116 @@ class GrokProvider(LLMProvider):
             await self._client.aclose()
             self._client = None
 
+    @staticmethod
+    def _strip_think_tags(text: str) -> str:
+        """Remove <think>...</think> blocks from non-streaming response."""
+        return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).lstrip("\n")
+
+    @staticmethod
+    async def _raw_chunks(response: httpx.Response) -> AsyncIterator[StreamChunk]:
+        """Parse SSE lines and yield raw StreamChunks without filtering."""
+        async for line in response.aiter_lines():
+            if not line or not line.startswith("data: "):
+                continue
+            data_str = line[6:]
+            if data_str == "[DONE]":
+                break
+            try:
+                data = json.loads(data_str)
+                choice = data["choices"][0]
+                delta = choice.get("delta", {})
+                content = delta.get("content", "")
+                if content:
+                    yield StreamChunk(content=content)
+                if choice.get("finish_reason"):
+                    usage = data.get("usage")
+                    yield StreamChunk(
+                        content="",
+                        finish_reason=choice["finish_reason"],
+                        usage={
+                            "prompt_tokens": usage.get("prompt_tokens", 0) if usage else 0,
+                            "completion_tokens": (
+                                usage.get("completion_tokens", 0) if usage else 0
+                            ),
+                            "total_tokens": usage.get("total_tokens", 0) if usage else 0,
+                        }
+                        if usage
+                        else None,
+                    )
+            except json.JSONDecodeError:
+                continue
+
+    @staticmethod
+    def _scan_outside_think(text: str, i: int) -> tuple[str, str, bool, int]:
+        """Scan text while outside a <think> block. Returns (result, pending, in_think, i)."""
+        start = text.find("<think>", i)
+        if start == -1:
+            tail_start = max(i, len(text) - 6)
+            for j in range(tail_start, len(text)):
+                if "<think>".startswith(text[j:]):
+                    return text[i:j], text[j:], False, len(text)
+            return text[i:], "", False, len(text)
+        return text[i:start], "", True, start + len("<think>")
+
+    @staticmethod
+    def _scan_inside_think(text: str, i: int) -> tuple[str, bool, int]:
+        """Scan text while inside a <think> block. Returns (pending, in_think, i)."""
+        end = text.find("</think>", i)
+        if end == -1:
+            tail_start = max(i, len(text) - 7)
+            for j in range(tail_start, len(text)):
+                if "</think>".startswith(text[j:]):
+                    return text[j:], True, len(text)
+            return "", True, len(text)
+        new_i = end + len("</think>")
+        # Drop one leading newline right after closing tag
+        if new_i < len(text) and text[new_i] == "\n":
+            new_i += 1
+        return "", False, new_i
+
+    @staticmethod
+    async def _filter_think_tags_stream(
+        chunks: AsyncIterator[StreamChunk],
+    ) -> AsyncIterator[StreamChunk]:
+        """
+        Strip <think>...</think> blocks from a streaming sequence of chunks.
+
+        Handles tags split across chunk boundaries via a small pending buffer
+        (max 7 chars = len("</think>") - 1). Fully streaming — yields each
+        non-think chunk immediately with no batching.
+        """
+        in_think = False
+        pending = ""
+
+        async for chunk in chunks:
+            if not chunk.content:
+                yield chunk
+                continue
+
+            text = pending + chunk.content
+            pending = ""
+            result = ""
+            i = 0
+
+            while i < len(text):
+                if in_think:
+                    seg_pending, in_think, i = GrokProvider._scan_inside_think(text, i)
+                    pending = seg_pending
+                    if i >= len(text):
+                        break
+                else:
+                    seg, seg_pending, in_think, i = GrokProvider._scan_outside_think(text, i)
+                    result += seg
+                    pending = seg_pending
+                    if i >= len(text):
+                        break
+
+            if result:
+                yield StreamChunk(content=result)
+
+        if pending and not in_think:
+            yield StreamChunk(content=pending)
+
     def _prepare_request_body(self, request: LLMRequest) -> Dict:
         messages = [{"role": msg.role.value, "content": msg.content} for msg in request.messages]
         body: Dict = {
@@ -110,7 +221,7 @@ class GrokProvider(LLMProvider):
             choice = data["choices"][0]
             usage = data.get("usage", {})
             return LLMResponse(
-                content=choice["message"]["content"],
+                content=self._strip_think_tags(choice["message"]["content"]),
                 model=data.get("model", request.model),
                 finish_reason=choice.get("finish_reason", "stop"),
                 usage={
@@ -155,36 +266,8 @@ class GrokProvider(LLMProvider):
         try:
             async with client.stream("POST", "/v1/chat/completions", json=body) as response:
                 response.raise_for_status()
-                async for line in response.aiter_lines():
-                    if not line or not line.startswith("data: "):
-                        continue
-                    data_str = line[6:]
-                    if data_str == "[DONE]":
-                        break
-                    try:
-                        data = json.loads(data_str)
-                        choice = data["choices"][0]
-                        delta = choice.get("delta", {})
-                        content = delta.get("content", "")
-                        if content:
-                            yield StreamChunk(content=content)
-                        if choice.get("finish_reason"):
-                            usage = data.get("usage")
-                            yield StreamChunk(
-                                content="",
-                                finish_reason=choice["finish_reason"],
-                                usage={
-                                    "prompt_tokens": usage.get("prompt_tokens", 0) if usage else 0,
-                                    "completion_tokens": (
-                                        usage.get("completion_tokens", 0) if usage else 0
-                                    ),
-                                    "total_tokens": usage.get("total_tokens", 0) if usage else 0,
-                                }
-                                if usage
-                                else None,
-                            )
-                    except json.JSONDecodeError:
-                        continue
+                async for chunk in self._filter_think_tags_stream(self._raw_chunks(response)):
+                    yield chunk
             self.circuit_breaker.record_success(self.provider_name, request.model)
         except httpx.HTTPStatusError as e:
             self.circuit_breaker.record_failure(self.provider_name, request.model, e)
