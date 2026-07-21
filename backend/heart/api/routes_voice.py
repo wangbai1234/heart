@@ -6,7 +6,7 @@ import uuid
 from io import BytesIO
 
 import structlog
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import text
@@ -20,7 +20,7 @@ from heart.core.config import settings
 from heart.membership import CloneForbiddenError, assert_clone_allowed, get_effective_tier
 
 from .deps import require_age_verified
-from .wiring import get_voice_service
+from .wiring import get_mimo_asr_provider, get_voice_service
 
 logger = structlog.get_logger()
 
@@ -1085,3 +1085,73 @@ async def remove_character_voice(
 
     logger.info("voice_config_removed", character_id=character_id, user_id=str(uid))
     return {"ok": True}
+
+
+# ── ASR: speech-to-text ───────────────────────────────────────────────────────
+
+_MAX_ASR_BYTES = 8 * 1024 * 1024  # 8 MB raw (base64 overhead stays under MIMO 10 MB limit)
+_ALLOWED_ASR_MIME = {"audio/wav", "audio/wave", "audio/x-wav"}
+
+
+@router.post("/transcribe")
+@limiter.limit("30/minute")
+async def transcribe_audio(
+    request: Request,
+    file: UploadFile = File(...),
+    duration_ms: int = Form(...),
+    current_user: TokenData = Depends(require_age_verified),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Upload a WAV recording and return the ASR transcript.
+
+    Charges ``asr_cost_credits`` fen only when the transcript is non-empty.
+    Empty transcriptions (silence) are free.
+    Audio is NOT persisted — caller handles session-only playback.
+    """
+    uid = uuid.UUID(current_user.user_id)
+
+    provider = get_mimo_asr_provider()
+    if provider is None:
+        raise HTTPException(status_code=503, detail="语音识别服务未配置，请联系管理员。")
+
+    mime = (file.content_type or "audio/wav").split(";")[0].strip()
+    if mime not in _ALLOWED_ASR_MIME:
+        raise HTTPException(status_code=400, detail="仅支持 WAV 格式音频")
+
+    data = await file.read()
+    if len(data) > _MAX_ASR_BYTES:
+        raise HTTPException(status_code=400, detail="录音文件不能超过 8MB")
+    if len(data) < 1024:
+        raise HTTPException(status_code=400, detail="录音文件过小，请重新录制")
+
+    cost = settings.asr_cost_credits
+    balance = await get_balance(db, uid)
+    if balance < cost:
+        raise HTTPException(
+            status_code=402,
+            detail=f"积分不足，语音识别需要 {cost // 100} 积分，当前余额 {balance / 100:.1f}",
+        )
+
+    try:
+        transcript = await provider.transcribe(data, mime=mime, asr_model=settings.mimo_asr_model)
+    except Exception as exc:
+        logger.exception("asr_transcribe_failed", user_id=str(uid), error=str(exc))
+        raise HTTPException(status_code=502, detail="语音识别失败，请稍后重试") from exc
+
+    if not transcript:
+        return {"transcript": "", "duration_ms": duration_ms}
+
+    idempotency_key = f"asr:{uuid.uuid4().hex}"
+    try:
+        new_balance = await deduct_credits(db, uid, cost, idempotency_key, type_str="consume_asr")
+        await db.commit()
+    except InsufficientCreditsError as exc:
+        raise HTTPException(
+            status_code=402,
+            detail=f"积分不足，语音识别需要 {cost // 100} 积分，当前余额 {balance / 100:.1f}",
+        ) from exc
+
+    logger.info(
+        "asr_success", user_id=str(uid), duration_ms=duration_ms, transcript_len=len(transcript)
+    )
+    return {"transcript": transcript, "duration_ms": duration_ms, "balance": new_balance / 100}
