@@ -969,7 +969,7 @@ export function CreateCharacterPage() {
                           </p>
                           {preset.provider && (
                             <span className="text-[10px] px-1.5 py-[1px] rounded-full bg-[rgba(199,182,255,0.20)] text-[var(--color-accent)] uppercase tracking-wide shrink-0">
-                              {preset.provider}
+                              {preset.provider === 'mimo' ? '预设' : preset.provider}
                             </span>
                           )}
                         </div>
@@ -1034,8 +1034,8 @@ export function CreateCharacterPage() {
                 }}
               />
               <div className="space-y-2.5">
-                {renderCloneCard('mimo', 'MiMo 克隆', cloneCosts.mimo, false)}
-                {renderCloneCard('fish', 'Fish 克隆', cloneCosts.fish, !canCloneFish)}
+              {renderCloneCard('mimo', '普通克隆', cloneCosts.mimo, false)}
+              {renderCloneCard('fish', '真人克隆', cloneCosts.fish, !canCloneFish)}
               </div>
               <p className="text-[11px] text-[var(--color-text-muted)] mt-2 text-center">
                 WAV / MP3，10–30 秒，最大 20MB · 克隆成功才扣费
