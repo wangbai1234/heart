@@ -505,6 +505,25 @@ def get_voice_service():
         return None
 
 
+@lru_cache
+def get_mimo_asr_provider() -> Any:
+    """Process singleton: MiMoProvider for ASR (transcription).
+
+    Returns None when MIMO_API_KEY is not configured.
+    """
+    if not settings.mimo_api_key:
+        return None
+    try:
+        from heart.ss08_voice.mimo_provider import MiMoProvider
+
+        provider = MiMoProvider(api_key=settings.mimo_api_key, base_url=settings.mimo_base_url)
+        logger.info("wiring_mimo_asr_initialized")
+        return provider
+    except Exception as e:
+        logger.warning("wiring_mimo_asr_init_failed", error=str(e))
+        return None
+
+
 # ── SS07 Orchestration dependencies ───────────────────────────────
 
 

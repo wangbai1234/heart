@@ -223,6 +223,51 @@ def _extract_choices_audio(data: dict) -> bytes | None:
     return None
 
 
+def _extract_text_from_chunk(data: dict) -> str:
+    """Extract ASR transcript text from a MiMo ASR response chunk."""
+    choices = data.get("choices", [])
+    if not choices:
+        return ""
+    message = choices[0].get("message") or choices[0].get("delta") or {}
+    content = message.get("content")
+    if isinstance(content, str):
+        return content.strip()
+    return ""
+
+
+def _parse_mimo_asr_response(raw: bytes) -> str:
+    """Parse MiMo ASR response and return transcript text."""
+    text = raw.decode("utf-8", errors="replace").strip()
+    if not text:
+        return ""
+
+    # SSE-style (data: ... lines)
+    if text.startswith("data:"):
+        lines = text.split("\n")
+        for line in lines:
+            if not line.startswith("data:"):
+                continue
+            data_str = line[5:].strip()
+            if data_str == "[DONE]":
+                break
+            try:
+                data = json.loads(data_str)
+                transcript = _extract_text_from_chunk(data)
+                if transcript:
+                    return transcript
+            except json.JSONDecodeError:
+                continue
+        return ""
+
+    # Single JSON body
+    try:
+        data = json.loads(text)
+        return _extract_text_from_chunk(data)
+    except json.JSONDecodeError:
+        logger.warning("mimo_asr_unparseable_response", preview=text[:200])
+        return ""
+
+
 def _extract_audio_obj(data: dict) -> bytes | None:
     audio = data.get("audio") or {}
     if isinstance(audio, dict) and "data" in audio:
@@ -417,6 +462,63 @@ class MiMoProvider:
             timeout=60.0,
         )
         return MiMoCancellableStream(response_cm, character_id, fmt="pcm16")
+
+    async def transcribe(
+        self,
+        audio: bytes,
+        mime: str = "audio/wav",
+        language: str = "auto",
+        asr_model: str = "mimo-v2.5-asr",
+    ) -> str:
+        """Transcribe audio bytes to text via MiMo ASR.
+
+        Audio must be WAV or MP3 (base64-encoded internally); max ~7.5MB raw
+        (base64 overhead keeps it under MIMO's 10MB limit).
+        Returns the transcript string (empty string if silent/no speech).
+        """
+        b64_audio = base64.b64encode(audio).decode("ascii")
+        body = {
+            "model": asr_model,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "input_audio",
+                            "input_audio": {
+                                "data": f"data:{mime};base64,{b64_audio}",
+                            },
+                        }
+                    ],
+                }
+            ],
+            "asr_options": {"language": language},
+        }
+        try:
+            response = await self._client.post(
+                f"{self._base_url}/chat/completions",
+                json=body,
+                headers={
+                    "api-key": self._api_key,
+                    "Content-Type": "application/json",
+                },
+            )
+            response.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            raise TTSProviderError(
+                f"MiMo ASR error: {e.response.status_code} - {e.response.text[:500]}",
+                status_code=e.response.status_code,
+            ) from e
+        except httpx.RequestError as e:
+            raise TTSProviderError(f"MiMo ASR request failed: {str(e)}") from e
+
+        transcript = _parse_mimo_asr_response(response.content)
+        logger.info(
+            "mimo_asr_transcribed",
+            length=len(audio),
+            transcript_len=len(transcript),
+        )
+        return transcript
 
     def estimate_cost_cents(self, text: str) -> float:
         """Estimate cost in cents for synthesizing text via MiMo.

@@ -257,8 +257,12 @@ class Settings(BaseSettings):
     mimo_base_url: str = "https://api.xiaomimimo.com/v1"
     mimo_reference_audio_path: str = "assets/reference_voices/rin.mp3"
     mimo_model: str = "mimo-v2.5-tts-voiceclone"
+    mimo_asr_model: str = "mimo-v2.5-asr"
     voice_provider: str = "minimax"  # "mimo" | "minimax"
     voice_fallback_enabled: bool = True
+
+    # ASR (speech-to-text) billing — 5 display credits = 500 fen
+    asr_cost_credits: int = 500
 
     # Outbound TTS concurrency / failover (process-global; see ss08_voice/pooled_provider.py).
     # MiniMax account concurrency caps are typically single-digit → keep conservative.
