@@ -459,7 +459,10 @@ export function useWebSocket() {
   }, [connect])
 
   const sendMessage = useCallback(
-    (text: string) => {
+    (
+      text: string,
+      opts?: { voiceBubble?: { audioData: string; durationMs: number; format: string } },
+    ) => {
       if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
 
       const { currentCharacterId } = useAppStore.getState()
@@ -473,11 +476,16 @@ export function useWebSocket() {
       const model = chatModel?.[characterId] ?? 'deepseek'
       pendingVoiceTurnRef.current = voiceEnabled
       const turnId = crypto.randomUUID()
+
+      const vb = opts?.voiceBubble
       addMessage(characterId, {
         id: `user-${turnId}`,
         role: 'user',
         content: text,
         timestamp: Date.now(),
+        ...(vb
+          ? { kind: 'voice', audioData: vb.audioData, audioDuration: vb.durationMs, audioFormat: vb.format }
+          : {}),
       })
       // Sync user message to threads for HomePage
       {
@@ -487,7 +495,7 @@ export function useWebSocket() {
           role: 'user',
           content: text,
           timestamp: Date.now(),
-          kind: 'text',
+          kind: vb ? 'voice' : 'text',
         })
       }
       setStreaming(characterId, true)

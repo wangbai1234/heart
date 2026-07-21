@@ -635,6 +635,25 @@ export async function removeCharacterVoice(characterId: string): Promise<{ ok: b
   return request(`/voice/${characterId}`, { method: 'DELETE' })
 }
 
+export async function transcribeAudio(
+  wav: Blob,
+  durationMs: number,
+): Promise<{ transcript: string; duration_ms: number; balance?: number }> {
+  const { accessToken } = (await import('../stores/authStore')).useAuthStore.getState()
+  if (!accessToken) throw new Error('未登录')
+  const formData = new FormData()
+  formData.append('file', wav, 'recording.wav')
+  formData.append('duration_ms', String(durationMs))
+  const res = await fetch('/api/voice/transcribe', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: formData,
+  })
+  const data = await res.json().catch(() => null)
+  if (!res.ok) throw new ApiError(res.status, detailToMessage(data?.detail, '语音识别失败'))
+  return data
+}
+
 // --- Proactive messages (SS06 Inner Loop) ---
 
 export interface ProactiveMessageDTO {

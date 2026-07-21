@@ -7,13 +7,15 @@ import { CHARACTER_PROFILES, resolveCharacterProfile, shouldShowTimestamp, forma
 import { useCharactersStore } from '../stores/charactersStore'
 import { useWebSocket } from '../hooks/useWebSocket'
 import { useProactiveStore } from '../stores/proactiveStore'
-import { getChatHistory, ackProactive, markCharacterRead } from '../services/api'
+import { getChatHistory, ackProactive, markCharacterRead, transcribeAudio } from '../services/api'
 import { BreathingDots } from './ui/BreathingDots'
 import { Dialog } from './ui/Dialog'
 import { Button } from './ui/Button'
 import { Avatar } from './ui/Avatar'
 import VoiceMessageBubble from './VoiceMessageBubble'
 import { useSwipeNavigation } from '../hooks/useSwipeNavigation'
+import { useVoiceRecorder } from '../hooks/useVoiceRecorder'
+import { VoiceRecordingOverlay } from './VoiceRecordingOverlay'
 
 const EMPTY_MESSAGES: Message[] = []
 
@@ -28,6 +30,13 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
   const [historyLoaded, setHistoryLoaded] = useState(false)
   const [expandedVoiceTextIds, setExpandedVoiceTextIds] = useState<Set<string>>(new Set())
   const scrollRef = useRef<HTMLDivElement>(null)
+
+  // Voice recording state
+  const [isRecording, setIsRecording] = useState(false)
+  const [willCancel, setWillCancel] = useState(false)
+  const [recordingToast, setRecordingToast] = useState<string | null>(null)
+  const cancelZoneRef = useRef<HTMLDivElement | null>(null)
+  const recorder = useVoiceRecorder()
 
   // Right-swipe from left edge → back to chat list
   useSwipeNavigation({ onRightSwipe: () => navigate('/home') })
@@ -298,6 +307,76 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
   const handleInterrupt = useCallback(() => {
     interrupt()
   }, [interrupt])
+
+  const showToast = useCallback((msg: string) => {
+    setRecordingToast(msg)
+    setTimeout(() => setRecordingToast(null), 2500)
+  }, [])
+
+  const handleMicPointerDown = useCallback(
+    async (e: React.PointerEvent<HTMLButtonElement>) => {
+      if (isStreaming) return
+      e.currentTarget.setPointerCapture(e.pointerId)
+      setIsRecording(true)
+      setWillCancel(false)
+      try {
+        await recorder.start()
+      } catch {
+        setIsRecording(false)
+        showToast('无法访问麦克风，请检查权限')
+      }
+    },
+    [isStreaming, recorder, showToast],
+  )
+
+  const handleMicPointerMove = useCallback(
+    (e: React.PointerEvent<HTMLButtonElement>) => {
+      if (!isRecording || !cancelZoneRef.current) return
+      const rect = cancelZoneRef.current.getBoundingClientRect()
+      const inside =
+        e.clientX >= rect.left &&
+        e.clientX <= rect.right &&
+        e.clientY >= rect.top &&
+        e.clientY <= rect.bottom
+      setWillCancel(inside)
+    },
+    [isRecording],
+  )
+
+  const handleMicPointerUp = useCallback(
+    async (_e: React.PointerEvent<HTMLButtonElement>) => {
+      if (!isRecording) return
+      setIsRecording(false)
+      const cancel = willCancel
+      setWillCancel(false)
+
+      const result = await recorder.stop({ cancel })
+      if (!result) {
+        if (!cancel) showToast('说话时间太短')
+        return
+      }
+
+      const { wavBlob, durationMs } = result
+      const blobUrl = URL.createObjectURL(wavBlob)
+
+      try {
+        const { transcript } = await transcribeAudio(wavBlob, durationMs)
+        if (!transcript) {
+          URL.revokeObjectURL(blobUrl)
+          showToast('没有识别到语音内容')
+          return
+        }
+        sendMessage(transcript, {
+          voiceBubble: { audioData: blobUrl, durationMs, format: 'wav' },
+        })
+      } catch (err: unknown) {
+        URL.revokeObjectURL(blobUrl)
+        const msg = err instanceof Error ? err.message : '语音识别失败'
+        showToast(msg)
+      }
+    },
+    [isRecording, willCancel, recorder, sendMessage, showToast],
+  )
 
   const toggleVoiceTranscript = useCallback((messageId: string) => {
     setExpandedVoiceTextIds((prev) => {
@@ -572,10 +651,18 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
             </svg>
           </button>
         ) : (
-          <button className="w-[40px] h-[40px] flex items-center justify-center shrink-0">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={isDark ? '#666' : '#BBBBBB'} strokeWidth="2" strokeLinecap="round">
-              <line x1="12" y1="5" x2="12" y2="19" />
-              <line x1="5" y1="12" x2="19" y2="12" />
+          <button
+            className="w-[40px] h-[40px] flex items-center justify-center shrink-0 touch-none select-none"
+            onPointerDown={handleMicPointerDown}
+            onPointerMove={handleMicPointerMove}
+            onPointerUp={handleMicPointerUp}
+            onPointerCancel={handleMicPointerUp}
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={isStreaming ? (isDark ? '#444' : '#DDD') : (isDark ? '#999' : '#888')} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="9" y="2" width="6" height="11" rx="3" />
+              <path d="M5 10a7 7 0 0 0 14 0" />
+              <line x1="12" y1="19" x2="12" y2="22" />
+              <line x1="8" y1="22" x2="16" y2="22" />
             </svg>
           </button>
         )}
@@ -631,6 +718,22 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
           </Button>
         </div>
       </Dialog>
+
+      {/* Voice recording overlay (WeChat-style) */}
+      {isRecording && (
+        <VoiceRecordingOverlay
+          durationMs={0}
+          willCancel={willCancel}
+          cancelZoneRef={cancelZoneRef}
+        />
+      )}
+
+      {/* Short toast for voice recording feedback */}
+      {recordingToast && (
+        <div className="fixed bottom-36 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-xl text-white text-[13px] bg-[rgba(0,0,0,0.65)] backdrop-blur pointer-events-none">
+          {recordingToast}
+        </div>
+      )}
     </div>
   )
 }
