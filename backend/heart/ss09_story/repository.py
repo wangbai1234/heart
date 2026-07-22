@@ -50,6 +50,7 @@ def _card_from_row(row: Any) -> ScenarioCard:
         maturity=row.maturity,
         is_featured=row.is_featured,
         play_count=row.play_count,
+        free_tier=bool(getattr(row, "free_tier", False)),
     )
 
 
@@ -74,7 +75,8 @@ async def list_scenarios(
     result = await session.execute(
         text(
             f"""
-            SELECT id, title, genre, cover_url, blurb, maturity, is_featured, play_count
+            SELECT id, title, genre, cover_url, blurb, maturity,
+                   is_featured, play_count, free_tier
             FROM story_scenarios
             WHERE {where}
             ORDER BY is_featured DESC, play_count DESC, created_at DESC
@@ -110,7 +112,8 @@ async def get_scenario(session: AsyncSession, scenario_id: UUID) -> Optional[Sce
         text(
             """
             SELECT id, slug, title, genre, cover_url, blurb, maturity,
-                   gm_system_prompt, player_template_json, status, is_featured, play_count
+                   gm_system_prompt, player_template_json, status, is_featured,
+                   play_count, free_tier
             FROM story_scenarios
             WHERE id = :id
             """
@@ -133,6 +136,39 @@ async def get_scenario(session: AsyncSession, scenario_id: UUID) -> Optional[Sce
         status=row.status,
         is_featured=row.is_featured,
         play_count=row.play_count,
+        free_tier=bool(getattr(row, "free_tier", False)),
+    )
+
+
+# ── Scenario unlocks (PR C1 billing) ────────────────────────────────
+
+
+async def is_scenario_unlocked(session: AsyncSession, user_id: UUID, scenario_id: UUID) -> bool:
+    """True if the user has permanently unlocked this scenario."""
+    result = await session.execute(
+        text(
+            """
+            SELECT 1 FROM story_scenario_unlocks
+            WHERE user_id = :uid AND scenario_id = :sid
+            LIMIT 1
+            """
+        ),
+        {"uid": str(user_id), "sid": str(scenario_id)},
+    )
+    return result.scalar_one_or_none() is not None
+
+
+async def add_scenario_unlock(session: AsyncSession, user_id: UUID, scenario_id: UUID) -> None:
+    """Record a permanent unlock (idempotent — repeat unlock is a no-op)."""
+    await session.execute(
+        text(
+            """
+            INSERT INTO story_scenario_unlocks (user_id, scenario_id)
+            VALUES (:uid, :sid)
+            ON CONFLICT (user_id, scenario_id) DO NOTHING
+            """
+        ),
+        {"uid": str(user_id), "sid": str(scenario_id)},
     )
 
 

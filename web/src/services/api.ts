@@ -698,6 +698,8 @@ export interface ScenarioCardDTO {
   maturity: 'all_ages' | 'adult'
   is_featured: boolean
   play_count: number
+  /** Free (普通) users may unlock/play only free_tier scenarios. */
+  free_tier: boolean
 }
 
 /** A single form field in a scenario's player-card template (StartRunSheet). */
@@ -715,6 +717,22 @@ export interface PlayerTemplate {
 
 export interface ScenarioDetailDTO extends ScenarioCardDTO {
   player_template: PlayerTemplate
+  /** True once the caller has permanently unlocked (paid for) this scenario. */
+  unlocked: boolean
+  /** True if the caller's tier is eligible to unlock this scenario. */
+  tier_allowed: boolean
+  /** One-time unlock price, in 悠悠币 (display coins). */
+  unlock_cost_coins: number
+  /** Per-minute playtime price, in 悠悠币 (display coins). */
+  minute_cost_coins: number
+}
+
+export async function unlockScenario(
+  scenarioId: string,
+): Promise<{ ok: boolean; already: boolean; balance: number }> {
+  return request(`/story/scenarios/${encodeURIComponent(scenarioId)}/unlock`, {
+    method: 'POST',
+  })
 }
 
 export async function getScenarios(params?: {

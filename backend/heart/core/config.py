@@ -183,6 +183,12 @@ class Settings(BaseSettings):
     clone_mimo_cost_credits: int = 50  # 5000 fen per clone
     clone_fish_cost_credits: int = 100  # 10000 fen per clone
 
+    # Story mode (SS09) pricing + tier gating
+    story_unlock_cost_coins: int = 80  # 8000 fen, permanent per-scenario unlock
+    story_minute_cost_coins: int = 1  # 100 fen per full minute of play (PR C2)
+    # Slugs (filename stems) free-tier users may unlock/play; plus/immersive unlock all.
+    story_free_tier_slugs: str = "当我暗恋的哥哥朋友成为我的顶头上司,轮到我演校园偶像剧了吗？,我在后宫开后宫,无限流？好玩的恐怖游戏而已"
+
     # Membership tier definitions (JSON string, overridable via MEMBERSHIP_TIERS_CONFIG env var).
     # Each tier maps to: models (allowed LLM slugs), tts (allowed TTS providers),
     # clone (allowed clone providers), monthly_grant (coins per 30-day cycle).

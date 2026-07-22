@@ -64,6 +64,7 @@ class Scenario:
     status: str
     is_featured: bool
     play_count: int
+    free_tier: bool = False  # free-tier users may unlock/play only free_tier scenarios
 
 
 @dataclass
@@ -111,5 +112,6 @@ class ScenarioCard:
     maturity: str  # display-only label ('all_ages' | 'adult'); not access-gated
     is_featured: bool
     play_count: int
+    free_tier: bool = False  # non-free scenarios require plus/immersive to unlock
 
     extra: dict[str, Any] = field(default_factory=dict)
