@@ -38,6 +38,16 @@ def tts_cost_fen(provider: str) -> int:
     return _map.get(provider, 0)
 
 
+def story_unlock_cost_fen() -> int:
+    """Fen to permanently unlock one story scenario (charged once per scenario)."""
+    return settings.story_unlock_cost_coins * 100
+
+
+def story_minute_cost_fen() -> int:
+    """Fen per full minute of story playtime (PR C2 heartbeat billing)."""
+    return settings.story_minute_cost_coins * 100
+
+
 def action_cost_fen(action: str) -> int:
     """Return cost in fen for a one-shot action (voice clone etc.)."""
     _map = {

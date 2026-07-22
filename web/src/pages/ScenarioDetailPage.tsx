@@ -6,6 +6,7 @@ import { NavigationBar } from '../components/ui/NavigationBar'
 import { Skeleton } from '../components/ui/Skeleton'
 import { ErrorState } from '../components/ui/ErrorState'
 import { StartRunSheet } from '../components/story/StartRunSheet'
+import { ApiError } from '../services/api'
 
 /**
  * Scenario detail (探索/:id). Cover + blurb + genre + play count, and the
@@ -17,10 +18,32 @@ export function ScenarioDetailPage() {
   const { scenarioId = '' } = useParams()
   const { resolvedTheme } = useThemeStore()
   const { detailById, detailLoading, detailError, loadScenario, loadActiveRun } = useStoryStore()
+  const unlockScenario = useStoryStore((s) => s.unlockScenario)
   const activeRun = useStoryStore((s) => s.activeRunByScenario[scenarioId])
   const [sheetOpen, setSheetOpen] = useState(false)
+  const [unlocking, setUnlocking] = useState(false)
+  const [unlockError, setUnlockError] = useState<string | null>(null)
 
   const scenario = detailById[scenarioId]
+
+  async function handleUnlock() {
+    if (unlocking) return
+    setUnlocking(true)
+    setUnlockError(null)
+    try {
+      await unlockScenario(scenarioId)
+      // The store flips detail.unlocked → true, so the CTA re-renders to 开始剧情.
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 402) {
+        // Not enough 悠悠币 → send them to recharge; the save is untouched.
+        navigate('/wallet')
+        return
+      }
+      setUnlockError(err instanceof Error ? err.message : '解锁失败，请稍后再试')
+    } finally {
+      setUnlocking(false)
+    }
+  }
 
   useEffect(() => {
     if (scenarioId) {
@@ -97,13 +120,41 @@ export function ScenarioDetailPage() {
               </div>
             </div>
 
-            {/* Sticky CTA — a returning player gets 继续游玩 + 重新开始; a
-                first-time player just gets 开始剧情. */}
+            {/* Sticky CTA. Gating order: not-unlocked → unlock (if tier
+                allows) or upgrade-membership; once unlocked, a returning player
+                gets 继续游玩 + 重新开始, a first-time player gets 开始剧情. */}
             <div
               className="fixed bottom-0 left-0 right-0 z-20 px-5 pt-3 bg-gradient-to-t from-[var(--color-surface)] via-[var(--color-surface)] to-transparent"
               style={{ paddingBottom: 'calc(16px + var(--safe-bottom))' }}
             >
-              {activeRun ? (
+              {unlockError && (
+                <p className="mb-2 text-center text-[13px] text-[var(--color-danger,#e5484d)]">
+                  {unlockError}
+                </p>
+              )}
+              {!scenario.unlocked ? (
+                <>
+                  <p className="mb-2 text-center text-[12px] text-[var(--color-text-muted)]">
+                    一次性解锁 · 解锁后 {scenario.minute_cost_coins} 悠悠币/分钟
+                  </p>
+                  {scenario.tier_allowed ? (
+                    <button
+                      onClick={handleUnlock}
+                      disabled={unlocking}
+                      className="w-full h-[52px] rounded-[26px] bg-[var(--color-primary)] text-white text-[16px] font-semibold shadow-[var(--shadow-btn)] active:scale-[0.98] transition-transform disabled:opacity-60"
+                    >
+                      {unlocking ? '解锁中…' : `解锁 · ${scenario.unlock_cost_coins} 悠悠币`}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => navigate('/membership')}
+                      className="w-full h-[52px] rounded-[26px] bg-[var(--color-primary)] text-white text-[16px] font-semibold shadow-[var(--shadow-btn)] active:scale-[0.98] transition-transform"
+                    >
+                      升级会员解锁
+                    </button>
+                  )}
+                </>
+              ) : activeRun ? (
                 <div className="flex gap-3">
                   <button
                     onClick={() => setSheetOpen(true)}
@@ -131,7 +182,7 @@ export function ScenarioDetailPage() {
         ) : null}
       </div>
 
-      {sheetOpen && scenario && (
+      {sheetOpen && scenario && scenario.unlocked && (
         <StartRunSheet
           scenarioId={scenario.id}
           scenarioTitle={scenario.title}

@@ -18,15 +18,29 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from heart import billing
 from heart.api.rate_limit import limiter
 from heart.api.wiring import get_db, get_story_service
+from heart.billing.pricing import story_minute_cost_fen, story_unlock_cost_fen
 from heart.core.auth import TokenData, get_current_user
+from heart.core.config import settings
+from heart.membership import get_effective_tier
 from heart.ss09_story import repository as repo
 from heart.ss09_story.models import DEFAULT_PLAYER_TEMPLATE
 
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix="/api/story", tags=["story"])
+
+
+def _tier_can_unlock(tier: str, free_tier: bool) -> bool:
+    """Whether *tier* is eligible to unlock a scenario.
+
+    Free (普通) users may only unlock the ``free_tier`` demo scenarios;
+    plus/immersive members may unlock the full catalog. Membership grants
+    *eligibility* only — it does not waive the unlock fee.
+    """
+    return free_tier or tier in ("plus", "immersive")
 
 
 @router.get("/scenarios")
@@ -60,6 +74,7 @@ async def list_scenarios(
                 "maturity": c.maturity,
                 "is_featured": c.is_featured,
                 "play_count": c.play_count,
+                "free_tier": c.free_tier,
             }
             for c in cards
         ],
@@ -93,6 +108,10 @@ async def get_scenario(
     if scenario is None or scenario.status != "published":
         raise HTTPException(404, "scenario_not_found")
 
+    user_id = uuid.UUID(current_user.user_id)
+    tier = await get_effective_tier(db, user_id)
+    unlocked = await repo.is_scenario_unlocked(db, user_id, scenario_id)
+
     template = scenario.player_template_json or DEFAULT_PLAYER_TEMPLATE
     return {
         "id": str(scenario.id),
@@ -105,6 +124,13 @@ async def get_scenario(
         "play_count": scenario.play_count,
         # Player card template drives the StartRunSheet form.
         "player_template": template,
+        # Billing / gating (PR C1). `unlocked` = permanently paid for;
+        # `tier_allowed` = this tier may unlock it (free users: free_tier only).
+        "free_tier": scenario.free_tier,
+        "unlocked": unlocked,
+        "tier_allowed": _tier_can_unlock(tier, scenario.free_tier),
+        "unlock_cost_coins": settings.story_unlock_cost_coins,
+        "minute_cost_coins": settings.story_minute_cost_coins,
     }
 
 
@@ -124,6 +150,52 @@ async def get_active_run(
     """
     run = await repo.get_active_run_for_scenario(db, uuid.UUID(current_user.user_id), scenario_id)
     return {"run": _run_dto(run) if run is not None else None}
+
+
+@router.post("/scenarios/{scenario_id}/unlock")
+@limiter.limit("20/minute")
+async def unlock_scenario(
+    request: Request,
+    scenario_id: uuid.UUID,
+    current_user: TokenData = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """Permanently unlock a scenario for the caller (one-time 80-悠悠币 charge).
+
+    Idempotent: if already unlocked, returns ``{"ok": True, "already": True}``
+    without charging again. Tier gating: free users may only unlock ``free_tier``
+    scenarios; plus/immersive may unlock the full catalog (they still pay the fee).
+    """
+    scenario = await repo.get_scenario(db, scenario_id)
+    if scenario is None or scenario.status != "published":
+        raise HTTPException(404, "scenario_not_found")
+
+    user_id = uuid.UUID(current_user.user_id)
+
+    # Already unlocked → no-op, no charge.
+    if await repo.is_scenario_unlocked(db, user_id, scenario_id):
+        return {"ok": True, "already": True, "balance": await billing.get_balance(db, user_id)}
+
+    tier = await get_effective_tier(db, user_id)
+    if not _tier_can_unlock(tier, scenario.free_tier):
+        raise HTTPException(403, "tier_required")
+
+    try:
+        balance = await billing.deduct_credits(
+            db,
+            user_id,
+            story_unlock_cost_fen(),
+            idempotency_key=f"unlock_story:{user_id}:{scenario_id}",
+            type_str="unlock_story",
+        )
+    except billing.InsufficientCreditsError as e:
+        # get_db rolls back the partial deduct on this HTTPException.
+        raise HTTPException(
+            402, detail={"code": "insufficient_credits", "needed": e.needed, "balance": e.balance}
+        ) from e
+
+    await repo.add_scenario_unlock(db, user_id, scenario_id)
+    return {"ok": True, "already": False, "balance": balance}
 
 
 # ── Run lifecycle (PR3) ─────────────────────────────────────────────
@@ -168,10 +240,22 @@ async def start_run(
     current_user: TokenData = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
-    """Start a new run and return the opening GM bubbles."""
+    """Start a new run and return the opening GM bubbles.
+
+    Requires a permanent unlock (POST /scenarios/{id}/unlock) first: playtime is
+    billed per minute (PR C2), but the scenario must be paid-for to enter.
+    """
     scenario = await repo.get_scenario(db, body.scenario_id)
     if scenario is None or scenario.status != "published":
         raise HTTPException(404, "scenario_not_found")
+
+    # Gating: must be eligible for this scenario's tier AND have unlocked it.
+    user_id = uuid.UUID(current_user.user_id)
+    tier = await get_effective_tier(db, user_id)
+    if not _tier_can_unlock(tier, scenario.free_tier):
+        raise HTTPException(403, "tier_required")
+    if not await repo.is_scenario_unlocked(db, user_id, body.scenario_id):
+        raise HTTPException(403, "unlock_required")
 
     service = get_story_service()
     if service is None:

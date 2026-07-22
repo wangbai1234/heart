@@ -42,7 +42,13 @@ from typing import Any, Optional
 import structlog
 from sqlalchemy import text
 
+from heart.core.config import settings
 from heart.ss09_story.models import GENRES
+
+
+def _free_tier_slugs() -> set[str]:
+    """The demo slugs free (普通) users may unlock, from config (CSV)."""
+    return {s.strip() for s in settings.story_free_tier_slugs.split(",") if s.strip()}
 
 logger = structlog.get_logger(__name__)
 
@@ -220,10 +226,10 @@ async def upsert_scenario(
             """
             INSERT INTO story_scenarios
                 (slug, title, genre, blurb, maturity, gm_system_prompt,
-                 source_hash, status, updated_at)
+                 source_hash, status, free_tier, updated_at)
             VALUES
                 (:slug, :title, :genre, :blurb, :maturity, :prompt,
-                 :hash, :status, NOW())
+                 :hash, :status, :free_tier, NOW())
             ON CONFLICT (slug) DO UPDATE SET
                 title = EXCLUDED.title,
                 genre = EXCLUDED.genre,
@@ -232,6 +238,7 @@ async def upsert_scenario(
                 gm_system_prompt = EXCLUDED.gm_system_prompt,
                 source_hash = EXCLUDED.source_hash,
                 status = EXCLUDED.status,
+                free_tier = EXCLUDED.free_tier,
                 updated_at = NOW()
             """
         ),
@@ -244,6 +251,7 @@ async def upsert_scenario(
             "prompt": gm_system_prompt,
             "hash": source_hash,
             "status": status,
+            "free_tier": slug in _free_tier_slugs(),
         },
     )
     return "updated" if existed else "created"

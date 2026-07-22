@@ -30,7 +30,7 @@ interface ScenarioCardProps {
 }
 
 export function ScenarioCard({ scenario, onOpen }: ScenarioCardProps) {
-  const { id, title, genre, cover_url, play_count, maturity } = scenario
+  const { id, title, genre, cover_url, play_count, maturity, free_tier } = scenario
 
   return (
     <button
@@ -53,6 +53,12 @@ export function ScenarioCard({ scenario, onOpen }: ScenarioCardProps) {
         {maturity === 'adult' && (
           <span className="absolute top-2 right-2 inline-flex h-[22px] items-center rounded-full bg-black/35 px-1.5 text-[12px] backdrop-blur-[4px]">
             🔞
+          </span>
+        )}
+        {/* Membership-only label: free-tier users can't unlock non-free scenarios. */}
+        {!free_tier && (
+          <span className="absolute bottom-2 left-2 inline-flex h-[20px] items-center gap-0.5 rounded-full bg-[var(--color-primary)]/85 px-1.5 text-[11px] font-medium text-white backdrop-blur-[4px]">
+            👑 会员
           </span>
         )}
       </div>

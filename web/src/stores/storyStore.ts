@@ -4,6 +4,7 @@ import {
   getStoryGenres,
   getScenario,
   getActiveRun as apiGetActiveRun,
+  unlockScenario as apiUnlockScenario,
   startRun as apiStartRun,
   getRun as apiGetRun,
   type ScenarioCardDTO,
@@ -86,6 +87,8 @@ interface StoryState {
   setGenre: (genre: string | null) => Promise<void>
   loadScenario: (id: string, force?: boolean) => Promise<ScenarioDetailDTO | null>
   loadActiveRun: (scenarioId: string, force?: boolean) => Promise<StoryRunDTO | null>
+  // Permanently unlock (pay for) a scenario; updates the detail cache on success.
+  unlockScenario: (scenarioId: string) => Promise<{ ok: boolean; balance: number }>
 
   // Run lifecycle
   startRun: (
@@ -193,6 +196,18 @@ export const useStoryStore = create<StoryState>((set, get) => ({
       // "开始剧情" (a first-time-play affordance is the safe default).
       return null
     }
+  },
+
+  unlockScenario: async (scenarioId) => {
+    const res = await apiUnlockScenario(scenarioId)
+    // Reflect the unlock in the detail cache so the CTA flips to 开始剧情
+    // without a refetch. Leaves other detail fields untouched.
+    set((s) => {
+      const cached = s.detailById[scenarioId]
+      if (!cached) return {}
+      return { detailById: { ...s.detailById, [scenarioId]: { ...cached, unlocked: true } } }
+    })
+    return { ok: res.ok, balance: res.balance }
   },
 
   // ── Run lifecycle ─────────────────────────────────────────────────
