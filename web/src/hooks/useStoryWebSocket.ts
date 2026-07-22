@@ -31,7 +31,6 @@ const TURN_WATCHDOG_MS = 90_000
 
 const ERROR_COPY: Record<string, string> = {
   engine_unavailable: '剧情引擎暂时不可用，请稍后再试',
-  age_gate_required: '这是成人向剧情，需要先完成年龄验证',
   run_not_found: '这局剧情不存在或已结束',
   scenario_not_found: '剧本已下架',
   empty_message: '说点什么再发送吧',

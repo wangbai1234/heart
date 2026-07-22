@@ -108,9 +108,8 @@ class ScenarioCard:
     genre: str
     cover_url: Optional[str]
     blurb: str
-    maturity: str
+    maturity: str  # display-only label ('all_ages' | 'adult'); not access-gated
     is_featured: bool
     play_count: int
-    locked: bool = False  # maturity=adult and viewer not age-verified
 
     extra: dict[str, Any] = field(default_factory=dict)

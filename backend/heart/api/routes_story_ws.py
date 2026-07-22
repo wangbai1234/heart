@@ -5,8 +5,8 @@ message_bubble / turn_end / error) but is a slim, self-contained loop that
 delegates to StoryService.process_turn_stream. No audio (text-only MVP), no
 per-character voice/model branching.
 
-Age-gate: unlike chat (which gates the whole socket), story gates per-run —
-only when the run's scenario is maturity='adult' and the user isn't verified.
+Scenarios are not age-gated (registration already restricts signup to adults);
+``maturity`` is a display-only label handled by the UI.
 """
 
 from __future__ import annotations
@@ -18,7 +18,6 @@ from typing import Any, Optional
 
 import structlog
 from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
-from sqlalchemy import text as sql_text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from heart.core.auth import auth_manager
@@ -42,11 +41,7 @@ def _parse_turn_id(value: Any) -> uuid.UUID:
 
 
 async def _verify_story_token(ws: WebSocket, token: Optional[str]) -> Optional[str]:
-    """Verify the JWT and return user_id (ws already closed on failure).
-
-    Does NOT enforce age verification here — that is per-run (adult scenarios
-    only), checked when a story_chat targets an adult run.
-    """
+    """Verify the JWT and return user_id (ws already closed on failure)."""
     if not token:
         await ws.close(code=1008, reason="Missing token")
         return None
@@ -58,12 +53,10 @@ async def _verify_story_token(ws: WebSocket, token: Optional[str]) -> Optional[s
     return token_data.user_id
 
 
-async def _load_run_scenario_and_gate(
-    user_id: str, run_id: uuid.UUID
-) -> tuple[Any, Any, Optional[str]]:
-    """Return (run, scenario, gate_error). gate_error is a code string or None.
+async def _load_run_scenario(user_id: str, run_id: uuid.UUID) -> tuple[Any, Any, Optional[str]]:
+    """Return (run, scenario, error). error is a code string or None.
 
-    gate_error ∈ {run_not_found, scenario_not_found, age_gate_required}.
+    error ∈ {run_not_found, scenario_not_found}.
     """
     async with AsyncSession(_get_engine(), expire_on_commit=False) as db:
         run = await repo.get_run(db, run_id, uuid.UUID(user_id))
@@ -72,13 +65,6 @@ async def _load_run_scenario_and_gate(
         scenario = await repo.get_scenario(db, run.scenario_id)
         if scenario is None:
             return run, None, "scenario_not_found"
-        if scenario.maturity == "adult":
-            result = await db.execute(
-                sql_text("SELECT age_verified_at FROM users WHERE id = :uid"),
-                {"uid": uuid.UUID(user_id)},
-            )
-            if result.scalar_one_or_none() is None:
-                return run, scenario, "age_gate_required"
         return run, scenario, None
 
 
@@ -120,9 +106,9 @@ class _StorySession:
             await self.send({"type": "error", "code": "bad_run_id"})
             return
 
-        run, scenario, gate = await _load_run_scenario_and_gate(self._user_id, run_id)
-        if gate is not None:
-            await self.send({"type": "error", "code": gate})
+        run, scenario, err = await _load_run_scenario(self._user_id, run_id)
+        if err is not None:
+            await self.send({"type": "error", "code": err})
             return
 
         turn_id = _parse_turn_id(msg.get("turn_id"))

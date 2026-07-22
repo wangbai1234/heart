@@ -38,19 +38,18 @@ def _jsonb(value: Any) -> dict[str, Any]:
     return {}
 
 
-def _card_from_row(row: Any, *, age_verified: bool) -> ScenarioCard:
-    locked = row.maturity == "adult" and not age_verified
+def _card_from_row(row: Any) -> ScenarioCard:
+    # `maturity` is a display-only label (🔞); registration already restricts
+    # signup to adults, so scenarios are never access-gated here.
     return ScenarioCard(
         id=row.id,
         title=row.title,
         genre=row.genre,
         cover_url=row.cover_url,
-        # Never leak adult blurbs to unverified viewers; show a gate hint.
-        blurb=("🔞 需完成年龄验证后查看" if locked else row.blurb),
+        blurb=row.blurb,
         maturity=row.maturity,
         is_featured=row.is_featured,
         play_count=row.play_count,
-        locked=locked,
     )
 
 
@@ -59,7 +58,6 @@ async def list_scenarios(
     *,
     genre: Optional[str] = None,
     featured: Optional[bool] = None,
-    age_verified: bool = False,
     limit: int = 30,
     offset: int = 0,
 ) -> list[ScenarioCard]:
@@ -85,7 +83,7 @@ async def list_scenarios(
         ),
         params,
     )
-    return [_card_from_row(r, age_verified=age_verified) for r in result.fetchall()]
+    return [_card_from_row(r) for r in result.fetchall()]
 
 
 async def list_genres(session: AsyncSession) -> list[dict[str, Any]]:

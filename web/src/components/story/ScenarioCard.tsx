@@ -4,10 +4,8 @@ import type { ScenarioCardDTO } from '../../services/api'
  * A single scenario tile for the Explore grid (SS09 PR2).
  *
  * Cover falls back to a genre-tinted gradient when `cover_url` is null (the
- * bulk importer leaves covers empty initially). Adult scenarios that the viewer
- * hasn't age-verified render a 🔞 lock; tapping still fires `onOpen` so the
- * detail page can drive the /age-gate flow (the card never leaks the blurb —
- * the server already replaced it with a gate hint).
+ * bulk importer leaves covers empty initially). Adult scenarios show a 🔞 label
+ * (display only — scenarios are not age-gated).
  */
 
 // Stable per-genre gradient so cover-less cards are still visually distinct.
@@ -32,7 +30,7 @@ interface ScenarioCardProps {
 }
 
 export function ScenarioCard({ scenario, onOpen }: ScenarioCardProps) {
-  const { id, title, genre, cover_url, play_count, maturity, locked } = scenario
+  const { id, title, genre, cover_url, play_count, maturity } = scenario
 
   return (
     <button
@@ -51,17 +49,11 @@ export function ScenarioCard({ scenario, onOpen }: ScenarioCardProps) {
         <span className="absolute top-2 left-2 inline-flex h-[22px] items-center rounded-full bg-black/25 px-2 text-[11px] font-medium text-white backdrop-blur-[4px]">
           {genre}
         </span>
-        {/* Adult tag */}
+        {/* Adult label (display only) */}
         {maturity === 'adult' && (
           <span className="absolute top-2 right-2 inline-flex h-[22px] items-center rounded-full bg-black/35 px-1.5 text-[12px] backdrop-blur-[4px]">
             🔞
           </span>
-        )}
-        {/* Locked overlay */}
-        {locked && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/35 backdrop-blur-[3px]">
-            <span className="text-[12px] font-medium text-white/90">需验证年龄</span>
-          </div>
         )}
       </div>
 

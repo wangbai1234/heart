@@ -9,11 +9,8 @@ import { StartRunSheet } from '../components/story/StartRunSheet'
 
 /**
  * Scenario detail (探索/:id). Cover + blurb + genre + play count, and the
- * entry point into a run. Adult scenarios the viewer hasn't age-verified are
- * locked here (blurb hidden by the server) and the CTA routes to /age-gate.
- *
- * Starting a run (the full 主控 card sheet + player UI) lands in PR4; until
- * then the CTA is a "coming soon" affordance so the page is never a dead end.
+ * entry point into a run. `maturity='adult'` shows a 🔞 label only — scenarios
+ * are not age-gated.
  */
 export function ScenarioDetailPage() {
   const navigate = useNavigate()
@@ -94,14 +91,6 @@ export function ScenarioDetailPage() {
                   {scenario.blurb || '（暂无简介）'}
                 </p>
               </div>
-
-              {scenario.locked && (
-                <div className="mt-4 rounded-[18px] bg-[rgba(255,133,161,0.12)] border border-[rgba(255,133,161,0.3)] p-4">
-                  <p className="text-[14px] leading-[1.6] text-[var(--color-ink)]">
-                    🔞 这是成人向剧情，需要完成年龄验证后才能进入。
-                  </p>
-                </div>
-              )}
             </div>
 
             {/* Sticky CTA */}
@@ -109,27 +98,18 @@ export function ScenarioDetailPage() {
               className="fixed bottom-0 left-0 right-0 z-20 px-5 pt-3 bg-gradient-to-t from-[var(--color-surface)] via-[var(--color-surface)] to-transparent"
               style={{ paddingBottom: 'calc(16px + var(--safe-bottom))' }}
             >
-              {scenario.locked ? (
-                <button
-                  onClick={() => navigate('/age-gate')}
-                  className="w-full h-[52px] rounded-[26px] bg-[var(--color-primary)] text-white text-[16px] font-semibold shadow-[var(--shadow-btn)] active:scale-[0.98] transition-transform"
-                >
-                  去验证年龄
-                </button>
-              ) : (
-                <button
-                  onClick={() => setSheetOpen(true)}
-                  className="w-full h-[52px] rounded-[26px] bg-[var(--color-primary)] text-white text-[16px] font-semibold shadow-[var(--shadow-btn)] active:scale-[0.98] transition-transform"
-                >
-                  开始剧情
-                </button>
-              )}
+              <button
+                onClick={() => setSheetOpen(true)}
+                className="w-full h-[52px] rounded-[26px] bg-[var(--color-primary)] text-white text-[16px] font-semibold shadow-[var(--shadow-btn)] active:scale-[0.98] transition-transform"
+              >
+                开始剧情
+              </button>
             </div>
           </>
         ) : null}
       </div>
 
-      {sheetOpen && scenario && !scenario.locked && (
+      {sheetOpen && scenario && (
         <StartRunSheet
           scenarioId={scenario.id}
           scenarioTitle={scenario.title}
