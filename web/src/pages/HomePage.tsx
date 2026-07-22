@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useThemeStore } from '../stores/themeStore'
 import { useAuthStore } from '../stores/authStore'
@@ -7,6 +7,7 @@ import { TabBar } from '../components/ui/TabBar'
 import { Skeleton } from '../components/ui/Skeleton'
 import { HOME_ANNOUNCEMENTS, getHeroBanner, type HomeAnnouncement } from '../data/uiContent'
 import { useSwipeNavigation } from '../hooks/useSwipeNavigation'
+import { getScenarios, type ScenarioCardDTO } from '../services/api'
 
 export function HomePage() {
   const navigate = useNavigate()
@@ -87,6 +88,9 @@ export function HomePage() {
                   </button>
                 ))}
               </div>
+
+              {/* 今日剧情推荐 — deep-links to the featured scenario's detail. */}
+              <FeaturedStoryCard />
 
               {/* Recent Announcements */}
               <div className="mb-4">
@@ -212,6 +216,94 @@ export function HomePage() {
       )}
     </div>
   )
+}
+
+/**
+ * 今日剧情推荐 — a single featured story card on the home feed.
+ *
+ * Self-contained: fetches the featured scenario on mount (best-effort) and
+ * renders nothing until/unless one exists, so the home page never blocks or
+ * shows an empty slot. Tapping deep-links to the scenario detail (/explore/:id),
+ * where the player fills the 主控 card and starts a run.
+ */
+function FeaturedStoryCard() {
+  const navigate = useNavigate()
+  const [scenario, setScenario] = useState<ScenarioCardDTO | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    getScenarios({ featured: true, limit: 1 })
+      .then(({ scenarios }) => {
+        if (!cancelled) setScenario(scenarios[0] ?? null)
+      })
+      .catch(() => {
+        /* best-effort: leave the card hidden on failure */
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  if (!scenario) return null
+
+  const locked = scenario.locked
+  const playLabel =
+    scenario.play_count > 0 ? `已有 ${formatPlayCount(scenario.play_count)} 人游玩` : '抢先体验'
+
+  return (
+    <div className="mb-4">
+      <div className="flex items-center justify-between pl-1 pr-1 mb-3">
+        <span className="text-[16px] font-bold text-[var(--color-ink)]">今日剧情推荐</span>
+        <button
+          onClick={() => navigate('/explore')}
+          className="text-[13px] text-[var(--color-primary)] active:opacity-70"
+        >
+          更多
+        </button>
+      </div>
+
+      <button
+        onClick={() => navigate(`/explore/${scenario.id}`)}
+        className="relative w-full h-[132px] rounded-[20px] overflow-hidden shadow-[var(--shadow-soft)] active:scale-[0.98] transition-transform text-left"
+      >
+        {scenario.cover_url ? (
+          <img src={scenario.cover_url} alt="" className="absolute inset-0 w-full h-full object-cover" />
+        ) : (
+          <div className="absolute inset-0 bg-gradient-to-br from-[#FFB7C5] via-[#E7A6C4] to-[#C8B6FF]" />
+        )}
+        {/* Legibility scrim */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
+
+        <div className="absolute inset-0 p-4 flex flex-col justify-between">
+          <div className="flex items-center gap-2">
+            <span className="inline-flex h-6 items-center rounded-full bg-white/25 backdrop-blur-[4px] px-2.5 text-[12px] font-medium text-white">
+              🔥 {scenario.genre}
+            </span>
+            {locked && (
+              <span className="inline-flex h-6 items-center rounded-full bg-black/35 px-2.5 text-[12px] font-medium text-white">
+                🔞 18+
+              </span>
+            )}
+          </div>
+          <div>
+            <p className="text-[18px] font-bold text-white leading-[1.3] line-clamp-1">
+              {scenario.title}
+            </p>
+            <p className="mt-1 text-[13px] text-white/85 leading-[1.4] line-clamp-1">
+              {scenario.blurb}
+            </p>
+            <p className="mt-1.5 text-[12px] text-white/70">{playLabel}</p>
+          </div>
+        </div>
+      </button>
+    </div>
+  )
+}
+
+/** Compact play-count: 12800 → 1.2万, 999 → 999. */
+function formatPlayCount(n: number): string {
+  if (n >= 10000) return `${(n / 10000).toFixed(1).replace(/\.0$/, '')}万`
+  return String(n)
 }
 
 function NoticeIcon() {
