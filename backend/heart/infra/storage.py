@@ -37,7 +37,7 @@ def _get_s3_client():
 
 
 async def ensure_bucket() -> None:
-    """Create bucket if it doesn't exist."""
+    """Create bucket if it doesn't exist, then set lifecycle rules."""
     global _bucket_checked
     if _bucket_checked:
         return
@@ -53,7 +53,57 @@ async def ensure_bucket() -> None:
             logger.info("s3_bucket_created", bucket=settings.s3_bucket_name)
 
     await asyncio.to_thread(_check_or_create)
+    await _ensure_voice_lifecycle()
     _bucket_checked = True
+
+
+_VOICE_LIFECYCLE_RULE_ID = "expire-voice-messages"
+
+
+async def _ensure_voice_lifecycle(expiry_days: int = 20) -> None:
+    """Idempotently add a lifecycle rule to auto-delete voice_messages/ after expiry_days.
+
+    Uses get → merge → put to avoid clobbering unrelated rules.
+    Works with AWS S3, Cloudflare R2, and MinIO.
+    """
+    from heart.core.config import settings
+
+    client = _get_s3_client()
+    bucket = settings.s3_bucket_name
+
+    def _apply() -> None:
+        try:
+            existing = client.get_bucket_lifecycle_configuration(Bucket=bucket)
+            rules: list = [
+                r for r in existing.get("Rules", []) if r.get("ID") != _VOICE_LIFECYCLE_RULE_ID
+            ]
+        except client.exceptions.NoSuchLifecycleConfiguration:  # type: ignore[attr-defined]
+            rules = []
+        except Exception:
+            # Some S3-compatible stores (old MinIO versions) raise a generic
+            # ClientError with code NoSuchLifecycleConfiguration. Treat any
+            # unknown get-lifecycle error as "no rules yet" to stay safe.
+            rules = []
+
+        rules.append(
+            {
+                "ID": _VOICE_LIFECYCLE_RULE_ID,
+                "Status": "Enabled",
+                "Filter": {"Prefix": "voice_messages/"},
+                "Expiration": {"Days": expiry_days},
+            }
+        )
+        try:
+            client.put_bucket_lifecycle_configuration(
+                Bucket=bucket,
+                LifecycleConfiguration={"Rules": rules},
+            )
+            logger.info("s3_voice_lifecycle_set", expiry_days=expiry_days)
+        except Exception as exc:
+            # Non-fatal: lifecycle setup failure should not prevent startup.
+            logger.warning("s3_voice_lifecycle_failed", error=str(exc))
+
+    await asyncio.to_thread(_apply)
 
 
 async def upload_file(
