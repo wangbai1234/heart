@@ -16,14 +16,18 @@ export function ScenarioDetailPage() {
   const navigate = useNavigate()
   const { scenarioId = '' } = useParams()
   const { resolvedTheme } = useThemeStore()
-  const { detailById, detailLoading, detailError, loadScenario } = useStoryStore()
+  const { detailById, detailLoading, detailError, loadScenario, loadActiveRun } = useStoryStore()
+  const activeRun = useStoryStore((s) => s.activeRunByScenario[scenarioId])
   const [sheetOpen, setSheetOpen] = useState(false)
 
   const scenario = detailById[scenarioId]
 
   useEffect(() => {
-    if (scenarioId) void loadScenario(scenarioId)
-  }, [scenarioId, loadScenario])
+    if (scenarioId) {
+      void loadScenario(scenarioId)
+      void loadActiveRun(scenarioId)
+    }
+  }, [scenarioId, loadScenario, loadActiveRun])
 
   const pageBg =
     resolvedTheme === 'dark'
@@ -93,17 +97,35 @@ export function ScenarioDetailPage() {
               </div>
             </div>
 
-            {/* Sticky CTA */}
+            {/* Sticky CTA — a returning player gets 继续游玩 + 重新开始; a
+                first-time player just gets 开始剧情. */}
             <div
               className="fixed bottom-0 left-0 right-0 z-20 px-5 pt-3 bg-gradient-to-t from-[var(--color-surface)] via-[var(--color-surface)] to-transparent"
               style={{ paddingBottom: 'calc(16px + var(--safe-bottom))' }}
             >
-              <button
-                onClick={() => setSheetOpen(true)}
-                className="w-full h-[52px] rounded-[26px] bg-[var(--color-primary)] text-white text-[16px] font-semibold shadow-[var(--shadow-btn)] active:scale-[0.98] transition-transform"
-              >
-                开始剧情
-              </button>
+              {activeRun ? (
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setSheetOpen(true)}
+                    className="h-[52px] flex-1 rounded-[26px] bg-[var(--color-glass-55)] backdrop-blur-[12px] border border-[var(--color-border-glass)] text-[var(--color-ink)] text-[16px] font-semibold active:scale-[0.98] transition-transform"
+                  >
+                    重新开始
+                  </button>
+                  <button
+                    onClick={() => navigate(`/story/${activeRun.run_id}`)}
+                    className="h-[52px] flex-[1.4] rounded-[26px] bg-[var(--color-primary)] text-white text-[16px] font-semibold shadow-[var(--shadow-btn)] active:scale-[0.98] transition-transform"
+                  >
+                    继续游玩
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setSheetOpen(true)}
+                  className="w-full h-[52px] rounded-[26px] bg-[var(--color-primary)] text-white text-[16px] font-semibold shadow-[var(--shadow-btn)] active:scale-[0.98] transition-transform"
+                >
+                  开始剧情
+                </button>
+              )}
             </div>
           </>
         ) : null}

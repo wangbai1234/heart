@@ -193,6 +193,53 @@ async def test_turn_stream_generation_error_before_any_delta(patched_repo):
     assert events[-1][1]["ok"] is False
 
 
+# ── PR B: run resume / restart ───────────────────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_start_run_retires_prior_active_run(monkeypatch):
+    """开始/重新开始 ends any prior active run before creating the fresh one.
+
+    Keeps the "at most one active run per scenario" invariant so the detail
+    page's 继续游玩 always resumes the newest playthrough.
+    """
+    calls: list[str] = []
+    run = _run()
+
+    async def _end_active(session, user_id, scenario_id):
+        calls.append("end_active")
+        return 1
+
+    async def _create_run(session, **kw):
+        calls.append("create_run")
+        return run
+
+    async def _next_seq(session, run_id):
+        return 1
+
+    async def _add_message(session, **kw):
+        return object()
+
+    async def _bump(session, run_id, **kw):
+        return None
+
+    monkeypatch.setattr(repo, "end_active_runs_for_scenario", _end_active)
+    monkeypatch.setattr(repo, "create_run", _create_run)
+    monkeypatch.setattr(repo, "next_seq", _next_seq)
+    monkeypatch.setattr(repo, "add_message", _add_message)
+    monkeypatch.setattr(repo, "bump_run_activity", _bump)
+
+    svc = StoryService(_fake_factory, _FakeRouter())
+    result = await svc.start_run(
+        user_id=run.user_id, scenario=_scenario(), player_identity={}
+    )
+
+    # Prior active run retired strictly before the new one is created.
+    assert calls[:2] == ["end_active", "create_run"]
+    assert result.run is run
+    assert result.opening_bubbles  # opening GM bubbles generated + returned
+
+
 # ── PR5: safety pre-check ────────────────────────────────────────────
 
 

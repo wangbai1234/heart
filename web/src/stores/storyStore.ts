@@ -3,6 +3,7 @@ import {
   getScenarios,
   getStoryGenres,
   getScenario,
+  getActiveRun as apiGetActiveRun,
   startRun as apiStartRun,
   getRun as apiGetRun,
   type ScenarioCardDTO,
@@ -68,6 +69,10 @@ interface StoryState {
   detailLoading: boolean
   detailError: boolean
 
+  // Prior active run per scenario (resume vs restart CTA on the detail page).
+  // undefined = not yet checked; null = checked, no active run.
+  activeRunByScenario: Record<string, StoryRunDTO | null>
+
   // ── Run / player state (PR4) ──────────────────────────────────────
   runMetaById: Record<string, StoryRunDTO>
   messagesByRun: Record<string, StoryMessageVM[]>
@@ -80,6 +85,7 @@ interface StoryState {
   loadCatalog: (force?: boolean) => Promise<void>
   setGenre: (genre: string | null) => Promise<void>
   loadScenario: (id: string, force?: boolean) => Promise<ScenarioDetailDTO | null>
+  loadActiveRun: (scenarioId: string, force?: boolean) => Promise<StoryRunDTO | null>
 
   // Run lifecycle
   startRun: (
@@ -127,6 +133,8 @@ export const useStoryStore = create<StoryState>((set, get) => ({
   detailLoading: false,
   detailError: false,
 
+  activeRunByScenario: {},
+
   runMetaById: {},
   messagesByRun: {},
   streamTextByRun: {},
@@ -173,17 +181,34 @@ export const useStoryStore = create<StoryState>((set, get) => ({
     }
   },
 
+  loadActiveRun: async (scenarioId, force = false) => {
+    const cached = get().activeRunByScenario[scenarioId]
+    if (cached !== undefined && !force) return cached
+    try {
+      const { run } = await apiGetActiveRun(scenarioId)
+      set((s) => ({ activeRunByScenario: { ...s.activeRunByScenario, [scenarioId]: run } }))
+      return run
+    } catch {
+      // Best-effort: on failure leave it unchecked so the CTA falls back to
+      // "开始剧情" (a first-time-play affordance is the safe default).
+      return null
+    }
+  },
+
   // ── Run lifecycle ─────────────────────────────────────────────────
 
   startRun: async (scenarioId, playerIdentity) => {
     const { run, opening_bubbles } = await apiStartRun(scenarioId, playerIdentity)
     // Seed the transcript with the opening GM bubbles so the player page has
-    // content immediately (no extra round-trip before the first turn).
+    // content immediately (no extra round-trip before the first turn). The
+    // fresh run is now this scenario's active run (the server retired any prior
+    // one), so update the resume cache to point at it.
     set((s) => ({
       runMetaById: { ...s.runMetaById, [run.run_id]: run },
       messagesByRun: { ...s.messagesByRun, [run.run_id]: opening_bubbles.map(bubbleToVM) },
       streamTextByRun: { ...s.streamTextByRun, [run.run_id]: null },
       generatingByRun: { ...s.generatingByRun, [run.run_id]: false },
+      activeRunByScenario: { ...s.activeRunByScenario, [scenarioId]: run },
     }))
     return run
   },

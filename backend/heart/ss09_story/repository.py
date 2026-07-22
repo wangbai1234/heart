@@ -226,6 +226,48 @@ async def get_run(session: AsyncSession, run_id: UUID, user_id: UUID) -> Optiona
     return _run_from_row(row) if row else None
 
 
+async def get_active_run_for_scenario(
+    session: AsyncSession, user_id: UUID, scenario_id: UUID
+) -> Optional[Run]:
+    """The user's current active run for a scenario, if any (most recent)."""
+    result = await session.execute(
+        text(
+            """
+            SELECT id, user_id, scenario_id, player_identity_json, title,
+                   summary, summary_watermark, turn_count, status, model,
+                   created_at, last_activity_at
+            FROM story_runs
+            WHERE user_id = :uid AND scenario_id = :sid AND status = 'active'
+            ORDER BY last_activity_at DESC
+            LIMIT 1
+            """
+        ),
+        {"uid": str(user_id), "sid": str(scenario_id)},
+    )
+    row = result.fetchone()
+    return _run_from_row(row) if row else None
+
+
+async def end_active_runs_for_scenario(
+    session: AsyncSession, user_id: UUID, scenario_id: UUID
+) -> int:
+    """End (status='ended') all active runs of a scenario. Returns rows affected.
+
+    Called before starting a fresh run so a scenario has at most one active run
+    ("重新开始" retires the prior playthrough rather than deleting its history).
+    """
+    result = await session.execute(
+        text(
+            """
+            UPDATE story_runs SET status = 'ended'
+            WHERE user_id = :uid AND scenario_id = :sid AND status = 'active'
+            """
+        ),
+        {"uid": str(user_id), "sid": str(scenario_id)},
+    )
+    return getattr(result, "rowcount", 0) or 0
+
+
 async def list_runs(session: AsyncSession, user_id: UUID) -> list[Run]:
     """List a user's non-deleted runs, active first, most-recent first."""
     result = await session.execute(

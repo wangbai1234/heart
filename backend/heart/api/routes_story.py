@@ -108,6 +108,24 @@ async def get_scenario(
     }
 
 
+@router.get("/scenarios/{scenario_id}/active-run")
+@limiter.limit("60/minute")
+async def get_active_run(
+    request: Request,
+    scenario_id: uuid.UUID,
+    current_user: TokenData = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """The caller's current active run for a scenario, if any.
+
+    Drives the detail page's dual CTA: a returning player is offered 继续游玩
+    (resume ``run``) vs 重新开始 (start fresh); a first-time player just sees
+    开始剧情. Returns ``{"run": null}`` when there is no active playthrough.
+    """
+    run = await repo.get_active_run_for_scenario(db, uuid.UUID(current_user.user_id), scenario_id)
+    return {"run": _run_dto(run) if run is not None else None}
+
+
 # ── Run lifecycle (PR3) ─────────────────────────────────────────────
 
 

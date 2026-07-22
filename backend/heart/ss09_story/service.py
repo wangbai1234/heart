@@ -83,6 +83,10 @@ class StoryService:
             raise StoryEngineUnavailable("model_router_unavailable")
 
         async with self._session_factory() as session:
+            # "重新开始": retire any prior active run of this scenario so a
+            # scenario has at most one active run (its history is kept, status
+            # flips to 'ended'). Resume of the prior run is offered separately.
+            await repo.end_active_runs_for_scenario(session, user_id, scenario.id)
             run = await repo.create_run(
                 session,
                 user_id=user_id,
