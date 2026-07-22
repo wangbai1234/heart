@@ -36,6 +36,17 @@ const tabs: TabItem[] = [
     ),
   },
   {
+    id: 'explore',
+    label: '探索',
+    path: '/explore',
+    icon: (active) => (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={active ? '#FFB7C5' : '#8E8E9A'} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="9" />
+        <polygon points="15.5,8.5 10.5,10.5 8.5,15.5 13.5,13.5" fill={active ? '#FFB7C5' : 'none'} />
+      </svg>
+    ),
+  },
+  {
     id: 'character',
     label: '角色',
     path: '/character',

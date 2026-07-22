@@ -24,6 +24,8 @@ import { LegalPage } from './pages/LegalPage'
 import { UIStatePreviewPage } from './pages/UIStatePreviewPage'
 import { CreateCharacterPage } from './pages/CreateCharacterPage'
 import { MyCharactersPage } from './pages/MyCharactersPage'
+import { ExplorePage } from './pages/ExplorePage'
+import { ScenarioDetailPage } from './pages/ScenarioDetailPage'
 import { ToastContainer } from './components/ui/ToastContainer'
 import { useProactivePolling } from './hooks/useProactivePolling'
 import { useThemeStore } from './stores/themeStore'
@@ -132,6 +134,8 @@ export function App() {
         <Route path="/home" element={<HomePage />} />
         <Route path="/chat" element={<ChatInboxPage />} />
         <Route path="/chat/:characterId" element={<ChatConversationRouter />} />
+        <Route path="/explore" element={<ExplorePage />} />
+        <Route path="/explore/:scenarioId" element={<ScenarioDetailPage />} />
         <Route path="/character-backstage" element={<CharacterBackstagePage />} />
         <Route path="/character" element={<CharacterPage />} />
         <Route path="/settings" element={<SettingsPage />} />
