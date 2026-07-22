@@ -683,3 +683,63 @@ export async function ackProactive(
     body: JSON.stringify({ message_ids: messageIds }),
   })
 }
+
+// ── Story / 剧情 mode (SS09) ────────────────────────────────────────
+// Read paths for the scenario catalog. Run lifecycle + WS land in PR3/PR4.
+// `maturity='adult'` scenarios are age-gated: the server soft-locks them for
+// unverified users (`locked:true`, blurb replaced with a gate hint) rather than
+// hard-failing, so the UI can drive the user to /age-gate.
+
+export interface ScenarioCardDTO {
+  id: string
+  title: string
+  genre: string
+  cover_url: string | null
+  blurb: string
+  maturity: 'all_ages' | 'adult'
+  is_featured: boolean
+  play_count: number
+  locked: boolean
+}
+
+/** A single form field in a scenario's player-card template (StartRunSheet). */
+export interface PlayerTemplateField {
+  key: string
+  label: string
+  type: 'text' | 'textarea' | 'select'
+  required: boolean
+  options?: string[]
+}
+
+export interface PlayerTemplate {
+  fields: PlayerTemplateField[]
+}
+
+export interface ScenarioDetailDTO extends ScenarioCardDTO {
+  player_template: PlayerTemplate
+}
+
+export async function getScenarios(params?: {
+  genre?: string
+  featured?: boolean
+  limit?: number
+  offset?: number
+}): Promise<{ count: number; scenarios: ScenarioCardDTO[] }> {
+  const qs = new URLSearchParams()
+  if (params?.genre) qs.set('genre', params.genre)
+  if (params?.featured !== undefined) qs.set('featured', String(params.featured))
+  if (params?.limit !== undefined) qs.set('limit', String(params.limit))
+  if (params?.offset !== undefined) qs.set('offset', String(params.offset))
+  const suffix = qs.toString() ? `?${qs}` : ''
+  return request(`/story/scenarios${suffix}`)
+}
+
+export async function getStoryGenres(): Promise<{
+  genres: Array<{ genre: string; count: number }>
+}> {
+  return request('/story/genres')
+}
+
+export async function getScenario(scenarioId: string): Promise<ScenarioDetailDTO> {
+  return request(`/story/scenarios/${encodeURIComponent(scenarioId)}`)
+}
