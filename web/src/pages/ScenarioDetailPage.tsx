@@ -1,11 +1,11 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useThemeStore } from '../stores/themeStore'
 import { useStoryStore } from '../stores/storyStore'
-import { useToastStore } from '../stores/toastStore'
 import { NavigationBar } from '../components/ui/NavigationBar'
 import { Skeleton } from '../components/ui/Skeleton'
 import { ErrorState } from '../components/ui/ErrorState'
+import { StartRunSheet } from '../components/story/StartRunSheet'
 
 /**
  * Scenario detail (探索/:id). Cover + blurb + genre + play count, and the
@@ -20,7 +20,7 @@ export function ScenarioDetailPage() {
   const { scenarioId = '' } = useParams()
   const { resolvedTheme } = useThemeStore()
   const { detailById, detailLoading, detailError, loadScenario } = useStoryStore()
-  const showToast = useToastStore((s) => s.show)
+  const [sheetOpen, setSheetOpen] = useState(false)
 
   const scenario = detailById[scenarioId]
 
@@ -118,7 +118,7 @@ export function ScenarioDetailPage() {
                 </button>
               ) : (
                 <button
-                  onClick={() => showToast('剧情马上就来，敬请期待 ✨', 'info')}
+                  onClick={() => setSheetOpen(true)}
                   className="w-full h-[52px] rounded-[26px] bg-[var(--color-primary)] text-white text-[16px] font-semibold shadow-[var(--shadow-btn)] active:scale-[0.98] transition-transform"
                 >
                   开始剧情
@@ -128,6 +128,16 @@ export function ScenarioDetailPage() {
           </>
         ) : null}
       </div>
+
+      {sheetOpen && scenario && !scenario.locked && (
+        <StartRunSheet
+          scenarioId={scenario.id}
+          scenarioTitle={scenario.title}
+          template={scenario.player_template}
+          onClose={() => setSheetOpen(false)}
+          onStarted={(runId) => navigate(`/story/${runId}`)}
+        />
+      )}
     </div>
   )
 }

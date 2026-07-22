@@ -26,6 +26,7 @@ import { CreateCharacterPage } from './pages/CreateCharacterPage'
 import { MyCharactersPage } from './pages/MyCharactersPage'
 import { ExplorePage } from './pages/ExplorePage'
 import { ScenarioDetailPage } from './pages/ScenarioDetailPage'
+import { StoryPlayerPage } from './pages/StoryPlayerPage'
 import { ToastContainer } from './components/ui/ToastContainer'
 import { useProactivePolling } from './hooks/useProactivePolling'
 import { useThemeStore } from './stores/themeStore'
@@ -136,6 +137,7 @@ export function App() {
         <Route path="/chat/:characterId" element={<ChatConversationRouter />} />
         <Route path="/explore" element={<ExplorePage />} />
         <Route path="/explore/:scenarioId" element={<ScenarioDetailPage />} />
+        <Route path="/story/:runId" element={<StoryPlayerPage />} />
         <Route path="/character-backstage" element={<CharacterBackstagePage />} />
         <Route path="/character" element={<CharacterPage />} />
         <Route path="/settings" element={<SettingsPage />} />
