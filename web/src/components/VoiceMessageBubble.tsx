@@ -29,14 +29,19 @@ export default function VoiceMessageBubble({
   const [frameIndex, setFrameIndex] = useState(0)
   const [loadFailed, setLoadFailed] = useState(false)
   const [loadExpired, setLoadExpired] = useState(false)
-  const [retryTick, setRetryTick] = useState(0)
   const audioRef = useRef<HTMLAudioElement | null>(null)
+  // Object URL we created and must revoke; kept in a ref so the lazy fetch (which
+  // runs outside the mount effect) can register its blob for cleanup on unmount.
+  const objectUrlRef = useRef<string | null>(null)
   const setGlobalPlaying = useChatStore((s) => s.setPlaying)
 
+  // Resolve only the *free* sources on mount — an in-session blob/base64 recording
+  // or an already-absolute http(s) URL. A durable `/api/...` pointer is NOT fetched
+  // here: doing so on every bubble would fire a network request per voice message
+  // on page entry and, for a genuinely-expired object, flash "音频已过期" before the
+  // user ever taps it. That fetch is deferred to the play handler (fetchApiAudio).
   useEffect(() => {
     if (!audioData) return
-    let cancelled = false
-    let blobUrl: string | null = null
     setLoadFailed(false)
     setLoadExpired(false)
 
@@ -45,39 +50,10 @@ export default function VoiceMessageBubble({
       return
     }
 
+    // Durable server pointer — resolve lazily on click, not now.
     if (audioData.startsWith('/api/')) {
-      const { accessToken } = useAuthStore.getState()
-      fetch(audioData, {
-        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
-      })
-        .then((res) => {
-          if (!res.ok) throw new Error(`Audio fetch failed: ${res.status}`)
-          return res.blob()
-        })
-        .then((blob) => {
-          if (cancelled) return
-          blobUrl = URL.createObjectURL(blob)
-          setAudioUrl(blobUrl)
-        })
-        .catch((err) => {
-          if (cancelled) return
-          setLoadFailed(true)
-          const statusMatch = /\b(401|403|404)\b/.exec(String(err?.message ?? ''))
-          const statusCode = statusMatch ? parseInt(statusMatch[0]) : 0
-          if (statusCode === 404) {
-            setLoadExpired(true)
-            useToastStore.getState().show('音频已过期，可点击"转文字"查看内容', 'error')
-          } else {
-            const permanent = statusCode === 401 || statusCode === 403
-            useToastStore
-              .getState()
-              .show(permanent ? FEEDBACK_COPY.voiceUnavailable : FEEDBACK_COPY.voiceLoadFailed, 'error')
-          }
-        })
-      return () => {
-        cancelled = true
-        if (blobUrl) URL.revokeObjectURL(blobUrl)
-      }
+      setAudioUrl(null)
+      return
     }
 
     if (audioData.startsWith('/')) {
@@ -94,12 +70,56 @@ export default function VoiceMessageBubble({
     const byteArray = new Uint8Array(byteNumbers)
     const blob = new Blob([byteArray], { type: mimeType })
     const url = URL.createObjectURL(blob)
+    objectUrlRef.current = url
     setAudioUrl(url)
+  }, [audioData, format])
 
+  // Revoke any object URL we created, on unmount only (the effect above manages
+  // its own within-session churn by overwriting the ref).
+  useEffect(() => {
     return () => {
-      URL.revokeObjectURL(url)
+      if (objectUrlRef.current) {
+        URL.revokeObjectURL(objectUrlRef.current)
+        objectUrlRef.current = null
+      }
     }
-  }, [audioData, format, retryTick])
+  }, [])
+
+  // Lazily fetch a durable `/api/...` audio object. Runs only when the user taps
+  // play, so a 404 (object aged out past the 20-day lifecycle, or never uploaded)
+  // surfaces "音频已过期" on tap — never on page entry. Returns the playable object
+  // URL, or null when it could not be resolved (state/toast already set).
+  const fetchApiAudio = useCallback(async (): Promise<string | null> => {
+    const { accessToken } = useAuthStore.getState()
+    try {
+      const res = await fetch(audioData, {
+        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+      })
+      if (!res.ok) throw new Error(`Audio fetch failed: ${res.status}`)
+      const blob = await res.blob()
+      const blobUrl = URL.createObjectURL(blob)
+      if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current)
+      objectUrlRef.current = blobUrl
+      setAudioUrl(blobUrl)
+      setLoadFailed(false)
+      setLoadExpired(false)
+      return blobUrl
+    } catch (err) {
+      const statusMatch = /\b(401|403|404)\b/.exec(String((err as Error)?.message ?? ''))
+      const statusCode = statusMatch ? parseInt(statusMatch[0]) : 0
+      if (statusCode === 404) {
+        setLoadExpired(true)
+        useToastStore.getState().show('音频已过期，可点击"转文字"查看内容', 'error')
+      } else {
+        setLoadFailed(true)
+        const permanent = statusCode === 401 || statusCode === 403
+        useToastStore
+          .getState()
+          .show(permanent ? FEEDBACK_COPY.voiceUnavailable : FEEDBACK_COPY.voiceLoadFailed, 'error')
+      }
+      return null
+    }
+  }, [audioData])
 
   useEffect(() => {
     setGlobalPlaying(isPlaying)
@@ -154,34 +174,45 @@ export default function VoiceMessageBubble({
     }
   }, [stopPlayback])
 
-  const handlePlayPause = useCallback(() => {
-    if (loadExpired) return
-    if (loadFailed) {
-      setRetryTick((t) => t + 1)
-      return
-    }
-    if (!audioUrl) return
+  const startPlayback = useCallback(
+    (url: string) => {
+      const audio = new Audio(url)
+      audioRef.current = audio
+      audio.onended = () => stopPlayback()
+      audio.onerror = () => {
+        stopPlayback()
+        useToastStore.getState().show(FEEDBACK_COPY.voiceRetry, 'error')
+      }
+      audio
+        .play()
+        .then(() => setIsPlaying(true))
+        .catch(() => {
+          stopPlayback()
+          useToastStore.getState().show(FEEDBACK_COPY.voiceRetry, 'error')
+        })
+    },
+    [stopPlayback],
+  )
 
+  const handlePlayPause = useCallback(async () => {
     if (isPlaying) {
       stopPlayback()
       return
     }
-
-    const audio = new Audio(audioUrl)
-    audioRef.current = audio
-    audio.onended = () => stopPlayback()
-    audio.onerror = () => {
-      stopPlayback()
-      useToastStore.getState().show(FEEDBACK_COPY.voiceRetry, 'error')
+    // Already resolved (in-session recording, http URL, or a prior successful
+    // lazy fetch) → play immediately.
+    if (audioUrl) {
+      startPlayback(audioUrl)
+      return
     }
-    audio
-      .play()
-      .then(() => setIsPlaying(true))
-      .catch(() => {
-        stopPlayback()
-        useToastStore.getState().show(FEEDBACK_COPY.voiceRetry, 'error')
-      })
-  }, [audioUrl, isPlaying, loadFailed, loadExpired, stopPlayback])
+    // Durable `/api/...` pointer not yet resolved → fetch on this tap. This is the
+    // ONLY place expiry is detected: a 404 here shows "音频已过期" (and lets the user
+    // retry by tapping again), so it never fires just from opening the page.
+    if (audioData.startsWith('/api/')) {
+      const url = await fetchApiAudio()
+      if (url) startPlayback(url)
+    }
+  }, [audioData, audioUrl, isPlaying, stopPlayback, startPlayback, fetchApiAudio])
 
   const durationSeconds = Math.max(1, Math.ceil(duration / 1000))
   const durationLabel = `${durationSeconds}''`

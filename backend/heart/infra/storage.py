@@ -85,11 +85,13 @@ async def _ensure_voice_lifecycle() -> None:
             rules: list = [
                 r for r in existing.get("Rules", []) if r.get("ID") not in _AUDIO_EXPIRY_PREFIXES
             ]
-        except client.exceptions.NoSuchLifecycleConfiguration:  # type: ignore[attr-defined]
-            rules = []
         except Exception:
-            # Older MinIO versions raise a generic ClientError instead of the
-            # typed exception above — treat any get-lifecycle error as "empty".
+            # No lifecycle config yet (S3/R2 raise NoSuchLifecycleConfiguration,
+            # MinIO raises a generic ClientError, and some botocore builds don't
+            # even define client.exceptions.NoSuchLifecycleConfiguration — so
+            # referencing it in an `except` clause here would itself raise
+            # AttributeError and abort the whole upload). Treat any read failure
+            # as "no existing rules" and continue.
             rules = []
 
         for rule_id, prefix in _AUDIO_EXPIRY_PREFIXES.items():
