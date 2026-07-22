@@ -242,6 +242,32 @@ def get_safety_agent():
         return None
 
 
+@lru_cache
+def get_story_service():
+    """Process singleton: StoryService (SS09 story engine).
+
+    Reuses the model router + safety agent + session factory. Returns None if
+    the LLM router is unavailable (no API key) so callers can 503 cleanly.
+    """
+    router = get_model_router()
+    if router is None:
+        logger.warning("wiring_story_service_no_router")
+        return None
+    try:
+        from heart.ss09_story.service import StoryService
+
+        svc = StoryService(
+            session_factory=_get_session_factory(),
+            model_router=router,
+            safety_agent=get_safety_agent(),
+        )
+        logger.info("wiring_story_service_initialized")
+        return svc
+    except Exception as e:
+        logger.warning("wiring_story_service_init_failed", error=str(e))
+        return None
+
+
 def _build_minimax_members() -> list:
     """Build one MiniMaxProvider per configured key (primary + optional pool extras)."""
     from heart.ss08_voice.minimax_provider import MiniMaxProvider
