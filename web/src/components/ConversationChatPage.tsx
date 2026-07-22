@@ -19,6 +19,28 @@ import { VoiceRecordingOverlay } from './VoiceRecordingOverlay'
 
 const EMPTY_MESSAGES: Message[] = []
 
+// Map a server chat-history item to a store Message. Voice rows get an
+// unambiguous by-message-id audio pointer (keyed on the row id, so it needs no
+// role param). Shared by the mount load and the visibilitychange sync so both
+// feed reconcileHistory identical shapes.
+type HistoryItem = Awaited<ReturnType<typeof getChatHistory>>['items'][number]
+function historyItemToMessage(item: HistoryItem): Message {
+  const isVoice = item.modality === 'voice'
+  return {
+    id: item.id,
+    turnId: item.turn_id ?? undefined,
+    role: item.role as 'user' | 'assistant',
+    content: item.content,
+    timestamp: new Date(item.created_at).getTime(),
+    // Prefer the server-provided kind (TEST_REPORT_20260712 BUG-5). Falls back
+    // to modality when the server response is old (no `kind` field).
+    kind: item.kind === 'action' ? 'action' : isVoice ? 'voice' : 'text',
+    audioUrl: isVoice && item.audio_url ? `/api/chat/audio/${item.id}` : undefined,
+    audioDuration: item.audio_duration_ms ?? undefined,
+    audioFormat: isVoice ? 'wav' : undefined,
+  }
+}
+
 interface ConversationChatPageProps {
   isDark: boolean
 }
@@ -63,6 +85,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
   const isStreaming = useChatStore((s) => s.isStreaming[currentCharacterId as CharacterId] ?? false)
   const isPlaying = useChatStore((s) => s.isPlaying)
   const addMessage = useChatStore((s) => s.addMessage)
+  const reconcileHistory = useChatStore((s) => s.reconcileHistory)
   const setCharacterId = useChatStore((s) => s.setCharacterId)
   const appendMessage = useChatStore((s) => s.appendMessage)
   const setLastFetchedAt = useChatStore((s) => s.setLastFetchedAt)
@@ -167,24 +190,11 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
     getChatHistory(currentCharacterId, undefined, 50)
       .then((data) => {
         const reversed = [...data.items].reverse()
-        for (const item of reversed) {
-          addMessage(currentCharacterId, {
-            id: item.id,
-            role: item.role as 'user' | 'assistant',
-            content: item.content,
-            timestamp: new Date(item.created_at).getTime(),
-            // Prefer the server-provided kind (added in the fix for
-            // TEST_REPORT_20260712 BUG-5). Falls back to modality when the
-            // server response is old (no `kind` field).
-            kind: item.kind === 'action' ? 'action' : item.modality === 'voice' ? 'voice' : 'text',
-            // Durable pointer (persisted) rather than audioData, so the voice
-            // bubble survives the next refresh too. VoiceMessageBubble fetches
-            // /api/ URLs with auth.
-            audioUrl: item.modality === 'voice' && item.audio_url ? `/api/chat/audio/${item.id}` : undefined,
-            audioDuration: item.audio_duration_ms ?? undefined,
-            audioFormat: item.modality === 'voice' ? 'wav' : undefined,
-          })
-        }
+        // Reconcile (not append) so the server's rows replace the optimistic
+        // copies of the same turn instead of duplicating them. reconcileHistory
+        // dedups by turnId, protects the live turn, and carries over in-session
+        // audioData.
+        reconcileHistory(currentCharacterId, reversed.map(historyItemToMessage))
         if (reversed.length > 0) {
           const last = reversed[reversed.length - 1]
           appendMessage(currentCharacterId, {
@@ -215,14 +225,13 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
     const msgs = useChatStore.getState().messages[cid as CharacterId] ?? []
     const streamingTurnId = useChatStore.getState().currentTurnId
     for (const m of msgs) {
-      if (
-        m.role === 'assistant' &&
-        m.kind === 'voice' &&
-        !m.audioData &&
-        !m.audioUrl &&
-        m.id !== streamingTurnId
-      ) {
-        setMessageAudioUrl(cid, m.id, `/api/chat/audio/by-turn/${m.id}`)
+      if (m.kind !== 'voice' || m.audioData || m.audioUrl || m.id === streamingTurnId) continue
+      // Repoint at the by-turn endpoint, role-scoped. Assistant placeholders use
+      // id === turn_id; user messages use turnId (their id is `user-${turnId}`).
+      if (m.role === 'assistant') {
+        setMessageAudioUrl(cid, m.id, `/api/chat/audio/by-turn/${m.id}?role=assistant`)
+      } else if (m.turnId) {
+        setMessageAudioUrl(cid, m.id, `/api/chat/audio/by-turn/${m.turnId}?role=user`)
       }
     }
     // Re-runs when isStreaming flips false too: on reconnect the WS layer clears
@@ -264,30 +273,16 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
       getChatHistory(currentCharacterId, undefined, 20)
         .then((data) => {
           const incomingMsgs = [...data.items].reverse()
-          const existing = useChatStore.getState().messages[currentCharacterId] ?? []
-          const existingIds = new Set(existing.map((m) => m.id))
-          const fresh = incomingMsgs.filter((item) => !existingIds.has(item.id))
-          for (const item of fresh) {
-            addMessage(currentCharacterId, {
-              id: item.id,
-              role: item.role as 'user' | 'assistant',
-              content: item.content,
-              timestamp: new Date(item.created_at).getTime(),
-              // Prefer the server-provided kind (added in the fix for
-              // TEST_REPORT_20260712 BUG-5). Falls back to modality when
-              // the server response is old (no `kind` field).
-              kind: item.kind === 'action' ? 'action' : item.modality === 'voice' ? 'voice' : 'text',
-              audioUrl: item.modality === 'voice' && item.audio_url ? `/api/chat/audio/${item.id}` : undefined,
-              audioDuration: item.audio_duration_ms ?? undefined,
-            })
-          }
-          if (fresh.length > 0) setLastFetchedAt(currentCharacterId, Date.now())
+          // Reconcile by turn (not raw id): optimistic ids never match server
+          // UUIDs, so an id-only dedup let the user's own messages duplicate.
+          reconcileHistory(currentCharacterId, incomingMsgs.map(historyItemToMessage))
+          if (incomingMsgs.length > 0) setLastFetchedAt(currentCharacterId, Date.now())
         })
         .catch(() => {})
     }
     document.addEventListener('visibilitychange', handler)
     return () => document.removeEventListener('visibilitychange', handler)
-  }, [currentCharacterId, isAuthenticated, addMessage, setLastFetchedAt])
+  }, [currentCharacterId, isAuthenticated, reconcileHistory, setLastFetchedAt])
 
   // Auto-scroll on new messages
   useEffect(() => {
