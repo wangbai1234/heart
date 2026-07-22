@@ -743,3 +743,58 @@ export async function getStoryGenres(): Promise<{
 export async function getScenario(scenarioId: string): Promise<ScenarioDetailDTO> {
   return request(`/story/scenarios/${encodeURIComponent(scenarioId)}`)
 }
+
+// ── Run lifecycle (PR4) ─────────────────────────────────────────────
+// A run is one playthrough of a scenario. Turns stream over /api/story/ws;
+// these REST calls start / list / resume / delete runs.
+
+export type StoryRole = 'player' | 'gm' | 'npc' | 'system'
+export type StoryKind = 'narration' | 'dialogue' | 'action'
+
+/** A persisted story message (transcript row) or an opening bubble. */
+export interface StoryBubbleDTO {
+  id?: string
+  turn_id: string | null
+  seq?: number
+  role?: StoryRole
+  kind: StoryKind
+  npc_name: string | null
+  content: string
+}
+
+export interface StoryRunDTO {
+  run_id: string
+  scenario_id: string
+  title: string
+  status: 'active' | 'ended' | 'deleted'
+  turn_count: number
+  model: string
+  created_at: string
+  last_activity_at: string
+}
+
+export async function startRun(
+  scenarioId: string,
+  playerIdentity: Record<string, unknown>,
+): Promise<{ run: StoryRunDTO; opening_bubbles: StoryBubbleDTO[] }> {
+  return request('/story/runs', {
+    method: 'POST',
+    body: JSON.stringify({ scenario_id: scenarioId, player_identity: playerIdentity }),
+  })
+}
+
+export async function getRuns(): Promise<{ runs: StoryRunDTO[] }> {
+  return request('/story/runs')
+}
+
+export async function getRun(
+  runId: string,
+  afterSeq = 0,
+): Promise<{ run: StoryRunDTO; player_identity: Record<string, unknown>; messages: StoryBubbleDTO[] }> {
+  const qs = afterSeq > 0 ? `?after_seq=${afterSeq}` : ''
+  return request(`/story/runs/${encodeURIComponent(runId)}${qs}`)
+}
+
+export async function deleteRun(runId: string): Promise<{ ok: boolean }> {
+  return request(`/story/runs/${encodeURIComponent(runId)}`, { method: 'DELETE' })
+}
