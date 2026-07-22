@@ -48,6 +48,7 @@ from .routes_proactive import router as proactive_router
 from .routes_profile import router as profile_router
 from .routes_state import dev_router, memory_router
 from .routes_state import router as state_router
+from .routes_story import router as story_router
 from .routes_voice import router as voice_router
 from .routes_webhooks import router as webhooks_router
 
@@ -288,6 +289,7 @@ def create_app() -> FastAPI:
     app.include_router(account_router)  # /api/account/* (clear, delete, export)
     app.include_router(characters_router)  # /api/characters/* (voice settings)
     app.include_router(proactive_router)
+    app.include_router(story_router)  # /api/story/* (scenario catalog; runs+ws in PR3)
     app.include_router(state_router)
     app.include_router(memory_router)
     app.include_router(voice_router)
