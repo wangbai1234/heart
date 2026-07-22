@@ -1093,6 +1093,18 @@ _MAX_ASR_BYTES = 8 * 1024 * 1024  # 8 MB raw (base64 overhead stays under MIMO 1
 _ALLOWED_ASR_MIME = {"audio/wav", "audio/wave", "audio/x-wav"}
 
 
+async def _upload_asr_audio(user_id: str, data: bytes, mime: str) -> str | None:
+    """Upload ASR recording to S3 (best-effort). Returns URL or None."""
+    try:
+        from heart.infra.storage import is_s3_configured, upload_voice_message
+
+        if is_s3_configured():
+            return await upload_voice_message(user_id, data, mime)
+    except Exception as exc:
+        logger.warning("asr_s3_upload_failed", user_id=user_id, error=str(exc))
+    return None
+
+
 @router.post("/transcribe")
 @limiter.limit("30/minute")
 async def transcribe_audio(
@@ -1151,7 +1163,16 @@ async def transcribe_audio(
             detail=f"积分不足，语音识别需要 {cost // 100} 积分，当前余额 {balance / 100:.1f}",
         ) from exc
 
+    # Upload to S3 for cross-session persistence (best-effort — non-fatal if it fails).
+    # Requires a lifecycle rule on voice_messages/ prefix to auto-delete after 20 days.
+    audio_url = await _upload_asr_audio(str(uid), data, mime)
+
     logger.info(
         "asr_success", user_id=str(uid), duration_ms=duration_ms, transcript_len=len(transcript)
     )
-    return {"transcript": transcript, "duration_ms": duration_ms, "balance": new_balance / 100}
+    return {
+        "transcript": transcript,
+        "duration_ms": duration_ms,
+        "balance": new_balance / 100,
+        "audio_url": audio_url,
+    }

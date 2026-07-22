@@ -638,7 +638,7 @@ export async function removeCharacterVoice(characterId: string): Promise<{ ok: b
 export async function transcribeAudio(
   wav: Blob,
   durationMs: number,
-): Promise<{ transcript: string; duration_ms: number; balance?: number }> {
+): Promise<{ transcript: string; duration_ms: number; balance?: number; audio_url?: string | null }> {
   const { accessToken } = (await import('../stores/authStore')).useAuthStore.getState()
   if (!accessToken) throw new Error('未登录')
   const formData = new FormData()

@@ -461,7 +461,7 @@ export function useWebSocket() {
   const sendMessage = useCallback(
     (
       text: string,
-      opts?: { voiceBubble?: { audioData: string; durationMs: number; format: string } },
+      opts?: { voiceBubble?: { audioData: string; durationMs: number; format: string; audioUrl?: string | null } },
     ) => {
       if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
 
@@ -509,6 +509,7 @@ export function useWebSocket() {
           turn_id: turnId,
           voice_enabled: voiceEnabled,
           model,
+          ...(vb?.audioUrl ? { audio_url: vb.audioUrl } : {}),
         }),
       )
     },

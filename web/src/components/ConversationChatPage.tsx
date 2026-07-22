@@ -357,20 +357,19 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
       }
 
       const { wavBlob, durationMs } = result
-      const blobUrl = URL.createObjectURL(wavBlob)
 
       try {
-        const { transcript } = await transcribeAudio(wavBlob, durationMs)
+        const { transcript, audio_url } = await transcribeAudio(wavBlob, durationMs)
         if (!transcript) {
-          URL.revokeObjectURL(blobUrl)
           showToast('没有识别到语音内容')
           return
         }
+        // Blob URL for immediate in-session playback; S3 audio_url persists across navigations.
+        const blobUrl = URL.createObjectURL(wavBlob)
         sendMessage(transcript, {
-          voiceBubble: { audioData: blobUrl, durationMs, format: 'wav' },
+          voiceBubble: { audioData: blobUrl, durationMs, format: 'wav', audioUrl: audio_url },
         })
       } catch (err: unknown) {
-        URL.revokeObjectURL(blobUrl)
         const msg = err instanceof Error ? err.message : '语音识别失败'
         showToast(msg)
       }

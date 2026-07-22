@@ -566,6 +566,7 @@ async def _post_turn_billing(
     served_model: str = "deepseek",
     degraded_to: Optional[str] = None,
     tts_provider: str = "",
+    user_audio_url: str = "",
 ) -> None:
     """Charge credits and persist chat messages after turn completes.
 
@@ -590,11 +591,12 @@ async def _post_turn_billing(
 
     try:
         async with AsyncSession(_get_engine(), expire_on_commit=False) as db:
+            _user_modality = "voice" if user_audio_url else "text"
             await db.execute(
                 sql_text(
                     "INSERT INTO chat_messages "
-                    "(id, user_id, character_id, turn_id, role, content, modality, created_at) "
-                    "VALUES (:id, :uid, :cid, :tid, 'user', :content, 'text', NOW())"
+                    "(id, user_id, character_id, turn_id, role, content, modality, audio_url, created_at) "
+                    "VALUES (:id, :uid, :cid, :tid, 'user', :content, :modality, :audio_url, NOW())"
                 ),
                 {
                     "id": uuid.uuid4(),
@@ -602,6 +604,8 @@ async def _post_turn_billing(
                     "cid": character_id,
                     "tid": uuid.UUID(turn_id),
                     "content": user_text,
+                    "modality": _user_modality,
+                    "audio_url": user_audio_url or None,
                 },
             )
 
@@ -808,6 +812,7 @@ async def _handle_chat_message(
     """
     turn_id = msg.get("turn_id") or str(uuid.uuid4())
     user_text = msg.get("text", "")
+    user_audio_url = (msg.get("audio_url") or "").strip()
     character_id = msg.get("character_id", "rin")
     # Requested LLM model — default to deepseek (free, unlimited).
     model = msg.get("model", "deepseek") or "deepseek"
@@ -1023,6 +1028,7 @@ async def _handle_chat_message(
                 served_model=served_model,
                 degraded_to=degraded_to,
                 tts_provider=stream_session.tts_provider_name if stream_session else "",
+                user_audio_url=user_audio_url,
             )
             _terminal_sent = True
     finally:

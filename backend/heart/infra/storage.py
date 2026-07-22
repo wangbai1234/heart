@@ -130,6 +130,17 @@ async def _upload_to_s3(key: str, data: bytes, content_type: str) -> None:
     logger.info("file_uploaded", key=key, size=len(data))
 
 
+async def upload_voice_message(user_id: str, data: bytes, mime: str = "audio/wav") -> str:
+    """Upload a user voice recording and return its URL.
+
+    Objects land under voice_messages/<user_id>/<uuid>.<ext> and should be
+    covered by an S3/R2 lifecycle rule that auto-deletes this prefix after 20 days.
+    """
+    ext = "mp3" if mime in ("audio/mpeg", "audio/mp3") else "wav"
+    key = f"voice_messages/{user_id}/{uuid.uuid4().hex}.{ext}"
+    return await upload_file(data, key, mime)
+
+
 async def get_s3_object(key: str) -> tuple[bytes, str]:
     """Fetch object from S3/MinIO. Returns (data, content_type)."""
     client = _get_s3_client()
