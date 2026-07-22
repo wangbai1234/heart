@@ -1288,6 +1288,7 @@ async def _serve_stored_audio(audio_url: Optional[str], log_ref: str) -> Respons
 @router.get("/api/chat/audio/by-turn/{turn_id}")
 async def get_chat_audio_by_turn(
     turn_id: str,
+    role: str = Query("assistant"),
     current_user: TokenData = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> Response:
@@ -1297,6 +1298,11 @@ async def get_chat_audio_by_turn(
     persisted row gets a fresh server id. After a page refresh the frontend only
     holds the turn_id, so it replays via this endpoint — without it, rehydrated
     voice bubbles hang in the "加载中" state forever.
+
+    A single turn can hold BOTH a user voice row (ASR recording) and an assistant
+    voice row (TTS reply); the user row is inserted first, so without a role
+    filter the assistant's by-turn pointer would resolve to the user's recording.
+    `role` (default 'assistant', so existing callers are unchanged) disambiguates.
     """
     uid = uuid.UUID(current_user.user_id)
     try:
@@ -1309,13 +1315,13 @@ async def get_chat_audio_by_turn(
             """
             SELECT audio_url
             FROM chat_messages
-            WHERE turn_id = :tid AND user_id = :uid
+            WHERE turn_id = :tid AND user_id = :uid AND role = :role
               AND modality = 'voice' AND audio_url IS NOT NULL
             ORDER BY created_at ASC
             LIMIT 1
             """
         ),
-        {"tid": tid, "uid": uid},
+        {"tid": tid, "uid": uid, "role": role},
     )
     row = result.mappings().first()
     return await _serve_stored_audio(row["audio_url"] if row else None, f"turn:{turn_id}")

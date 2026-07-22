@@ -185,6 +185,7 @@ export function useWebSocket() {
           setCurrentTurnId(msg.turn_id ?? null)
           addMessage(cid, {
             id: msg.turn_id ?? crypto.randomUUID(),
+            turnId: msg.turn_id ?? undefined,
             role: 'assistant',
             content: '',
             timestamp: Date.now(),
@@ -271,6 +272,7 @@ export function useWebSocket() {
           } else {
             addMessage(cid, {
               id: `${msg.turn_id ?? ''}-${msg.sequence_id ?? 0}`,
+              turnId: msg.turn_id ?? undefined,
               role: 'assistant',
               content: msg.content ?? '',
               timestamp: Date.now(),
@@ -480,11 +482,21 @@ export function useWebSocket() {
       const vb = opts?.voiceBubble
       addMessage(characterId, {
         id: `user-${turnId}`,
+        turnId,
         role: 'user',
         content: text,
         timestamp: Date.now(),
         ...(vb
-          ? { kind: 'voice', audioData: vb.audioData, audioDuration: vb.durationMs, audioFormat: vb.format }
+          ? {
+              kind: 'voice',
+              audioData: vb.audioData,
+              audioDuration: vb.durationMs,
+              audioFormat: vb.format,
+              // Durable, same-origin pointer so the voice bubble survives a
+              // refresh (audioData is dropped from persistence). role=user
+              // disambiguates it from the assistant's audio in the same turn.
+              audioUrl: `/api/chat/audio/by-turn/${turnId}?role=user`,
+            }
           : {}),
       })
       // Sync user message to threads for HomePage
