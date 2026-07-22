@@ -37,7 +37,7 @@ def _get_s3_client():
 
 
 async def ensure_bucket() -> None:
-    """Create bucket if it doesn't exist."""
+    """Create bucket if it doesn't exist, then set lifecycle rules."""
     global _bucket_checked
     if _bucket_checked:
         return
@@ -53,7 +53,68 @@ async def ensure_bucket() -> None:
             logger.info("s3_bucket_created", bucket=settings.s3_bucket_name)
 
     await asyncio.to_thread(_check_or_create)
+    await _ensure_voice_lifecycle()
     _bucket_checked = True
+
+
+# Prefixes whose objects expire after AUDIO_EXPIRY_DAYS days.
+# voice_messages/ — user ASR recordings
+# chat_audio/     — character TTS output
+_AUDIO_EXPIRY_PREFIXES: dict[str, str] = {
+    "expire-voice-messages": "voice_messages/",
+    "expire-chat-audio": "chat_audio/",
+}
+AUDIO_EXPIRY_DAYS = 20
+
+
+async def _ensure_voice_lifecycle() -> None:
+    """Idempotently set 20-day expiry rules for all audio prefixes.
+
+    Uses get → merge → put so unrelated bucket rules are preserved.
+    Works with AWS S3, Cloudflare R2, and local Docker MinIO (latest).
+    Failure is non-fatal — logs a warning and lets startup continue.
+    """
+    from heart.core.config import settings
+
+    client = _get_s3_client()
+    bucket = settings.s3_bucket_name
+
+    def _apply() -> None:
+        try:
+            existing = client.get_bucket_lifecycle_configuration(Bucket=bucket)
+            rules: list = [
+                r for r in existing.get("Rules", []) if r.get("ID") not in _AUDIO_EXPIRY_PREFIXES
+            ]
+        except client.exceptions.NoSuchLifecycleConfiguration:  # type: ignore[attr-defined]
+            rules = []
+        except Exception:
+            # Older MinIO versions raise a generic ClientError instead of the
+            # typed exception above — treat any get-lifecycle error as "empty".
+            rules = []
+
+        for rule_id, prefix in _AUDIO_EXPIRY_PREFIXES.items():
+            rules.append(
+                {
+                    "ID": rule_id,
+                    "Status": "Enabled",
+                    "Filter": {"Prefix": prefix},
+                    "Expiration": {"Days": AUDIO_EXPIRY_DAYS},
+                }
+            )
+        try:
+            client.put_bucket_lifecycle_configuration(
+                Bucket=bucket,
+                LifecycleConfiguration={"Rules": rules},
+            )
+            logger.info(
+                "s3_audio_lifecycle_set",
+                prefixes=list(_AUDIO_EXPIRY_PREFIXES.values()),
+                expiry_days=AUDIO_EXPIRY_DAYS,
+            )
+        except Exception as exc:
+            logger.warning("s3_audio_lifecycle_failed", error=str(exc))
+
+    await asyncio.to_thread(_apply)
 
 
 async def upload_file(
@@ -128,6 +189,17 @@ async def _upload_to_s3(key: str, data: bytes, content_type: str) -> None:
         ContentType=content_type,
     )
     logger.info("file_uploaded", key=key, size=len(data))
+
+
+async def upload_voice_message(user_id: str, data: bytes, mime: str = "audio/wav") -> str:
+    """Upload a user voice recording and return its URL.
+
+    Objects land under voice_messages/<user_id>/<uuid>.<ext> and should be
+    covered by an S3/R2 lifecycle rule that auto-deletes this prefix after 20 days.
+    """
+    ext = "mp3" if mime in ("audio/mpeg", "audio/mp3") else "wav"
+    key = f"voice_messages/{user_id}/{uuid.uuid4().hex}.{ext}"
+    return await upload_file(data, key, mime)
 
 
 async def get_s3_object(key: str) -> tuple[bytes, str]:

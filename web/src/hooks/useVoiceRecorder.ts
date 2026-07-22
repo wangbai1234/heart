@@ -32,7 +32,10 @@ export function useVoiceRecorder() {
       if (e.data.size > 0) chunksRef.current.push(e.data)
     }
 
-    mr.start(100)
+    // No timeslice: all audio arrives in one chunk when stop() fires.
+    // Using a timeslice (e.g. 100ms) risks losing the final partial chunk in
+    // some browsers when stop() is called before the next slice boundary.
+    mr.start()
     startTimeRef.current = performance.now()
 
     autoStopTimerRef.current = setTimeout(() => {
@@ -64,7 +67,7 @@ export function useVoiceRecorder() {
 
       if (mr.state === 'recording') {
         await new Promise<void>((resolve) => {
-          mr.onstop = () => resolve()
+          mr.addEventListener('stop', () => resolve(), { once: true })
           mr.stop()
         })
       }
