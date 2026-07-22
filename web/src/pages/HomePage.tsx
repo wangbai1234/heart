@@ -246,7 +246,7 @@ function FeaturedStoryCard() {
 
   if (!scenario) return null
 
-  const locked = scenario.locked
+  const isAdult = scenario.maturity === 'adult'
   const playLabel =
     scenario.play_count > 0 ? `已有 ${formatPlayCount(scenario.play_count)} 人游玩` : '抢先体验'
 
@@ -279,7 +279,7 @@ function FeaturedStoryCard() {
             <span className="inline-flex h-6 items-center rounded-full bg-white/25 backdrop-blur-[4px] px-2.5 text-[12px] font-medium text-white">
               🔥 {scenario.genre}
             </span>
-            {locked && (
+            {isAdult && (
               <span className="inline-flex h-6 items-center rounded-full bg-black/35 px-2.5 text-[12px] font-medium text-white">
                 🔞 18+
               </span>

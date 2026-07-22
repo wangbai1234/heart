@@ -685,10 +685,9 @@ export async function ackProactive(
 }
 
 // ── Story / 剧情 mode (SS09) ────────────────────────────────────────
-// Read paths for the scenario catalog. Run lifecycle + WS land in PR3/PR4.
-// `maturity='adult'` scenarios are age-gated: the server soft-locks them for
-// unverified users (`locked:true`, blurb replaced with a gate hint) rather than
-// hard-failing, so the UI can drive the user to /age-gate.
+// Read paths for the scenario catalog + run lifecycle + WS.
+// `maturity='adult'` is a display-only label (🔞) shown on the card/intro;
+// scenarios are NOT age-gated (registration already restricts signup to adults).
 
 export interface ScenarioCardDTO {
   id: string
@@ -699,7 +698,6 @@ export interface ScenarioCardDTO {
   maturity: 'all_ages' | 'adult'
   is_featured: boolean
   play_count: number
-  locked: boolean
 }
 
 /** A single form field in a scenario's player-card template (StartRunSheet). */
