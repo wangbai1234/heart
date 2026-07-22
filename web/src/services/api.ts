@@ -785,6 +785,11 @@ export async function getRuns(): Promise<{ runs: StoryRunDTO[] }> {
   return request('/story/runs')
 }
 
+/** The caller's current active run for a scenario, or null (resume vs restart). */
+export async function getActiveRun(scenarioId: string): Promise<{ run: StoryRunDTO | null }> {
+  return request(`/story/scenarios/${encodeURIComponent(scenarioId)}/active-run`)
+}
+
 export async function getRun(
   runId: string,
   afterSeq = 0,
