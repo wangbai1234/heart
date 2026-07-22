@@ -90,11 +90,36 @@ class _StorySession:
         mtype = msg.get("type")
         if mtype == "story_chat":
             await self._start_chat(msg)
+        elif mtype == "heartbeat":
+            await self._heartbeat(msg)
         elif mtype == "interrupt":
             if self._task is not None and not self._task.done():
                 self._task.cancel()
         else:
             await self.send({"type": "error", "code": "unknown_type"})
+
+    async def _heartbeat(self, msg: dict[str, Any]) -> None:
+        """Per-minute playtime billing pulse (client sends one every 60s while
+        the player page is foregrounded).
+
+        Charges one minute; on ``charged`` echoes the new balance so the wallet
+        stays live, on ``insufficient`` tells the client to pause the run and
+        prompt a recharge (the save is preserved — play resumes after top-up).
+        throttled / inactive / free are silent no-ops.
+        """
+        try:
+            run_id = uuid.UUID(str(msg.get("run_id")))
+        except (ValueError, TypeError):
+            await self.send({"type": "error", "code": "bad_run_id"})
+            return
+
+        status, balance = await self._service.charge_playtime(run_id, uuid.UUID(self._user_id))
+        if status == "charged":
+            await self.send({"type": "playtime", "run_id": str(run_id), "balance": balance})
+        elif status == "insufficient":
+            await self.send(
+                {"type": "insufficient_credits", "run_id": str(run_id), "balance": balance}
+            )
 
     async def _start_chat(self, msg: dict[str, Any]) -> None:
         if self._task is not None and not self._task.done():

@@ -26,11 +26,12 @@ export function StoryPlayerPage() {
   const messages = useStoryStore((s) => s.messagesByRun[runId])
   const streamText = useStoryStore((s) => s.streamTextByRun[runId])
   const generating = useStoryStore((s) => s.generatingByRun[runId] ?? false)
+  const paused = useStoryStore((s) => s.pausedByRun[runId] ?? false)
   const runLoading = useStoryStore((s) => s.runLoading)
   const runError = useStoryStore((s) => s.runError)
   const loadRun = useStoryStore((s) => s.loadRun)
 
-  const { sendMessage, interrupt } = useStoryWebSocket()
+  const { sendMessage, interrupt } = useStoryWebSocket(runId)
   const [draft, setDraft] = useState('')
   const scrollRef = useRef<HTMLDivElement | null>(null)
 
@@ -51,7 +52,7 @@ export function StoryPlayerPage() {
 
   const handleSend = () => {
     const text = draft.trim()
-    if (!text || generating) return
+    if (!text || generating || paused) return
     const sent = sendMessage(runId, text)
     if (sent) setDraft('')
   }
@@ -108,12 +109,28 @@ export function StoryPlayerPage() {
         className="relative z-10 flex-shrink-0 border-t border-[var(--color-border-glass)] bg-[var(--color-glass-55)] backdrop-blur-[12px] px-3 pt-2.5"
         style={{ paddingBottom: 'calc(10px + var(--safe-bottom))' }}
       >
+        {/* Per-minute billing ran dry → freeze input + prompt recharge. The run
+            is saved; a successful charge after top-up auto-resumes it. */}
+        {paused && (
+          <div className="mb-2.5 flex items-center gap-3 rounded-[16px] bg-[var(--color-primary)]/10 border border-[var(--color-primary)]/30 px-3.5 py-2.5">
+            <span className="flex-1 text-[13px] leading-[1.5] text-[var(--color-ink)]">
+              余额不足，剧情已暂停。充值后可继续游玩，进度已保存。
+            </span>
+            <button
+              onClick={() => navigate('/wallet')}
+              className="shrink-0 h-[36px] rounded-[18px] bg-[var(--color-primary)] text-white px-4 text-[14px] font-semibold active:scale-[0.97] transition-transform"
+            >
+              去充值
+            </button>
+          </div>
+        )}
         <div className="flex items-end gap-2">
           <textarea
-            className="flex-1 resize-none rounded-[20px] bg-[var(--color-surface)] text-[var(--color-ink)] placeholder-[var(--color-text-muted)] border border-[var(--color-border-glass)] px-4 py-2.5 focus:outline-none focus:border-[var(--color-primary)] max-h-32 min-h-[44px] text-[15px]"
-            placeholder="描述你的行动或对白…"
+            className="flex-1 resize-none rounded-[20px] bg-[var(--color-surface)] text-[var(--color-ink)] placeholder-[var(--color-text-muted)] border border-[var(--color-border-glass)] px-4 py-2.5 focus:outline-none focus:border-[var(--color-primary)] max-h-32 min-h-[44px] text-[15px] disabled:opacity-50"
+            placeholder={paused ? '充值后继续剧情…' : '描述你的行动或对白…'}
             rows={1}
             value={draft}
+            disabled={paused}
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={handleKey}
           />
@@ -127,7 +144,7 @@ export function StoryPlayerPage() {
           ) : (
             <button
               onClick={handleSend}
-              disabled={!draft.trim()}
+              disabled={!draft.trim() || paused}
               className="shrink-0 h-[44px] rounded-[22px] bg-[var(--color-primary)] text-white px-5 text-[15px] font-semibold active:scale-[0.97] transition-transform disabled:opacity-40"
             >
               发送

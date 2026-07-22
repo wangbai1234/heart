@@ -172,6 +172,48 @@ async def add_scenario_unlock(session: AsyncSession, user_id: UUID, scenario_id:
     )
 
 
+# ── Playtime billing (PR C2) ────────────────────────────────────────
+
+
+async def get_run_billing(session: AsyncSession, run_id: UUID, user_id: UUID) -> Optional[Any]:
+    """Billing state for a run scoped to its owner, or None.
+
+    Returns a row with ``status``, ``billed_minutes``, ``last_billed_at``.
+    """
+    result = await session.execute(
+        text(
+            """
+            SELECT status, billed_minutes, last_billed_at
+            FROM story_runs
+            WHERE id = :id AND user_id = :uid AND status != 'deleted'
+            """
+        ),
+        {"id": str(run_id), "uid": str(user_id)},
+    )
+    return result.fetchone()
+
+
+async def advance_billed_minute(
+    session: AsyncSession, run_id: UUID, minute: int, now: datetime
+) -> None:
+    """Advance the run's billed-minute counter after a successful charge.
+
+    Guarded on ``billed_minutes = :minute`` so two concurrent heartbeats that
+    read the same minute only advance the counter once (the second is a no-op),
+    matching the idempotent ``story_time:{run}:{minute}`` deduct.
+    """
+    await session.execute(
+        text(
+            """
+            UPDATE story_runs
+            SET billed_minutes = :next, last_billed_at = :now
+            WHERE id = :id AND billed_minutes = :minute
+            """
+        ),
+        {"id": str(run_id), "minute": minute, "next": minute + 1, "now": now},
+    )
+
+
 # ── Run + message writes (PR3 story engine) ─────────────────────────
 
 

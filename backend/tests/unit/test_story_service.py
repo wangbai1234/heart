@@ -439,6 +439,119 @@ async def test_maybe_summarize_folds_when_tail_grows(monkeypatch):
     assert bumped[0]["summary_watermark"] == expected_wm
 
 
+# ── PR C2: per-minute playtime billing ───────────────────────────────
+
+
+class _BillingRow:
+    """Stand-in for the get_run_billing result row."""
+
+    def __init__(self, status="active", billed_minutes=0, last_billed_at=None):
+        self.status = status
+        self.billed_minutes = billed_minutes
+        self.last_billed_at = last_billed_at
+
+
+@pytest.mark.asyncio
+async def test_charge_playtime_charges_one_minute(monkeypatch):
+    """First heartbeat of a fresh active run bills minute 0 and advances it."""
+    import heart.billing as billing
+
+    charged: list[tuple] = []
+    advanced: list[int] = []
+
+    async def _get_billing(session, run_id, user_id):
+        return _BillingRow(status="active", billed_minutes=0, last_billed_at=None)
+
+    async def _deduct(session, user_id, amount, idem, type_str="consume_text"):
+        charged.append((amount, idem, type_str))
+        return 5_000 - amount
+
+    async def _advance(session, run_id, minute, now):
+        advanced.append(minute)
+
+    monkeypatch.setattr(repo, "get_run_billing", _get_billing)
+    monkeypatch.setattr(repo, "advance_billed_minute", _advance)
+    monkeypatch.setattr(billing, "deduct_credits", _deduct)
+
+    svc = StoryService(_fake_factory, _FakeRouter())
+    run = _run()
+    status, balance = await svc.charge_playtime(run.id, run.user_id)
+
+    assert status == "charged"
+    assert balance == 5_000 - 100  # 1 悠悠币 = 100 fen
+    assert len(charged) == 1
+    assert charged[0][0] == 100
+    assert charged[0][1] == f"story_time:{run.id}:0"
+    assert charged[0][2] == "story_time"
+    assert advanced == [0]
+
+
+@pytest.mark.asyncio
+async def test_charge_playtime_throttled(monkeypatch):
+    """A heartbeat arriving too soon after the last charge bills nothing."""
+    import heart.billing as billing
+
+    charged: list[tuple] = []
+
+    async def _get_billing(session, run_id, user_id):
+        recent = datetime.now(timezone.utc)
+        return _BillingRow(status="active", billed_minutes=3, last_billed_at=recent)
+
+    async def _deduct(session, user_id, amount, idem, type_str="consume_text"):
+        charged.append((amount, idem, type_str))
+        return 0
+
+    monkeypatch.setattr(repo, "get_run_billing", _get_billing)
+    monkeypatch.setattr(billing, "deduct_credits", _deduct)
+
+    svc = StoryService(_fake_factory, _FakeRouter())
+    status, _ = await svc.charge_playtime(uuid4(), uuid4())
+
+    assert status == "throttled"
+    assert charged == []  # never billed
+
+
+@pytest.mark.asyncio
+async def test_charge_playtime_insufficient(monkeypatch):
+    """Balance below a minute's cost → insufficient, no advance, save preserved."""
+    import heart.billing as billing
+
+    advanced: list[int] = []
+
+    async def _get_billing(session, run_id, user_id):
+        return _BillingRow(status="active", billed_minutes=7, last_billed_at=None)
+
+    async def _deduct(session, user_id, amount, idem, type_str="consume_text"):
+        raise billing.InsufficientCreditsError(amount, 40)
+
+    async def _advance(session, run_id, minute, now):
+        advanced.append(minute)
+
+    monkeypatch.setattr(repo, "get_run_billing", _get_billing)
+    monkeypatch.setattr(repo, "advance_billed_minute", _advance)
+    monkeypatch.setattr(billing, "deduct_credits", _deduct)
+
+    svc = StoryService(_fake_factory, _FakeRouter())
+    status, balance = await svc.charge_playtime(uuid4(), uuid4())
+
+    assert status == "insufficient"
+    assert balance == 40
+    assert advanced == []  # minute counter not advanced when unpaid
+
+
+@pytest.mark.asyncio
+async def test_charge_playtime_inactive_run(monkeypatch):
+    """A missing / non-active run bills nothing."""
+    async def _get_billing(session, run_id, user_id):
+        return None
+
+    monkeypatch.setattr(repo, "get_run_billing", _get_billing)
+
+    svc = StoryService(_fake_factory, _FakeRouter())
+    status, _ = await svc.charge_playtime(uuid4(), uuid4())
+    assert status == "inactive"
+
+
 @pytest.mark.asyncio
 async def test_maybe_summarize_noop_below_trigger(monkeypatch):
     """Below the trigger threshold nothing is summarised."""

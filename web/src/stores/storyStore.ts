@@ -80,6 +80,9 @@ interface StoryState {
   // Live delta accumulation for the in-flight GM turn; null = no live buffer.
   streamTextByRun: Record<string, string | null>
   generatingByRun: Record<string, boolean>
+  // Set when the server reports 余额不足 for a run's per-minute billing: the
+  // player page freezes input and shows a recharge prompt until top-up.
+  pausedByRun: Record<string, boolean>
   runLoading: boolean
   runError: boolean
 
@@ -89,6 +92,9 @@ interface StoryState {
   loadActiveRun: (scenarioId: string, force?: boolean) => Promise<StoryRunDTO | null>
   // Permanently unlock (pay for) a scenario; updates the detail cache on success.
   unlockScenario: (scenarioId: string) => Promise<{ ok: boolean; balance: number }>
+
+  // Per-minute billing pause (set from useStoryWebSocket on insufficient_credits)
+  setPaused: (runId: string, paused: boolean) => void
 
   // Run lifecycle
   startRun: (
@@ -142,6 +148,7 @@ export const useStoryStore = create<StoryState>((set, get) => ({
   messagesByRun: {},
   streamTextByRun: {},
   generatingByRun: {},
+  pausedByRun: {},
   runLoading: false,
   runError: false,
 
@@ -208,6 +215,10 @@ export const useStoryStore = create<StoryState>((set, get) => ({
       return { detailById: { ...s.detailById, [scenarioId]: { ...cached, unlocked: true } } }
     })
     return { ok: res.ok, balance: res.balance }
+  },
+
+  setPaused: (runId, paused) => {
+    set((s) => ({ pausedByRun: { ...s.pausedByRun, [runId]: paused } }))
   },
 
   // ── Run lifecycle ─────────────────────────────────────────────────
