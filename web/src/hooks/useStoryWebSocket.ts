@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef } from 'react'
 import { useAuthStore } from '../stores/authStore'
 import { useToastStore } from '../stores/toastStore'
 import { useStoryStore } from '../stores/storyStore'
+import { useCreditsStore } from '../stores/creditsStore'
 import { authNavigate } from '../services/navigation'
 
 /**
@@ -17,10 +18,12 @@ const WS_BASE = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.h
 interface StoryWsFrame {
   type: string
   turn_id?: string
+  run_id?: string
   delta?: string
   content?: string
   kind?: 'narration' | 'dialogue' | 'action'
   npc_name?: string | null
+  balance?: number
   ok?: boolean
   code?: string
 }
@@ -28,6 +31,10 @@ interface StoryWsFrame {
 // Wall-clock ceiling for a single turn; if no turn_end/error arrives the UI
 // force-clears the "正在续写" state so the player never gets stuck.
 const TURN_WATCHDOG_MS = 90_000
+
+// Per-minute playtime billing pulse: while the player page is foregrounded we
+// send one heartbeat a minute; the server bills 1 悠悠币 per full minute.
+const HEARTBEAT_MS = 60_000
 
 const ERROR_COPY: Record<string, string> = {
   engine_unavailable: '剧情引擎暂时不可用，请稍后再试',
@@ -41,11 +48,12 @@ const ERROR_COPY: Record<string, string> = {
   safety_blocked: '这条内容涉及高风险话题，无法继续。如果你正处于困境，请寻求专业帮助。',
 }
 
-export function useStoryWebSocket() {
+export function useStoryWebSocket(runId?: string) {
   const wsRef = useRef<WebSocket | null>(null)
   const connectRef = useRef<(() => void) | null>(null)
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const watchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const heartbeatTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   // The run a frame belongs to. Frames don't carry run_id (the socket is
   // single-run), so we stamp the run the most recent story_chat targeted.
   const activeRunRef = useRef<string | null>(null)
@@ -107,6 +115,23 @@ export function useStoryWebSocket() {
           if (runId) store.endTurn(runId)
           activeTurnRef.current = null
           break
+        case 'playtime': {
+          // A minute was billed — keep the wallet live and, if the run was
+          // paused for 余额不足, a fresh charge means a top-up landed: resume.
+          if (msg.balance !== undefined) useCreditsStore.getState().setBalance(msg.balance)
+          const r = msg.run_id ?? activeRunRef.current
+          if (r) store.setPaused(r, false)
+          break
+        }
+        case 'insufficient_credits': {
+          // Per-minute billing ran dry — freeze the run (the save is kept) and
+          // prompt a recharge; the next successful heartbeat resumes it.
+          const r = msg.run_id ?? activeRunRef.current
+          if (r) store.setPaused(r, true)
+          if (msg.balance !== undefined) useCreditsStore.getState().setBalance(msg.balance)
+          useToastStore.getState().show('余额不足，剧情已暂停，请充值后继续', 'error')
+          break
+        }
         case 'error': {
           clearWatchdog()
           if (runId) store.endTurn(runId)
@@ -194,6 +219,27 @@ export function useStoryWebSocket() {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN || !turnId) return
     wsRef.current.send(JSON.stringify({ type: 'interrupt', turn_id: turnId }))
   }, [])
+
+  // Per-minute billing heartbeat. Stamps activeRunRef so heartbeat replies
+  // (playtime / insufficient_credits) resolve to the right run, and pulses once
+  // a minute only while the tab is foregrounded (background pauses billing —
+  // charge for time actually spent playing, not a backgrounded tab).
+  useEffect(() => {
+    if (!runId) return
+    activeRunRef.current = runId
+    heartbeatTimerRef.current = setInterval(() => {
+      if (document.visibilityState !== 'visible') return
+      const ws = wsRef.current
+      if (!ws || ws.readyState !== WebSocket.OPEN) return
+      ws.send(JSON.stringify({ type: 'heartbeat', run_id: runId }))
+    }, HEARTBEAT_MS)
+    return () => {
+      if (heartbeatTimerRef.current) {
+        clearInterval(heartbeatTimerRef.current)
+        heartbeatTimerRef.current = null
+      }
+    }
+  }, [runId])
 
   useEffect(() => {
     connect()

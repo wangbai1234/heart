@@ -14,13 +14,14 @@ never-crashing turn stream.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Any, AsyncGenerator, Optional
 from uuid import UUID, uuid4
 
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from heart.billing.pricing import llm_cost_fen
+from heart.billing.pricing import llm_cost_fen, story_minute_cost_fen
 
 from . import prompt as gm_prompt
 from . import repository as repo
@@ -46,6 +47,12 @@ SUMMARIZE_TRIGGER = gm_prompt.RECENT_TURNS_WINDOW * 2
 # (decision 3: keep 18+ behind the age-gate, never SFW-sanitise). Kept as a
 # module constant so the bar is tunable without touching the flow.
 _SAFETY_BLOCK_MIN_ORDINAL = 3  # SeverityLevel.RED.ordinal
+
+# Per-minute playtime billing (PR C2): the client sends a heartbeat every 60s
+# while the player page is foregrounded. Reject a heartbeat that lands sooner
+# than this since the last successful charge, so a buggy/duplicated client
+# heartbeat can't bill two minutes inside one wall-clock minute.
+_MIN_BILL_INTERVAL_S = 45
 
 
 @dataclass
@@ -337,6 +344,64 @@ class StoryService:
                 await session.commit()
         except Exception:
             logger.exception("story_charge_failed", turn_id=str(turn_id), model=model, cost=cost)
+
+    # ── per-minute playtime billing (PR C2) ──────────────────────────
+
+    async def charge_playtime(self, run_id: UUID, user_id: UUID) -> tuple[str, int]:
+        """Charge one minute of story playtime (driven by the client heartbeat).
+
+        Returns ``(status, balance)`` where status is one of:
+
+        - ``"charged"`` — one minute billed; ``balance`` is the new balance.
+        - ``"throttled"`` — arrived < _MIN_BILL_INTERVAL_S since the last charge;
+          nothing billed, ``balance`` unused.
+        - ``"insufficient"`` — balance can't cover a minute; the run should pause
+          and prompt a recharge. ``balance`` is the (unchanged) current balance.
+        - ``"inactive"`` — run missing / not owned / not active; ``balance`` unused.
+        - ``"free"`` — per-minute price is 0 (nothing to bill); ``balance`` unused.
+
+        Idempotent per minute via the key ``story_time:{run}:{minute}`` where
+        ``minute`` is the run's ``billed_minutes`` counter (globally unique per
+        run, survives disconnect/resume). A concurrent duplicate heartbeat either
+        hits the ON CONFLICT no-op deduct or the guarded ``advance_billed_minute``
+        no-op, so a minute is never double-charged. Unlike ``_charge_turn`` this
+        deliberately propagates nothing but a status — the WS layer decides
+        whether to pause the run.
+        """
+        from heart.billing import InsufficientCreditsError, deduct_credits
+
+        cost = story_minute_cost_fen()
+        if cost <= 0:
+            return ("free", 0)
+
+        async with self._session_factory() as session:
+            row = await repo.get_run_billing(session, run_id, user_id)
+            if row is None or row.status != "active":
+                return ("inactive", 0)
+
+            now = datetime.now(timezone.utc)
+            last = row.last_billed_at
+            if last is not None and (now - last).total_seconds() < _MIN_BILL_INTERVAL_S:
+                return ("throttled", 0)
+
+            minute = int(row.billed_minutes)
+            try:
+                balance = await deduct_credits(
+                    session,
+                    user_id,
+                    cost,
+                    f"story_time:{run_id}:{minute}",
+                    "story_time",
+                )
+            except InsufficientCreditsError as e:
+                # Not enough for another minute → no advance, no commit; the
+                # balance is untouched. Caller pauses the run + prompts recharge,
+                # and the save is preserved so play resumes after top-up.
+                return ("insufficient", e.balance)
+
+            await repo.advance_billed_minute(session, run_id, minute, now)
+            await session.commit()
+            return ("charged", balance)
 
     # ── rolling summary (PR5) ────────────────────────────────────────
 
