@@ -132,37 +132,83 @@ class Bubble(dict):
     """A single rendered bubble: {kind, npc_name?, content}."""
 
 
-def _classify_structured_line(stripped: str) -> Optional[dict[str, Any]]:
-    """Return a dialogue/action bubble for a structured line, else None.
+def _classify_structured_line(stripped: str) -> Optional[list[dict[str, Any]]]:
+    """Split a line into action/dialogue/narration segments.
 
-    A ``None`` result means the line is (possibly narration-prefixed) prose and
-    should be buffered into the running narration bubble by the caller.
+    Returns a list of bubbles extracted from the line, or None if the line is
+    pure narration. Handles mixed cases like `（他走近你）"你来了。"`.
     """
-    # 1. Check for **角色名** dialogue (highest priority)
+    # 1. Check for **角色名** dialogue (highest priority, takes entire line)
     npc_m = _NPC_LINE_RE.match(stripped)
     if npc_m:
-        return {
-            "kind": "dialogue",
-            "npc_name": npc_m.group("name").strip(),
-            "content": npc_m.group("rest").strip(),
-        }
+        content = npc_m.group("rest").strip()
+        # Strip surrounding quotes if present
+        content = re.sub(r'^[""""]|[""""]$', "", content)
+        return [
+            {
+                "kind": "dialogue",
+                "npc_name": npc_m.group("name").strip(),
+                "content": content,
+            }
+        ]
 
-    # 2. Check for （action）
-    action_m = _ACTION_LINE_RE.match(stripped)
-    if action_m:
-        return {"kind": "action", "npc_name": None, "content": action_m.group("inner").strip()}
+    # 2. Check if line starts with 【旁白】 prefix → pure narration, let caller strip it
+    if _NARRATION_PREFIX_RE.match(stripped):
+        return None
 
-    # 3. Check for "quoted dialogue" (fallback for GM not following **角色名** format)
-    quoted_m = _QUOTED_DIALOGUE_RE.match(stripped)
-    if quoted_m:
-        # 去掉双引号，只保留内容
-        return {
-            "kind": "dialogue",
-            "npc_name": None,  # No explicit NPC name, will use last speaker or scenario context
-            "content": quoted_m.group("inner").strip(),
-        }
+    # 3. Scan for inline （action） and "dialogue" spans, preserving order
+    bubbles: list[dict[str, Any]] = []
+    pos = 0
+    narration_buf: list[str] = []
+    has_structured = False  # Track if we found any action/dialogue
 
-    return None
+    def flush_narration():
+        if narration_buf:
+            text = "".join(narration_buf).strip()
+            if text:
+                bubbles.append({"kind": "narration", "npc_name": None, "content": text})
+            narration_buf.clear()
+
+    while pos < len(stripped):
+        # Try to match （action） at current position
+        action_match = re.match(r"（(?P<inner>[^）]+)）", stripped[pos:])
+        if action_match:
+            flush_narration()
+            bubbles.append(
+                {
+                    "kind": "action",
+                    "npc_name": None,
+                    "content": action_match.group("inner").strip(),
+                }
+            )
+            has_structured = True
+            pos += action_match.end()
+            continue
+
+        # Try to match "dialogue" at current position
+        dialogue_match = re.match(r'[""""](?P<inner>[^""""]+)[""""]', stripped[pos:])
+        if dialogue_match:
+            flush_narration()
+            bubbles.append(
+                {
+                    "kind": "dialogue",
+                    "npc_name": None,
+                    "content": dialogue_match.group("inner").strip(),
+                }
+            )
+            has_structured = True
+            pos += dialogue_match.end()
+            continue
+
+        # No special span matched → accumulate as narration
+        narration_buf.append(stripped[pos])
+        pos += 1
+
+    flush_narration()
+
+    # Only return bubbles if we found structured content (action/dialogue)
+    # Pure text lines return None → caller merges them into narration buffer
+    return bubbles if has_structured else None
 
 
 def split_gm_text(text: str) -> list[dict[str, Any]]:
@@ -196,7 +242,7 @@ def split_gm_text(text: str) -> list[dict[str, Any]]:
         structured = _classify_structured_line(stripped)
         if structured is not None:
             flush_narration()
-            bubbles.append(structured)
+            bubbles.extend(structured)  # Now returns a list
             continue
 
         # Prose: strip an optional 【旁白】 prefix, then buffer.
@@ -249,8 +295,10 @@ class StreamingBubbleParser:
 
             structured = _classify_structured_line(stripped)
             if structured is not None:
-                bubbles.append(structured)
-                self.emitted.append(structured)
+                # structured is now a list of bubbles
+                for bubble in structured:
+                    bubbles.append(bubble)
+                    self.emitted.append(bubble)
 
         return bubbles
 

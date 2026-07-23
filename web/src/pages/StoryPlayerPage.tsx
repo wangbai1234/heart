@@ -268,17 +268,6 @@ function MessageGroup({ group }: { group: MessageGroup }) {
   )
 }
 
-function NarrationBubble({ content, streaming }: { content: string; streaming?: boolean }) {
-  return (
-    <div className="flex justify-center">
-      <p className="max-w-[88%] text-center text-[14px] leading-[1.75] text-[var(--color-text-secondary)] whitespace-pre-wrap">
-        {content}
-        {streaming && <span className="animate-pulse">▍</span>}
-      </p>
-    </div>
-  )
-}
-
 function TypingDots() {
   return (
     <div className="flex justify-center py-2">

@@ -213,11 +213,28 @@ class StoryService:
             # Partial content already streamed — fall through and persist it.
 
         # Finalize: flush any remaining buffer content
-        bubbles = parser.finalize()
+        # Track how many bubbles were already emitted during streaming
+        emitted_during_stream = len(parser.emitted)
 
+        # finalize() appends remaining buffer (if any) to parser.emitted and returns it
+        all_bubbles = parser.finalize()
+
+        # Emit only the newly added bubbles (remaining buffer content)
+        for b in all_bubbles[emitted_during_stream:]:
+            yield (
+                "message_bubble",
+                {
+                    "turn_id": str(turn_id),
+                    "kind": b["kind"],
+                    "npc_name": b.get("npc_name"),
+                    "content": b["content"],
+                },
+            )
+
+        # Persist all bubbles to database
         async with self._session_factory() as session:
             seq = await repo.next_seq(session, run_id)
-            for b in bubbles:
+            for b in all_bubbles:
                 await repo.add_message(
                     session,
                     run_id=run_id,
@@ -238,16 +255,6 @@ class StoryService:
         if cost > 0:
             await self._charge_turn(user_id, turn_id, cost, run.model or "deepseek")
 
-        for b in bubbles:
-            yield (
-                "message_bubble",
-                {
-                    "turn_id": str(turn_id),
-                    "kind": b["kind"],
-                    "npc_name": b.get("npc_name"),
-                    "content": b["content"],
-                },
-            )
         yield ("turn_end", {"turn_id": str(turn_id), "ok": True})
 
         # Fold older turns into the rolling summary *after* turn_end is emitted,
