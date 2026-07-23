@@ -96,11 +96,8 @@ export function StoryPlayerPage() {
             {groupMessages(messages ?? []).map((group, idx) => (
               <MessageGroup key={group.id || idx} group={group} />
             ))}
-            {/* Live streaming GM turn (before split bubbles arrive). */}
-            {streamText !== null && streamText !== undefined && streamText.length > 0 && (
-              <NarrationBubble content={streamText} streaming />
-            )}
-            {generating && (streamText === null || streamText === '') && <TypingDots />}
+            {/* 正在生成中的加载提示 */}
+            {generating && <TypingDots />}
           </div>
         )}
       </div>

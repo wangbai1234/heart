@@ -21,7 +21,8 @@ from heart.ss09_story.service import StoryService
 
 class _FakeRouter:
     def __init__(self, deltas: list[str] | None = None, raise_after: int | None = None):
-        self._deltas = deltas if deltas is not None else ["【旁白】开场。\n", "**林深** 你好。"]
+        # Updated: include newlines so StreamingBubbleParser can detect complete lines
+        self._deltas = deltas if deltas is not None else ["【旁白】开场。\n", "**林深**：你好。\n"]
         self._raise_after = raise_after
         self.cheap_calls: list[list[dict]] = []
 
@@ -136,13 +137,16 @@ async def test_turn_stream_happy_path(patched_repo):
     )
     types = [e[0] for e in events]
     assert types[0] == "turn_start"
-    assert "text_delta" in types
+    # text_delta removed: we now stream message_bubble directly
+    assert "message_bubble" in types
     assert types[-1] == "turn_end"
     assert events[-1][1]["ok"] is True
-    # message_bubble frames for narration + dialogue.
+    # message_bubble frames should be present
     bubbles = [e[1] for e in events if e[0] == "message_bubble"]
+    assert len(bubbles) > 0
+    # At least one dialogue bubble (from **林深**：你好。)
     kinds = [b["kind"] for b in bubbles]
-    assert "narration" in kinds and "dialogue" in kinds
+    assert "dialogue" in kinds
     # Player line + each bubble persisted.
     roles = [m["role"] for m in patched_repo["added"]]
     assert "player" in roles
@@ -278,7 +282,8 @@ async def test_turn_stream_safety_allows_low_severity(patched_repo):
     types = [e[0] for e in events]
     assert types[-1] == "turn_end"
     assert events[-1][1]["ok"] is True
-    assert any(e[0] == "text_delta" for e in events)
+    # text_delta removed: we now stream message_bubble directly
+    assert any(e[0] == "message_bubble" for e in events)
 
 
 @pytest.mark.asyncio

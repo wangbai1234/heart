@@ -213,6 +213,65 @@ def split_gm_text(text: str) -> list[dict[str, Any]]:
     return bubbles
 
 
+class StreamingBubbleParser:
+    """Incremental parser for streaming GM text into bubbles.
+
+    Detects complete lines and emits bubbles as they arrive, maintaining a buffer
+    for incomplete lines. Used by service.py to provide real-time bubble streaming.
+    """
+
+    def __init__(self) -> None:
+        self.buffer = ""  # Accumulated text not yet emitted
+        self.emitted: list[dict[str, Any]] = []  # Bubbles already emitted
+
+    def feed(self, delta: str) -> list[dict[str, Any]]:
+        """Process a streaming delta and return any complete bubbles.
+
+        Returns a list of newly detected bubbles (may be empty if delta doesn't
+        complete a line). Call finalize() at stream end to flush remaining content.
+        """
+        self.buffer += delta
+        bubbles: list[dict[str, Any]] = []
+
+        # Only process complete lines (ending with \n)
+        if "\n" not in self.buffer:
+            return bubbles
+
+        lines = self.buffer.split("\n")
+        # Keep the last incomplete line in buffer
+        self.buffer = lines[-1]
+        complete_lines = lines[:-1]
+
+        for line in complete_lines:
+            stripped = line.strip()
+            if not stripped:
+                continue
+
+            structured = _classify_structured_line(stripped)
+            if structured is not None:
+                bubbles.append(structured)
+                self.emitted.append(structured)
+
+        return bubbles
+
+    def finalize(self) -> list[dict[str, Any]]:
+        """Flush remaining buffer content as narration and return all bubbles.
+
+        Called at stream end. Returns the complete list of bubbles (including
+        previously emitted ones). The remaining buffer becomes a narration bubble.
+        """
+        if self.buffer.strip():
+            # Remaining content is narration
+            bubble = {"kind": "narration", "npc_name": None, "content": self.buffer.strip()}
+            self.emitted.append(bubble)
+
+        # If nothing was emitted, return the whole buffer as narration
+        if not self.emitted and self.buffer:
+            return [{"kind": "narration", "npc_name": None, "content": self.buffer}]
+
+        return self.emitted
+
+
 def build_summary_messages(
     scenario: Scenario, prior_summary: str, turns: list[StoryMessage]
 ) -> list[dict[str, str]]:

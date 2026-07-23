@@ -179,6 +179,8 @@ class StoryService:
             )
         messages = gm_prompt.build_gm_messages(scenario, run, recent)
 
+        # Streaming bubble parser: emit bubbles as complete lines arrive
+        parser = gm_prompt.StreamingBubbleParser()
         collected: list[str] = []
         try:
             async for delta in self._router.stream_for(
@@ -188,7 +190,18 @@ class StoryService:
             ):
                 if delta:
                     collected.append(delta)
-                    yield ("text_delta", {"turn_id": str(turn_id), "delta": delta})
+                    # Parse delta and emit any complete bubbles immediately
+                    new_bubbles = parser.feed(delta)
+                    for b in new_bubbles:
+                        yield (
+                            "message_bubble",
+                            {
+                                "turn_id": str(turn_id),
+                                "kind": b["kind"],
+                                "npc_name": b.get("npc_name"),
+                                "content": b["content"],
+                            },
+                        )
         except Exception:
             # Not a silent swallow: logged with stack + surfaced as a structured
             # error/partial-persist path (per CLAUDE.md DB 铁律 #5).
@@ -199,8 +212,8 @@ class StoryService:
                 return
             # Partial content already streamed — fall through and persist it.
 
-        full_text = "".join(collected)
-        bubbles = gm_prompt.split_gm_text(full_text)
+        # Finalize: flush any remaining buffer content
+        bubbles = parser.finalize()
 
         async with self._session_factory() as session:
             seq = await repo.next_seq(session, run_id)
