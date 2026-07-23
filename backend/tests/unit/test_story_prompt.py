@@ -225,3 +225,22 @@ def test_render_player_card_skips_empty_list():
     card = _render_player_card({"name": "阿远", "preferences": []})  # é¿è¿, []
     assert "阿远" in card
     assert "设定偏好" not in card  # è®¾å®åå¥½ absent
+
+
+def test_split_corner_quote_dialogue():
+    """Corner quotes 「」 should be recognized as dialogue (2026-07 multi-quote fix)."""
+    line = "**纳西缇** 「外面危险。」"
+    out = split_gm_text(line)
+    assert len(out) == 1
+    assert out[0]["kind"] == "dialogue"
+    assert out[0]["npc_name"] == "纳西缇"
+    assert out[0]["content"] == "外面危险。"
+
+
+def test_split_mixed_action_and_corner_dialogue():
+    """Mixed line: （action）「dialogue」 should split correctly."""
+    line = "（他走近你）「你来了。」"
+    out = split_gm_text(line)
+    assert [b["kind"] for b in out] == ["action", "dialogue"]
+    assert out[0]["content"] == "他走近你"
+    assert out[1]["content"] == "你来了。"

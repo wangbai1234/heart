@@ -161,8 +161,10 @@ _NPC_LINE_RE = re.compile(r"^\s*\*\*(?P<name>[^*\n]{1,24})\*\*[:：]?\s*(?P<rest
 # An action span wrapped in full-width parens spanning a whole line.
 _ACTION_LINE_RE = re.compile(r"^\s*（(?P<inner>.+)）\s*$")
 # A dialogue line wrapped in double quotes (fallback when no **角色名** prefix).
-# Supports ASCII (U+0022) + Chinese curly quotes (U+201C/U+201D)
-_QUOTED_DIALOGUE_RE = re.compile(r'^\s*["“”](?P<inner>.+?)["“”]\.?\s*$')
+# Supports ASCII (U+0022) + Chinese curly quotes (U+201C/U+201D) + corner quotes (U+300C/U+300D)
+_QUOTED_DIALOGUE_RE = re.compile(
+    r"^\s*[\x22\u201c\u201d\u300c](?P<inner>.+?)[\x22\u201c\u201d\u300d]\.?\s*$"
+)
 # A narration prefix.
 _NARRATION_PREFIX_RE = re.compile(r"^\s*【旁白】\s*(?P<rest>.*)$", re.DOTALL)
 
@@ -181,8 +183,8 @@ def _classify_structured_line(stripped: str) -> Optional[list[dict[str, Any]]]:
     npc_m = _NPC_LINE_RE.match(stripped)
     if npc_m:
         content = npc_m.group("rest").strip()
-        # Strip surrounding quotes if present (ASCII + Chinese curly quotes)
-        content = re.sub(r'^["“”]|["“”]$', "", content)
+        # Strip surrounding quotes if present (ASCII + Chinese curly/corner quotes)
+        content = re.sub(r"^[\x22\u201c\u201d\u300c]|[\x22\u201c\u201d\u300d]$", "", content)
         return [
             {
                 "kind": "dialogue",
@@ -224,8 +226,11 @@ def _classify_structured_line(stripped: str) -> Optional[list[dict[str, Any]]]:
             pos += action_match.end()
             continue
 
-        # Try to match "dialogue" at current position (ASCII + Chinese curly quotes)
-        dialogue_match = re.match(r'["“”](?P<inner>[^"“”]+)["“”]', stripped[pos:])
+        # Try to match “dialogue” at current position (ASCII + Chinese curly/corner quotes)
+        dialogue_match = re.match(
+            r"[\x22\u201c\u201d\u300c](?P<inner>[^\x22\u201c\u201d\u300d]+)[\x22\u201c\u201d\u300d]",
+            stripped[pos:],
+        )
         if dialogue_match:
             flush_narration()
             bubbles.append(
