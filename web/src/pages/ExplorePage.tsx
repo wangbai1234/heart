@@ -42,9 +42,8 @@ export function ExplorePage() {
 
   // 推荐区：显示热度最高的 4 个 featured 剧情，支持左右滑动
   const featuredTop4 = featuredScenarios.slice(0, 4)
-  // 剧情网格：排除已在推荐区显示的剧情，避免重复
-  const featuredIds = new Set(featuredTop4.map((s) => s.id))
-  const grid = scenarios.filter((s) => !featuredIds.has(s.id))
+  // 剧情网格：显示当前分类的所有剧情（不排除推荐区剧情，用户可能想从分类找到它们）
+  const grid = scenarios
   const openScenario = (id: string) => navigate(`/explore/${id}`)
 
   return (

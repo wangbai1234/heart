@@ -92,8 +92,9 @@ export function StoryPlayerPage() {
           </div>
         ) : (
           <div className="flex flex-col gap-3 pb-4">
-            {(messages ?? []).map((m) => (
-              <StoryBubble key={m.id} msg={m} />
+            {/* 将连续的同角色消息分组，避免 action + dialogue 被分开显示 */}
+            {groupMessages(messages ?? []).map((group, idx) => (
+              <MessageGroup key={group.id || idx} group={group} />
             ))}
             {/* Live streaming GM turn (before split bubbles arrive). */}
             {streamText !== null && streamText !== undefined && streamText.length > 0 && (
@@ -156,6 +157,119 @@ export function StoryPlayerPage() {
   )
 }
 
+/**
+ * 将连续的同角色消息分组，使 action + dialogue 能在同一气泡容器内显示。
+ *
+ * 示例：[action(NPC1), dialogue(NPC1), action(NPC1)] → 一组
+ *       [dialogue(NPC2)] → 另一组
+ */
+interface MessageGroup {
+  id: string
+  role: string
+  npcName: string | null
+  messages: StoryMessageVM[]
+}
+
+function groupMessages(messages: StoryMessageVM[]): MessageGroup[] {
+  const groups: MessageGroup[] = []
+  let currentGroup: MessageGroup | null = null
+
+  for (const msg of messages) {
+    // Player 消息总是独立成组
+    if (msg.role === 'player') {
+      if (currentGroup) groups.push(currentGroup)
+      groups.push({
+        id: msg.id,
+        role: msg.role,
+        npcName: null,
+        messages: [msg],
+      })
+      currentGroup = null
+      continue
+    }
+
+    // NPC/GM 消息：同角色且相邻 → 合并到当前组
+    const sameRole = currentGroup && currentGroup.role === msg.role
+    const sameNpc = currentGroup && currentGroup.npcName === msg.npcName
+
+    if (sameRole && sameNpc) {
+      currentGroup!.messages.push(msg)
+    } else {
+      if (currentGroup) groups.push(currentGroup)
+      currentGroup = {
+        id: msg.id,
+        role: msg.role,
+        npcName: msg.npcName,
+        messages: [msg],
+      }
+    }
+  }
+
+  if (currentGroup) groups.push(currentGroup)
+  return groups
+}
+
+function MessageGroup({ group }: { group: MessageGroup }) {
+  // Player 消息：右侧蓝色气泡
+  if (group.role === 'player') {
+    return (
+      <div className="flex justify-end">
+        <div className="max-w-[80%] rounded-[18px] rounded-br-[6px] bg-[var(--color-primary)] text-white px-4 py-2.5 text-[15px] leading-[1.6] whitespace-pre-wrap break-words">
+          {group.messages[0].content}
+        </div>
+      </div>
+    )
+  }
+
+  // NPC/GM 消息：可能包含 action + dialogue 组合
+  const hasDialogue = group.messages.some((m) => m.kind === 'dialogue')
+  const hasAction = group.messages.some((m) => m.kind === 'action')
+  const hasNarration = group.messages.some((m) => m.kind === 'narration')
+
+  // 纯 narration：居中灰色
+  if (hasNarration && !hasDialogue && !hasAction) {
+    return <NarrationBubble content={group.messages.map((m) => m.content).join('\n\n')} />
+  }
+
+  // 纯 action：居中斜体
+  if (hasAction && !hasDialogue && !hasNarration) {
+    return (
+      <div className="flex justify-center">
+        <p className="max-w-[85%] text-center text-[13px] italic text-[var(--color-text-muted)] leading-[1.6] whitespace-pre-wrap break-words">
+          （{group.messages.map((m) => m.content).join('，')}）
+        </p>
+      </div>
+    )
+  }
+
+  // 包含 dialogue 的组：左侧白色气泡，action 作为气泡内的前缀
+  return (
+    <div className="flex flex-col items-start max-w-[85%]">
+      {group.npcName && (
+        <span className="ml-1 mb-1 text-[12px] font-semibold text-[var(--color-text-secondary)]">
+          {group.npcName}
+        </span>
+      )}
+      <div className="rounded-[18px] rounded-tl-[6px] bg-[var(--color-surface)] border border-[var(--color-border-glass)] text-[var(--color-ink)] px-4 py-2.5 text-[15px] leading-[1.6] whitespace-pre-wrap break-words">
+        {group.messages.map((msg, idx) => {
+          if (msg.kind === 'action') {
+            return (
+              <span key={idx} className="block text-[13px] italic text-[var(--color-text-muted)] mb-1.5">
+                （{msg.content}）
+              </span>
+            )
+          }
+          return (
+            <span key={idx} className={idx > 0 ? 'block mt-2' : 'block'}>
+              {msg.content}
+            </span>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 function StoryBubble({ msg }: { msg: StoryMessageVM }) {
   if (msg.role === 'player') {
     return (
@@ -174,7 +288,7 @@ function StoryBubble({ msg }: { msg: StoryMessageVM }) {
             {msg.npcName}
           </span>
         )}
-        <div className="rounded-[18px] rounded-tl-[6px] bg-[var(--color-surface)] border border-[var(--color-border-glass)] text-[var(--color-ink)] px-4 py-2.5 text-[15px] leading-[1.6] whitespace-pre-wrap">
+        <div className="rounded-[18px] rounded-tl-[6px] bg-[var(--color-surface)] border border-[var(--color-border-glass)] text-[var(--color-ink)] px-4 py-2.5 text-[15px] leading-[1.6] whitespace-pre-wrap break-words">
           {msg.content}
         </div>
       </div>
@@ -183,7 +297,7 @@ function StoryBubble({ msg }: { msg: StoryMessageVM }) {
   if (msg.kind === 'action') {
     return (
       <div className="flex justify-center">
-        <p className="max-w-[85%] text-center text-[13px] italic text-[var(--color-text-muted)] leading-[1.6] whitespace-pre-wrap">
+        <p className="max-w-[85%] text-center text-[13px] italic text-[var(--color-text-muted)] leading-[1.6] whitespace-pre-wrap break-words">
           （{msg.content}）
         </p>
       </div>
