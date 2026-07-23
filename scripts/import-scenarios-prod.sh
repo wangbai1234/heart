@@ -76,7 +76,7 @@ info "✓ 同步完成（远端 .txt 数量见下方导入日志）"
 log "2/2  在 api 容器内运行 import_scenarios.py $MODE_ARG ..."
 ssh -p "$HEART_PROD_PORT" "$HEART_PROD_SSH" "cd '$HEART_PROD_DIR' && \
     docker compose -f docker-compose.prod.yml --env-file .env.prod exec -T api \
-    python scripts/import_scenarios.py --src /scenarios $MODE_ARG" \
+    python -m scripts.import_scenarios --src /scenarios $MODE_ARG" \
     || { warn "远端导入失败（exit $?）"; exit 3; }
 
 echo ""
