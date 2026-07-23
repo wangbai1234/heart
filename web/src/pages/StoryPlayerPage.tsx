@@ -270,42 +270,6 @@ function MessageGroup({ group }: { group: MessageGroup }) {
   )
 }
 
-function StoryBubble({ msg }: { msg: StoryMessageVM }) {
-  if (msg.role === 'player') {
-    return (
-      <div className="flex justify-end">
-        <div className="max-w-[80%] rounded-[18px] rounded-br-[6px] bg-[var(--color-primary)] text-white px-4 py-2.5 text-[15px] leading-[1.6] whitespace-pre-wrap">
-          {msg.content}
-        </div>
-      </div>
-    )
-  }
-  if (msg.kind === 'dialogue') {
-    return (
-      <div className="flex flex-col items-start max-w-[85%]">
-        {msg.npcName && (
-          <span className="ml-1 mb-1 text-[12px] font-semibold text-[var(--color-text-secondary)]">
-            {msg.npcName}
-          </span>
-        )}
-        <div className="rounded-[18px] rounded-tl-[6px] bg-[var(--color-surface)] border border-[var(--color-border-glass)] text-[var(--color-ink)] px-4 py-2.5 text-[15px] leading-[1.6] whitespace-pre-wrap break-words">
-          {msg.content}
-        </div>
-      </div>
-    )
-  }
-  if (msg.kind === 'action') {
-    return (
-      <div className="flex justify-center">
-        <p className="max-w-[85%] text-center text-[13px] italic text-[var(--color-text-muted)] leading-[1.6] whitespace-pre-wrap break-words">
-          （{msg.content}）
-        </p>
-      </div>
-    )
-  }
-  return <NarrationBubble content={msg.content} />
-}
-
 function NarrationBubble({ content, streaming }: { content: string; streaming?: boolean }) {
   return (
     <div className="flex justify-center">

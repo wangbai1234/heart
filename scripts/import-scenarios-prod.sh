@@ -38,12 +38,14 @@ HEART_PROD_DIR="${HEART_PROD_DIR:-/home/deploy/heart}"
 REMOTE_DIR="$HEART_PROD_DIR/scenarios_src"
 
 MODE_ARG="--publish"
+FORCE_ARG=""
 case "${1:-}" in
     --dry-run) MODE_ARG="--dry-run" ;;
     --publish|"") MODE_ARG="--publish" ;;
+    --force) MODE_ARG="--publish"; FORCE_ARG="--force" ;;
     -h|--help)
         sed -n '2,26p' "$0"; exit 0 ;;
-    *) die "未知参数: $1 （用 --publish 或 --dry-run）" ;;
+    *) die "未知参数: $1 （用 --publish、--dry-run 或 --force）" ;;
 esac
 
 # ── 前置检查 ──────────────────────────────────────────────────────────────
@@ -73,10 +75,10 @@ info "✓ 同步完成（远端 .txt 数量见下方导入日志）"
 # ── 2) ssh 在 api 容器内跑导入器 ──────────────────────────────────────────
 # 容器内 WORKDIR=/app，脚本在 /app/scripts/import_scenarios.py（build context=./backend）。
 # --src /scenarios = compose 挂载的 ./scenarios_src:ro。env-file 让 compose 看到 DB/LLM 配置。
-log "2/2  在 api 容器内运行 import_scenarios.py $MODE_ARG ..."
+log "2/2  在 api 容器内运行 import_scenarios.py $MODE_ARG $FORCE_ARG ..."
 ssh -p "$HEART_PROD_PORT" "$HEART_PROD_SSH" "cd '$HEART_PROD_DIR' && \
     docker compose -f docker-compose.prod.yml --env-file .env.prod exec -T api \
-    python -m scripts.import_scenarios --src /scenarios $MODE_ARG" \
+    python -m scripts.import_scenarios --src /scenarios $MODE_ARG $FORCE_ARG" \
     || { warn "远端导入失败（exit $?）"; exit 3; }
 
 echo ""

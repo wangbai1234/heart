@@ -290,6 +290,7 @@ async def import_one(
     *,
     publish: bool,
     dry_run: bool,
+    force: bool = False,
 ) -> ImportResult:
     slug = derive_slug(path)
     raw = read_text(path)
@@ -297,8 +298,8 @@ async def import_one(
         return ImportResult(slug=slug, action="error", detail="empty file")
     source_hash = compute_hash(raw)
 
-    # Unchanged file already imported → skip (no LLM, no write).
-    if db is not None:
+    # Unchanged file already imported → skip (no LLM, no write), unless --force.
+    if db is not None and not force:
         prior = await existing_hash(db, slug)
         if prior == source_hash:
             return ImportResult(slug=slug, action="skipped", detail="unchanged")
@@ -330,7 +331,7 @@ def _select_files(src: Path, only: Optional[str], limit: Optional[int]) -> list[
 
 
 async def _main(
-    src: Path, publish: bool, dry_run: bool, only: Optional[str], limit: Optional[int]
+    src: Path, publish: bool, dry_run: bool, only: Optional[str], limit: Optional[int], force: bool
 ) -> None:
     from heart.api.wiring import get_db_session_factory, get_model_router
 
@@ -354,7 +355,7 @@ async def _main(
     async def _run(db: Any) -> None:
         for path in files:
             try:
-                res = await import_one(db, router, path, publish=publish, dry_run=dry_run)
+                res = await import_one(db, router, path, publish=publish, dry_run=dry_run, force=force)
             except Exception as exc:  # noqa: BLE001 — batch resilience: log + continue
                 logger.exception("story_import_file_failed", file=path.name)
                 res = ImportResult(slug=derive_slug(path), action="error", detail=str(exc))
@@ -389,9 +390,10 @@ def main() -> None:
     ap.add_argument("--dry-run", action="store_true", help="只抽取并打印，不写库")
     ap.add_argument("--only", help="仅处理文件名包含该子串的剧本")
     ap.add_argument("--limit", type=int, help="最多处理前 N 个（配合 --dry-run 采样）")
+    ap.add_argument("--force", action="store_true", help="强制重新提取元数据（即使 source_hash 未变）")
     args = ap.parse_args()
 
-    asyncio.run(_main(Path(args.src), args.publish, args.dry_run, args.only, args.limit))
+    asyncio.run(_main(Path(args.src), args.publish, args.dry_run, args.only, args.limit, args.force))
 
 
 if __name__ == "__main__":
