@@ -155,6 +155,7 @@ def _classify_structured_line(stripped: str) -> Optional[dict[str, Any]]:
     # 3. Check for "quoted dialogue" (fallback for GM not following **角色名** format)
     quoted_m = _QUOTED_DIALOGUE_RE.match(stripped)
     if quoted_m:
+        # 去掉双引号，只保留内容
         return {
             "kind": "dialogue",
             "npc_name": None,  # No explicit NPC name, will use last speaker or scenario context

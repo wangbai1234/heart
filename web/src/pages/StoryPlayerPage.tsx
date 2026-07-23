@@ -221,51 +221,52 @@ function MessageGroup({ group }: { group: MessageGroup }) {
     )
   }
 
-  // NPC/GM 消息：可能包含 action + dialogue 组合
-  const hasDialogue = group.messages.some((m) => m.kind === 'dialogue')
-  const hasAction = group.messages.some((m) => m.kind === 'action')
-  const hasNarration = group.messages.some((m) => m.kind === 'narration')
-
-  // 纯 narration：居中灰色
-  if (hasNarration && !hasDialogue && !hasAction) {
-    return <NarrationBubble content={group.messages.map((m) => m.content).join('\n\n')} />
-  }
-
-  // 纯 action：居中斜体
-  if (hasAction && !hasDialogue && !hasNarration) {
-    return (
-      <div className="flex justify-center">
-        <p className="max-w-[85%] text-center text-[13px] italic text-[var(--color-text-muted)] leading-[1.6] whitespace-pre-wrap break-words">
-          （{group.messages.map((m) => m.content).join('，')}）
-        </p>
-      </div>
-    )
-  }
-
-  // 包含 dialogue 的组：左侧白色气泡，action 作为气泡内的前缀
+  // NPC/GM 消息：action 和 dialogue 分别渲染
   return (
-    <div className="flex flex-col items-start max-w-[85%]">
-      {group.npcName && (
-        <span className="ml-1 mb-1 text-[12px] font-semibold text-[var(--color-text-secondary)]">
+    <div className="flex flex-col gap-2 items-start max-w-[85%]">
+      {/* NPC 名称（如果有且第一条消息是 dialogue） */}
+      {group.npcName && group.messages.some((m) => m.kind === 'dialogue') && (
+        <span className="ml-1 text-[12px] font-semibold text-[var(--color-text-secondary)]">
           {group.npcName}
         </span>
       )}
-      <div className="rounded-[18px] rounded-tl-[6px] bg-[var(--color-surface)] border border-[var(--color-border-glass)] text-[var(--color-ink)] px-4 py-2.5 text-[15px] leading-[1.6] whitespace-pre-wrap break-words">
-        {group.messages.map((msg, idx) => {
-          if (msg.kind === 'action') {
-            return (
-              <span key={idx} className="block text-[13px] italic text-[var(--color-text-muted)] mb-1.5">
-                （{msg.content}）
-              </span>
-            )
-          }
+
+      {/* 逐条渲染 action 和 dialogue */}
+      {group.messages.map((msg, idx) => {
+        if (msg.kind === 'action') {
+          // Action：灰色药丸（圆角矩形，独立显示）
           return (
-            <span key={idx} className={idx > 0 ? 'block mt-2' : 'block'}>
-              {msg.content}
-            </span>
+            <div
+              key={idx}
+              className="inline-flex items-center px-3 py-1.5 rounded-full bg-[var(--color-surface)] border border-[var(--color-border-glass)]"
+            >
+              <span className="text-[13px] text-[var(--color-text-muted)]">{msg.content}</span>
+            </div>
           )
-        })}
-      </div>
+        }
+
+        if (msg.kind === 'dialogue') {
+          // Dialogue：白色气泡，去掉双引号
+          const cleanContent = msg.content.replace(/^[""]|[""]$/g, '')
+          return (
+            <div
+              key={idx}
+              className="rounded-[18px] rounded-tl-[6px] bg-[var(--color-surface)] border border-[var(--color-border-glass)] text-[var(--color-ink)] px-4 py-2.5 text-[15px] leading-[1.6] whitespace-pre-wrap break-words"
+            >
+              {cleanContent}
+            </div>
+          )
+        }
+
+        // Narration：居中灰色文字
+        return (
+          <div key={idx} className="w-full flex justify-center">
+            <p className="max-w-[88%] text-center text-[14px] leading-[1.75] text-[var(--color-text-secondary)] whitespace-pre-wrap">
+              {msg.content}
+            </p>
+          </div>
+        )
+      })}
     </div>
   )
 }
