@@ -159,3 +159,69 @@ def test_build_messages_role_mapping():
     # NPC line re-tagged with speaker for continuity.
     assert msgs[3]["role"] == "assistant"
     assert "**林深**" in msgs[3]["content"]
+
+
+# ââ Chinese curly-quote dialogue (regression: 2026-07 bubble bug) ââââ
+# DeepSeek emits full-width curly quotes ââ¦â (U+201C/U+201D), not ASCII ".
+# The old regex only matched U+0022 â dialogue fell through to narration.
+
+
+def test_split_chinese_curly_quote_dialogue():
+    """Dialogue in Chinese curly quotes must parse as a dialogue bubble."""
+    out = split_gm_text("“你来了。”")  # âä½ æ¥äºãâ
+    assert len(out) == 1
+    assert out[0]["kind"] == "dialogue"
+    assert out[0]["content"] == "你来了。"  # ä½ æ¥äºã (quotes stripped)
+
+
+def test_split_mixed_action_and_curly_dialogue_same_line():
+    """ï¼å¨ä½ï¼âå¯¹è¯â on one line â action bubble + dialogue bubble, in order."""
+    # ï¼ä»èµ°è¿ä½ ï¼âä½ æ¥äºãâ
+    line = "（他走近你）“你来了。”"
+    out = split_gm_text(line)
+    assert [b["kind"] for b in out] == ["action", "dialogue"]
+    assert out[0]["content"] == "他走近你"  # ä»èµ°è¿ä½ 
+    assert out[1]["content"] == "你来了。"  # ä½ æ¥äºã
+
+
+def test_split_ascii_quote_still_works():
+    """ASCII double quotes remain supported (backward compat)."""
+    out = split_gm_text('（点头）"好的。"')  # ï¼ç¹å¤´ï¼"å¥½çã"
+    assert [b["kind"] for b in out] == ["action", "dialogue"]
+    assert out[1]["content"] == "好的。"  # å¥½çã
+
+
+def test_split_npc_line_strips_curly_quotes():
+    """**è§è²å**âå°è¯â â dialogue with curly quotes stripped from content."""
+    # **ææ·±**âä½ ç»äºæ¥äºãâ
+    line = "**林深**“你终于来了。”"
+    out = split_gm_text(line)
+    assert len(out) == 1
+    assert out[0]["kind"] == "dialogue"
+    assert out[0]["npc_name"] == "林深"  # ææ·±
+    assert out[0]["content"] == "你终于来了。"  # ä½ ç»äºæ¥äºã (no quotes)
+
+
+# ââ _render_player_card multi-select values (2026-07 form extraction) â
+from heart.ss09_story.prompt import _render_player_card  # noqa: E402
+
+
+def test_render_player_card_joins_list_values():
+    """A checkbox multi-select value (list) renders as é¡¿å·-joined, not a repr."""
+    card = _render_player_card({
+        "name": "小明",           # å°æ
+        "preferences": ["办公室恋", "背德感"],  # [åå¬å®¤æ, èå¾·æ]
+    })
+    assert "办公室恋、背德感" in card  # åå¬å®¤æãèå¾·æ
+    assert "[" not in card and "'" not in card  # no python list repr
+
+
+def test_render_player_card_uses_known_label_for_mode():
+    card = _render_player_card({"mode": "18禁模式"})  # 18ç¦æ¨¡å¼
+    assert card.startswith("- 模式：")  # - æ¨¡å¼ï¼
+
+
+def test_render_player_card_skips_empty_list():
+    card = _render_player_card({"name": "阿远", "preferences": []})  # é¿è¿, []
+    assert "阿远" in card
+    assert "设定偏好" not in card  # è®¾å®åå¥½ absent

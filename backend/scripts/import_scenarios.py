@@ -67,18 +67,33 @@ _METADATA_SYSTEM = (
 )
 
 _METADATA_INSTRUCTION = (
-    "根据下面的剧本开头，抽取用于展示卡片的元数据和玩家信息表单字段，返回 JSON："
+    "根据下面的剧本开头，抽取用于展示卡片的元数据和玩家开局表单字段，返回 JSON："
     '{{"title": "简洁标题(≤16字)", "genre": "从固定枚举中选一个", '
     '"blurb": "一句话简介(≤40字，不剧透关键反转)", "maturity": "all_ages 或 adult", '
     '"player_template": {{"fields": [字段数组]}}}}\n'
     "genre 只能是以下之一：{genres}。无法归类时用「其他」。\n"
     "maturity 判定：出现 18禁/成人/露骨性描写开关或明显色情内容记为 adult，否则 all_ages。\n"
-    "player_template 从剧本开头的「请填写个人信息」区域提取，每个字段格式：\n"
-    '{{"key": "字段名", "label": "显示标签", "type": "text|textarea|select", "required": true|false, "options": ["选项1"]}}\n'
-    "常见字段：name(姓名), age(年龄), gender(性别), appearance(外貌), personality(性格), identity(身份), background(生平经历)等。\n"
-    "如果剧本有特殊字段（如分化、星座、MBTI），也要提取。必填字段：name, gender；其他为选填。\n"
-    "gender 字段默认 options: [\"男\", \"女\", \"双性\"]，如果剧本明确提到ABO设定，options改为: [\"Alpha\", \"Beta\", \"Omega\"]。\n"
-    "如果剧本没有明确的玩家信息表单，返回空 fields: []（会使用默认模版）。\n"
+    "\n"
+    "【player_template 提取规则 — 最重要】\n"
+    "剧本开头通常有「主控自定义」区，用编号 1. 2. 3.… 列出玩家开局前必须填写/选择的全部项目"
+    "（例如：个人信息、纯爱or18禁模式、设定偏好、私设、1v1还是np 等）。\n"
+    "你必须把这些编号项**全部**转成表单字段，一个都不能漏——漏掉的项会导致游戏开场时反复追问玩家，体验极差。\n"
+    "每个字段格式：\n"
+    '{{"key": "英文小写key", "label": "中文显示标签", "type": "text|textarea|select|radio|checkbox", '
+    '"required": true|false, "options": ["选项1", "选项2"]}}\n'
+    "字段类型选择：\n"
+    "- text：短填空（姓名/年龄/星座/MBTI/信息素气味 等单行）。\n"
+    "- textarea：长填空（外貌/性格/生平/私设描述 等多行）。\n"
+    "- select 或 radio：单选一项（如 性别、纯爱/18禁 模式选择）。二者皆可，模式类用 radio 更直观。\n"
+    "- checkbox：多选（凡剧本写「可多选」的设定偏好/玩法偏好，必须用 checkbox 并列出全部 a/b/c/d 选项）。\n"
+    "常见个人信息字段：name(姓名,必填), age(年龄), gender(性别,必填), appearance(外貌), "
+    "personality(性格), identity(身份), background(生平经历)。\n"
+    "特殊字段按剧本原样提取：分化(ABO→options:[Alpha,Beta,Omega])、星座(zodiac)、mbti、"
+    "信息素、模式(mode)、设定偏好(preferences)、私设 等。\n"
+    "gender 默认 options: [\"男\", \"女\", \"双性\"]；若剧本是 ABO 设定，另出一个 分化 字段。\n"
+    "选项要照抄剧本里的原文（含 a/b/c 描述），不要自己发明或精简。含「自定义」选项时也保留。\n"
+    "必填项：name、gender，以及剧本明确标注「必填」的项；其余选填。\n"
+    "如果剧本开头完全没有玩家自定义区，才返回空 fields: []（会使用默认模版）。\n"
     "默认标题（无更好选择时使用）：{default_title}\n\n"
     "===== 剧本开头 =====\n{excerpt}"
 )
@@ -137,6 +152,58 @@ def clamp_blurb(value: Any) -> str:
     return s[:_BLURB_MAX]
 
 
+# Field types the StartRunSheet frontend can render. Anything else degrades to
+# text so an unexpected type from the model never produces an unrenderable field.
+_VALID_FIELD_TYPES = {"text", "textarea", "select", "radio", "checkbox"}
+_CHOICE_TYPES = {"select", "radio", "checkbox"}
+
+
+def normalize_fields(fields: Any) -> list[dict[str, Any]]:
+    """Defensively normalize the LLM's field array into renderable fields.
+
+    Drops fields without a usable key; snaps unknown types to text; ensures
+    choice types (select/radio/checkbox) carry a non-empty options list (else
+    they degrade to text). Never raises — a bad field is dropped, not fatal.
+    """
+    if not isinstance(fields, list):
+        return []
+    out: list[dict[str, Any]] = []
+    seen_keys: set[str] = set()
+    for raw in fields:
+        if not isinstance(raw, dict):
+            continue
+        key = raw.get("key")
+        if not isinstance(key, str) or not key.strip():
+            continue
+        key = key.strip()
+        if key in seen_keys:
+            continue  # dedupe: first field for a key wins
+        seen_keys.add(key)
+
+        ftype = raw.get("type")
+        ftype = ftype if isinstance(ftype, str) and ftype in _VALID_FIELD_TYPES else "text"
+
+        options_raw = raw.get("options")
+        options = [str(o).strip() for o in options_raw if str(o).strip()] if isinstance(options_raw, list) else []
+        # A choice field with no options is useless → degrade to a free-text box.
+        if ftype in _CHOICE_TYPES and not options:
+            ftype = "text"
+
+        label = raw.get("label")
+        label = label.strip() if isinstance(label, str) and label.strip() else key
+
+        field: dict[str, Any] = {
+            "key": key,
+            "label": label,
+            "type": ftype,
+            "required": bool(raw.get("required", False)),
+        }
+        if ftype in _CHOICE_TYPES:
+            field["options"] = options
+        out.append(field)
+    return out
+
+
 def parse_metadata(raw_json: str, *, default_title: str) -> Metadata:
     """Parse (and defensively normalize) the LLM metadata JSON.
 
@@ -157,11 +224,12 @@ def parse_metadata(raw_json: str, *, default_title: str) -> Metadata:
     title = obj.get("title")
     title = title.strip() if isinstance(title, str) and title.strip() else default_title
 
-    # 提取 player_template，如果为空或无效则返回空字典（后端会用默认模版）
-    player_template = obj.get("player_template", {})
-    if not isinstance(player_template, dict) or "fields" not in player_template:
-        player_template = {}
-    elif not isinstance(player_template.get("fields"), list):
+    # 提取 player_template，规范化每个字段；空/无效 → 空字典（后端用默认模版）
+    raw_template = obj.get("player_template", {})
+    if isinstance(raw_template, dict) and isinstance(raw_template.get("fields"), list):
+        normalized = normalize_fields(raw_template["fields"])
+        player_template = {"fields": normalized} if normalized else {}
+    else:
         player_template = {}
 
     return Metadata(
