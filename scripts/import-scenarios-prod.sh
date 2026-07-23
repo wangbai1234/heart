@@ -12,7 +12,8 @@
 #
 # 可覆盖环境变量：
 #   SRC_DIR=/path/to/scenarios   # 本地 .txt 目录（默认 ~/Downloads/剧情设定）
-#   HEART_PROD_SSH=deploy@1.2.3.4   # ssh 目标（默认 deploy@yuoyuo.app）
+#   HEART_PROD_SSH=deploy@1.2.3.4   # ssh 目标（默认 deploy@167.104.96.125）
+#   HEART_PROD_PORT=52200           # ssh 端口（默认 52200）
 #   HEART_PROD_DIR=/home/deploy/heart  # 服务器上仓库检出路径
 #
 # 前置：
@@ -31,7 +32,8 @@ die()  { printf "${c_red}[error]${c_reset} %s\n" "$*" >&2; exit 1; }
 
 # ── 参数 ──────────────────────────────────────────────────────────────────
 SRC_DIR="${SRC_DIR:-/Users/wanglixun/Downloads/剧情设定}"
-HEART_PROD_SSH="${HEART_PROD_SSH:-deploy@yuoyuo.app}"
+HEART_PROD_SSH="${HEART_PROD_SSH:-deploy@167.104.96.125}"
+HEART_PROD_PORT="${HEART_PROD_PORT:-52200}"
 HEART_PROD_DIR="${HEART_PROD_DIR:-/home/deploy/heart}"
 REMOTE_DIR="$HEART_PROD_DIR/scenarios_src"
 
@@ -53,7 +55,7 @@ command -v rsync &>/dev/null || die "rsync 未安装（macOS 自带，若无：b
 
 log "导入 $txt_count 个剧本 → 生产"
 info "源目录:   $SRC_DIR"
-info "SSH 目标: $HEART_PROD_SSH"
+info "SSH 目标: $HEART_PROD_SSH:$HEART_PROD_PORT"
 info "远端目录: $REMOTE_DIR"
 info "模式:     $MODE_ARG"
 echo ""
@@ -61,7 +63,7 @@ echo ""
 # ── 1) rsync 推 .txt 到服务器（--delete 保持镜像，只同步 .txt，不推 .DS_Store 等）──
 log "1/2  rsync 同步 .txt → $REMOTE_DIR ..."
 rsync -az --delete \
-    -e ssh \
+    -e "ssh -p $HEART_PROD_PORT" \
     --include='*.txt' --exclude='*' \
     "$SRC_DIR/" "$HEART_PROD_SSH:$REMOTE_DIR/" \
     || die "rsync 失败（exit $?)"
@@ -72,7 +74,7 @@ info "✓ 同步完成（远端 .txt 数量见下方导入日志）"
 # 容器内 WORKDIR=/app，脚本在 /app/scripts/import_scenarios.py（build context=./backend）。
 # --src /scenarios = compose 挂载的 ./scenarios_src:ro。env-file 让 compose 看到 DB/LLM 配置。
 log "2/2  在 api 容器内运行 import_scenarios.py $MODE_ARG ..."
-ssh "$HEART_PROD_SSH" "cd '$HEART_PROD_DIR' && \
+ssh -p "$HEART_PROD_PORT" "$HEART_PROD_SSH" "cd '$HEART_PROD_DIR' && \
     docker compose -f docker-compose.prod.yml --env-file .env.prod exec -T api \
     python scripts/import_scenarios.py --src /scenarios $MODE_ARG" \
     || { warn "远端导入失败（exit $?）"; exit 3; }
@@ -81,7 +83,7 @@ echo ""
 log "✅ 完成。"
 if [[ "$MODE_ARG" == "--publish" ]]; then
     info "已发布剧本。核对："
-    info "  ssh $HEART_PROD_SSH \"cd $HEART_PROD_DIR && docker compose -f docker-compose.prod.yml --env-file .env.prod exec -T api python -m alembic current\""
+    info "  ssh -p $HEART_PROD_PORT $HEART_PROD_SSH \"cd $HEART_PROD_DIR && docker compose -f docker-compose.prod.yml --env-file .env.prod exec -T api python -m alembic current\""
     info "  或前端 https://yuoyuo.app 探索页查看卡片。"
 else
     warn "dry-run 未写库。核对元数据后跑：bash scripts/import-scenarios-prod.sh --publish"
