@@ -122,6 +122,8 @@ def build_gm_messages(
 _NPC_LINE_RE = re.compile(r"^\s*\*\*(?P<name>[^*\n]{1,24})\*\*[:：]?\s*(?P<rest>.*)$")
 # An action span wrapped in full-width parens spanning a whole line.
 _ACTION_LINE_RE = re.compile(r"^\s*（(?P<inner>.+)）\s*$")
+# A dialogue line wrapped in double quotes (fallback when no **角色名** prefix).
+_QUOTED_DIALOGUE_RE = re.compile(r'^\s*[""""](?P<inner>.+?)[""""]\.?\s*$')
 # A narration prefix.
 _NARRATION_PREFIX_RE = re.compile(r"^\s*【旁白】\s*(?P<rest>.*)$", re.DOTALL)
 
@@ -136,6 +138,7 @@ def _classify_structured_line(stripped: str) -> Optional[dict[str, Any]]:
     A ``None`` result means the line is (possibly narration-prefixed) prose and
     should be buffered into the running narration bubble by the caller.
     """
+    # 1. Check for **角色名** dialogue (highest priority)
     npc_m = _NPC_LINE_RE.match(stripped)
     if npc_m:
         return {
@@ -143,9 +146,21 @@ def _classify_structured_line(stripped: str) -> Optional[dict[str, Any]]:
             "npc_name": npc_m.group("name").strip(),
             "content": npc_m.group("rest").strip(),
         }
+
+    # 2. Check for （action）
     action_m = _ACTION_LINE_RE.match(stripped)
     if action_m:
         return {"kind": "action", "npc_name": None, "content": action_m.group("inner").strip()}
+
+    # 3. Check for "quoted dialogue" (fallback for GM not following **角色名** format)
+    quoted_m = _QUOTED_DIALOGUE_RE.match(stripped)
+    if quoted_m:
+        return {
+            "kind": "dialogue",
+            "npc_name": None,  # No explicit NPC name, will use last speaker or scenario context
+            "content": quoted_m.group("inner").strip(),
+        }
+
     return None
 
 
