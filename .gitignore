@@ -82,3 +82,6 @@ docs/mvp/cut_status.md
 .playwright-mcp/
 .codex_artifacts/
 create_test_token.py
+
+# Story scenarios source files (adult content, rsync'd to prod; never commit)
+scenarios_src/
