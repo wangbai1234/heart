@@ -20,6 +20,7 @@ export function ExplorePage() {
   const { resolvedTheme } = useThemeStore()
   const {
     scenarios,
+    featuredScenarios,
     genres,
     activeGenre,
     loading,
@@ -39,8 +40,11 @@ export function ExplorePage() {
       ? '/assets/backgrounds/暗色聊天背景图.png'
       : '/assets/backgrounds/聊天背景图.png'
 
-  const featured = scenarios.find((s) => s.is_featured) ?? null
-  const grid = scenarios.filter((s) => s.id !== featured?.id)
+  // 推荐区：显示热度最高的 4 个 featured 剧情，支持左右滑动
+  const featuredTop4 = featuredScenarios.slice(0, 4)
+  // 剧情网格：排除已在推荐区显示的剧情，避免重复
+  const featuredIds = new Set(featuredTop4.map((s) => s.id))
+  const grid = scenarios.filter((s) => !featuredIds.has(s.id))
   const openScenario = (id: string) => navigate(`/explore/${id}`)
 
   return (
@@ -74,37 +78,42 @@ export function ExplorePage() {
             </div>
           ) : (
             <>
-              {/* Featured hero */}
-              {featured && (
-                <button
-                  onClick={() => openScenario(featured.id)}
-                  className="relative w-full h-[220px] rounded-[24px] overflow-hidden shadow-[var(--shadow-hero)] mb-5 active:scale-[0.98] transition-transform"
-                  style={{ background: 'linear-gradient(135deg, #FFD6E0 0%, #C8B6FF 100%)' }}
-                >
-                  {featured.cover_url && (
-                    <img
-                      src={featured.cover_url}
-                      alt=""
-                      className="absolute inset-0 w-full h-full object-cover"
-                    />
-                  )}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent" />
-                  <div className="absolute top-3 left-3 inline-flex h-[24px] items-center rounded-full bg-white/85 px-2.5 text-[12px] font-semibold text-[var(--color-primary-600)]">
-                    ✨ 今日精选
-                  </div>
-                  <div className="absolute bottom-0 left-0 right-0 p-4 text-left">
-                    <p className="text-[20px] font-bold text-white leading-[1.3] line-clamp-1">
-                      {featured.title}
-                    </p>
-                    <p className="mt-1 text-[13px] text-white/85 leading-[1.5] line-clamp-2">
-                      {featured.blurb}
-                    </p>
-                    <div className="mt-2 flex items-center gap-2 text-[12px] text-white/80">
-                      <span className="rounded-full bg-white/20 px-2 py-0.5">{featured.genre}</span>
-                      <span>🔥 {featured.play_count} 人玩过</span>
-                    </div>
-                  </div>
-                </button>
+              {/* Featured hero carousel - 支持左右滑动的推荐 banner */}
+              {featuredTop4.length > 0 && (
+                <div className="flex gap-3 overflow-x-auto pb-1 mb-5 -mx-1 px-1 snap-x snap-mandatory scrollbar-none">
+                  {featuredTop4.map((scenario) => (
+                    <button
+                      key={scenario.id}
+                      onClick={() => openScenario(scenario.id)}
+                      className="relative shrink-0 w-[calc(100vw-32px)] h-[220px] rounded-[24px] overflow-hidden shadow-[var(--shadow-hero)] active:scale-[0.98] transition-transform snap-center"
+                      style={{ background: 'linear-gradient(135deg, #FFD6E0 0%, #C8B6FF 100%)' }}
+                    >
+                      {scenario.cover_url && (
+                        <img
+                          src={scenario.cover_url}
+                          alt=""
+                          className="absolute inset-0 w-full h-full object-cover"
+                        />
+                      )}
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent" />
+                      <div className="absolute top-3 left-3 inline-flex h-[24px] items-center rounded-full bg-white/85 px-2.5 text-[12px] font-semibold text-[var(--color-primary-600)]">
+                        ✨ 热门推荐
+                      </div>
+                      <div className="absolute bottom-0 left-0 right-0 p-4 text-left">
+                        <p className="text-[20px] font-bold text-white leading-[1.3] line-clamp-1">
+                          {scenario.title}
+                        </p>
+                        <p className="mt-1 text-[13px] text-white/85 leading-[1.5] line-clamp-2">
+                          {scenario.blurb}
+                        </p>
+                        <div className="mt-2 flex items-center gap-2 text-[12px] text-white/80">
+                          <span className="rounded-full bg-white/20 px-2 py-0.5">{scenario.genre}</span>
+                          <span>🔥 {scenario.play_count} 人玩过</span>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
               )}
 
               {/* Genre filter chips */}
@@ -133,7 +142,7 @@ export function ExplorePage() {
                     <Skeleton key={i} className="w-full aspect-[3/4] rounded-[20px]" />
                   ))}
                 </div>
-              ) : grid.length === 0 && !featured ? (
+              ) : grid.length === 0 && featuredTop4.length === 0 ? (
                 <div className="pt-16">
                   <EmptyState
                     title="还没有剧情"
