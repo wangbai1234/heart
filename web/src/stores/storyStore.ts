@@ -60,6 +60,7 @@ function bubbleToVM(b: StoryBubbleDTO): StoryMessageVM {
  */
 interface StoryState {
   scenarios: ScenarioCardDTO[]
+  featuredScenarios: ScenarioCardDTO[]  // 独立的推荐区剧情（不受分类筛选影响）
   genres: Array<{ genre: string; count: number }>
   activeGenre: string | null
   loading: boolean
@@ -120,11 +121,14 @@ async function fetchCatalog(
   set({ loading: true, error: false })
   try {
     const genre = get().activeGenre
-    const [{ scenarios }, { genres }] = await Promise.all([
+    // 推荐区独立查询 featured=true，不受分类筛选影响
+    // 剧情网格查询当前分类（排除 featured，避免重复显示）
+    const [{ scenarios: featured }, { scenarios }, { genres }] = await Promise.all([
+      getScenarios({ featured: true, limit: 10 }),
       getScenarios(genre ? { genre, limit: 60 } : { limit: 60 }),
       getStoryGenres(),
     ])
-    set({ scenarios, genres, loaded: true, loading: false })
+    set({ featuredScenarios: featured, scenarios, genres, loaded: true, loading: false })
   } catch {
     set({ loading: false, error: true })
   }
@@ -132,6 +136,7 @@ async function fetchCatalog(
 
 export const useStoryStore = create<StoryState>((set, get) => ({
   scenarios: [],
+  featuredScenarios: [],
   genres: [],
   activeGenre: null,
   loading: false,
@@ -164,7 +169,7 @@ export const useStoryStore = create<StoryState>((set, get) => ({
   setGenre: async (genre) => {
     if (get().activeGenre === genre) return
     set({ activeGenre: genre })
-    // Only the grid depends on the filter; refetch scenarios (genres are stable).
+    // 推荐区（featuredScenarios）保持不变，只重新查询分类网格
     set({ loading: true, error: false })
     try {
       const { scenarios } = await getScenarios(genre ? { genre, limit: 60 } : { limit: 60 })

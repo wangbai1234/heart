@@ -67,11 +67,18 @@ _METADATA_SYSTEM = (
 )
 
 _METADATA_INSTRUCTION = (
-    "根据下面的剧本开头，抽取用于展示卡片的元数据，返回 JSON："
+    "根据下面的剧本开头，抽取用于展示卡片的元数据和玩家信息表单字段，返回 JSON："
     '{{"title": "简洁标题(≤16字)", "genre": "从固定枚举中选一个", '
-    '"blurb": "一句话简介(≤40字，不剧透关键反转)", "maturity": "all_ages 或 adult"}}\n'
+    '"blurb": "一句话简介(≤40字，不剧透关键反转)", "maturity": "all_ages 或 adult", '
+    '"player_template": {{"fields": [字段数组]}}}}\n'
     "genre 只能是以下之一：{genres}。无法归类时用「其他」。\n"
     "maturity 判定：出现 18禁/成人/露骨性描写开关或明显色情内容记为 adult，否则 all_ages。\n"
+    "player_template 从剧本开头的「请填写个人信息」区域提取，每个字段格式：\n"
+    '{{"key": "字段名", "label": "显示标签", "type": "text|textarea|select", "required": true|false, "options": ["选项1"]}}\n'
+    "常见字段：name(姓名), age(年龄), gender(性别), appearance(外貌), personality(性格), identity(身份), background(生平经历)等。\n"
+    "如果剧本有特殊字段（如分化、星座、MBTI），也要提取。必填字段：name, gender；其他为选填。\n"
+    "gender 字段默认 options: [\"男\", \"女\", \"双性\"]，如果剧本明确提到ABO设定，options改为: [\"Alpha\", \"Beta\", \"Omega\"]。\n"
+    "如果剧本没有明确的玩家信息表单，返回空 fields: []（会使用默认模版）。\n"
     "默认标题（无更好选择时使用）：{default_title}\n\n"
     "===== 剧本开头 =====\n{excerpt}"
 )
@@ -83,6 +90,7 @@ class Metadata:
     genre: str
     blurb: str
     maturity: str
+    player_template: dict[str, Any]  # 玩家信息表单字段定义
 
 
 @dataclass
@@ -148,11 +156,20 @@ def parse_metadata(raw_json: str, *, default_title: str) -> Metadata:
 
     title = obj.get("title")
     title = title.strip() if isinstance(title, str) and title.strip() else default_title
+
+    # 提取 player_template，如果为空或无效则返回空字典（后端会用默认模版）
+    player_template = obj.get("player_template", {})
+    if not isinstance(player_template, dict) or "fields" not in player_template:
+        player_template = {}
+    elif not isinstance(player_template.get("fields"), list):
+        player_template = {}
+
     return Metadata(
         title=title[:64],
         genre=normalize_genre(obj.get("genre")),
         blurb=clamp_blurb(obj.get("blurb")),
         maturity=normalize_maturity(obj.get("maturity")),
+        player_template=player_template,
     )
 
 
@@ -191,7 +208,9 @@ async def extract_metadata(router: Any, raw: str, *, default_title: str) -> Meta
         return parse_metadata(out, default_title=default_title)
     except Exception:
         logger.exception("story_import_metadata_failed", slug=default_title)
-        return Metadata(title=default_title, genre="其他", blurb="", maturity="all_ages")
+        return Metadata(
+            title=default_title, genre="其他", blurb="", maturity="all_ages", player_template={}
+        )
 
 
 # ── DB upsert ───────────────────────────────────────────────────────────
@@ -216,26 +235,29 @@ async def upsert_scenario(
 ) -> str:
     """Idempotent upsert. Returns 'created' or 'updated'.
 
-    Only card metadata + the verbatim prompt + hash are written; play_count /
-    is_featured / cover_url are preserved on update (curated post-import).
+    Only card metadata + the verbatim prompt + hash + player_template are written;
+    play_count / is_featured / cover_url are preserved on update (curated post-import).
     """
     existed = await existing_hash(db, slug) is not None
     status = "published" if publish else "draft"
+    # player_template_json: 空字典 → NULL（后端用默认模版）；有字段 → JSON
+    template_json = json.dumps(meta.player_template, ensure_ascii=False) if meta.player_template else None
     await db.execute(
         text(
             """
             INSERT INTO story_scenarios
                 (slug, title, genre, blurb, maturity, gm_system_prompt,
-                 source_hash, status, free_tier, updated_at)
+                 player_template_json, source_hash, status, free_tier, updated_at)
             VALUES
                 (:slug, :title, :genre, :blurb, :maturity, :prompt,
-                 :hash, :status, :free_tier, NOW())
+                 CAST(:template AS JSONB), :hash, :status, :free_tier, NOW())
             ON CONFLICT (slug) DO UPDATE SET
                 title = EXCLUDED.title,
                 genre = EXCLUDED.genre,
                 blurb = EXCLUDED.blurb,
                 maturity = EXCLUDED.maturity,
                 gm_system_prompt = EXCLUDED.gm_system_prompt,
+                player_template_json = EXCLUDED.player_template_json,
                 source_hash = EXCLUDED.source_hash,
                 status = EXCLUDED.status,
                 free_tier = EXCLUDED.free_tier,
@@ -249,6 +271,7 @@ async def upsert_scenario(
             "blurb": meta.blurb,
             "maturity": meta.maturity,
             "prompt": gm_system_prompt,
+            "template": template_json,
             "hash": source_hash,
             "status": status,
             "free_tier": slug in _free_tier_slugs(),
