@@ -232,38 +232,40 @@ async def list_companions(
     for r in proactive_result.fetchall():
         proactive_ids.add(r.character_id)
 
-    # --- 4.5. Story hooks: enabled invitations for visible characters (batch)
-    # Eligibility (stage/intimacy threshold) is computed in the merge loop below
-    # where the user's live relationship state is in scope. Only the character's
-    # *highest-ranked* eligible hook is surfaced (one invitation card per card).
+    # --- 4.5. Story hooks: DISABLED (产品决策 2026-07-24)
+    # 角色↔剧情关联功能已暂停：角色性格无法代入 GM 驱动的剧情，语义不成立。
+    # 查询与 _pick_story_hook 逻辑保留在代码里（helper + migration 047 + DTO 字段）
+    # 便于日后恢复；此处直接不查，hooks_map 恒空 → _pick_story_hook 恒返回 None
+    # → available_story_hook 恒为 None，前端卡片不渲染。
+    # 恢复方法：取消下方查询的注释即可，第 5 步的 _pick_story_hook 调用无需改动。
     hooks_map: dict[str, list[dict]] = {}
-    hooks_result = await db.execute(
-        text(
-            """
-            SELECT h.character_id, h.scenario_id, h.trigger_stage_min,
-                   h.trigger_intimacy_min, h.cooldown_hours,
-                   h.invite_title, h.invite_copy, h.cta_label
-            FROM character_story_hooks h
-            JOIN story_scenarios s ON s.id = h.scenario_id
-            WHERE h.enabled = true
-              AND s.status = 'published'
-              AND h.character_id = ANY(:ids)
-            """
-        ),
-        {"ids": visible_ids},
-    )
-    for r in hooks_result.fetchall():
-        hooks_map.setdefault(r.character_id, []).append(
-            {
-                "scenario_id": str(r.scenario_id),
-                "trigger_stage_min": r.trigger_stage_min,
-                "trigger_intimacy_min": float(r.trigger_intimacy_min or 0.0),
-                "cooldown_hours": int(r.cooldown_hours or 0),
-                "invite_title": r.invite_title or "",
-                "invite_copy": r.invite_copy or "",
-                "cta_label": r.cta_label or "进入剧情",
-            }
-        )
+    # hooks_result = await db.execute(
+    #     text(
+    #         """
+    #         SELECT h.character_id, h.scenario_id, h.trigger_stage_min,
+    #                h.trigger_intimacy_min, h.cooldown_hours,
+    #                h.invite_title, h.invite_copy, h.cta_label
+    #         FROM character_story_hooks h
+    #         JOIN story_scenarios s ON s.id = h.scenario_id
+    #         WHERE h.enabled = true
+    #           AND s.status = 'published'
+    #           AND h.character_id = ANY(:ids)
+    #         """
+    #     ),
+    #     {"ids": visible_ids},
+    # )
+    # for r in hooks_result.fetchall():
+    #     hooks_map.setdefault(r.character_id, []).append(
+    #         {
+    #             "scenario_id": str(r.scenario_id),
+    #             "trigger_stage_min": r.trigger_stage_min,
+    #             "trigger_intimacy_min": float(r.trigger_intimacy_min or 0.0),
+    #             "cooldown_hours": int(r.cooldown_hours or 0),
+    #             "invite_title": r.invite_title or "",
+    #             "invite_copy": r.invite_copy or "",
+    #             "cta_label": r.cta_label or "进入剧情",
+    #         }
+    #     )
 
     # --- 5. Merge into the companion view-model
     companions = []

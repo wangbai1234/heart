@@ -10,7 +10,8 @@ import { CHARACTER_PROFILES, resolveCharacterProfile, type CharacterProfile } fr
 import { useCharactersStore } from '../stores/charactersStore'
 import { useCompanionsStore } from '../stores/companionsStore'
 import { stageLabel, stageWithIntimacy, isColdWar, intimacyPercent } from '../utils/relationship'
-import { StoryInviteCard } from '../components/StoryInviteCard'
+// DISABLED 2026-07-24: 角色↔剧情关联功能暂停，见下方渲染块注释
+// import { StoryInviteCard } from '../components/StoryInviteCard'
 import type { CompanionDTO } from '../services/api'
 
 interface CompanionVM {
@@ -319,10 +320,11 @@ function ArchivePanel({ vm, onOpenBackstage }: { vm: CompanionVM; onOpenBackstag
         </div>
       </div>
 
-      {/* 剧情邀约（Wave 3）— 后端 available_story_hook 驱动 */}
+      {/* 剧情邀约（Wave 3）— DISABLED 2026-07-24：角色↔剧情关联功能已暂停。
+          恢复：取消 import 与下方注释即可。
       {companion.available_story_hook && (
         <StoryInviteCard characterId={companion.character_id} hook={companion.available_story_hook} />
-      )}
+      )} */}
 
       <div className="rounded-[16px] bg-[var(--color-glass-55)] border border-[var(--color-border-glass)] p-4">
         <h4 className="text-[13px] font-medium text-[var(--color-text-secondary)] mb-2">共同回忆</h4>
