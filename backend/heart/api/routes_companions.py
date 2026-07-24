@@ -39,10 +39,43 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from heart.api.wiring import get_db
 from heart.core.auth import TokenData, get_current_user
 from heart.ss01_soul.character_catalog import CharacterRow, build_catalog_entries
+from heart.ss04_relationship.stage_engine import STAGE_ORDER, RelationshipStage
 
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix="/api/companions", tags=["companions"])
+
+
+def _stage_rank(raw_stage: str) -> int:
+    """RAW stage enum string → STAGE_ORDER rank; unknown/cold_war → -1 (ineligible)."""
+    try:
+        return STAGE_ORDER[RelationshipStage(raw_stage)]
+    except (ValueError, KeyError):
+        return -1
+
+
+def _pick_story_hook(hooks: list[dict], stage_raw: str, intimacy: float) -> dict | None:
+    """Highest-threshold hook the user qualifies for (stage rank AND intimacy met).
+
+    cold_war ranks -1, so a hook with any real ``trigger_stage_min`` is never
+    eligible mid-conflict. Returns the frontend-facing card payload, or None.
+    """
+    user_rank = _stage_rank(stage_raw)
+    for hook in sorted(
+        hooks,
+        key=lambda h: (_stage_rank(h["trigger_stage_min"]), h["trigger_intimacy_min"]),
+        reverse=True,
+    ):
+        hook_rank = _stage_rank(hook["trigger_stage_min"])
+        if user_rank >= hook_rank >= 0 and intimacy >= hook["trigger_intimacy_min"]:
+            return {
+                "scenario_id": hook["scenario_id"],
+                "invite_title": hook["invite_title"],
+                "invite_copy": hook["invite_copy"],
+                "cta_label": hook["cta_label"],
+                "cooldown_hours": hook["cooldown_hours"],
+            }
+    return None
 
 
 def sort_companions(companions: list[dict]) -> list[dict]:
@@ -199,12 +232,52 @@ async def list_companions(
     for r in proactive_result.fetchall():
         proactive_ids.add(r.character_id)
 
+    # --- 4.5. Story hooks: enabled invitations for visible characters (batch)
+    # Eligibility (stage/intimacy threshold) is computed in the merge loop below
+    # where the user's live relationship state is in scope. Only the character's
+    # *highest-ranked* eligible hook is surfaced (one invitation card per card).
+    hooks_map: dict[str, list[dict]] = {}
+    hooks_result = await db.execute(
+        text(
+            """
+            SELECT h.character_id, h.scenario_id, h.trigger_stage_min,
+                   h.trigger_intimacy_min, h.cooldown_hours,
+                   h.invite_title, h.invite_copy, h.cta_label
+            FROM character_story_hooks h
+            JOIN story_scenarios s ON s.id = h.scenario_id
+            WHERE h.enabled = true
+              AND s.status = 'published'
+              AND h.character_id = ANY(:ids)
+            """
+        ),
+        {"ids": visible_ids},
+    )
+    for r in hooks_result.fetchall():
+        hooks_map.setdefault(r.character_id, []).append(
+            {
+                "scenario_id": str(r.scenario_id),
+                "trigger_stage_min": r.trigger_stage_min,
+                "trigger_intimacy_min": float(r.trigger_intimacy_min or 0.0),
+                "cooldown_hours": int(r.cooldown_hours or 0),
+                "invite_title": r.invite_title or "",
+                "invite_copy": r.invite_copy or "",
+                "cta_label": r.cta_label or "进入剧情",
+            }
+        )
+
     # --- 5. Merge into the companion view-model
     companions = []
     for e in entries:
         rel = rel_map.get(e.id)
         inbox = inbox_map.get(e.id)
         last_at = inbox["last_message_at"] if inbox else None
+
+        # Story invitation: highest-threshold hook this user currently qualifies for.
+        available_story_hook = _pick_story_hook(
+            hooks_map.get(e.id, []),
+            rel["stage"] if rel else "STRANGER",
+            rel["intimacy"] if rel else 0.0,
+        )
 
         companions.append(
             {
@@ -225,6 +298,8 @@ async def list_companions(
                 "last_message_modality": inbox["modality"] if inbox else None,
                 "unread_count": inbox["unread_count"] if inbox else 0,
                 "has_proactive": e.id in proactive_ids,
+                # Wave 3: 剧情邀约. null unless the user qualifies for a hook.
+                "available_story_hook": available_story_hook,
             }
         )
 
