@@ -54,10 +54,13 @@ logger = structlog.get_logger(__name__)
 
 DEFAULT_SRC = "/Users/wanglixun/Downloads/剧情设定"
 
-# Only the opening matters for card metadata (title/genre/blurb/maturity); the
-# 18禁 / 纯爱 switch and NPC intros live near the top of these packs. Cap the
-# excerpt so the classification call stays cheap on 10k+ char files.
-_META_EXCERPT_CHARS = 6000
+# Extract metadata and player_template from a substantial portion of each file.
+# The 玩家自定义区 (player template fields) often appears in the opening, but can
+# extend deeper into the file when there are many NPC profiles or detailed options.
+# Reading 50%+ of the content ensures we capture all user-fillable fields, avoiding
+# the UX issue where missing fields cause the GM to re-ask during gameplay.
+# Median file size ~13k chars → 50% ≈ 6500 chars. Use 12000 to cover larger files.
+_META_EXCERPT_CHARS = 12000
 
 _BLURB_MAX = 40
 

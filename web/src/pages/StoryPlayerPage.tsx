@@ -231,12 +231,12 @@ function MessageGroup({ group }: { group: MessageGroup }) {
       {/* 逐条渲染 action 和 dialogue */}
       {group.messages.map((msg, idx) => {
         if (msg.kind === 'action') {
-          // Action：低调的灰色斜体文字，不带边框，类似轻量旁白
+          // Action：小灰色药丸，置于页面中间（不靠左）
           return (
-            <div key={idx} className="w-full">
-              <p className="text-[13px] leading-[1.6] text-[var(--color-text-muted)] italic opacity-75">
-                （{msg.content}）
-              </p>
+            <div key={idx} className="w-full flex justify-center">
+              <span className="inline-block px-3 py-1 text-[12px] leading-[1.5] text-[var(--color-text-muted)] bg-[var(--color-surface)] rounded-full border border-[var(--color-border)]">
+                {msg.content}
+              </span>
             </div>
           )
         }
