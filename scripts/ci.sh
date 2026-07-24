@@ -53,7 +53,10 @@ pip_install() {
 stage_lint() {
     log "stage: lint (ruff + mypy)"
     require_backend
-    pip_install ruff mypy
+    # Pin linters so CI == local (unpinned ruff drifts to latest and reformats
+    # embedded code blocks in .md docs that older ruff leaves alone → phantom
+    # red on untouched files). Bump these two lines + requirements-dev.txt together.
+    pip_install ruff==0.15.13 mypy==2.1.0
     pip_install -r "$BACKEND_DIR/requirements.txt"
 
     cd "$BACKEND_DIR"
