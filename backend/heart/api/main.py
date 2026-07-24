@@ -41,6 +41,7 @@ from .routes_admin import router as admin_router
 from .routes_auth import router as auth_router
 from .routes_characters import router as characters_router
 from .routes_chat_ws import router as chat_ws_router
+from .routes_companions import router as companions_router
 from .routes_credits import router as credits_router
 from .routes_invite import router as invite_router
 from .routes_membership import router as membership_router
@@ -289,6 +290,7 @@ def create_app() -> FastAPI:
     app.include_router(profile_router)  # /api/profile/* (GET/PATCH profile, avatar)
     app.include_router(account_router)  # /api/account/* (clear, delete, export)
     app.include_router(characters_router)  # /api/characters/* (voice settings)
+    app.include_router(companions_router)  # /api/companions (bond-center aggregation)
     app.include_router(proactive_router)
     app.include_router(story_router)  # /api/story/* (scenario catalog + runs)
     app.include_router(story_ws_router)  # /api/story/ws (real-time turn stream)
