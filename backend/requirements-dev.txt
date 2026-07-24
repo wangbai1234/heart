@@ -16,9 +16,10 @@ playwright>=1.45.0
 # Load testing
 locust>=2.20.0
 
-# Code quality
-ruff>=0.1.0
-mypy>=1.8.0
+# Code quality — pinned exact so CI == local (see scripts/ci.sh stage_lint).
+# Unpinned ruff drifts to latest and reformats .md code blocks older ruff skips.
+ruff==0.15.13
+mypy==2.1.0
 
 # Interactive development
 ipython>=8.20.0
