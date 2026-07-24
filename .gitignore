@@ -85,3 +85,6 @@ create_test_token.py
 
 # Story scenarios source files (adult content, rsync'd to prod; never commit)
 scenarios_src/
+
+# Scenario cover images (rsync'd to prod via upload-covers-prod.sh; never commit)
+covers_src/
