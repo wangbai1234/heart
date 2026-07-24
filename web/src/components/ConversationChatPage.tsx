@@ -10,7 +10,8 @@ import { stageLabel, stageWithIntimacy, stageOrderIndex } from '../utils/relatio
 import { useWebSocket } from '../hooks/useWebSocket'
 import { useProactiveStore } from '../stores/proactiveStore'
 import { getChatHistory, ackProactive, markCharacterRead, transcribeAudio } from '../services/api'
-import { StoryInviteCard, isHookOnCooldown } from './StoryInviteCard'
+// DISABLED 2026-07-24: 角色↔剧情关联功能暂停，见下方渲染块注释
+// import { StoryInviteCard, isHookOnCooldown } from './StoryInviteCard'
 import { BreathingDots } from './ui/BreathingDots'
 import { Dialog } from './ui/Dialog'
 import { Button } from './ui/Button'
@@ -66,7 +67,8 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
   // Bond-center relationship status (Wave 2 event cards). Purely additive —
   // does not touch voice / proactive / WS logic.
   const [upgradeStage, setUpgradeStage] = useState<string | null>(null)
-  const [hookDismissed, setHookDismissed] = useState(false)
+  // DISABLED 2026-07-24: hookDismissed 仅供剧情邀约卡使用，功能暂停
+  // const [hookDismissed, setHookDismissed] = useState(false)
   const companions = useCompanionsStore((s) => s.companions)
   const loadCompanions = useCompanionsStore((s) => s.load)
 
@@ -626,7 +628,8 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
         </button>
       </header>
 
-      {/* 剧情邀约卡（Wave 3）— 后端 available_story_hook 驱动，dismissal 走 localStorage */}
+      {/* 剧情邀约卡（Wave 3）— DISABLED 2026-07-24：角色↔剧情关联功能已暂停。
+          恢复：取消 import、hookDismissed state 与下方注释即可。
       {currentCompanion?.available_story_hook &&
         !hookDismissed &&
         !isHookOnCooldown(currentCharacterId, currentCompanion.available_story_hook) && (
@@ -637,7 +640,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
               onDismiss={() => setHookDismissed(true)}
             />
           </div>
-        )}
+        )} */}
 
       {/* 关系升阶事件卡（纯前端，localStorage 比对，不写回后端） */}
       {upgradeStage && (
