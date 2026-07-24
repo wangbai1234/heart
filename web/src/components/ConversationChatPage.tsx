@@ -5,6 +5,8 @@ import { useChatStore, type Message } from '../stores/chatStore'
 import { useAuthStore } from '../stores/authStore'
 import { CHARACTER_PROFILES, resolveCharacterProfile, shouldShowTimestamp, formatChatTime, type CharacterId } from '../data/uiContent'
 import { useCharactersStore } from '../stores/charactersStore'
+import { useCompanionsStore } from '../stores/companionsStore'
+import { stageLabel, stageWithIntimacy, stageOrderIndex } from '../utils/relationship'
 import { useWebSocket } from '../hooks/useWebSocket'
 import { useProactiveStore } from '../stores/proactiveStore'
 import { getChatHistory, ackProactive, markCharacterRead, transcribeAudio } from '../services/api'
@@ -60,6 +62,12 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
   const cancelZoneRef = useRef<HTMLDivElement | null>(null)
   const recorder = useVoiceRecorder()
 
+  // Bond-center relationship status (Wave 2 event cards). Purely additive —
+  // does not touch voice / proactive / WS logic.
+  const [upgradeStage, setUpgradeStage] = useState<string | null>(null)
+  const companions = useCompanionsStore((s) => s.companions)
+  const loadCompanions = useCompanionsStore((s) => s.load)
+
   // Right-swipe from left edge → back to chat list
   useSwipeNavigation({ onRightSwipe: () => navigate('/home') })
 
@@ -105,6 +113,33 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
   const pageBg = isDark
     ? '/assets/backgrounds/暗色聊天背景图.png'
     : '/assets/backgrounds/聊天背景图.png'
+
+  const currentCompanion = companions.find((c) => c.character_id === currentCharacterId)
+
+  // Load the bond-center aggregation lazily (companionsStore dedupes concurrent
+  // loads); used only for the relationship status bar + upgrade card below.
+  useEffect(() => {
+    loadCompanions()
+  }, [loadCompanions])
+
+  // Relationship-upgrade event card: compare the current stage against the
+  // last-seen stage for this character (localStorage), purely client-side.
+  // First visit for a character just records the baseline — it never pops a
+  // card on the very first time we learn the stage.
+  useEffect(() => {
+    if (!currentCompanion) return
+    const stage = currentCompanion.relationship_stage
+    const key = `lastStage:${currentCharacterId}`
+    const prevStage = localStorage.getItem(key)
+    if (prevStage === null) {
+      localStorage.setItem(key, stage)
+      return
+    }
+    if (prevStage !== stage && stageOrderIndex(stage) > stageOrderIndex(prevStage)) {
+      setUpgradeStage(stage)
+    }
+    localStorage.setItem(key, stage)
+  }, [currentCharacterId, currentCompanion])
 
   const setInboxUnreadTotal = useAppStore((s) => s.setInboxUnreadTotal)
 
@@ -577,12 +612,39 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
             <span className={`text-[13px] ${isDark ? 'text-[rgba(228,228,231,0.65)]' : 'text-[var(--color-text-secondary)]'}`}>
               {isStreaming ? '正在回复…' : isPlaying ? '朗读中' : profile.statusLabel}
             </span>
+            {currentCompanion && (
+              <span className={`text-[12px] ml-1.5 ${isDark ? 'text-[rgba(228,228,231,0.5)]' : 'text-[var(--color-text-secondary)]'}`}>
+                · {stageWithIntimacy(currentCompanion.relationship_stage, currentCompanion.intimacy)}
+              </span>
+            )}
           </div>
         </div>
         <button onClick={() => navigate('/character-backstage')} className="w-[44px] h-[44px] flex items-center justify-center" aria-label="打开角色后台">
           <span className={`text-[20px] ${isDark ? 'text-[#E4E4E7]' : 'text-[var(--color-ink)]'}`}>···</span>
         </button>
       </header>
+
+      {/* 关系升阶事件卡（纯前端，localStorage 比对，不写回后端） */}
+      {/* TODO(Wave 3): 剧情邀约卡，依赖 character_story_hooks 后端 */}
+      {upgradeStage && (
+        <div className="relative z-20 mx-3 mt-3 rounded-[20px] px-4 py-3 bg-[var(--color-glass-75)] backdrop-blur-[16px] border border-[var(--color-border-glass)] shadow-[var(--shadow-soft)] flex items-center justify-between gap-3">
+          <div>
+            <p className="text-[13px] font-medium text-[var(--color-ink)]">
+              你们的关系进入「{stageLabel(upgradeStage)}」
+            </p>
+            <p className="text-[12px] text-[var(--color-text-secondary)] mt-0.5">她开始更主动地靠近你。</p>
+          </div>
+          <button
+            onClick={() => {
+              setUpgradeStage(null)
+              navigate('/character')
+            }}
+            className="shrink-0 h-[32px] px-3 rounded-full bg-[var(--color-primary)] text-white text-[12px] font-medium active:scale-[0.96] transition-transform"
+          >
+            查看羁绊
+          </button>
+        </div>
+      )}
 
       {/* Messages */}
       <div ref={scrollRef} className="relative z-10 flex-1 overflow-y-auto px-4 py-3 flex flex-col gap-3">

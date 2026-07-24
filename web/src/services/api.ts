@@ -372,6 +372,30 @@ export async function markCharacterRead(characterId: string): Promise<{ ok: bool
   return request(`/chat/${encodeURIComponent(characterId)}/mark-read`, { method: 'POST' })
 }
 
+// ── Companion Aggregation API (bond center) ──────────────────────────
+
+export interface CompanionDTO {
+  character_id: string
+  display_name: string
+  avatar_url?: string | null
+  source: 'built_in' | 'user_created'
+  is_owner: boolean
+  is_builtin: boolean
+  has_voice: boolean
+  companion_status: 'locked' | 'encountered' | 'companioned'
+  relationship_stage: string // RAW enum: STRANGER/ACQUAINTANCE/FRIEND/CONFIDANT/ROMANTIC_INTEREST/LOVER/BONDED/cold_war
+  intimacy: number // 0..1
+  last_message_text: string
+  last_message_at: string | null
+  last_message_modality: 'text' | 'voice' | null
+  unread_count: number
+  has_proactive: boolean
+}
+
+export async function getCompanions(): Promise<{ companions: CompanionDTO[] }> {
+  return request('/companions')
+}
+
 export async function getChatHistory(
   characterId: string,
   cursor?: string,
