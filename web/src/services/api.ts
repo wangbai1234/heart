@@ -390,6 +390,17 @@ export interface CompanionDTO {
   last_message_modality: 'text' | 'voice' | null
   unread_count: number
   has_proactive: boolean
+  /** Wave 3: 剧情邀约. Present only when the user qualifies for a linked scenario hook. */
+  available_story_hook?: StoryHookDTO | null
+}
+
+/** A story-invitation card payload (character↔scenario hook the user qualifies for). */
+export interface StoryHookDTO {
+  scenario_id: string
+  invite_title: string
+  invite_copy: string
+  cta_label: string
+  cooldown_hours: number
 }
 
 export async function getCompanions(): Promise<{ companions: CompanionDTO[] }> {

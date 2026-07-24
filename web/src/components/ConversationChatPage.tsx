@@ -10,6 +10,7 @@ import { stageLabel, stageWithIntimacy, stageOrderIndex } from '../utils/relatio
 import { useWebSocket } from '../hooks/useWebSocket'
 import { useProactiveStore } from '../stores/proactiveStore'
 import { getChatHistory, ackProactive, markCharacterRead, transcribeAudio } from '../services/api'
+import { StoryInviteCard, isHookOnCooldown } from './StoryInviteCard'
 import { BreathingDots } from './ui/BreathingDots'
 import { Dialog } from './ui/Dialog'
 import { Button } from './ui/Button'
@@ -65,6 +66,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
   // Bond-center relationship status (Wave 2 event cards). Purely additive —
   // does not touch voice / proactive / WS logic.
   const [upgradeStage, setUpgradeStage] = useState<string | null>(null)
+  const [hookDismissed, setHookDismissed] = useState(false)
   const companions = useCompanionsStore((s) => s.companions)
   const loadCompanions = useCompanionsStore((s) => s.load)
 
@@ -624,8 +626,20 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
         </button>
       </header>
 
+      {/* 剧情邀约卡（Wave 3）— 后端 available_story_hook 驱动，dismissal 走 localStorage */}
+      {currentCompanion?.available_story_hook &&
+        !hookDismissed &&
+        !isHookOnCooldown(currentCharacterId, currentCompanion.available_story_hook) && (
+          <div className="relative z-20 mx-3 mt-3">
+            <StoryInviteCard
+              characterId={currentCharacterId}
+              hook={currentCompanion.available_story_hook}
+              onDismiss={() => setHookDismissed(true)}
+            />
+          </div>
+        )}
+
       {/* 关系升阶事件卡（纯前端，localStorage 比对，不写回后端） */}
-      {/* TODO(Wave 3): 剧情邀约卡，依赖 character_story_hooks 后端 */}
       {upgradeStage && (
         <div className="relative z-20 mx-3 mt-3 rounded-[20px] px-4 py-3 bg-[var(--color-glass-75)] backdrop-blur-[16px] border border-[var(--color-border-glass)] shadow-[var(--shadow-soft)] flex items-center justify-between gap-3">
           <div>

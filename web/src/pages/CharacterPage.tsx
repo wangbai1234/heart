@@ -10,6 +10,7 @@ import { CHARACTER_PROFILES, resolveCharacterProfile, type CharacterProfile } fr
 import { useCharactersStore } from '../stores/charactersStore'
 import { useCompanionsStore } from '../stores/companionsStore'
 import { stageLabel, stageWithIntimacy, isColdWar, intimacyPercent } from '../utils/relationship'
+import { StoryInviteCard } from '../components/StoryInviteCard'
 import type { CompanionDTO } from '../services/api'
 
 interface CompanionVM {
@@ -318,9 +319,14 @@ function ArchivePanel({ vm, onOpenBackstage }: { vm: CompanionVM; onOpenBackstag
         </div>
       </div>
 
+      {/* 剧情邀约（Wave 3）— 后端 available_story_hook 驱动 */}
+      {companion.available_story_hook && (
+        <StoryInviteCard characterId={companion.character_id} hook={companion.available_story_hook} />
+      )}
+
       <div className="rounded-[16px] bg-[var(--color-glass-55)] border border-[var(--color-border-glass)] p-4">
         <h4 className="text-[13px] font-medium text-[var(--color-text-secondary)] mb-2">共同回忆</h4>
-        {/* TODO(Wave 3/4): 接 character_story_hooks + 相遇摘要，本轮无数据源 */}
+        {/* TODO(Wave 4): 接相遇摘要（story-encounter → L3/L4 记忆），本轮无数据源 */}
         <p className="text-[13px] text-[var(--color-text-secondary)]">还没有共同经历的剧情，敬请期待。</p>
       </div>
 
