@@ -38,6 +38,18 @@ _GM_ROLE_HEADER = (
     "不要替主控做决定、不要代替主控发言。"
 )
 
+# The scenario's raw prompt frequently instructs the GM to make the player fill
+# in a character sheet / pick a mode before starting. That intake已 happened in the
+# StartRunSheet before the run was created, so the GM must NOT re-ask — it treats
+# the 主控档案 below as settled fact and opens the story directly.
+_SETUP_DONE_NOTICE = (
+    "【开局须知】主控的开局设定（个人信息、模式、设定偏好、私设等）已在进入剧情前"
+    "全部收集完毕，见下方「主控档案」。即使剧本原文要求你列举选项让主控填写，你也"
+    "**不要**再在对话里重复索要这些信息或让主控重新选择——直接以档案为准开场并推进剧情。"
+    "档案中未提供的细节，你可以在剧情中自然带出或让主控在行动中自行补充，但不要以填表"
+    "／问答的方式打断开场。"
+)
+
 _FORMAT_GUIDE = (
     "【输出格式】\n"
     "- 场景/环境/心理描写用「【旁白】」开头。\n"
@@ -47,28 +59,50 @@ _FORMAT_GUIDE = (
 )
 
 
+# Fallback Chinese labels for the well-known player-card keys. Scenario-specific
+# keys (mode / preferences / 私设 …) fall back to their own key as the label — the
+# extractor already stores a Chinese label on the field, but the run only persists
+# key→value, so this map covers the common ones for a readable GM card.
+_CARD_LABELS = {
+    "name": "姓名",
+    "age": "年龄",
+    "gender": "性别",
+    "appearance": "外貌",
+    "personality": "性格",
+    "zodiac": "星座",
+    "mbti": "MBTI",
+    "identity": "身份",
+    "background": "生平经历",
+    "mode": "模式",
+    "preferences": "设定偏好",
+}
+
+
+def _render_card_value(value: Any) -> str:
+    """Render one card value: join multi-select lists with 、, stringify scalars."""
+    if isinstance(value, (list, tuple)):
+        parts = [str(v).strip() for v in value if str(v).strip()]
+        return "、".join(parts)
+    return str(value).strip()
+
+
 def _render_player_card(identity: dict[str, Any]) -> str:
-    """Render the filled 主控 card into a compact labelled block."""
+    """Render the filled 主控 card into a compact labelled block.
+
+    Handles scalar fields (name/age/…) and multi-select list values (设定偏好),
+    which arrive as a list from the checkbox form and must render as a readable
+    顿号-joined string, never a Python list repr.
+    """
     if not identity:
         return "（主控未填写详细档案，请根据剧情合理称呼玩家。）"
     # Preserve insertion order; skip empty values.
     lines = []
-    label_map = {
-        "name": "姓名",
-        "age": "年龄",
-        "gender": "性别",
-        "appearance": "外貌",
-        "personality": "性格",
-        "zodiac": "星座",
-        "mbti": "MBTI",
-        "identity": "身份",
-        "background": "生平经历",
-    }
     for key, value in identity.items():
-        if value in (None, "", []):
+        rendered = _render_card_value(value)
+        if not rendered:  # None / "" / [] / whitespace-only all collapse to empty
             continue
-        label = label_map.get(key, key)
-        lines.append(f"- {label}：{value}")
+        label = _CARD_LABELS.get(key, key)
+        lines.append(f"- {label}：{rendered}")
     return "\n".join(lines) if lines else "（主控未填写详细档案。）"
 
 
@@ -80,6 +114,10 @@ def build_gm_system_prompt(scenario: Scenario, run: Run) -> str:
         scenario.gm_system_prompt.strip(),
         "──────────────────────────────────",
         _SECURITY_NOTICE,
+        # 剧本原文常写「请主控填写个人信息/选择模式/偏好后再开始」。这些开局表单已由前端在
+        # 进入剧情前一次性收集完毕（见下方档案），GM 绝不能再在对话里重新索要这些信息，否则
+        # 玩家会看到「又要填一遍」的重复追问。直接把档案当作既定事实，开场即进入剧情。
+        _SETUP_DONE_NOTICE,
         "【主控档案】\n" + _render_player_card(run.player_identity_json),
     ]
     summary = (run.summary or "").strip()
@@ -123,7 +161,10 @@ _NPC_LINE_RE = re.compile(r"^\s*\*\*(?P<name>[^*\n]{1,24})\*\*[:：]?\s*(?P<rest
 # An action span wrapped in full-width parens spanning a whole line.
 _ACTION_LINE_RE = re.compile(r"^\s*（(?P<inner>.+)）\s*$")
 # A dialogue line wrapped in double quotes (fallback when no **角色名** prefix).
-_QUOTED_DIALOGUE_RE = re.compile(r'^\s*[""""](?P<inner>.+?)[""""]\.?\s*$')
+# Supports ASCII (U+0022) + Chinese curly quotes (U+201C/U+201D) + corner quotes (U+300C/U+300D)
+_QUOTED_DIALOGUE_RE = re.compile(
+    r"^\s*[\x22\u201c\u201d\u300c](?P<inner>.+?)[\x22\u201c\u201d\u300d]\.?\s*$"
+)
 # A narration prefix.
 _NARRATION_PREFIX_RE = re.compile(r"^\s*【旁白】\s*(?P<rest>.*)$", re.DOTALL)
 
@@ -142,8 +183,8 @@ def _classify_structured_line(stripped: str) -> Optional[list[dict[str, Any]]]:
     npc_m = _NPC_LINE_RE.match(stripped)
     if npc_m:
         content = npc_m.group("rest").strip()
-        # Strip surrounding quotes if present
-        content = re.sub(r'^[""""]|[""""]$', "", content)
+        # Strip surrounding quotes if present (ASCII + Chinese curly/corner quotes)
+        content = re.sub(r"^[\x22\u201c\u201d\u300c]|[\x22\u201c\u201d\u300d]$", "", content)
         return [
             {
                 "kind": "dialogue",
@@ -185,8 +226,11 @@ def _classify_structured_line(stripped: str) -> Optional[list[dict[str, Any]]]:
             pos += action_match.end()
             continue
 
-        # Try to match "dialogue" at current position
-        dialogue_match = re.match(r'[""""](?P<inner>[^""""]+)[""""]', stripped[pos:])
+        # Try to match “dialogue” at current position (ASCII + Chinese curly/corner quotes)
+        dialogue_match = re.match(
+            r"[\x22\u201c\u201d\u300c](?P<inner>[^\x22\u201c\u201d\u300d]+)[\x22\u201c\u201d\u300d]",
+            stripped[pos:],
+        )
         if dialogue_match:
             flush_narration()
             bubbles.append(

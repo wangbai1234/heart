@@ -14,7 +14,7 @@ import uuid
 from typing import Any, Optional
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -332,3 +332,21 @@ async def delete_run(
     if not ok:
         raise HTTPException(404, "run_not_found")
     return {"ok": True}
+
+
+@router.get("/covers/{slug}")
+async def get_scenario_cover(slug: str) -> Response:
+    """Proxy scenario cover image from S3/MinIO storage.
+
+    Used when S3_PUBLIC_BASE_URL is not configured (internal MinIO).
+    cover_url in DB is stored as /api/story/covers/{slug}.
+    """
+    from heart.infra.storage import get_s3_object
+
+    key = f"scenario_covers/{slug}.png"
+    try:
+        data, content_type = await get_s3_object(key)
+        return Response(content=data, media_type=content_type or "image/png")
+    except Exception as exc:
+        logger.warning("cover_proxy_fetch_failed", slug=slug, error=str(exc))
+        raise HTTPException(status_code=404, detail="cover_not_found") from exc

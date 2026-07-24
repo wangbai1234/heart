@@ -127,6 +127,9 @@ services:
       # rsync 到宿主机 ./scenarios_src/）。只读挂载到容器内 /scenarios，供导入器读取。
       # 仅 api 容器需要（encoder-worker 不导入剧本）。源文件含成人向内容，不入库（.gitignore）。
       - ./scenarios_src:/scenarios:ro
+      # 剧情封面图片目录（scripts/upload-covers-prod.sh 把本地 .png rsync 到宿主机 ./covers_src/）
+      # 只读挂载到容器内 /covers，供封面上传器读取。
+      - ./covers_src:/covers:ro
     environment:
       - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-heart}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-heart}
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0

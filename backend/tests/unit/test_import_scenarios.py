@@ -84,6 +84,75 @@ def test_parse_metadata_blank_title_uses_default():
     assert m.title == "文件名"
 
 
+# ── normalize_fields (form-block extraction, 2026-07) ────────────────
+
+
+def test_normalize_fields_keeps_valid_types():
+    fields = [
+        {"key": "name", "label": "姓名", "type": "text", "required": True},
+        {"key": "mode", "label": "模式", "type": "radio", "required": True,
+         "options": ["纯爱", "18禁"]},
+        {"key": "prefs", "label": "偏好", "type": "checkbox", "required": False,
+         "options": ["办公室恋", "背德感"]},
+    ]
+    out = imp.normalize_fields(fields)
+    assert [f["type"] for f in out] == ["text", "radio", "checkbox"]
+    assert out[1]["options"] == ["纯爱", "18禁"]
+    assert out[2]["options"] == ["办公室恋", "背德感"]
+
+
+def test_normalize_fields_unknown_type_degrades_to_text():
+    out = imp.normalize_fields([{"key": "x", "label": "X", "type": "slider"}])
+    assert out[0]["type"] == "text"
+
+
+def test_normalize_fields_choice_without_options_degrades_to_text():
+    # A radio/checkbox with no options is unrenderable → becomes a text box.
+    out = imp.normalize_fields([{"key": "m", "label": "模式", "type": "radio", "options": []}])
+    assert out[0]["type"] == "text"
+    assert "options" not in out[0]
+
+
+def test_normalize_fields_drops_keyless_and_dedupes():
+    out = imp.normalize_fields([
+        {"label": "无key"},                       # dropped: no key
+        {"key": "name", "label": "姓名1"},
+        {"key": "name", "label": "姓名2"},          # dropped: duplicate key
+        "not a dict",                              # dropped: not a dict
+    ])
+    assert len(out) == 1
+    assert out[0]["key"] == "name" and out[0]["label"] == "姓名1"
+
+
+def test_normalize_fields_label_falls_back_to_key():
+    out = imp.normalize_fields([{"key": "zodiac", "type": "text"}])
+    assert out[0]["label"] == "zodiac"
+
+
+def test_parse_metadata_extracts_multi_block_template():
+    raw = (
+        '{"title":"臣妻","genre":"古风仙侠","maturity":"adult",'
+        '"player_template":{"fields":['
+        '{"key":"name","label":"姓名","type":"text","required":true},'
+        '{"key":"mode","label":"模式","type":"radio","required":true,"options":["纯爱","18禁"]},'
+        '{"key":"prefs","label":"设定偏好","type":"checkbox","required":false,'
+        '"options":["皇帝线","丈夫线","后宫斗争"]}'
+        ']}}'
+    )
+    m = imp.parse_metadata(raw, default_title="fallback")
+    fields = m.player_template["fields"]
+    assert len(fields) == 3
+    assert {f["key"] for f in fields} == {"name", "mode", "prefs"}
+    prefs = next(f for f in fields if f["key"] == "prefs")
+    assert prefs["type"] == "checkbox"
+    assert prefs["options"] == ["皇帝线", "丈夫线", "后宫斗争"]
+
+
+def test_parse_metadata_empty_fields_yields_empty_template():
+    m = imp.parse_metadata('{"title":"x","player_template":{"fields":[]}}', default_title="x")
+    assert m.player_template == {}  # empty → backend uses default template
+
+
 # ── extract_metadata (stubbed router) ────────────────────────────────
 
 

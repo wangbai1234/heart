@@ -706,7 +706,11 @@ export interface ScenarioCardDTO {
 export interface PlayerTemplateField {
   key: string
   label: string
-  type: 'text' | 'textarea' | 'select'
+  /**
+   * text/textarea → free text; select/radio → single choice from `options`;
+   * checkbox → multi-select (value is a string[] of picked options).
+   */
+  type: 'text' | 'textarea' | 'select' | 'radio' | 'checkbox'
   required: boolean
   options?: string[]
 }
