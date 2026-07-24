@@ -54,13 +54,15 @@ logger = structlog.get_logger(__name__)
 
 DEFAULT_SRC = "/Users/wanglixun/Downloads/剧情设定"
 
-# Extract metadata and player_template from a substantial portion of each file.
-# The 玩家自定义区 (player template fields) often appears in the opening, but can
-# extend deeper into the file when there are many NPC profiles or detailed options.
-# Reading 50%+ of the content ensures we capture all user-fillable fields, avoiding
-# the UX issue where missing fields cause the GM to re-ask during gameplay.
-# Median file size ~13k chars → 50% ≈ 6500 chars. Use 12000 to cover larger files.
-_META_EXCERPT_CHARS = 12000
+# Extract metadata and player_template from the FULL scenario file (no truncation).
+# Root cause of missing form fields: truncating at a fixed char count (even 12000)
+# misses fields that appear late in the file, or distributed across multiple sections.
+# Examples: "群星背叛者" has 【3.请选择偏好（可多选）】with a/b/c/d/e/f options that
+# were being cut off. Reading the entire file ensures the LLM sees ALL player-facing
+# fields regardless of file structure or author's layout choices.
+# Trade-off: slightly higher LLM input cost (cheap model, minimal), but eliminates
+# the "form incomplete → GM re-asks during play" UX bug entirely.
+_META_EXCERPT_CHARS = None  # None = read full file
 
 _BLURB_MAX = 40
 
@@ -259,12 +261,12 @@ def read_text(path: Path) -> str:
 
 
 async def extract_metadata(router: Any, raw: str, *, default_title: str) -> Metadata:
-    """Derive card metadata from the opening excerpt via the cheap model.
+    """Derive card metadata from the full scenario file via the cheap model.
 
     On any LLM/parse failure, degrades to filename-title + 其他 + all_ages so a
     single bad extraction never aborts the batch.
     """
-    excerpt = raw[:_META_EXCERPT_CHARS]
+    excerpt = raw if _META_EXCERPT_CHARS is None else raw[:_META_EXCERPT_CHARS]
     messages = [
         {"role": "system", "content": _METADATA_SYSTEM},
         {
@@ -432,8 +434,11 @@ async def _main(
                 res = ImportResult(slug=derive_slug(path), action="error", detail=str(exc))
             results.append(res)
             m = res.metadata
+            field_count = len(m.player_template.get("fields", [])) if m else 0
             meta_str = (
-                f"  [{m.genre}/{m.maturity}] {m.title} — {m.blurb}" if m else f"  ({res.detail})"
+                f"  [{m.genre}/{m.maturity}] {m.title} — {m.blurb} ({field_count} 字段)"
+                if m
+                else f"  ({res.detail})"
             )
             print(f"{res.action:>8} · {res.slug}\n{meta_str}")
 

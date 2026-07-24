@@ -96,8 +96,18 @@ export function StoryPlayerPage() {
             {groupMessages(messages ?? []).map((group, idx) => (
               <MessageGroup key={group.id || idx} group={group} />
             ))}
-            {/* 正在生成中的加载提示 */}
-            {generating && <TypingDots />}
+            {/* 流式输出：生成中实时显示累积的原始文本（打字机效果）。
+                收到第一条 message_bubble 后，streamText 被置空、换成结构化气泡。 */}
+            {generating && streamText ? (
+              <div className="w-full flex justify-center">
+                <p className="max-w-[88%] text-center text-[14px] leading-[1.75] text-[var(--color-text-secondary)] whitespace-pre-wrap">
+                  {streamText}
+                  <span className="inline-block w-[2px] h-[1em] ml-0.5 -mb-[2px] bg-[var(--color-text-muted)] animate-pulse" />
+                </p>
+              </div>
+            ) : (
+              generating && <TypingDots />
+            )}
           </div>
         )}
       </div>

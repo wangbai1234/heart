@@ -179,8 +179,17 @@ class StoryService:
             )
         messages = gm_prompt.build_gm_messages(scenario, run, recent)
 
-        # Streaming bubble parser: emit bubbles as complete lines arrive
-        parser = gm_prompt.StreamingBubbleParser()
+        # Two-phase streaming (matches the frontend store contract):
+        #   1. During generation: emit raw text_delta frames so the player sees a
+        #      live typewriter effect (streamStore accumulates them into a live
+        #      narration bubble).
+        #   2. After generation completes: split the full text into structured
+        #      bubbles and emit them as message_bubble frames — the first one
+        #      retires the live streaming buffer and replaces it with clean,
+        #      speaker-tagged bubbles.
+        # Emitting bubbles only at the end (not per-\n mid-stream) is what makes
+        # the whole turn stream smoothly instead of stalling until the first
+        # newline arrives — GM prose often has no internal line breaks.
         collected: list[str] = []
         try:
             async for delta in self._router.stream_for(
@@ -190,18 +199,7 @@ class StoryService:
             ):
                 if delta:
                     collected.append(delta)
-                    # Parse delta and emit any complete bubbles immediately
-                    new_bubbles = parser.feed(delta)
-                    for b in new_bubbles:
-                        yield (
-                            "message_bubble",
-                            {
-                                "turn_id": str(turn_id),
-                                "kind": b["kind"],
-                                "npc_name": b.get("npc_name"),
-                                "content": b["content"],
-                            },
-                        )
+                    yield ("text_delta", {"turn_id": str(turn_id), "delta": delta})
         except Exception:
             # Not a silent swallow: logged with stack + surfaced as a structured
             # error/partial-persist path (per CLAUDE.md DB 铁律 #5).
@@ -212,15 +210,13 @@ class StoryService:
                 return
             # Partial content already streamed — fall through and persist it.
 
-        # Finalize: flush any remaining buffer content
-        # Track how many bubbles were already emitted during streaming
-        emitted_during_stream = len(parser.emitted)
+        # Split the full accumulated text into structured bubbles (single source
+        # of truth for what streams, persists, and re-renders on reload).
+        full_text = "".join(collected)
+        all_bubbles = gm_prompt.split_gm_text(full_text)
 
-        # finalize() appends remaining buffer (if any) to parser.emitted and returns it
-        all_bubbles = parser.finalize()
-
-        # Emit only the newly added bubbles (remaining buffer content)
-        for b in all_bubbles[emitted_during_stream:]:
+        # Emit the structured bubbles; the first retires the live stream buffer.
+        for b in all_bubbles:
             yield (
                 "message_bubble",
                 {
