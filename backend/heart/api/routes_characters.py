@@ -282,6 +282,7 @@ async def get_character_profile(
         "creator_name": creator_name,
         "avatar_url": draft_json.get("avatar_url"),
         "cover_url": row["cover_url"],
+        "age_range": draft_json.get("age_range"),
         "tags": coerce_tags(row["tags"]),
         "source": "built_in" if is_builtin else "user_created",
         "has_voice": bool(row["has_voice"]),

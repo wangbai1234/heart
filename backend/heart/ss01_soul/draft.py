@@ -82,5 +82,8 @@ class CharacterDraft(BaseModel, extra="forbid"):
         default_factory=list
     )
     gender: Optional[Literal["male", "female"]] = None
+    # Age bracket the creator picks in the UGC form (e.g. "18-24"). Free-text
+    # short label — a public presentation field, kept out of the internal persona.
+    age_range: Optional[Annotated[str, Field(max_length=16)]] = None
     sliders: SliderSet = Field(default_factory=SliderSet)
     locale: str = "zh"
