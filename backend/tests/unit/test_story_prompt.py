@@ -118,6 +118,54 @@ def test_split_empty_returns_empty():
     assert split_gm_text("   \n  ") == []
 
 
+# ── off-contract markup normalisation (pre-clean) ───────────────────
+
+
+def test_split_unwraps_latex_colorbox_to_dialogue():
+    # 笼中鸟 / 雨停 / 为躲雨 / 再见蚊子 style: LaTeX speech bubble → dialogue bubble.
+    line = r"\(\colorbox{white}{\textcolor{blue}{\text{你终于回来了}}}\)"
+    out = split_gm_text(line)
+    assert len(out) == 1
+    assert out[0]["kind"] == "dialogue"
+    assert out[0]["content"] == "你终于回来了"
+    # No raw LaTeX leaks into the rendered content.
+    assert "colorbox" not in out[0]["content"]
+    assert "\\text" not in out[0]["content"]
+
+
+def test_split_strips_markdown_code_fence_keeps_inner_as_narration():
+    # 小姐与狗 / 哥承认爱我 style: ```text 心理活动 code block → plain narration.
+    text = "```text\n她其实很紧张。\n心跳得厉害。\n```"
+    out = split_gm_text(text)
+    assert len(out) == 1
+    assert out[0]["kind"] == "narration"
+    assert "```" not in out[0]["content"]
+    assert "她其实很紧张" in out[0]["content"]
+
+
+def test_split_strips_danmu_marker_prefix():
+    out = split_gm_text("【弹幕】前排围观，主播好帅")
+    assert len(out) == 1
+    assert out[0]["kind"] == "narration"
+    assert "【弹幕】" not in out[0]["content"]
+    assert "前排围观" in out[0]["content"]
+
+
+def test_split_drops_horizontal_rule_lines():
+    out = split_gm_text("第一段。\n---\n**林深** 你来了。")
+    kinds = [b["kind"] for b in out]
+    assert "dialogue" in kinds
+    assert all("---" not in b["content"] for b in out)
+
+
+def test_preclean_leaves_compliant_text_semantically_unchanged():
+    # A fully-compliant turn must classify exactly as before the pre-clean.
+    text = "【旁白】夜色降临。\n**林深** 你来了。\n（他走近）"
+    out = split_gm_text(text)
+    assert [b["kind"] for b in out] == ["narration", "dialogue", "action"]
+    assert out[1]["npc_name"] == "林深"
+
+
 # ── build_gm_system_prompt ──────────────────────────────────────────
 
 
