@@ -17,6 +17,16 @@ export function HomePage() {
   const userAvatar = useAuthStore((s) => s.user?.avatar_url ?? null)
   const loading = false
   const [activeAnnouncement, setActiveAnnouncement] = useState<HomeAnnouncement | null>(null)
+  // On-entry notice: 抖音群被封禁 → 引导进 QQ 群。每个会话只弹一次，展示 ≥6s 后自动消失，
+  // 也可手动关闭。用 sessionStorage 而非 localStorage：用户每次重新进入 App 都提醒一次。
+  const [showEntryNotice, setShowEntryNotice] = useState(false)
+  useEffect(() => {
+    if (sessionStorage.getItem('douyin-ban-notice-seen') === '1') return
+    sessionStorage.setItem('douyin-ban-notice-seen', '1')
+    setShowEntryNotice(true)
+    const timer = window.setTimeout(() => setShowEntryNotice(false), 6000)
+    return () => window.clearTimeout(timer)
+  }, [])
   const pageBg = resolvedTheme === 'dark'
     ? '/assets/backgrounds/暗色聊天背景图.png'
     : '/assets/backgrounds/聊天背景图.png'
@@ -211,6 +221,37 @@ export function HomePage() {
                 {activeAnnouncement.content || activeAnnouncement.summary}
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* On-entry notice — 抖音群被封禁提示，进入应用后自动弹出（每会话一次），
+          文字放大醒目，展示 ≥6s 后自动淡出，点击可立即关闭。 */}
+      {showEntryNotice && (
+        <div
+          className="absolute inset-0 z-[60] flex items-center justify-center px-6"
+          onClick={() => setShowEntryNotice(false)}
+        >
+          <div className="absolute inset-0 bg-black/45 backdrop-blur-[2px]" />
+          <div
+            className="relative w-full max-w-[360px] rounded-[24px] bg-[var(--color-surface-card)] px-6 py-7 text-center shadow-[0_12px_48px_rgba(0,0,0,0.28)]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mx-auto mb-4 flex h-[56px] w-[56px] items-center justify-center rounded-full bg-[rgba(255,183,197,0.20)]">
+              <NoticeIcon />
+            </div>
+            <p className="text-[19px] font-bold leading-[1.6] text-[var(--color-ink)]">
+              暂时抖音群被封禁，用户请进QQ群：
+              <span className="text-[var(--color-primary)]">460919879</span>。
+              <br />
+              详情在公告查看！
+            </p>
+            <button
+              onClick={() => setShowEntryNotice(false)}
+              className="mt-6 h-[48px] w-full rounded-[24px] bg-[var(--color-primary)] text-[16px] font-semibold text-white shadow-[var(--shadow-btn)] active:scale-[0.98] transition-transform"
+            >
+              我知道了
+            </button>
           </div>
         </div>
       )}
