@@ -291,3 +291,27 @@ async def test_import_one_empty_file_errors(tmp_path):
     res = await imp.import_one(db, router, f, publish=False, dry_run=False)
     assert res.action == "error"
     assert db.upserts == []
+
+
+@pytest.mark.asyncio
+async def test_import_one_empty_template_writes_empty_object_not_null(tmp_path):
+    """Regression: an empty player_template must be written as '{}' — NOT None.
+
+    The column is NOT NULL DEFAULT '{}' (migration 042). Writing None → SQL NULL
+    → NotNullViolationError, which (pre-fix) aborted the shared transaction and
+    cascaded InFailedSQLTransactionError into every subsequent scenario. Read-side
+    (routes_story.py) treats {} as falsy and falls back to DEFAULT_PLAYER_TEMPLATE,
+    so '{}' is behaviorally identical to the old intended-NULL.
+    """
+    f = tmp_path / "共感娃娃.txt"
+    f.write_text("　　这是一款主控自定义游戏，一切由主控意愿决定。", encoding="utf-8")
+    db = _FakeDB()
+    # LLM returns no player fields → empty template.
+    router = _FakeRouter(out='{"title":"共感娃娃","genre":"其他","maturity":"all_ages"}')
+
+    res = await imp.import_one(db, router, f, publish=True, dry_run=False)
+
+    assert res.action == "created"
+    assert len(db.upserts) == 1
+    assert db.upserts[0]["template"] == "{}"  # empty object, never None
+    assert db.upserts[0]["template"] is not None

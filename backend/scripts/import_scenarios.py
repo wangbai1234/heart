@@ -313,8 +313,11 @@ async def upsert_scenario(
     """
     existed = await existing_hash(db, slug) is not None
     status = "published" if publish else "draft"
-    # player_template_json: 空字典 → NULL（后端用默认模版）；有字段 → JSON
-    template_json = json.dumps(meta.player_template, ensure_ascii=False) if meta.player_template else None
+    # player_template_json 列是 NOT NULL DEFAULT '{}'（见 042 迁移）。空模版必须写入
+    # '{}' 而非 NULL —— 否则违反 NOT NULL 约束。读取端 (routes_story.py:115) 用
+    # `scenario.player_template_json or DEFAULT_PLAYER_TEMPLATE`，空字典 {} 是 falsy，
+    # 会回退到默认模版，行为与「NULL 表示用默认」完全等价。
+    template_json = json.dumps(meta.player_template or {}, ensure_ascii=False)
     await db.execute(
         text(
             """
@@ -394,6 +397,33 @@ async def import_one(
     return ImportResult(slug=slug, action=action, metadata=meta)
 
 
+async def _import_one_resilient(
+    db: Any,
+    router: Any,
+    path: Path,
+    *,
+    publish: bool,
+    dry_run: bool,
+    force: bool,
+) -> ImportResult:
+    """Run import_one, but never let one bad file abort the batch.
+
+    On any failure: log it, roll back the (now-aborted) transaction so the next
+    file doesn't cascade ``InFailedSQLTransactionError``, and return an 'error'
+    result. Rollback is a no-op in dry-run (db is None).
+    """
+    try:
+        return await import_one(db, router, path, publish=publish, dry_run=dry_run, force=force)
+    except Exception as exc:  # noqa: BLE001 — batch resilience: log + continue
+        logger.exception("story_import_file_failed", file=path.name)
+        if db is not None:
+            try:
+                await db.rollback()
+            except Exception:
+                logger.exception("story_import_rollback_failed", file=path.name)
+        return ImportResult(slug=derive_slug(path), action="error", detail=str(exc))
+
+
 def _select_files(src: Path, only: Optional[str], limit: Optional[int]) -> list[Path]:
     files = sorted(src.glob("*.txt"))
     if only:
@@ -427,11 +457,9 @@ async def _main(
 
     async def _run(db: Any) -> None:
         for path in files:
-            try:
-                res = await import_one(db, router, path, publish=publish, dry_run=dry_run, force=force)
-            except Exception as exc:  # noqa: BLE001 — batch resilience: log + continue
-                logger.exception("story_import_file_failed", file=path.name)
-                res = ImportResult(slug=derive_slug(path), action="error", detail=str(exc))
+            res = await _import_one_resilient(
+                db, router, path, publish=publish, dry_run=dry_run, force=force
+            )
             results.append(res)
             m = res.metadata
             field_count = len(m.player_template.get("fields", [])) if m else 0
