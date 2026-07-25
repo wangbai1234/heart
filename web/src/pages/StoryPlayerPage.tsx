@@ -245,8 +245,8 @@ function MessageGroup({ group }: { group: MessageGroup }) {
   // NPC/GM 消息：action 和 dialogue 分别渲染
   return (
     <div className="flex flex-col gap-2 items-start max-w-[85%]">
-      {/* NPC 名称（如果有且第一条消息是 dialogue） */}
-      {group.npcName && group.messages.some((m) => m.kind === 'dialogue') && (
+      {/* NPC 名称（有且至少一条 dialogue 有非空台词才显示，避免空气泡上方的孤立名字） */}
+      {group.npcName && group.messages.some((m) => m.kind === 'dialogue' && m.content.trim()) && (
         <span className="ml-1 text-[12px] font-semibold text-[var(--color-text-secondary)]">
           {group.npcName}
         </span>
@@ -268,6 +268,8 @@ function MessageGroup({ group }: { group: MessageGroup }) {
         if (msg.kind === 'dialogue') {
           // Dialogue：白色气泡，去掉双引号
           const cleanContent = msg.content.replace(/^[""]|[""]$/g, '')
+          // 空台词不渲染气泡（清理历史遗留的空 dialogue 行，杜绝空气泡）。
+          if (!cleanContent.trim()) return null
           return (
             <div
               key={idx}
