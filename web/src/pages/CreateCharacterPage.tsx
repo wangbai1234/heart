@@ -1310,6 +1310,18 @@ export function CreateCharacterPage() {
                 </button>
               )
             })}
+            {/* Custom tags (not in presets) — always rendered as active so the
+                user gets immediate confirmation that their tag was added. */}
+            {form.tags.filter((t) => !(CHARACTER_ROLE_TAGS as readonly string[]).includes(t)).map((tag) => (
+              <button
+                key={tag}
+                type="button"
+                onClick={() => toggleTag(tag)}
+                className="h-[32px] px-3.5 rounded-full text-[13px] font-medium border transition-all active:scale-[0.96] bg-[rgba(255,183,197,0.22)] border-[rgba(255,183,197,0.55)] text-[#E86083]"
+              >
+                {tag}
+              </button>
+            ))}
           </div>
           <p className="text-[12px] text-[var(--color-text-muted)] mb-2">或添加自定义标签</p>
           <div className="flex gap-2">

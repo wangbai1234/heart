@@ -131,11 +131,15 @@ export function CharacterPage() {
     const q = query.trim().toLowerCase()
     return items.filter((it) => {
       const tags = it.profile.tags ?? []
-      if (activeTag === DISCOVERY_RECOMMENDED) {
-        // Editorial: built-ins + anything explicitly tagged 推荐 on import.
-        if (!(it.isBuiltin || tags.includes(DISCOVERY_RECOMMENDED))) return false
-      } else if (activeTag !== DISCOVERY_ALL && !tags.includes(activeTag)) {
-        return false
+      // Tag/category filter only applies when there is no search query.
+      // Typing should search across the full catalog regardless of the active tab.
+      if (!q) {
+        if (activeTag === DISCOVERY_RECOMMENDED) {
+          // Editorial: built-ins + anything explicitly tagged 推荐 on import.
+          if (!(it.isBuiltin || tags.includes(DISCOVERY_RECOMMENDED))) return false
+        } else if (activeTag !== DISCOVERY_ALL && !tags.includes(activeTag)) {
+          return false
+        }
       }
       if (q) {
         const hay = `${it.profile.name} ${tags.join(' ')} ${it.profile.tagline ?? ''}`.toLowerCase()
