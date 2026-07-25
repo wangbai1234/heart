@@ -142,7 +142,7 @@ function FieldInput({
   )
 
   const baseInput =
-    'w-full rounded-[14px] bg-[var(--color-glass-55)] border border-[var(--color-border-glass)] px-3.5 text-[15px] text-[var(--color-ink)] placeholder-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-primary)]'
+    'w-full rounded-[14px] bg-[var(--color-glass-55)] border border-[var(--color-border-glass)] px-3.5 text-[16px] text-[var(--color-ink)] placeholder-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-primary)]'
 
   // ── multi-select: pill toggles, value is a string[] ──
   if (field.type === 'checkbox') {

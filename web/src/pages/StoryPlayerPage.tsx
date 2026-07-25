@@ -148,7 +148,7 @@ export function StoryPlayerPage() {
         )}
         <div className="flex items-end gap-2">
           <textarea
-            className="flex-1 resize-none rounded-[20px] bg-[var(--color-surface)] text-[var(--color-ink)] placeholder-[var(--color-text-muted)] border border-[var(--color-border-glass)] px-4 py-2.5 focus:outline-none focus:border-[var(--color-primary)] max-h-32 min-h-[44px] text-[15px] disabled:opacity-50"
+            className="flex-1 resize-none rounded-[20px] bg-[var(--color-surface)] text-[var(--color-ink)] placeholder-[var(--color-text-muted)] border border-[var(--color-border-glass)] px-4 py-2.5 focus:outline-none focus:border-[var(--color-primary)] max-h-32 min-h-[44px] text-[16px] disabled:opacity-50"
             placeholder={paused ? '充值后继续剧情…' : '描述你的行动或对白…'}
             rows={1}
             value={draft}
