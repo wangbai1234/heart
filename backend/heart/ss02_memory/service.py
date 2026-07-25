@@ -673,67 +673,19 @@ class MemoryService:
                     error=str(e),
                 )
 
-        # Enqueue regex hints for slow-path LLM extraction
-        hints = getattr(self._fast_encoder, "last_hints", [])
-        if hints:
-            await self._enqueue_extraction(
-                turn,
-                {
-                    "hints": [
-                        {
-                            "raw_phrase": h.raw_phrase,
-                            "suspected_attribute": h.suspected_attribute,
-                            "span": list(h.span),
-                        }
-                        for h in hints
-                    ]
-                },
-            )
+        # NOTE: The regex-hint slow-path enqueue (memory_extraction_queue) was
+        # decommissioned — see removal of MemoryExtractorWorker. That worker was
+        # a parallel reimplementation of the live memory_encoder pipeline and was
+        # never wired with an extractor in prod (every item was skipped with
+        # `no_extractor_configured`). Fact extraction runs solely through the
+        # memory_encoder path now. The extractor/ library modules remain (used by
+        # golden tests, qa/golden_loader, and scripts/cleanup_dirty_l4).
 
         # INV-M-11 runtime assertion: fast path must NOT write L2/L3/L4
         # (enforced structurally — this method only touches Redis L1
         #  and the extraction queue; no DB writes to episodic/fact/identity tables)
 
         return signals
-
-    async def _enqueue_extraction(
-        self,
-        turn: "Turn",
-        hints: Optional[dict] = None,
-    ) -> None:
-        """Enqueue turn for slow-path LLM extraction.
-
-        Called inside encode_fast() AFTER L1 write.
-        Only enqueues when mode is 'llm' or 'dual' (INV-M-11 compliant).
-
-        Args:
-            turn: Current conversation turn
-            hints: Optional regex hints as auxiliary signals
-        """
-        from heart.ss02_memory.mode import is_llm_enabled
-
-        if not is_llm_enabled():
-            return
-
-        if self._db is None:
-            logger.warning("extraction_enqueue_no_db")
-            return
-
-        try:
-            from heart.ss02_memory.models import MemoryExtractionQueue
-
-            item = MemoryExtractionQueue(
-                id=uuid4(),
-                session_id=uuid4(),  # Phase A: placeholder session_id
-                turn_id=turn.turn_index,
-                hints_json=hints,
-                status="pending",
-            )
-            self._db.add(item)
-            await self._db.flush()
-            logger.debug("extraction_enqueued", turn_id=turn.turn_index)
-        except Exception as e:
-            logger.error("extraction_enqueue_failed", error=str(e))
 
     async def queue_llm_encoding(self, event: MemoryEncodingEvent) -> None:
         """Queue async LLM encoding (§10.3 Write API).
