@@ -204,16 +204,42 @@ async def upload_voice_message(user_id: str, data: bytes, mime: str = "audio/wav
     return await upload_file(data, key, mime)
 
 
-async def get_s3_object(key: str) -> tuple[bytes, str]:
-    """Fetch object from S3/MinIO. Returns (data, content_type)."""
+async def get_s3_object(key: str) -> tuple[bytes, str, str]:
+    """Fetch object from S3/MinIO. Returns (data, content_type, etag).
+
+    The ETag (quotes stripped) lets callers set a validator header so browsers
+    can revalidate with If-None-Match instead of re-downloading.
+    """
     client = _get_s3_client()
     from heart.core.config import settings
 
-    def _get() -> tuple[bytes, str]:
+    def _get() -> tuple[bytes, str, str]:
         resp = client.get_object(Bucket=settings.s3_bucket_name, Key=key)
-        return resp["Body"].read(), resp.get("ContentType", "application/octet-stream")
+        etag = resp.get("ETag", "").strip('"')
+        return (
+            resp["Body"].read(),
+            resp.get("ContentType", "application/octet-stream"),
+            etag,
+        )
 
     return await asyncio.to_thread(_get)
+
+
+async def head_s3_object(key: str) -> tuple[str, str]:
+    """Return (etag, content_type) without reading the body — for 304 checks.
+
+    Cheap metadata-only call so a matching If-None-Match can short-circuit to
+    304 without pulling the full object out of MinIO into memory.
+    """
+    client = _get_s3_client()
+    from heart.core.config import settings
+
+    def _head() -> tuple[str, str]:
+        resp = client.head_object(Bucket=settings.s3_bucket_name, Key=key)
+        etag = resp.get("ETag", "").strip('"')
+        return etag, resp.get("ContentType", "application/octet-stream")
+
+    return await asyncio.to_thread(_head)
 
 
 def is_s3_configured() -> bool:

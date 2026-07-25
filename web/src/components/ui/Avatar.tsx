@@ -28,6 +28,8 @@ export function Avatar({ src, alt = '', size = 40, className = '', border = fals
     <img
       src={src}
       alt={alt}
+      loading="lazy"
+      decoding="async"
       className={`rounded-full object-cover ${borderStyle} ${className}`}
       style={{ width: size, height: size }}
     />

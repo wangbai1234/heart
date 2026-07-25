@@ -57,17 +57,17 @@ export const FEEDBACK_COPY = {
 
 export const HERO_BANNER = {
   light: '/assets/backgrounds/background_login_hero.webp',
-  dark: '/assets/backgrounds/暗色风格background_login_hero.webp.png',
+  dark: '/assets/backgrounds/background_login_hero_dark.webp',
 } as const
 
 export const CHARACTER_BANNER = {
   light: '/assets/backgrounds/background_character_hero.webp',
-  dark: '/assets/backgrounds/暗色风格background_login_hero.webp.png',
+  dark: '/assets/backgrounds/background_login_hero_dark.webp',
 } as const
 
 export const LOGIN_HERO = {
   light: '/assets/backgrounds/background_login_hero.webp',
-  dark: '/assets/backgrounds/暗色风格background_login_hero.webp.png',
+  dark: '/assets/backgrounds/background_login_hero_dark.webp',
 } as const
 
 /**

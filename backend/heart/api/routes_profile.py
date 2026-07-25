@@ -181,14 +181,32 @@ async def upload_avatar(
 
 
 @router.get("/avatar-file/{path:path}")
-async def get_avatar_file(path: str) -> Response:
-    """Proxy avatar file from S3/MinIO storage."""
-    from heart.core.config import settings
-    from heart.infra.storage import get_s3_object
+async def get_avatar_file(path: str, request: Request) -> Response:
+    """Proxy avatar file from S3/MinIO storage.
+
+    Avatar object keys are content-addressed (UUID filename), so the bytes for a
+    given URL never change → cache immutably. We set a long-lived Cache-Control
+    + ETag so browsers/Service Worker serve refreshes straight from cache instead
+    of re-downloading (and re-reading MinIO) every time. A matching If-None-Match
+    short-circuits to 304 via a cheap head_object, skipping the full-body read.
+    """
+    from heart.infra.storage import get_s3_object, head_s3_object
+
+    key = f"avatars/{path}"
+    cache_headers = {"Cache-Control": "public, max-age=31536000, immutable"}
 
     try:
-        data, content_type = await get_s3_object(f"avatars/{path}")
-        return Response(content=data, media_type=content_type)
+        inm = request.headers.get("if-none-match")
+        if inm:
+            etag, _ctype = await head_s3_object(key)
+            if inm.strip('"') == etag:
+                return Response(status_code=304, headers={"ETag": f'"{etag}"', **cache_headers})
+        data, content_type, etag = await get_s3_object(key)
+        return Response(
+            content=data,
+            media_type=content_type,
+            headers={"ETag": f'"{etag}"', **cache_headers},
+        )
     except Exception as exc:
         logger.warning("avatar_proxy_fetch_failed", path=path, error=str(exc))
         raise HTTPException(status_code=404, detail="Avatar not found") from exc

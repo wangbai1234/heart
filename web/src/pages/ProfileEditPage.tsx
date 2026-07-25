@@ -30,8 +30,8 @@ export function ProfileEditPage() {
   const setUser = useAuthStore((s) => s.setUser)
   const { resolvedTheme } = useThemeStore()
   const pageBg = resolvedTheme === 'dark'
-    ? '/assets/backgrounds/暗色聊天背景图.png'
-    : '/assets/backgrounds/聊天背景图.png'
+    ? '/assets/backgrounds/暗色聊天背景图.webp'
+    : '/assets/backgrounds/聊天背景图.webp'
   const [displayName, setDisplayName] = useState(user?.display_name || '')
   const [gender, setGender] = useState(user?.gender || 'undisclosed')
   const [birthdate, setBirthdate] = useState(user?.birthdate || '')

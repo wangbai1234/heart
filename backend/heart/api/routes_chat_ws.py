@@ -1277,12 +1277,20 @@ async def _serve_stored_audio(audio_url: Optional[str], log_ref: str) -> Respons
     try:
         from heart.infra.storage import get_s3_object
 
-        data, content_type = await get_s3_object(key)
+        data, content_type, etag = await get_s3_object(key)
     except Exception as exc:
         logger.warning("chat_audio_fetch_failed", ref=log_ref, error=str(exc))
         raise HTTPException(status_code=404, detail="Audio unavailable") from exc
 
-    return Response(content=data, media_type=content_type)
+    # Audio keys are content-addressed by turn_id → safe to cache long-lived.
+    return Response(
+        content=data,
+        media_type=content_type,
+        headers={
+            "Cache-Control": "public, max-age=604800",
+            "ETag": f'"{etag}"',
+        },
+    )
 
 
 @router.get("/api/chat/audio/by-turn/{turn_id}")

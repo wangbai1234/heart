@@ -53,8 +53,8 @@ export function CharacterPage() {
 
   const pageBg =
     resolvedTheme === 'dark'
-      ? '/assets/backgrounds/暗色聊天背景图.png'
-      : '/assets/backgrounds/聊天背景图.png'
+      ? '/assets/backgrounds/暗色聊天背景图.webp'
+      : '/assets/backgrounds/聊天背景图.webp'
 
   const handleSelectCharacter = (charId: string) => {
     setCharacter(charId)
