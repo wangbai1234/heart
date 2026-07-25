@@ -38,7 +38,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from heart.api.wiring import get_db
 from heart.core.auth import TokenData, get_current_user
-from heart.ss01_soul.character_catalog import CharacterRow, build_catalog_entries
+from heart.ss01_soul.character_catalog import CharacterRow, build_catalog_entries, coerce_tags
 from heart.ss04_relationship.stage_engine import STAGE_ORDER, RelationshipStage
 
 logger = structlog.get_logger(__name__)
@@ -115,7 +115,7 @@ async def list_companions(
     char_result = await db.execute(
         text(
             """
-            SELECT id, owner_user_id, visibility, status, has_voice
+            SELECT id, owner_user_id, visibility, status, has_voice, tags, cover_url
             FROM characters
             WHERE status = 'active'
               AND (visibility = 'public' OR owner_user_id = :uid)
@@ -130,6 +130,8 @@ async def list_companions(
             owner_user_id=r["owner_user_id"],
             visibility=r["visibility"],
             status=r["status"],
+            tags=coerce_tags(r.get("tags")),
+            cover_url=r.get("cover_url"),
         )
         for r in raw_rows
     ]
@@ -286,6 +288,8 @@ async def list_companions(
                 "character_id": e.id,
                 "display_name": e.display_name,
                 "avatar_url": e.avatar_url,
+                "cover_url": e.cover_url,
+                "tags": e.tags,
                 "source": "built_in" if e.is_builtin else "user_created",
                 "is_owner": e.is_owner,
                 "is_builtin": e.is_builtin,

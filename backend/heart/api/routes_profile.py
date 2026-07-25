@@ -210,3 +210,35 @@ async def get_avatar_file(path: str, request: Request) -> Response:
     except Exception as exc:
         logger.warning("avatar_proxy_fetch_failed", path=path, error=str(exc))
         raise HTTPException(status_code=404, detail="Avatar not found") from exc
+
+
+@router.get("/cover-file/{path:path}")
+async def get_cover_file(path: str, request: Request) -> Response:
+    """Proxy a character portrait cover from S3/MinIO storage.
+
+    Identical caching contract to ``get_avatar_file``: cover object keys are
+    content-addressed (UUID filename) so the bytes for a given URL never change
+    → immutable Cache-Control + ETag, with a cheap head_object 304 short-circuit
+    on If-None-Match. Covers are large-ish (tall WebP), so serving from cache /
+    304 rather than re-reading the full object out of MinIO matters here.
+    """
+    from heart.infra.storage import get_s3_object, head_s3_object
+
+    key = f"covers/{path}"
+    cache_headers = {"Cache-Control": "public, max-age=31536000, immutable"}
+
+    try:
+        inm = request.headers.get("if-none-match")
+        if inm:
+            etag, _ctype = await head_s3_object(key)
+            if inm.strip('"') == etag:
+                return Response(status_code=304, headers={"ETag": f'"{etag}"', **cache_headers})
+        data, content_type, etag = await get_s3_object(key)
+        return Response(
+            content=data,
+            media_type=content_type,
+            headers={"ETag": f'"{etag}"', **cache_headers},
+        )
+    except Exception as exc:
+        logger.warning("cover_proxy_fetch_failed", path=path, error=str(exc))
+        raise HTTPException(status_code=404, detail="Cover not found") from exc

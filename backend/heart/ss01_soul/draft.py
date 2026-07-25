@@ -63,6 +63,12 @@ class CharacterDraft(BaseModel, extra="forbid"):
 
     display_name: DisplayNameDraft
     avatar_url: Optional[str] = Field(None, max_length=200000)
+    # Portrait cover for the discovery grid + chat background. This is a *short*
+    # S3 proxy URL (/api/profile/cover-file/...), never a base64 data URL — hence
+    # a tight cap, unlike avatar_url which still tolerates legacy inline data.
+    cover_url: Optional[str] = Field(None, max_length=500)
+    # Style/category tags used by the discovery filter chips.
+    tags: list[Annotated[str, Field(max_length=20)]] = Field(default_factory=list, max_length=10)
     persona: Annotated[str, Field(min_length=20, max_length=1500)]
     backstory: Optional[str] = Field(None, max_length=1500)
     catchphrases: list[Annotated[str, Field(max_length=50)]] = Field(
