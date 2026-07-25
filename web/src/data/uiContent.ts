@@ -219,7 +219,12 @@ export function resolveCharacterProfile(
     id,
     name,
     shortName: name,
-    avatar: avatarUrl || DEFAULT_CHARACTER_PROFILE.avatar,
+    // Avatar priority: explicit UGC avatar → derive from the portrait cover
+    // (Avatar renders it with object-cover, so the cover is center-cropped into
+    // the circle — memory-safe, cover is already a compressed WebP proxy URL) →
+    // neutral bundled fallback. Seeded catalog characters ship a cover but no
+    // avatar_url, so without the cover fallback they'd wrongly show 神无月凛.
+    avatar: avatarUrl || opts?.coverUrl || DEFAULT_CHARACTER_PROFILE.avatar,
     tag: isOwner ? '私密' : DEFAULT_CHARACTER_PROFILE.tag,
     tagColor: isOwner ? '#5A88F8' : DEFAULT_CHARACTER_PROFILE.tagColor,
     tagBg: isOwner ? 'rgba(120,150,255,0.24)' : DEFAULT_CHARACTER_PROFILE.tagBg,
