@@ -11,6 +11,7 @@ import { ChatInboxPage } from './pages/ChatInboxPage'
 import { ChatLightPage } from './pages/ChatLightPage'
 import { ChatDarkPage } from './pages/ChatDarkPage'
 import { CharacterPage } from './pages/CharacterPage'
+import { CharacterProfilePage } from './pages/CharacterProfilePage'
 import { CharacterBackstagePage } from './pages/CharacterBackstagePage'
 import { SettingsPage } from './pages/SettingsPage'
 import { ProfileEditPage } from './pages/ProfileEditPage'
@@ -140,6 +141,7 @@ export function App() {
         <Route path="/story/:runId" element={<StoryPlayerPage />} />
         <Route path="/character-backstage" element={<CharacterBackstagePage />} />
         <Route path="/character" element={<CharacterPage />} />
+        <Route path="/character/:id" element={<CharacterProfilePage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/settings/profile" element={<ProfileEditPage />} />
         <Route path="/credits/transactions" element={<TransactionsPage />} />

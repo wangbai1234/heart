@@ -15,6 +15,12 @@ export interface CharacterProfile {
   tagBg: string
   summary: string
   homeIntro: string
+  /** Portrait cover for the discovery grid / chat background. Null → avatar-derived fallback. */
+  cover?: string | null
+  /** Style/category tags (discovery filter chips). */
+  tags?: string[]
+  /** One-line hook shown under the name on the discovery card. */
+  tagline?: string
 }
 
 export interface ConversationMessage {
@@ -135,11 +141,19 @@ export function resolveCharacterProfile(
   id: string,
   displayName?: string,
   avatarUrl?: string | null,
-  opts?: { isOwner?: boolean },
+  opts?: { isOwner?: boolean; coverUrl?: string | null; tags?: string[]; tagline?: string },
 ): CharacterProfile {
+  // Server-provided discovery fields (cover / tags / tagline) are layered on top
+  // of both the bundled built-in profiles and the neutral UGC fallback, so a
+  // seeded cover_url shows for rin/dorothy too without editing their static entry.
+  const discovery = {
+    cover: opts?.coverUrl ?? null,
+    tags: opts?.tags ?? [],
+    tagline: opts?.tagline ?? '',
+  }
   const base = CHARACTER_PROFILES[id]
   if (base) {
-    return displayName ? { ...base, name: displayName } : base
+    return { ...base, ...(displayName ? { name: displayName } : {}), ...discovery }
   }
   const name = displayName || id
   const isOwner = opts?.isOwner ?? false
@@ -152,6 +166,7 @@ export function resolveCharacterProfile(
     tag: isOwner ? '私密' : DEFAULT_CHARACTER_PROFILE.tag,
     tagColor: isOwner ? '#5A88F8' : DEFAULT_CHARACTER_PROFILE.tagColor,
     tagBg: isOwner ? 'rgba(120,150,255,0.24)' : DEFAULT_CHARACTER_PROFILE.tagBg,
+    ...discovery,
   }
 }
 
