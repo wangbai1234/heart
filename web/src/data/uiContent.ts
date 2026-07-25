@@ -23,6 +23,33 @@ export interface CharacterProfile {
   tagline?: string
 }
 
+/**
+ * Canonical style/category tags offered in the UGC create form and used to
+ * order the discovery filter chips. NOTE: `推荐` is deliberately NOT here — it's
+ * an editorial filter (assigned to seeded/featured characters + built-ins), not
+ * a style a user picks for their own character.
+ */
+export const CHARACTER_STYLE_TAGS = [
+  '恋爱',
+  '治愈',
+  '御姐',
+  '元气',
+  '温柔',
+  '清冷',
+  '病娇',
+  '校园',
+  '奇幻',
+  '古风',
+  '职场',
+  '日常',
+  '悬疑',
+  '搞笑',
+] as const
+
+/** Discovery filter chip labels that are not data tags. */
+export const DISCOVERY_RECOMMENDED = '推荐'
+export const DISCOVERY_ALL = '全部'
+
 export interface ConversationMessage {
   id: string
   role: 'assistant' | 'user'

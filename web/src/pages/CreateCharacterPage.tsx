@@ -7,6 +7,7 @@ import { useMembershipStore } from '../stores/membershipStore'
 import {
   ApiError,
   uploadCharacterAvatar,
+  uploadCharacterCover,
   getPresetVoices,
   getPresetVoiceSampleUrl,
   setPresetVoice,
@@ -18,6 +19,9 @@ import {
   type PresetVoiceDTO,
 } from '../services/api'
 import { compressImage } from '../utils/imageCompress'
+import { CHARACTER_STYLE_TAGS } from '../data/uiContent'
+
+const MAX_TAGS = 5
 
 function useToast() {
   return useToastStore((s) => s.show)
@@ -62,10 +66,12 @@ function toApiSlider(v: number): number {
   return Math.round(v) / 100
 }
 
-function buildDraft(fields: FormFields, avatarUrl?: string): CharacterDraftDTO {
+function buildDraft(fields: FormFields, avatarUrl?: string, coverUrl?: string): CharacterDraftDTO {
   return {
     display_name: { zh: fields.nameZh.trim() || undefined },
     avatar_url: avatarUrl || undefined,
+    cover_url: coverUrl || undefined,
+    tags: fields.tags.length > 0 ? fields.tags : undefined,
     persona: fields.persona.trim(),
     greeting_style: fields.greetingStyle,
     gender: fields.gender,
@@ -89,6 +95,7 @@ interface FormFields {
   gender: 'female' | 'male'
   sliders: Record<keyof CharacterDraftDTO['sliders'], number> // 0-100 UI scale
   samples: string[]
+  tags: string[]
 }
 
 function defaultForm(): FormFields {
@@ -106,6 +113,7 @@ function defaultForm(): FormFields {
       steadiness:    60,
     },
     samples: ['', '', ''],
+    tags: [],
   }
 }
 
@@ -196,7 +204,10 @@ export function CreateCharacterPage() {
   const [step, setStep] = useState<1 | 2 | 3>(1) // 1: basic info, 2: personality, 3: voice
   const [avatarUrl, setAvatarUrl] = useState<string>('')
   const [avatarUploading, setAvatarUploading] = useState(false)
+  const [coverUrl, setCoverUrl] = useState<string>('')
+  const [coverUploading, setCoverUploading] = useState(false)
   const avatarInputRef = useRef<HTMLInputElement>(null)
+  const coverInputRef = useRef<HTMLInputElement>(null)
 
   // Voice step state
   const [createdCharacterId, setCreatedCharacterId] = useState<string>('')
@@ -278,9 +289,12 @@ export function CreateCharacterPage() {
     try {
       const raw = sessionStorage.getItem(DRAFT_KEY)
       if (!raw) return
-      const saved = JSON.parse(raw) as { form: FormFields; avatarUrl: string; step: 1 | 2 }
-      if (saved.form) setForm(saved.form)
+      const saved = JSON.parse(raw) as { form: FormFields; avatarUrl: string; coverUrl?: string; step: 1 | 2 }
+      // Older saved drafts predate the `tags` field — backfill so setForm never
+      // yields an undefined tags array downstream.
+      if (saved.form) setForm({ ...defaultForm(), ...saved.form, tags: saved.form.tags ?? [] })
       if (saved.avatarUrl) setAvatarUrl(saved.avatarUrl)
+      if (saved.coverUrl) setCoverUrl(saved.coverUrl)
       if (saved.step) setStep(saved.step)
     } catch { /* corrupted entry — ignore */ }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -289,9 +303,9 @@ export function CreateCharacterPage() {
   useEffect(() => {
     if (editId || isVoiceOnly || step === 3) return
     try {
-      sessionStorage.setItem(DRAFT_KEY, JSON.stringify({ form, avatarUrl, step }))
+      sessionStorage.setItem(DRAFT_KEY, JSON.stringify({ form, avatarUrl, coverUrl, step }))
     } catch { /* storage full — ignore */ }
-  }, [form, avatarUrl, step, editId, isVoiceOnly])
+  }, [form, avatarUrl, coverUrl, step, editId, isVoiceOnly])
 
   // If editing, load full draft from the server to pre-populate all fields
   useEffect(() => {
@@ -318,8 +332,10 @@ export function CreateCharacterPage() {
           draft.speech_samples?.[1] || '',
           draft.speech_samples?.[2] || '',
         ],
+        tags: draft.tags ?? [],
       })
       if (draft.avatar_url) setAvatarUrl(draft.avatar_url)
+      if (draft.cover_url) setCoverUrl(draft.cover_url)
       if (voiceConfig?.preset_voice_id) setSelectedPreset(voiceConfig.preset_voice_id)
     }).catch(() => {
       // Fallback: at least load display name from catalog
@@ -347,6 +363,44 @@ export function CreateCharacterPage() {
     } finally {
       setAvatarUploading(false)
     }
+  }
+
+  async function handleCoverFile(file: File) {
+    if (!file.type.startsWith('image/')) {
+      showToast('请选择图片文件', 'error')
+      return
+    }
+    setCoverUploading(true)
+    try {
+      // Portrait cover: compress to 800px WebP (matches the seed importer's
+      // budget). The backend is S3-only and rejects with 413 if storage is
+      // unavailable — never base64-inlines — so guard the client artifact too.
+      const compressed = await compressImage(file, 800, 0.8).catch(() => file)
+      if (compressed.size > 200 * 1024) {
+        showToast('封面图太大了，请换一张更小的图片', 'error')
+        return
+      }
+      const { cover_url } = await uploadCharacterCover(compressed)
+      setCoverUrl(cover_url)
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : '封面上传失败，请重试'
+      showToast(msg, 'error')
+    } finally {
+      setCoverUploading(false)
+    }
+  }
+
+  function toggleTag(tag: string) {
+    setForm((prev) => {
+      if (prev.tags.includes(tag)) {
+        return { ...prev, tags: prev.tags.filter((t) => t !== tag) }
+      }
+      if (prev.tags.length >= MAX_TAGS) {
+        showToast(`最多选择 ${MAX_TAGS} 个标签`, 'error')
+        return prev
+      }
+      return { ...prev, tags: [...prev.tags, tag] }
+    })
   }
 
   function setSlider(key: keyof FormFields['sliders'], v: number) {
@@ -455,7 +509,7 @@ export function CreateCharacterPage() {
     }
     setSubmitting(true)
     try {
-      const draft = buildDraft(form, avatarUrl || undefined)
+      const draft = buildDraft(form, avatarUrl || undefined, coverUrl || undefined)
       const { id } = await createCharacter(draft)
       sessionStorage.removeItem(DRAFT_KEY)
       setCreatedCharacterId(id)
@@ -631,7 +685,7 @@ export function CreateCharacterPage() {
 
     setSubmitting(true)
     try {
-      const draft = buildDraft(form, avatarUrl || undefined)
+      const draft = buildDraft(form, avatarUrl || undefined, coverUrl || undefined)
       await updateCharacter(editId, draft)
       showToast('角色已更新', 'success')
       navigate('/my-characters', { replace: true })
@@ -652,7 +706,7 @@ export function CreateCharacterPage() {
     setVoiceSaving(true)
     setSubmitting(true)
     try {
-      const draft = buildDraft(form, avatarUrl || undefined)
+      const draft = buildDraft(form, avatarUrl || undefined, coverUrl || undefined)
       const { id } = await createCharacter(draft)
       sessionStorage.removeItem(DRAFT_KEY)
       setCreatedCharacterId(id)
@@ -799,6 +853,59 @@ export function CreateCharacterPage() {
               {avatarUrl ? '点击头像更换' : '不上传则使用角色名最后一个字作为头像'}
             </p>
 
+            {/* Cover — 竖版封面，用于发现页封面卡 + 聊天全屏背景 */}
+            <SectionTitle>角色封面（选填）</SectionTitle>
+            <div className="flex justify-center mb-2">
+              <button
+                type="button"
+                onClick={() => coverInputRef.current?.click()}
+                className="relative w-[132px] aspect-[3/4] rounded-[18px] overflow-hidden flex items-center justify-center active:scale-[0.97] transition-transform"
+                style={{
+                  background: coverUrl ? 'transparent' : 'linear-gradient(135deg, #FFB7C5 0%, #C8B6FF 100%)',
+                }}
+              >
+                {coverUrl ? (
+                  <img src={coverUrl} alt="封面" className="w-full h-full object-cover" />
+                ) : coverUploading ? (
+                  <svg className="animate-spin w-8 h-8 text-white" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                ) : (
+                  <div className="flex flex-col items-center gap-1.5 text-white">
+                    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="3" y="3" width="18" height="18" rx="2" />
+                      <circle cx="8.5" cy="8.5" r="1.5" />
+                      <path d="M21 15l-5-5L5 21" />
+                    </svg>
+                    <span className="text-[12px] font-medium">上传竖版封面</span>
+                  </div>
+                )}
+                {coverUrl && (
+                  <div className="absolute bottom-1.5 right-1.5 w-[24px] h-[24px] rounded-full bg-[#FFB7C5] border-2 border-white flex items-center justify-center">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
+                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+                    </svg>
+                  </div>
+                )}
+                <input
+                  ref={coverInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    if (file) handleCoverFile(file)
+                    e.target.value = ''
+                  }}
+                />
+              </button>
+            </div>
+            <p className="text-center text-[12px] text-[var(--color-text-muted)] mb-2">
+              用于发现页封面与聊天背景，建议竖版（3:4）
+            </p>
+
             {/* Name */}
             <SectionTitle>角色名字</SectionTitle>
             <GlassCard>
@@ -860,6 +967,30 @@ export function CreateCharacterPage() {
                 </div>
               </div>
             </GlassCard>
+
+            {/* Tags — 发现页风格筛选（选填） */}
+            <SectionTitle>风格标签（选填，最多 {MAX_TAGS} 个）</SectionTitle>
+            <div className="flex flex-wrap gap-2 px-1">
+              {CHARACTER_STYLE_TAGS.map((tag) => {
+                const active = form.tags.includes(tag)
+                return (
+                  <button
+                    key={tag}
+                    type="button"
+                    onClick={() => toggleTag(tag)}
+                    className={`h-[32px] px-3.5 rounded-full text-[13px] font-medium border transition-all active:scale-[0.96] ${
+                      active
+                        ? 'bg-[rgba(255,183,197,0.22)] border-[rgba(255,183,197,0.55)] text-[#E86083]'
+                        : isDark
+                        ? 'bg-[var(--color-surface-card)] border-[var(--color-border-subtle)] text-[var(--color-text-secondary)]'
+                        : 'bg-[rgba(255,255,255,0.72)] border-[rgba(255,255,255,0.60)] text-[var(--color-text-secondary)]'
+                    } backdrop-blur-[12px]`}
+                  >
+                    {tag}
+                  </button>
+                )
+              })}
+            </div>
 
             {/* Speech samples */}
             <SectionTitle>口癖 / 标志性说话方式（选填）</SectionTitle>

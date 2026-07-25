@@ -2,7 +2,13 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useThemeStore } from '../stores/themeStore'
 import { TabBar } from '../components/ui/TabBar'
-import { resolveCharacterProfile, type CharacterProfile } from '../data/uiContent'
+import {
+  resolveCharacterProfile,
+  CHARACTER_STYLE_TAGS,
+  DISCOVERY_RECOMMENDED,
+  DISCOVERY_ALL,
+  type CharacterProfile,
+} from '../data/uiContent'
 import { useCharactersStore } from '../stores/charactersStore'
 import { useCompanionsStore } from '../stores/companionsStore'
 import { stageWithIntimacy, isColdWar } from '../utils/relationship'
@@ -26,10 +32,9 @@ interface GridItem {
   id: string
   profile: CharacterProfile
   isOwner: boolean
+  isBuiltin: boolean
   companion?: CompanionDTO
 }
-
-const ALL = '全部'
 
 export function CharacterPage() {
   const navigate = useNavigate()
@@ -39,7 +44,7 @@ export function CharacterPage() {
   const companions = useCompanionsStore((s) => s.companions)
   const loadCompanions = useCompanionsStore((s) => s.load)
 
-  const [activeTag, setActiveTag] = useState<string>(ALL)
+  const [activeTag, setActiveTag] = useState<string>(DISCOVERY_RECOMMENDED)
   const [showSearch, setShowSearch] = useState(false)
   const [query, setQuery] = useState('')
 
@@ -65,6 +70,7 @@ export function CharacterPage() {
         return {
           id: c.id,
           isOwner,
+          isBuiltin: c.is_builtin,
           companion: companionById.get(c.id),
           profile: resolveCharacterProfile(c.id, c.display_name, c.avatar_url, {
             isOwner,
@@ -79,6 +85,7 @@ export function CharacterPage() {
       return {
         id: c.character_id,
         isOwner,
+        isBuiltin: c.is_builtin,
         companion: c,
         profile: resolveCharacterProfile(c.character_id, c.display_name, c.avatar_url, {
           isOwner,
@@ -89,22 +96,46 @@ export function CharacterPage() {
     })
   }, [serverCharacters, companions, companionById])
 
-  // Tag universe for the filter chips: 全部 + first-seen order across the catalog.
+  // Filter chips: leading editorial filters (推荐 / 全部) + data-derived style
+  // tags, ordered by the canonical CHARACTER_STYLE_TAGS priority so curated
+  // categories lead, then any remaining tags in first-seen order. `推荐` never
+  // appears as a data tag here — it's the editorial lead filter.
   const tagChips = useMemo(() => {
-    const seen: string[] = []
+    const present = new Set<string>()
     for (const it of items) {
       for (const t of it.profile.tags ?? []) {
-        if (t && !seen.includes(t)) seen.push(t)
+        if (t && t !== DISCOVERY_RECOMMENDED) present.add(t)
       }
     }
-    return [ALL, ...seen]
+    const ordered: string[] = []
+    for (const t of CHARACTER_STYLE_TAGS) {
+      if (present.has(t)) {
+        ordered.push(t)
+        present.delete(t)
+      }
+    }
+    // leftover non-curated tags, first-seen order
+    for (const it of items) {
+      for (const t of it.profile.tags ?? []) {
+        if (t && t !== DISCOVERY_RECOMMENDED && present.has(t)) {
+          ordered.push(t)
+          present.delete(t)
+        }
+      }
+    }
+    return [DISCOVERY_RECOMMENDED, DISCOVERY_ALL, ...ordered]
   }, [items])
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
     return items.filter((it) => {
       const tags = it.profile.tags ?? []
-      if (activeTag !== ALL && !tags.includes(activeTag)) return false
+      if (activeTag === DISCOVERY_RECOMMENDED) {
+        // Editorial: built-ins + anything explicitly tagged 推荐 on import.
+        if (!(it.isBuiltin || tags.includes(DISCOVERY_RECOMMENDED))) return false
+      } else if (activeTag !== DISCOVERY_ALL && !tags.includes(activeTag)) {
+        return false
+      }
       if (q) {
         const hay = `${it.profile.name} ${tags.join(' ')} ${it.profile.tagline ?? ''}`.toLowerCase()
         if (!hay.includes(q)) return false
