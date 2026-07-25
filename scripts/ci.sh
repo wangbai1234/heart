@@ -97,6 +97,11 @@ stage_frontend() {
     # tail 放宽到 20 行，构建失败时能看到真正的报错而不是被截断成收尾花括号。
     npx vite build 2>&1 | tail -20
 
+    log "→ vitest run"
+    # 前端单测（storyBubbles 解析器等）。storyBubbles.ts 是后端 split_gm_text 的行为
+    # 镜像，两边用相同向量断言，vitest 锁住这份一致性，防止未来前端改动悄悄漂移。
+    npx vitest run
+
     log "✓ frontend passed"
 }
 
