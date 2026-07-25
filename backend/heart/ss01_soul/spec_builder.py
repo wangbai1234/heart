@@ -319,8 +319,20 @@ def build_soul_spec_from_draft(
             )
         )
 
-    # ── identity_narrative from persona + backstory ──────────────────────────
-    narrative_parts = [draft.persona]
+    # ── identity_narrative from persona + backstory + basic attributes ──────────
+    # gender and age_range were silently dropped before this fix — they are now
+    # prepended so the LLM knows basic persona facts the creator intended.
+    _gender_zh = {"male": "男性", "female": "女性"}
+    attr_parts: list[str] = []
+    if draft.gender and draft.gender in _gender_zh:
+        attr_parts.append(f"性别：{_gender_zh[draft.gender]}")
+    if draft.age_range:
+        attr_parts.append(f"年龄：{draft.age_range}岁")
+
+    narrative_parts: list[str] = []
+    if attr_parts:
+        narrative_parts.append("【" + "，".join(attr_parts) + "】\n")
+    narrative_parts.append(draft.persona)
     if draft.backstory:
         narrative_parts.append(f"\n【过往】{draft.backstory}")
     identity_narrative = "".join(narrative_parts)
