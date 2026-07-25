@@ -83,6 +83,10 @@ class Run:
     model: str
     created_at: datetime
     last_activity_at: datetime
+    # Structured 剧情记忆卡 (see migration 048): durable per-NPC / player / world /
+    # open-thread facts, maintained inline by the rolling-summary pass and injected
+    # into the GM prompt every turn. Defaults to {} (empty card) for a fresh run.
+    story_memory: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass

@@ -2,15 +2,23 @@
 
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
 from uuid import uuid4
+
+
+def json_dumps(obj: dict) -> str:
+    return json.dumps(obj, ensure_ascii=False)
 
 from heart.ss09_story.models import Run, Scenario, StoryMessage
 from heart.ss09_story.prompt import (
     build_gm_messages,
     build_gm_system_prompt,
+    build_memory_update_messages,
+    parse_memory_update,
     split_gm_text,
 )
+from heart.ss09_story.prompt import _render_story_memory  # noqa: E402
 
 
 def _scenario(prompt: str = "这是一个测试剧本原文。") -> Scenario:
@@ -30,7 +38,11 @@ def _scenario(prompt: str = "这是一个测试剧本原文。") -> Scenario:
     )
 
 
-def _run(summary: str = "", identity: dict | None = None) -> Run:
+def _run(
+    summary: str = "",
+    identity: dict | None = None,
+    story_memory: dict | None = None,
+) -> Run:
     now = datetime.now(timezone.utc)
     return Run(
         id=uuid4(),
@@ -45,6 +57,7 @@ def _run(summary: str = "", identity: dict | None = None) -> Run:
         model="deepseek",
         created_at=now,
         last_activity_at=now,
+        story_memory=story_memory if story_memory is not None else {},
     )
 
 
@@ -346,3 +359,217 @@ def test_split_mixed_action_and_corner_dialogue():
     assert [b["kind"] for b in out] == ["action", "dialogue"]
     assert out[0]["content"] == "他走近你"
     assert out[1]["content"] == "你来了。"
+
+
+# ── Tier 2 structured 剧情记忆卡 (story memory card) ─────────────────────
+
+
+def _sample_memory() -> dict:
+    return {
+        "npcs": {
+            "贺听澜": {
+                "relationship": "对主控警惕渐生好感",
+                "facts": ["贺家长子", "答应带主控见家人"],
+                "last_state": "离开书房",
+            }
+        },
+        "player_facts": ["自称记者", "左手受过伤"],
+        "world_facts": ["贺家老宅今夜停电"],
+        "open_threads": ["密室钥匙下落不明"],
+    }
+
+
+# ── parse_memory_update ─────────────────────────────────────────────
+
+
+def test_parse_memory_update_valid_json():
+    raw = (
+        '{"summary": "主控进入贺家老宅。", '
+        '"memory": {"npcs": {"贺听澜": {"relationship": "警惕", '
+        '"facts": ["贺家长子"], "last_state": "书房"}}, '
+        '"player_facts": ["记者"]}}'
+    )
+    parsed = parse_memory_update(raw)
+    assert parsed is not None
+    summary, memory = parsed
+    assert summary == "主控进入贺家老宅。"
+    assert memory["npcs"]["贺听澜"]["relationship"] == "警惕"
+    assert memory["npcs"]["贺听澜"]["facts"] == ["贺家长子"]
+    assert memory["player_facts"] == ["记者"]
+
+
+def test_parse_memory_update_strips_json_fence():
+    raw = (
+        "```json\n"
+        '{"summary": "夜色渐深。", "memory": {"world_facts": ["停电"]}}\n'
+        "```"
+    )
+    parsed = parse_memory_update(raw)
+    assert parsed is not None
+    summary, memory = parsed
+    assert summary == "夜色渐深。"
+    assert memory["world_facts"] == ["停电"]
+
+
+def test_parse_memory_update_bare_fence():
+    raw = '```\n{"summary": "abc", "memory": {}}\n```'
+    parsed = parse_memory_update(raw)
+    assert parsed is not None
+    summary, memory = parsed
+    assert summary == "abc"
+    assert memory == {}  # empty memory sections dropped
+
+
+def test_parse_memory_update_garbage_returns_none():
+    assert parse_memory_update("这不是 JSON，只是一段普通的前情提要。") is None
+    assert parse_memory_update("") is None
+    assert parse_memory_update("   ") is None
+    # A JSON array (not object) is not usable → None.
+    assert parse_memory_update("[1, 2, 3]") is None
+
+
+def test_parse_memory_update_missing_summary_yields_empty_string():
+    parsed = parse_memory_update('{"memory": {"player_facts": ["x"]}}')
+    assert parsed is not None
+    summary, memory = parsed
+    assert summary == ""
+    assert memory["player_facts"] == ["x"]
+
+
+def test_parse_memory_update_caps_npcs_at_eight():
+    npcs = {f"角色{i}": {"facts": [f"事实{i}"]} for i in range(20)}
+    raw = json_dumps({"summary": "s", "memory": {"npcs": npcs}})
+    parsed = parse_memory_update(raw)
+    assert parsed is not None
+    _, memory = parsed
+    assert len(memory["npcs"]) == 8  # _MEM_MAX_NPCS
+
+
+def test_parse_memory_update_caps_facts_per_npc():
+    raw = json_dumps(
+        {
+            "summary": "s",
+            "memory": {"npcs": {"甲": {"facts": [f"f{i}" for i in range(20)]}}},
+        }
+    )
+    parsed = parse_memory_update(raw)
+    assert parsed is not None
+    _, memory = parsed
+    assert len(memory["npcs"]["甲"]["facts"]) == 6  # _MEM_MAX_FACTS
+
+
+def test_parse_memory_update_dedups_and_caps_lists():
+    raw = json_dumps(
+        {"summary": "s", "memory": {"player_facts": ["同一条", "同一条"] + [f"x{i}" for i in range(20)]}}
+    )
+    parsed = parse_memory_update(raw)
+    assert parsed is not None
+    _, memory = parsed
+    facts = memory["player_facts"]
+    assert facts.count("同一条") == 1  # de-duped
+    assert len(facts) == 8  # _MEM_MAX_LIST
+
+
+def test_parse_memory_update_drops_offshape_npc_entry():
+    # A non-dict NPC entry is skipped rather than crashing.
+    raw = json_dumps({"summary": "s", "memory": {"npcs": {"坏值": "不是对象", "甲": {"facts": ["ok"]}}}})
+    parsed = parse_memory_update(raw)
+    assert parsed is not None
+    _, memory = parsed
+    assert "坏值" not in memory["npcs"]
+    assert memory["npcs"]["甲"]["facts"] == ["ok"]
+
+
+# ── _render_story_memory ────────────────────────────────────────────
+
+
+def test_render_story_memory_renders_all_sections():
+    block = _render_story_memory(_sample_memory())
+    assert "【角色记忆 / 剧情档案】" in block
+    assert "贺听澜" in block
+    assert "对主控警惕渐生好感" in block
+    assert "贺家长子" in block
+    assert "记者" in block  # player_facts
+    assert "停电" in block  # world_facts
+    assert "密室钥匙" in block  # open_threads
+
+
+def test_render_story_memory_empty_returns_empty_string():
+    assert _render_story_memory({}) == ""
+    assert _render_story_memory(None) == ""  # defensive: off-shape → ""
+
+
+def test_render_story_memory_skips_empty_sections():
+    block = _render_story_memory({"npcs": {"甲": {"facts": ["事实"]}}})
+    assert "甲" in block
+    assert "主控相关" not in block  # empty player_facts section omitted
+    assert "世界设定" not in block
+    assert "未解悬念" not in block
+
+
+def test_render_story_memory_all_empty_npc_yields_empty():
+    # NPC with nothing useful + no other sections → whole block empty.
+    assert _render_story_memory({"npcs": {"甲": {}}}) == ""
+
+
+# ── build_gm_system_prompt memory injection ─────────────────────────
+
+
+def test_system_prompt_includes_memory_block_when_present():
+    run = _run(story_memory=_sample_memory())
+    sp = build_gm_system_prompt(_scenario(), run)
+    assert "【角色记忆 / 剧情档案】" in sp
+    assert "贺听澜" in sp
+    assert "答应带主控见家人" in sp
+
+
+def test_system_prompt_omits_memory_block_when_empty():
+    sp = build_gm_system_prompt(_scenario(), _run(story_memory={}))
+    assert "角色记忆" not in sp
+
+
+def test_system_prompt_memory_and_summary_coexist():
+    run = _run(summary="主控已进入古宅。", story_memory=_sample_memory())
+    sp = build_gm_system_prompt(_scenario(), run)
+    assert "前情提要" in sp and "古宅" in sp
+    assert "角色记忆" in sp and "贺听澜" in sp
+
+
+# ── build_memory_update_messages ────────────────────────────────────
+
+
+def test_memory_update_messages_carry_merge_instruction_and_prior():
+    prior = _sample_memory()
+    turns = [
+        _msg("player", "我走进书房。", 1),
+        _msg("npc", "你来做什么？", 2, kind="dialogue", npc="贺听澜"),
+    ]
+    msgs = build_memory_update_messages(_scenario(), "旧的前情提要。", prior, turns)
+    assert msgs[0]["role"] == "system"
+    assert "增量合并" in msgs[0]["content"]  # MERGE semantics
+    assert "JSON" in msgs[0]["content"]
+    user = msgs[1]["content"]
+    assert "旧的前情提要。" in user  # prior summary in context
+    assert "贺听澜" in user  # prior memory serialized into context
+    assert "我走进书房。" in user  # new transcript folded in
+
+
+def test_memory_update_messages_handle_empty_prior():
+    turns = [_msg("player", "开场。", 1)]
+    msgs = build_memory_update_messages(_scenario(), "", {}, turns)
+    user = msgs[1]["content"]
+    assert "（无）" in user  # empty prior summary rendered as placeholder
+    assert "{}" in user  # empty prior memory serialized as {}
+
+
+# ── replay isolation: 重新游玩 = 记忆天然清空 ──────────────────────────
+
+
+def test_fresh_run_has_empty_memory_by_default():
+    """A run constructed without story_memory (mirrors create_run's DB default)
+    starts with an empty card, so 重新游玩 never inherits the prior run's NPC
+    memory."""
+    run = _run()
+    assert run.story_memory == {}
+    sp = build_gm_system_prompt(_scenario(), run)
+    assert "角色记忆" not in sp
