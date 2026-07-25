@@ -34,6 +34,12 @@ from heart.ss02_memory.predicate_vocab import build_embedding_text, normalize_pr
 
 logger = structlog.get_logger()
 
+# Confidence EWMA smoothing (mirrors ss02_memory.extractor.resolver):
+# ewma_new = 0.7 * ewma_old + 0.3 * new_confidence. Kept in sync so both the
+# encoder (active path) and the spec extractor age confidence identically.
+_EWMA_ALPHA = 0.7
+_EWMA_BETA = 0.3
+
 
 async def _embed_fact_text(text: str) -> Optional[list[float]]:
     """Embed an L3 fact's literal text, best-effort.
@@ -248,6 +254,23 @@ async def write_facts_to_l3(
         if existing_fact:
             # Fact exists - reinforce it (阶段 3 logic, simplified here)
             existing_fact.confirmation_count += 1
+            # L4 promotion gates on mention_count (P5: ≥ K1) and confidence_ewma
+            # (P6: ≥ K2). The promoter reads THESE two fields, so a reinforce that
+            # only bumps confirmation_count/confidence leaves both frozen at their
+            # creation defaults (mention_count=1, confidence_ewma=0.5<0.8) and no
+            # fact can ever be promoted to identity memory. Increment mention_count
+            # and roll the EWMA on every confirmation so repeated, high-confidence
+            # facts become L4-eligible over time.
+            existing_fact.mention_count = (existing_fact.mention_count or 1) + 1
+            existing_fact.confidence_ewma = (
+                _EWMA_ALPHA
+                * (
+                    existing_fact.confidence_ewma
+                    if existing_fact.confidence_ewma is not None
+                    else 0.5
+                )
+                + _EWMA_BETA * fact["confidence"]
+            )
             existing_fact.confidence = max(existing_fact.confidence, fact["confidence"])
             existing_fact.last_confirmed_at = datetime.now(timezone.utc).replace(tzinfo=None)
 
@@ -269,6 +292,8 @@ async def write_facts_to_l3(
                 fact_id=str(existing_fact.id),
                 predicate=canonical_pred,
                 confirmation_count=existing_fact.confirmation_count,
+                mention_count=existing_fact.mention_count,
+                confidence_ewma=round(existing_fact.confidence_ewma, 3),
             )
 
             created_fact_ids.append(existing_fact.id)
@@ -292,6 +317,12 @@ async def write_facts_to_l3(
                 raw_evidence=fact["source_text"],
                 source_turn_ids=[event.source_turn_id],
                 confidence=fact["confidence"],
+                # Seed the EWMA with this fact's own confidence rather than the
+                # column default (0.5). The L4 promoter's P6 gate requires
+                # confidence_ewma ≥ K2 (0.8); leaving it at 0.5 blocked promotion
+                # for every encoder-created fact regardless of mention_count.
+                confidence_ewma=fact["confidence"],
+                mention_count=1,
                 emotional_charge=fact["emotional_charge"],
                 emotional_label=fact.get("emotional_label"),
                 importance=extraction["importance_estimate"],
