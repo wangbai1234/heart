@@ -177,6 +177,29 @@ async def upload_avatar(user_id: str, data: bytes, content_type: str) -> str:
     return f"/api/profile/avatar-file/{user_id}/{filename}"
 
 
+async def upload_cover(user_id: str, data: bytes, content_type: str) -> str:
+    """Upload a character portrait cover and return its proxied URL.
+
+    Generates key: covers/{user_id}/{uuid}.{ext}
+    Returns: /api/profile/cover-file/{user_id}/{filename}
+
+    Mirrors ``upload_avatar`` but for the tall discovery/chat-background cover.
+    Covers are compressed WebP (frontend canvas / backend Pillow) before they
+    reach here; we only ever persist the S3 object + its short proxy URL, never
+    a base64 data URL (that would repeat the 探索页 OOM at the DB layer).
+    """
+    ext_map = {
+        "image/jpeg": "jpg",
+        "image/png": "png",
+        "image/webp": "webp",
+    }
+    ext = ext_map.get(content_type, "webp")
+    filename = f"{uuid.uuid4().hex}.{ext}"
+    key = f"covers/{user_id}/{filename}"
+    await _upload_to_s3(key, data, content_type)
+    return f"/api/profile/cover-file/{user_id}/{filename}"
+
+
 async def _upload_to_s3(key: str, data: bytes, content_type: str) -> None:
     """Upload raw bytes to S3/MinIO (non-blocking via asyncio.to_thread)."""
     client = _get_s3_client()

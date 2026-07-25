@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 import uuid
 from dataclasses import asdict
@@ -17,9 +18,10 @@ from heart.core.auth import TokenData, get_current_user
 from heart.ss01_soul.character_catalog import (
     CharacterRow,
     build_catalog_entries,
+    coerce_tags,
     is_known_character,
 )
-from heart.ss01_soul.character_content import CharacterContent
+from heart.ss01_soul.character_content import CharacterContent, get_display_name
 from heart.ss01_soul.draft import CharacterDraft
 
 logger = structlog.get_logger(__name__)
@@ -61,7 +63,7 @@ async def list_characters(
     result = await db.execute(
         text(
             """
-            SELECT id, owner_user_id, visibility, status, has_voice
+            SELECT id, owner_user_id, visibility, status, has_voice, tags, cover_url
             FROM characters
             WHERE status = 'active'
               AND (visibility = 'public' OR owner_user_id = :uid)
@@ -76,6 +78,8 @@ async def list_characters(
             owner_user_id=row["owner_user_id"],
             visibility=row["visibility"],
             status=row["status"],
+            tags=coerce_tags(row.get("tags")),
+            cover_url=row.get("cover_url"),
         )
         for row in raw_rows
     ]
@@ -106,6 +110,184 @@ async def list_characters(
         entry_dict["has_voice"] = has_voice_map.get(e.id, False)
         result_list.append(entry_dict)
     return {"characters": result_list}
+
+
+def _coerce_json(raw: object) -> dict:
+    """Normalize a JSONB column value into a dict (driver may return str or dict)."""
+    if isinstance(raw, str):
+        try:
+            parsed = json.loads(raw)
+        except (ValueError, TypeError):
+            return {}
+        return parsed if isinstance(parsed, dict) else {}
+    return raw if isinstance(raw, dict) else {}
+
+
+def _first_nonempty_line(text_block: str) -> str:
+    for line in (text_block or "").splitlines():
+        stripped = line.strip()
+        if stripped:
+            return stripped
+    return ""
+
+
+# UGC slider key → user-facing 性格轴 label (kept in sync with draft.SliderSet).
+_SLIDER_LABELS = {
+    "warmth": "亲切",
+    "talkativeness": "健谈",
+    "directness": "直率",
+    "humor": "幽默",
+    "playfulness": "俏皮",
+    "steadiness": "沉稳",
+}
+
+
+def _slider_personality(sliders: dict) -> list[dict]:
+    out: list[dict] = []
+    for key, label in _SLIDER_LABELS.items():
+        val = sliders.get(key)
+        if isinstance(val, (int, float)) and not isinstance(val, bool):
+            out.append({"label": label, "value": round(float(val), 2)})
+    return out
+
+
+def _derive_intro(archetype: str, persona: str, backstory: str) -> str:
+    """Fallback 叙引 body when the draft carries no explicit ``intro`` override."""
+    if archetype.strip():
+        return archetype.strip()
+    if backstory.strip():
+        return f"{persona.strip()}\n\n{backstory.strip()}".strip()
+    return persona.strip()
+
+
+def _derive_personality(draft: dict) -> list[dict]:
+    """性格轴 from an explicit ``personality`` list, else derived from sliders."""
+    personality: list[dict] = []
+    raw_pers = draft.get("personality")
+    if isinstance(raw_pers, list):
+        for item in raw_pers:
+            if isinstance(item, dict) and item.get("label"):
+                personality.append({"label": str(item["label"]), "value": item.get("value")})
+            elif isinstance(item, str) and item.strip():
+                personality.append({"label": item.strip(), "value": None})
+    if not personality and isinstance(draft.get("sliders"), dict):
+        personality = _slider_personality(draft["sliders"])
+    return personality
+
+
+def _derive_profile_presentation(spec: dict, draft: dict) -> dict:
+    """Best-effort public presentation fields (tagline / one_liner / intro / …).
+
+    Precedence per field: an explicit override in ``draft`` (used by the seed
+    importer and future UGC forms) → derivation from the public
+    ``identity_anchor.archetype`` (built-ins) or ``persona``/``backstory`` (UGC).
+    Every field degrades to '' / [] so a partial or malformed spec never 500s.
+
+    Only ever reads public-facing content. Internal persona layers
+    (core_wound / core_fear / core_belief / core_desire) are deliberately NOT
+    touched — this endpoint must not leak them.
+    """
+    spec = spec or {}
+    draft = draft or {}
+    try:
+        archetype = str((spec.get("identity_anchor") or {}).get("archetype", "") or "")
+    except Exception:
+        archetype = ""
+    persona = str(draft.get("persona", "") or "")
+    backstory = str(draft.get("backstory", "") or "")
+
+    def override(key: str, fallback: str) -> str:
+        v = draft.get(key)
+        return v.strip() if isinstance(v, str) and v.strip() else fallback
+
+    archetype_first = _first_nonempty_line(archetype)
+    persona_first = _first_nonempty_line(persona)
+
+    tagline = override("tagline", archetype_first or persona_first)
+    archetype_label = override("archetype_label", "")
+    one_liner = override("one_liner", archetype_first or persona_first)
+
+    intro = override("intro", "") or _derive_intro(archetype, persona, backstory)
+    personality = _derive_personality(draft)
+
+    return {
+        "tagline": tagline,
+        "archetype_label": archetype_label,
+        "one_liner": one_liner,
+        "intro": intro,
+        "personality": personality,
+    }
+
+
+@router.get("/{character_id}/profile")
+async def get_character_profile(
+    character_id: str,
+    current_user: TokenData = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Public-facing character profile for the discovery / profile page.
+
+    Readable for any character visible to the viewer (``public`` OR the viewer's
+    own UGC) — intentionally NOT owner-only, since the profile page is reached by
+    browsing the public catalog. Returns only public presentation fields derived
+    from the Soul Spec / draft; internal persona (core_wound / core_fear / …) is
+    never included (see ``_derive_profile_presentation``).
+    """
+    uid = uuid.UUID(current_user.user_id)
+
+    char_result = await db.execute(
+        text(
+            """
+            SELECT id, owner_user_id, visibility, status, has_voice, tags, cover_url
+            FROM characters
+            WHERE id = :cid AND status = 'active'
+              AND (visibility = 'public' OR owner_user_id = :uid)
+            """
+        ),
+        {"cid": character_id, "uid": uid},
+    )
+    row = char_result.mappings().fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"角色不存在或不可见: {character_id}")
+
+    spec_result = await db.execute(
+        text(
+            """
+            SELECT source, spec, draft
+            FROM soul_specs
+            WHERE character_id = :cid AND status = 'active'
+            ORDER BY created_at DESC LIMIT 1
+            """
+        ),
+        {"cid": character_id},
+    )
+    spec_row = spec_result.mappings().fetchone()
+    spec_json = _coerce_json(spec_row["spec"]) if spec_row else {}
+    draft_json = _coerce_json(spec_row["draft"]) if spec_row else {}
+
+    is_builtin = row["owner_user_id"] is None
+    presentation = _derive_profile_presentation(spec_json, draft_json)
+
+    creator_name = None
+    if not is_builtin:
+        cr = await db.execute(
+            text("SELECT display_name FROM users WHERE id = :oid"),
+            {"oid": row["owner_user_id"]},
+        )
+        creator_name = cr.scalar_one_or_none()
+
+    return {
+        "id": row["id"],
+        "display_name": get_display_name(character_id),
+        "creator_name": creator_name,
+        "avatar_url": draft_json.get("avatar_url"),
+        "cover_url": row["cover_url"],
+        "age_range": draft_json.get("age_range"),
+        "tags": coerce_tags(row["tags"]),
+        "source": "built_in" if is_builtin else "user_created",
+        "has_voice": bool(row["has_voice"]),
+        **presentation,
+    }
 
 
 @router.get("/{character_id}/settings")
@@ -394,6 +576,47 @@ async def upload_character_avatar(
     return {"avatar_url": avatar_url}
 
 
+@router.post("/cover")
+async def upload_character_cover(
+    request: Request,
+    file: UploadFile = File(...),
+    current_user: TokenData = Depends(get_current_user),
+) -> dict:
+    """Upload a character portrait cover. Returns a cover_url for use in CharacterDraft.
+
+    **S3-only, no base64 fallback.** Covers are tall portrait images (used both in
+    the discovery grid and as the full-screen chat background); a real cover is far
+    too large to inline into a DB row, and inlining base64 is exactly what caused
+    the 探索页 OOM (commit d3922fb). If object storage is unavailable we fail loudly
+    with 413 rather than silently bloating the row. The frontend compresses to
+    ≤800px WebP (~<200KB) before upload; the 8MB hard cap only guards direct callers.
+    """
+    uid = uuid.UUID(current_user.user_id)
+
+    if file.content_type not in ("image/jpeg", "image/png", "image/webp"):
+        raise HTTPException(status_code=400, detail="仅支持 jpg/png/webp 格式")
+
+    data = await file.read()
+    if len(data) > 8 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="封面文件不能超过 8MB")
+
+    from heart.infra.storage import is_s3_configured
+    from heart.infra.storage import upload_cover as s3_upload_cover
+
+    if not is_s3_configured():
+        raise HTTPException(
+            status_code=413,
+            detail="对象存储未配置，封面暂不可用（封面不做 base64 内联，避免内存问题）",
+        )
+    try:
+        cover_url = await s3_upload_cover(f"character-{uid.hex[:8]}", data, file.content_type)
+    except Exception as exc:
+        logger.warning("character_cover_s3_failed", error=str(exc))
+        raise HTTPException(status_code=413, detail="封面上传失败，请稍后再试") from exc
+
+    return {"cover_url": cover_url}
+
+
 @router.post("")
 async def create_character(
     draft: CharacterDraft,
@@ -442,10 +665,17 @@ async def create_character(
 
     await db.execute(
         text(
-            "INSERT INTO characters (id, owner_user_id, visibility, status, soul_spec_version)"
-            " VALUES (:id, :uid, 'private', 'active', :ver)"
+            "INSERT INTO characters"
+            " (id, owner_user_id, visibility, status, soul_spec_version, tags, cover_url)"
+            " VALUES (:id, :uid, 'private', 'active', :ver, CAST(:tags AS jsonb), :cover)"
         ),
-        {"id": character_id, "uid": uid, "ver": spec.spec_version},
+        {
+            "id": character_id,
+            "uid": uid,
+            "ver": spec.spec_version,
+            "tags": json.dumps(draft.tags or []),
+            "cover": draft.cover_url,
+        },
     )
     await insert_spec(
         db,
@@ -547,8 +777,17 @@ async def update_character(
         draft=draft_dict,
     )
     await db.execute(
-        text("UPDATE characters SET soul_spec_version = :ver WHERE id = :cid"),
-        {"ver": new_ver, "cid": character_id},
+        text(
+            "UPDATE characters"
+            " SET soul_spec_version = :ver, tags = CAST(:tags AS jsonb), cover_url = :cover"
+            " WHERE id = :cid"
+        ),
+        {
+            "ver": new_ver,
+            "cid": character_id,
+            "tags": json.dumps(draft.tags or []),
+            "cover": draft.cover_url,
+        },
     )
     await upsert_content(db, character_id=character_id, **content)
     await db.commit()

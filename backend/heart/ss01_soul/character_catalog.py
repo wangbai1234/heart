@@ -16,7 +16,7 @@ without a database:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional, Sequence
 from uuid import UUID
 
@@ -32,6 +32,8 @@ class CharacterRow:
     owner_user_id: Optional[UUID]
     visibility: str
     status: str
+    tags: list[str] = field(default_factory=list)
+    cover_url: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -44,6 +46,27 @@ class CharacterEntry:
     is_builtin: bool
     is_owner: bool
     avatar_url: Optional[str] = None
+    tags: list[str] = field(default_factory=list)
+    cover_url: Optional[str] = None
+
+
+def coerce_tags(raw: object) -> list[str]:
+    """Normalize a ``characters.tags`` JSONB value into a ``list[str]``.
+
+    Depending on the DB driver, a JSONB column may arrive already decoded to a
+    Python ``list`` (asyncpg) or as a raw JSON ``str``. Anything unexpected
+    (None, non-list) degrades to an empty list so the catalog never breaks.
+    """
+    if isinstance(raw, str):
+        import json
+
+        try:
+            raw = json.loads(raw)
+        except (ValueError, TypeError):
+            return []
+    if isinstance(raw, list):
+        return [str(t) for t in raw if isinstance(t, (str, int, float))]
+    return []
 
 
 def visible_to(row: CharacterRow, viewer_id: UUID) -> bool:
@@ -83,6 +106,8 @@ def build_catalog_entries(
             is_builtin=row.owner_user_id is None,
             is_owner=row.owner_user_id is not None and row.owner_user_id == viewer_id,
             avatar_url=avatar_urls.get(row.id),
+            tags=list(row.tags or []),
+            cover_url=row.cover_url,
         )
         for row in rows
         if visible_to(row, viewer_id)
