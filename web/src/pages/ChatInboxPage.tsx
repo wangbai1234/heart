@@ -120,12 +120,12 @@ export function ChatInboxPage() {
     : '/assets/backgrounds/聊天背景图.webp'
 
   // Catalog: server list when loaded, built-in profiles as fallback.
-  const catalog: Array<{ id: string; displayName?: string; avatarUrl?: string | null; isOwner: boolean }> =
+  const catalog: Array<{ id: string; displayName?: string; avatarUrl?: string | null; coverUrl?: string | null; isOwner: boolean }> =
     serverCharacters.length > 0
-      ? serverCharacters.map((c) => ({ id: c.id, displayName: c.display_name, avatarUrl: c.avatar_url, isOwner: c.is_owner && !c.is_builtin }))
+      ? serverCharacters.map((c) => ({ id: c.id, displayName: c.display_name, avatarUrl: c.avatar_url, coverUrl: c.cover_url, isOwner: c.is_owner && !c.is_builtin }))
       : Object.keys(CHARACTER_PROFILES).map((id) => ({ id, isOwner: false }))
 
-  const allConversations = catalog.map(({ id: characterId, displayName, avatarUrl, isOwner }) => {
+  const allConversations = catalog.map(({ id: characterId, displayName, avatarUrl, coverUrl, isOwner }) => {
     const liveMessages = messages[characterId] ?? []
     const threadMessages = threads[characterId] ?? []
     const timeline = (liveMessages.length > 0 ? liveMessages : threadMessages) as TimelineMessage[]
@@ -164,7 +164,7 @@ export function ChatInboxPage() {
     const totalMessages = timeline.length + pending.length + (serverSummary ? 1 : 0)
 
     return {
-      profile: resolveCharacterProfile(characterId, displayName, avatarUrl, { isOwner }),
+      profile: resolveCharacterProfile(characterId, displayName, avatarUrl, { isOwner, coverUrl }),
       characterId,
       preview,
       updatedAt: lastTimestamp ? formatConversationTime(lastTimestamp) : '',
@@ -243,7 +243,7 @@ export function ChatInboxPage() {
                     }`}
                   >
                     <div className="flex items-center gap-3">
-                      <Avatar src={conversation.profile.avatar} size={58} />
+                      <Avatar src={conversation.profile.cover ?? conversation.profile.avatar} size={58} />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
                           <p className="truncate text-[17px] font-semibold text-[var(--color-ink)]">

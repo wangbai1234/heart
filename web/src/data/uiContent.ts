@@ -15,7 +15,70 @@ export interface CharacterProfile {
   tagBg: string
   summary: string
   homeIntro: string
+  /** Portrait cover for the discovery grid / chat background. Null → avatar-derived fallback. */
+  cover?: string | null
+  /** Style/category tags (discovery filter chips). */
+  tags?: string[]
+  /** One-line hook shown under the name on the discovery card. */
+  tagline?: string
 }
+
+/**
+ * Canonical style/category tags offered in the UGC create form and used to
+ * order the discovery filter chips. NOTE: `推荐` is deliberately NOT here — it's
+ * an editorial filter (assigned to seeded/featured characters + built-ins), not
+ * a style a user picks for their own character.
+ */
+export const CHARACTER_STYLE_TAGS = [
+  '恋爱',
+  '治愈',
+  '御姐',
+  '元气',
+  '温柔',
+  '清冷',
+  '病娇',
+  '校园',
+  '奇幻',
+  '古风',
+  '职场',
+  '日常',
+  '悬疑',
+  '搞笑',
+] as const
+
+/**
+ * Canonical 角色标签 (role tags) offered as presets in the UGC create form's
+ * tag modal, and used to order the discovery filter chips. Creators may also add
+ * custom tags beyond this list. `推荐` is NOT here — it's an editorial filter.
+ */
+export const CHARACTER_ROLE_TAGS = [
+  '女性向',
+  '全性向',
+  '纯爱',
+  '年上',
+  '同人',
+  '骨科',
+  '病娇',
+  '纯洁',
+  '反差',
+  '男性向',
+] as const
+
+/** Age brackets a creator picks in the UGC form (required, single-select). */
+export const AGE_RANGES = ['18-24', '25-30', '31-39', '40+'] as const
+
+/**
+ * Default cover used when a character has no uploaded cover_url. Per product
+ * direction (2026-07-25) UGC characters no longer upload an avatar, so a
+ * cover-less character falls back to the page background image everywhere the
+ * cover appears (discovery card / profile page / chat background / inbox avatar)
+ * rather than exposing a placeholder portrait.
+ */
+export const DEFAULT_COVER = '/assets/backgrounds/聊天背景图.webp'
+
+/** Discovery filter chip labels that are not data tags. */
+export const DISCOVERY_RECOMMENDED = '推荐'
+export const DISCOVERY_ALL = '全部'
 
 export interface ConversationMessage {
   id: string
@@ -135,11 +198,19 @@ export function resolveCharacterProfile(
   id: string,
   displayName?: string,
   avatarUrl?: string | null,
-  opts?: { isOwner?: boolean },
+  opts?: { isOwner?: boolean; coverUrl?: string | null; tags?: string[]; tagline?: string },
 ): CharacterProfile {
+  // Server-provided discovery fields (cover / tags / tagline) are layered on top
+  // of both the bundled built-in profiles and the neutral UGC fallback, so a
+  // seeded cover_url shows for rin/dorothy too without editing their static entry.
+  const discovery = {
+    cover: opts?.coverUrl ?? null,
+    tags: opts?.tags ?? [],
+    tagline: opts?.tagline ?? '',
+  }
   const base = CHARACTER_PROFILES[id]
   if (base) {
-    return displayName ? { ...base, name: displayName } : base
+    return { ...base, ...(displayName ? { name: displayName } : {}), ...discovery }
   }
   const name = displayName || id
   const isOwner = opts?.isOwner ?? false
@@ -152,6 +223,7 @@ export function resolveCharacterProfile(
     tag: isOwner ? '私密' : DEFAULT_CHARACTER_PROFILE.tag,
     tagColor: isOwner ? '#5A88F8' : DEFAULT_CHARACTER_PROFILE.tagColor,
     tagBg: isOwner ? 'rgba(120,150,255,0.24)' : DEFAULT_CHARACTER_PROFILE.tagBg,
+    ...discovery,
   }
 }
 

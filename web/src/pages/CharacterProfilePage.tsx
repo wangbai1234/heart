@@ -1,0 +1,230 @@
+import { useEffect, useMemo, useState } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
+import { getCharacterProfile, type CharacterProfileDTO } from '../services/api'
+import { useCompanionsStore } from '../stores/companionsStore'
+import { useAppStore } from '../stores/appStore'
+import { DEFAULT_COVER } from '../data/uiContent'
+import { stageWithIntimacy, isColdWar, intimacyPercent } from '../utils/relationship'
+
+/**
+ * 角色档案页 (Nimoo-style rich profile) at /character/:id.
+ *
+ * Full-bleed cover → 关于TA (tagline + tag chips + intimacy + gradient「和Ta聊天」)
+ * → scroll into 叙引 card (archetype badge · name · accented one-liner · intro ·
+ * personality axes). Per product direction: NO 评论 / 脉络 tabs, NO share button.
+ *
+ * All copy comes from the public profile API, which deliberately never exposes
+ * internal persona (core_wound / core_fear …). Missing fields degrade to
+ * empty and simply don't render.
+ */
+export function CharacterProfilePage() {
+  const navigate = useNavigate()
+  const { id = '' } = useParams<{ id: string }>()
+  const setCharacter = useAppStore((s) => s.setCharacter)
+  const companions = useCompanionsStore((s) => s.companions)
+  const loadCompanions = useCompanionsStore((s) => s.load)
+
+  const [profile, setProfile] = useState<CharacterProfileDTO | null>(null)
+  const [error, setError] = useState(false)
+
+  useEffect(() => {
+    void loadCompanions()
+  }, [loadCompanions])
+
+  useEffect(() => {
+    let alive = true
+    setProfile(null)
+    setError(false)
+    getCharacterProfile(id)
+      .then((p) => {
+        if (alive) setProfile(p)
+      })
+      .catch(() => {
+        if (alive) setError(true)
+      })
+    return () => {
+      alive = false
+    }
+  }, [id])
+
+  const companion = useMemo(
+    () => companions.find((c) => c.character_id === id),
+    [companions, id],
+  )
+  const chatted = !!companion && companion.companion_status !== 'locked'
+
+  // Cover-less characters fall back to the shared background image (product
+  // direction 2026-07-25) rather than a blurred avatar placeholder.
+  const cover = profile?.cover_url || DEFAULT_COVER
+
+  const openChat = () => navigate(`/chat/${id}`)
+  const openBackstage = () => {
+    setCharacter(id)
+    navigate('/character-backstage')
+  }
+
+  if (error) {
+    return (
+      <div className="relative w-full h-full flex flex-col items-center justify-center gap-3 bg-[var(--color-bg-page)]">
+        <span className="text-[15px] text-[var(--color-text-secondary)]">角色不存在或已下架</span>
+        <button
+          onClick={() => navigate('/character')}
+          className="h-[38px] px-5 rounded-full bg-[var(--color-glass-75)] border border-[var(--color-border-glass)] text-[14px] text-[var(--color-ink)]"
+        >
+          返回
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="relative w-full h-full overflow-y-auto bg-[var(--color-bg-page)]">
+      {/* ── Full-bleed cover ── */}
+      <div className="relative w-full h-[62vh] min-h-[380px] overflow-hidden">
+        <img src={cover} alt={profile?.display_name ?? ''} className="absolute inset-0 w-full h-full object-cover" />
+        {/* bottom fade into the sheet below */}
+        <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-[var(--color-bg-page)] via-[var(--color-bg-page)]/40 to-transparent" />
+
+        {/* back button (no share button, by design) */}
+        <div className="absolute left-0 top-0 z-10" style={{ height: 'var(--safe-top)' }} />
+        <button
+          onClick={() => navigate(-1)}
+          aria-label="返回"
+          className="absolute left-4 z-10 w-[38px] h-[38px] rounded-full bg-black/30 backdrop-blur-[8px] flex items-center justify-center active:scale-[0.95] transition-transform"
+          style={{ top: 'calc(var(--safe-top) + 8px)' }}
+        >
+          <svg width="12" height="20" viewBox="0 0 12 20" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="10,2 2,10 10,18" />
+          </svg>
+        </button>
+      </div>
+
+      {/* ── 关于TA ── */}
+      <div className="relative -mt-14 px-5 pb-4">
+        <h1 className="text-[26px] font-bold text-[var(--color-ink)] leading-tight">
+          {profile?.display_name ?? '　'}
+        </h1>
+        {profile?.creator_name && (
+          <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">by @{profile.creator_name}</p>
+        )}
+
+        {profile?.age_range && (
+          <span className="mt-2 inline-flex h-[24px] items-center rounded-full bg-[var(--color-glass-75)] border border-[var(--color-border-glass)] px-3 text-[12px] font-medium text-[var(--color-text-secondary)] tabular-nums">
+            {profile.age_range} 岁
+          </span>
+        )}
+
+        {profile?.tagline && (
+          <p className="mt-3 text-[15px] leading-relaxed text-[var(--color-text-secondary)]">{profile.tagline}</p>
+        )}
+
+        {profile && profile.tags.length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {profile.tags.map((t) => (
+              <span
+                key={t}
+                className="h-[26px] px-3 inline-flex items-center rounded-full bg-[var(--color-glass-75)] border border-[var(--color-border-glass)] text-[12px] text-[var(--color-text-secondary)]"
+              >
+                {t}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* intimacy + chat CTA */}
+        <div className="mt-5 flex items-center gap-3">
+          {chatted && (
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between text-[12px] text-[var(--color-text-secondary)]">
+                <span>
+                  {isColdWar(companion!.relationship_stage)
+                    ? '闹别扭'
+                    : stageWithIntimacy(companion!.relationship_stage, companion!.intimacy)}
+                </span>
+              </div>
+              <div className="mt-1.5 h-[6px] w-full rounded-full bg-[var(--color-glass-55)] overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-[var(--color-primary)]"
+                  style={{ width: `${intimacyPercent(companion!.intimacy)}%` }}
+                />
+              </div>
+            </div>
+          )}
+          <button
+            onClick={openChat}
+            className={`h-[48px] rounded-full text-white text-[16px] font-semibold shadow-[var(--shadow-soft)] active:scale-[0.97] transition-transform ${
+              chatted ? 'px-7' : 'flex-1'
+            }`}
+            style={{ background: 'linear-gradient(120deg, #FF7EB3 0%, #9F7AEA 100%)' }}
+          >
+            和Ta聊天
+          </button>
+        </div>
+      </div>
+
+      {/* ── 叙引 detail card ── */}
+      {profile && (profile.archetype_label || profile.one_liner || profile.intro || profile.personality.length > 0) && (
+        <div className="mx-4 mb-4 rounded-[22px] bg-[var(--color-glass-75)] border border-[var(--color-border-glass)] p-5">
+          <div className="flex items-center gap-2 text-[13px] font-medium text-[var(--color-primary)]">
+            <span className="inline-block w-[3px] h-[14px] rounded-full bg-[var(--color-primary)]" />
+            叙引
+          </div>
+
+          {profile.archetype_label && (
+            <span className="mt-3 inline-flex h-[24px] items-center rounded-full bg-[var(--color-primary)]/10 px-3 text-[12px] font-medium text-[var(--color-primary)]">
+              {profile.archetype_label}
+            </span>
+          )}
+
+          <h2 className="mt-3 text-[22px] font-bold text-[var(--color-ink)] leading-tight">
+            {profile.display_name}
+          </h2>
+
+          {profile.one_liner && (
+            <div className="mt-3 flex gap-3">
+              <span className="mt-1 shrink-0 w-[3px] self-stretch rounded-full bg-gradient-to-b from-[#FF7EB3] to-[#9F7AEA]" />
+              <p className="text-[16px] font-medium text-[var(--color-ink)] leading-relaxed">{profile.one_liner}</p>
+            </div>
+          )}
+
+          {profile.intro && (
+            <p className="mt-4 text-[14px] leading-relaxed text-[var(--color-text-secondary)] whitespace-pre-wrap">
+              {profile.intro}
+            </p>
+          )}
+
+          {profile.personality.length > 0 && (
+            <div className="mt-5 flex flex-col gap-3">
+              {profile.personality.map((axis) => (
+                <div key={axis.label}>
+                  <div className="flex items-center justify-between text-[13px] text-[var(--color-text-secondary)]">
+                    <span>{axis.label}</span>
+                    {axis.value != null && <span className="text-[var(--color-text-muted)]">{Math.round(axis.value * 100)}%</span>}
+                  </div>
+                  {axis.value != null && (
+                    <div className="mt-1 h-[6px] w-full rounded-full bg-[var(--color-glass-55)] overflow-hidden">
+                      <div className="h-full rounded-full bg-[var(--color-primary)]" style={{ width: `${Math.round(axis.value * 100)}%` }} />
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── secondary entry ── */}
+      <button
+        onClick={openBackstage}
+        className="mx-4 mb-6 w-[calc(100%-2rem)] h-[52px] rounded-[18px] bg-[var(--color-glass-55)] border border-[var(--color-border-glass)] flex items-center justify-between px-5 text-[15px] text-[var(--color-ink)] active:scale-[0.98] transition-transform"
+      >
+        <span>声音与陪伴设置</span>
+        <svg width="8" height="14" viewBox="0 0 8 14" fill="none" stroke="var(--color-text-muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="1,1 7,7 1,13" />
+        </svg>
+      </button>
+
+      <div style={{ height: 'var(--safe-bottom)' }} />
+    </div>
+  )
+}

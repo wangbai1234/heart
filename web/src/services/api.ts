@@ -390,6 +390,10 @@ export interface CompanionDTO {
   last_message_modality: 'text' | 'voice' | null
   unread_count: number
   has_proactive: boolean
+  /** Portrait cover for the discovery grid / chat background (short S3 proxy URL). */
+  cover_url?: string | null
+  /** Style/category tags (mirrors CharacterDTO.tags). */
+  tags?: string[]
   /** Wave 3: 剧情邀约. Present only when the user qualifies for a linked scenario hook. */
   available_story_hook?: StoryHookDTO | null
 }
@@ -448,10 +452,42 @@ export interface CharacterDTO {
   is_owner: boolean
   avatar_url?: string | null
   has_voice?: boolean
+  /** Portrait cover for the discovery grid / chat background (short S3 proxy URL). */
+  cover_url?: string | null
+  /** Style/category tags used by the discovery filter chips. */
+  tags?: string[]
 }
 
 export async function getCharacters(): Promise<{ characters: CharacterDTO[] }> {
   return request('/characters')
+}
+
+/**
+ * Public-facing character profile for the discovery / profile page
+ * (GET /api/characters/{id}/profile). Only public presentation fields — the
+ * backend deliberately never exposes internal persona (core_wound / core_fear …).
+ * Every field degrades to '' / [] so the UI renders purely by presence.
+ */
+export interface CharacterProfileDTO {
+  id: string
+  display_name: string
+  creator_name: string
+  avatar_url: string | null
+  cover_url: string | null
+  /** Age bracket the creator picked (e.g. "18-24"); null when unset. */
+  age_range?: string | null
+  tags: string[]
+  tagline: string
+  archetype_label: string
+  one_liner: string
+  intro: string
+  personality: Array<{ label: string; value: number | null }>
+  source: string
+  has_voice: boolean
+}
+
+export async function getCharacterProfile(id: string): Promise<CharacterProfileDTO> {
+  return request(`/characters/${encodeURIComponent(id)}/profile`)
 }
 
 // ── UGC Character CRUD ─────────────────────────────────────────────
@@ -460,10 +496,16 @@ export async function getCharacters(): Promise<{ characters: CharacterDTO[] }> {
 export interface CharacterDraftDTO {
   display_name: { zh?: string; ja?: string; en?: string }
   avatar_url?: string
+  /** Portrait cover (short S3 proxy URL from POST /api/characters/cover — never base64). */
+  cover_url?: string
+  /** Up to 10 role/category tags for the discovery filter. */
+  tags?: string[]
   persona: string
   greeting_style: 'warm' | 'cool' | 'playful' | 'reserved' | 'intense'
   speech_samples?: string[]
   gender?: 'male' | 'female'
+  /** Age bracket the creator picked (e.g. "18-24"); one of AGE_RANGES. */
+  age_range?: string
   sliders: {
     warmth: number
     talkativeness: number
@@ -487,6 +529,26 @@ export async function uploadCharacterAvatar(file: File): Promise<{ avatar_url: s
   })
   const data = await res.json().catch(() => null)
   if (!res.ok || !data) throw new Error(detailToMessage(data?.detail, `上传失败 (${res.status})`))
+  return data
+}
+
+/**
+ * Upload a character portrait cover. The file must already be a compressed WebP
+ * (see utils/imageCompress — 800px / q0.8); the backend is S3-only and rejects
+ * with 413 when storage is unavailable rather than inlining base64 into the DB.
+ */
+export async function uploadCharacterCover(file: File): Promise<{ cover_url: string }> {
+  const formData = new FormData()
+  formData.append('file', file)
+  const { accessToken } = (await import('../stores/authStore')).useAuthStore.getState()
+  if (!accessToken) throw new Error('未登录')
+  const res = await fetch('/api/characters/cover', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}` },
+    body: formData,
+  })
+  const data = await res.json().catch(() => null)
+  if (!res.ok || !data) throw new Error(detailToMessage(data?.detail, `封面上传失败 (${res.status})`))
   return data
 }
 

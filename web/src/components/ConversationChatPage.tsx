@@ -117,6 +117,10 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
   const pageBg = isDark
     ? '/assets/backgrounds/暗色聊天背景图.webp'
     : '/assets/backgrounds/聊天背景图.webp'
+  // Prefer the character's portrait cover as the chat backdrop; a dark scrim keeps
+  // the glass bubbles + text legible over an arbitrary photo. No cover → the
+  // static themed background above.
+  const coverBg = currentCharacter?.cover_url ?? null
 
   const currentCompanion = companions.find((c) => c.character_id === currentCharacterId)
 
@@ -592,7 +596,15 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
 
   return (
     <div className="relative w-full h-full flex flex-col overflow-hidden">
-      <img src={pageBg} alt="" className="absolute inset-0 w-full h-full object-cover z-0" />
+      {coverBg ? (
+        <>
+          <img src={coverBg} alt="" className="absolute inset-0 w-full h-full object-cover z-0" />
+          <div className={`absolute inset-0 z-0 ${isDark ? 'bg-black/60' : 'bg-black/25'}`} />
+          <div className="absolute inset-0 z-0 bg-gradient-to-b from-black/35 via-transparent to-black/45" />
+        </>
+      ) : (
+        <img src={pageBg} alt="" className="absolute inset-0 w-full h-full object-cover z-0" />
+      )}
 
       {/* Header */}
       <header

@@ -37,6 +37,9 @@ function CharacterCard({ char, onEdit, onVisibility, onDisable }: CharacterCardP
   const [visMenuOpen, setVisMenuOpen] = useState(false)
   const { resolvedTheme } = useThemeStore()
   const isDark = resolvedTheme === 'dark'
+  const showToast = useToast()
+  // 链接可见 / 公开 暂未开放：仅「私密」可切换（产品方向 2026-07-25）。
+  const LOCKED_VIS = new Set(['unlisted', 'public'])
 
   return (
     <div className={`relative backdrop-blur-[18px] rounded-[20px] shadow-[0_4px_16px_rgba(255,183,197,0.10)] overflow-visible ${menuOpen ? 'z-50' : ''} ${isDark ? 'bg-[var(--color-surface-card)] border border-[var(--color-border-subtle)]' : 'bg-[rgba(255,255,255,0.78)] border border-[rgba(255,255,255,0.65)]'}`}>
@@ -107,13 +110,18 @@ function CharacterCard({ char, onEdit, onVisibility, onDisable }: CharacterCardP
               <div className={`border-t border-[var(--color-divider)] ${isDark ? 'bg-[var(--color-surface)]' : 'bg-[rgba(255,248,243,0.95)]'}`}>
                 {(['private', 'unlisted', 'public'] as const).map((v) => {
                   const info = VIS_LABELS[v]
+                  const locked = LOCKED_VIS.has(v)
                   return (
                     <MenuButton
                       key={v}
                       label={info.label}
                       icon={<span className="w-5 h-5 inline-block rounded-full" style={{ background: info.bg, border: `1.5px solid ${info.color}` }} />}
-                      onClick={() => { setMenuOpen(false); setVisMenuOpen(false); onVisibility(v) }}
+                      onClick={() => {
+                        if (locked) { showToast('链接可见 / 公开暂未开放', 'info'); return }
+                        setMenuOpen(false); setVisMenuOpen(false); onVisibility(v)
+                      }}
                       active={char.visibility === v}
+                      disabled={locked}
                     />
                   )
                 })}
@@ -141,6 +149,7 @@ function MenuButton({
   danger,
   chevron,
   active,
+  disabled,
 }: {
   label: string
   icon: React.ReactNode
@@ -148,16 +157,20 @@ function MenuButton({
   danger?: boolean
   chevron?: boolean
   active?: boolean
+  disabled?: boolean
 }) {
   return (
     <button
       onClick={onClick}
-      className={`w-full flex items-center gap-3 px-4 py-3 text-[14px] font-medium active:bg-[rgba(255,183,197,0.12)] transition-colors ${
-        danger ? 'text-[var(--color-error)]' : 'text-[var(--color-ink)]'
-      }`}
+      className={`w-full flex items-center gap-3 px-4 py-3 text-[14px] font-medium transition-colors ${
+        disabled ? 'opacity-45' : 'active:bg-[rgba(255,183,197,0.12)]'
+      } ${danger ? 'text-[var(--color-error)]' : 'text-[var(--color-ink)]'}`}
     >
       <span className="w-5 flex-shrink-0">{icon}</span>
       <span className="flex-1 text-left">{label}</span>
+      {disabled && (
+        <span className="text-[10px] text-[var(--color-text-muted)] font-normal">暂未开放</span>
+      )}
       {active && (
         <svg width="12" height="9" viewBox="0 0 12 9" fill="none" stroke="var(--color-primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <polyline points="1,4.5 4.5,8 11,1" />
