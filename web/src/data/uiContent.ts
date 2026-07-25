@@ -159,6 +159,15 @@ const now = Date.now()
 
 export const HOME_ANNOUNCEMENTS: HomeAnnouncement[] = [
   {
+    id: 'notice-douyin-ban',
+    title: '抖音账号暂时被封禁，请加QQ群交流',
+    summary: '因为有用户举报，暂时抖音账号被封禁，新用户请进QQ群交流：460919879。',
+    content:
+      '因为有用户举报，暂时抖音账号被封禁。\n\n新用户请进 QQ 群交流：\n\n**460919879**\n\n我们会尽快处理并恢复，感谢大家的理解与支持！',
+    publishedAt: now,
+    tag: '重要',
+  },
+  {
     id: 'notice-0709',
     title: '自创角色功能上线，现在可以设计你的专属伴侣',
     summary: '在「设置 → 角色创作」或角色页点击「创建新角色」即可开始，填写名字、人设、性格即可生成。',
