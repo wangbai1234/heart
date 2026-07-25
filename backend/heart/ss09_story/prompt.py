@@ -13,15 +13,18 @@ parse miss).
 
 from __future__ import annotations
 
+import json
 import re
 from typing import Any, Optional
 
 from .models import Run, Scenario, StoryMessage
 
-# How many recent turns to replay verbatim into the context window. Older turns
-# are compressed into run.summary by maybe_summarize (PR5). Keep in sync with
-# the summariser's watermark cadence.
-RECENT_TURNS_WINDOW = 16
+# How many recent message rows to replay verbatim into the context window. Older
+# rows are compressed into run.summary + run.story_memory by maybe_summarize.
+# Keep in sync with the summariser's watermark cadence (SUMMARIZE_TRIGGER =
+# RECENT_TURNS_WINDOW * 2 in service.py). Raised 16→24 to widen verbatim recency
+# for multi-NPC scenes (durable per-NPC facts live in story_memory, not here).
+RECENT_TURNS_WINDOW = 24
 
 # Prompt-injection framing borrowed (marker convention only) from
 # ss05_composer: everything inside the notice is untrusted player content and
@@ -116,6 +119,102 @@ def _render_player_card(identity: dict[str, Any]) -> str:
     return "\n".join(lines) if lines else "（主控未填写详细档案。）"
 
 
+# ── structured 剧情记忆卡 (story memory card) ────────────────────────
+# Hard caps bound the prompt token cost as a run grows. The summariser is told
+# to honour them; parse_memory_update also enforces them defensively so a chatty
+# model can never blow up the GM context. Shared by writer (parse) and reader
+# (render) so both sides agree on the ceiling.
+_MEM_MAX_NPCS = 8  # at most this many NPC entries kept
+_MEM_MAX_FACTS = 6  # facts per NPC
+_MEM_MAX_LIST = 8  # player_facts / world_facts / open_threads each
+_MEM_SECTIONS = ("player_facts", "world_facts", "open_threads")
+_MEM_SECTION_LABELS = {
+    "player_facts": "主控相关",
+    "world_facts": "世界设定",
+    "open_threads": "未解悬念",
+}
+
+
+def _clean_str(value: Any) -> str:
+    """Coerce one memory value to a trimmed single-line string (never a repr).
+
+    None (a missing/omitted field) collapses to "" rather than the literal
+    "None" — otherwise an absent relationship/last_state would leak "None" into
+    the GM prompt and register as a non-empty section.
+    """
+    if value is None:
+        return ""
+    if isinstance(value, (list, tuple)):
+        return "、".join(_clean_str(v) for v in value if _clean_str(v))
+    return str(value).strip().replace("\n", " ")
+
+
+def _clean_str_list(value: Any, limit: int) -> list[str]:
+    """Coerce a value to a de-duped, capped list of non-empty short strings."""
+    if not isinstance(value, (list, tuple)):
+        value = [value]
+    out: list[str] = []
+    for item in value:
+        s = _clean_str(item)
+        if s and s not in out:
+            out.append(s)
+        if len(out) >= limit:
+            break
+    return out
+
+
+def _render_npc(name: str, entry: dict[str, Any]) -> Optional[str]:
+    """Render one NPC line, or None when it carries nothing useful."""
+    name = _clean_str(name)
+    if not name:
+        return None
+    parts = []
+    relationship = _clean_str(entry.get("relationship")) if isinstance(entry, dict) else ""
+    facts = _clean_str_list(entry.get("facts") if isinstance(entry, dict) else [], _MEM_MAX_FACTS)
+    last_state = _clean_str(entry.get("last_state")) if isinstance(entry, dict) else ""
+    if relationship:
+        parts.append(f"关系={relationship}")
+    if facts:
+        parts.append("关键=" + "、".join(facts))
+    if last_state:
+        parts.append(f"近况={last_state}")
+    if not parts:
+        return None
+    return f"  - {name}：" + "；".join(parts)
+
+
+def _render_story_memory(memory: dict[str, Any]) -> str:
+    """Render the structured memory card into a GM-readable block.
+
+    Returns "" when the card is empty / carries nothing (caller then omits the
+    whole 【角色记忆】 section). Purely presentational and fully defensive: any
+    off-shape value degrades to empty rather than raising.
+    """
+    if not isinstance(memory, dict) or not memory:
+        return ""
+    lines: list[str] = []
+
+    npcs = memory.get("npcs")
+    if isinstance(npcs, dict):
+        npc_lines = []
+        for name, entry in list(npcs.items())[:_MEM_MAX_NPCS]:
+            rendered = _render_npc(name, entry)
+            if rendered:
+                npc_lines.append(rendered)
+        if npc_lines:
+            lines.append("· 角色：")
+            lines.extend(npc_lines)
+
+    for key in _MEM_SECTIONS:
+        items = _clean_str_list(memory.get(key), _MEM_MAX_LIST)
+        if items:
+            lines.append(f"· {_MEM_SECTION_LABELS[key]}：" + "、".join(items))
+
+    if not lines:
+        return ""
+    return "【角色记忆 / 剧情档案】\n" + "\n".join(lines)
+
+
 def build_gm_system_prompt(scenario: Scenario, run: Run) -> str:
     """Compose the GM system message: role + raw scenario + player card + summary."""
     parts = [
@@ -133,6 +232,12 @@ def build_gm_system_prompt(scenario: Scenario, run: Run) -> str:
     summary = (run.summary or "").strip()
     if summary:
         parts.append("【前情提要】\n" + summary)
+    # Structured 剧情记忆卡: durable per-NPC / player / world / open-thread facts,
+    # always in context so NPC memory survives past the verbatim window. Omitted
+    # entirely when the card is empty (fresh run) or renders to nothing.
+    memory_block = _render_story_memory(getattr(run, "story_memory", {}) or {})
+    if memory_block:
+        parts.append(memory_block)
     parts.append(_FORMAT_GUIDE)
     return "\n\n".join(parts)
 
@@ -500,25 +605,143 @@ class StreamingBubbleParser:
         return self.emitted
 
 
-def build_summary_messages(
-    scenario: Scenario, prior_summary: str, turns: list[StoryMessage]
+_MEMORY_UPDATE_INSTRUCTION = (
+    "你是剧情记录员，负责维护一段互动剧情的「记忆」。请阅读【已有记忆】与【新增片段】，"
+    "输出一个 JSON 对象（且只输出 JSON，不要加解释、不要用代码块围栏），结构如下：\n"
+    "{\n"
+    '  "summary": "第三人称的前情提要，300 字以内，保留关键事件、人物关系变化、'
+    '主控的重要选择与未解悬念，省略寒暄与冗余描写",\n'
+    '  "memory": {\n'
+    '    "npcs": {"角色名": {"relationship": "与主控/彼此的关系", '
+    '"facts": ["关于该角色的持久事实，如身份、承诺、秘密"], "last_state": "该角色最近的处境"}},\n'
+    '    "player_facts": ["关于主控的持久事实"],\n'
+    '    "world_facts": ["世界/场景的持久设定"],\n'
+    '    "open_threads": ["尚未收尾的悬念/任务"]\n'
+    "  }\n"
+    "}\n"
+    "重要规则：\n"
+    "- 这是【增量合并】：以【已有记忆】为基础，更新已有角色的信息、补入新出现的角色、"
+    "保留仍然成立的持久事实；把已经收尾/失效的 open_threads 删掉。\n"
+    f"- 控制体量：npcs 最多 {_MEM_MAX_NPCS} 个（保留最重要的），每个角色 facts 最多 "
+    f"{_MEM_MAX_FACTS} 条；player_facts / world_facts / open_threads 各最多 "
+    f"{_MEM_MAX_LIST} 条；每条尽量短。\n"
+    "- 只记录跨回合仍重要的信息，不要逐句复述剧情。空的分节可省略或留空数组。"
+)
+
+
+def build_memory_update_messages(
+    scenario: Scenario,
+    prior_summary: str,
+    prior_memory: dict[str, Any],
+    turns: list[StoryMessage],
 ) -> list[dict[str, str]]:
-    """Messages for the rolling-summary compression call (used by PR5)."""
+    """Messages for the inline rolling memory-update call.
+
+    The cheap model returns a single JSON object carrying both the prose
+    ``summary`` and the structured ``memory`` card (see parse_memory_update). It
+    is an incremental merge over ``prior_memory`` so durable per-NPC facts
+    accumulate instead of being re-derived from a shrinking window each time.
+    """
     transcript_lines = []
     for m in turns:
         who = "主控" if m.role == "player" else (m.npc_name or "GM")
         transcript_lines.append(f"{who}：{m.content}")
     transcript = "\n".join(transcript_lines)
-    instruction = (
-        "你是剧情记录员。请把下面的剧情片段压缩成简洁的「前情提要」，"
-        "保留关键事件、人物关系变化、未解决的悬念与主控的重要选择，"
-        "省略寒暄与冗余描写。用第三人称、200 字以内中文输出，不要加评论。"
+    prior_memory_json = json.dumps(prior_memory or {}, ensure_ascii=False)
+    context = (
+        f"【已有前情提要】\n{prior_summary or '（无）'}\n\n"
+        f"【已有记忆】\n{prior_memory_json}\n\n"
+        f"【新增片段】\n{transcript}"
     )
-    context = f"已有前情提要：\n{prior_summary}\n\n新增片段：\n{transcript}"
     return [
-        {"role": "system", "content": instruction},
+        {"role": "system", "content": _MEMORY_UPDATE_INSTRUCTION},
         {"role": "user", "content": context},
     ]
+
+
+# Fenced ```json … ``` (or bare ``` … ```) wrappers a model may add despite the
+# "no code block" instruction; stripped before json.loads.
+_JSON_FENCE_RE = re.compile(r"^\s*```(?:json)?\s*(.*?)\s*```\s*$", re.DOTALL | re.IGNORECASE)
+
+
+def _sanitize_npc(entry: Any) -> dict[str, Any]:
+    """Coerce one NPC entry to the bounded {relationship?, facts?, last_state?}
+    shape, dropping empty fields. Returns {} when it carries nothing."""
+    if not isinstance(entry, dict):
+        return {}
+    npc: dict[str, Any] = {}
+    relationship = _clean_str(entry.get("relationship"))
+    facts = _clean_str_list(entry.get("facts"), _MEM_MAX_FACTS)
+    last_state = _clean_str(entry.get("last_state"))
+    if relationship:
+        npc["relationship"] = relationship
+    if facts:
+        npc["facts"] = facts
+    if last_state:
+        npc["last_state"] = last_state
+    return npc
+
+
+def _sanitize_npcs(raw: Any) -> dict[str, Any]:
+    """Sanitize the ``npcs`` sub-object: cap count, drop empty/off-shape entries."""
+    if not isinstance(raw, dict):
+        return {}
+    npcs_out: dict[str, Any] = {}
+    for name, entry in list(raw.items())[:_MEM_MAX_NPCS]:
+        name = _clean_str(name)
+        if not name:
+            continue
+        npc = _sanitize_npc(entry)
+        if npc:
+            npcs_out[name] = npc
+    return npcs_out
+
+
+def _sanitize_memory(raw: Any) -> dict[str, Any]:
+    """Coerce a model-provided memory object to the bounded, typed card shape.
+
+    Enforces the same caps the summariser is asked to honour, so a chatty or
+    off-shape response can never bloat or corrupt the stored card. Empty sections
+    are dropped, so an empty/garbage input yields {}.
+    """
+    if not isinstance(raw, dict):
+        return {}
+    out: dict[str, Any] = {}
+
+    npcs_out = _sanitize_npcs(raw.get("npcs"))
+    if npcs_out:
+        out["npcs"] = npcs_out
+
+    for key in _MEM_SECTIONS:
+        items = _clean_str_list(raw.get(key), _MEM_MAX_LIST)
+        if items:
+            out[key] = items
+
+    return out
+
+
+def parse_memory_update(raw: str) -> Optional[tuple[str, dict[str, Any]]]:
+    """Parse the memory-update model output into (summary, memory_card).
+
+    Robust to ```json fences and trailing prose. Returns None when the output
+    isn't usable as a JSON object, so the caller can fall back to treating the
+    whole text as a plain prose summary. Never raises.
+    """
+    if not raw or not raw.strip():
+        return None
+    text_body = raw.strip()
+    fenced = _JSON_FENCE_RE.match(text_body)
+    if fenced:
+        text_body = fenced.group(1).strip()
+    try:
+        obj = json.loads(text_body)
+    except (TypeError, ValueError):
+        return None
+    if not isinstance(obj, dict):
+        return None
+    summary = str(obj.get("summary") or "").strip()
+    memory = _sanitize_memory(obj.get("memory"))
+    return summary, memory
 
 
 def default_opening_kickoff() -> Optional[str]:

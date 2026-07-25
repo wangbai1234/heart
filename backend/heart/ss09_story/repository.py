@@ -231,6 +231,7 @@ def _run_from_row(row: Any) -> Run:
         model=row.model,
         created_at=row.created_at,
         last_activity_at=row.last_activity_at,
+        story_memory=_jsonb(row.story_memory),
     )
 
 
@@ -267,7 +268,7 @@ async def create_run(
                 (:user_id, :scenario_id, CAST(:identity AS JSONB), :title, :model)
             RETURNING id, user_id, scenario_id, player_identity_json, title,
                       summary, summary_watermark, turn_count, status, model,
-                      created_at, last_activity_at
+                      created_at, last_activity_at, story_memory
             """
         ),
         {
@@ -293,7 +294,7 @@ async def get_run(session: AsyncSession, run_id: UUID, user_id: UUID) -> Optiona
             """
             SELECT id, user_id, scenario_id, player_identity_json, title,
                    summary, summary_watermark, turn_count, status, model,
-                   created_at, last_activity_at
+                   created_at, last_activity_at, story_memory
             FROM story_runs
             WHERE id = :id AND user_id = :uid AND status != 'deleted'
             """
@@ -313,7 +314,7 @@ async def get_active_run_for_scenario(
             """
             SELECT id, user_id, scenario_id, player_identity_json, title,
                    summary, summary_watermark, turn_count, status, model,
-                   created_at, last_activity_at
+                   created_at, last_activity_at, story_memory
             FROM story_runs
             WHERE user_id = :uid AND scenario_id = :sid AND status = 'active'
             ORDER BY last_activity_at DESC
@@ -353,7 +354,7 @@ async def list_runs(session: AsyncSession, user_id: UUID) -> list[Run]:
             """
             SELECT id, user_id, scenario_id, player_identity_json, title,
                    summary, summary_watermark, turn_count, status, model,
-                   created_at, last_activity_at
+                   created_at, last_activity_at, story_memory
             FROM story_runs
             WHERE user_id = :uid AND status != 'deleted'
             ORDER BY (status = 'active') DESC, last_activity_at DESC
@@ -473,8 +474,9 @@ async def bump_run_activity(
     turns_delta: int = 0,
     summary: Optional[str] = None,
     summary_watermark: Optional[int] = None,
+    story_memory: Optional[dict[str, Any]] = None,
 ) -> None:
-    """Advance last_activity_at, optionally turn_count and summary state."""
+    """Advance last_activity_at, optionally turn_count and summary/memory state."""
     sets = ["last_activity_at = :now", "turn_count = turn_count + :turns_delta"]
     params: dict[str, Any] = {
         "id": str(run_id),
@@ -487,6 +489,9 @@ async def bump_run_activity(
     if summary_watermark is not None:
         sets.append("summary_watermark = :wm")
         params["wm"] = summary_watermark
+    if story_memory is not None:
+        sets.append("story_memory = CAST(:story_memory AS JSONB)")
+        params["story_memory"] = json.dumps(story_memory, ensure_ascii=False)
     await session.execute(
         text(f"UPDATE story_runs SET {', '.join(sets)} WHERE id = :id"),
         params,

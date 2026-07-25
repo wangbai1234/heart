@@ -444,12 +444,29 @@ class StoryService:
                 return
             new_watermark = to_fold[-1].seq
 
-            messages = gm_prompt.build_summary_messages(scenario, run.summary, to_fold)
-            new_summary = (
-                await self._router.call_cheap(messages, agent_name="story_summary")
-            ).strip()
-            if not new_summary:
+            messages = gm_prompt.build_memory_update_messages(
+                scenario, run.summary, run.story_memory, to_fold
+            )
+            raw = (await self._router.call_cheap(messages, agent_name="story_summary")).strip()
+            if not raw:
                 return
+
+            # The model returns a JSON object carrying both the prose summary and
+            # the structured memory card. If it doesn't (older/off-format output),
+            # degrade gracefully: keep the whole text as the prose summary and
+            # leave the memory card untouched — never lose the fold.
+            parsed = gm_prompt.parse_memory_update(raw)
+            if parsed is not None:
+                new_summary, new_memory = parsed
+                if not new_summary:
+                    new_summary = run.summary  # keep prior prose if model omitted it
+                # An empty card on top of a populated one is almost always a model
+                # miss, not genuine amnesia — skip the write so memory never
+                # regresses on a flaky fold (new_memory=None → column untouched).
+                if not new_memory and run.story_memory:
+                    new_memory = None
+            else:
+                new_summary, new_memory = raw, None
 
             async with self._session_factory() as session:
                 await repo.bump_run_activity(
@@ -457,6 +474,7 @@ class StoryService:
                     run_id,
                     summary=new_summary,
                     summary_watermark=new_watermark,
+                    story_memory=new_memory,
                 )
                 await session.commit()
             logger.info(
@@ -464,6 +482,8 @@ class StoryService:
                 run_id=str(run_id),
                 folded=len(to_fold),
                 watermark=new_watermark,
+                structured=parsed is not None,
+                npc_count=len((new_memory or {}).get("npcs", {})) if new_memory else 0,
             )
         except Exception:
             logger.exception("story_summarize_failed", run_id=str(run_id))
