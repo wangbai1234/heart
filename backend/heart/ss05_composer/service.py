@@ -802,12 +802,15 @@ class ComposerService:
             parts.append(f"\n【你的故事】\n{soul_spec.identity_narrative}")
 
         # ── Layer 1.5: Cognitive style (slider-derived speaking style) ──
+        # Thresholds use 0.55 / 0.45 mid-band so middle-range (default) slider
+        # values still produce descriptive text rather than silent no-ops.
         cs = getattr(soul_spec, "cognitive_style", None)
         if cs is not None:
             try:
                 style_parts: list[str] = []
                 expr = cs.expression
-                # sentence_length.baseline is a string enum: "very_short"/"short"/"medium"/"long"
+
+                # talkativeness → sentence_length enum
                 _sl_order: dict[str, int] = {"very_short": 0, "short": 1, "medium": 2, "long": 3}
                 sl_raw = (
                     expr.sentence_length.baseline
@@ -817,39 +820,70 @@ class ComposerService:
                 sl = _sl_order.get(sl_raw) if isinstance(sl_raw, str) else None
                 if sl is not None:
                     if sl <= 1:
-                        style_parts.append("说话简短，每次回复不超过两句")
+                        style_parts.append("说话简短克制，每次回复不超过两句")
                     elif sl >= 3:
                         style_parts.append("表达详细，喜欢展开说清楚")
+                    else:
+                        style_parts.append("说话适度，不冗长也不过分简短")
+
+                # warmth → emotional_directness
                 ed = (
                     expr.emotional_directness.baseline
                     if hasattr(expr.emotional_directness, "baseline")
                     else None
                 )
                 if isinstance(ed, (int, float)):
-                    if ed > 0.7:
+                    if ed >= 0.6:
                         style_parts.append("情感表达直接，不掩藏内心感受")
-                    elif ed < 0.3:
+                    elif ed <= 0.4:
                         style_parts.append("情感含蓄，不轻易流露真实心思")
+                    else:
+                        style_parts.append("情感表达自然，偶尔流露内心感受")
+
+                # directness → hedge_words (inverted)
                 hw = expr.hedge_words.baseline if hasattr(expr.hedge_words, "baseline") else None
                 if isinstance(hw, (int, float)):
-                    if hw < 0.25:
+                    if hw <= 0.4:
                         style_parts.append("说话直接，不绕弯子")
-                    elif hw > 0.65:
+                    elif hw >= 0.6:
                         style_parts.append("说话委婉，喜欢用「也许」「可能」「大概」等软化语气")
+                    else:
+                        style_parts.append("表达时不失含蓄，但关键时刻也能说清楚")
+
+                # playfulness → use_of_metaphor
                 uom = (
                     expr.use_of_metaphor.baseline
                     if hasattr(expr.use_of_metaphor, "baseline")
                     else None
                 )
-                if isinstance(uom, (int, float)) and uom > 0.65:
-                    style_parts.append("喜欢用比喻和意象来表达情感")
+                if isinstance(uom, (int, float)):
+                    if uom >= 0.55:
+                        style_parts.append("喜欢用比喻和意象来表达情感")
+                    elif uom <= 0.35:
+                        style_parts.append("表达方式朴实直接，少用修辞")
+
+                # humor → humor_profile.dryness (was completely ignored before this fix)
+                hp = getattr(cs, "humor_profile", None)
+                if hp is not None:
+                    dryness = getattr(hp, "dryness", 0.0)
+                    if isinstance(dryness, (int, float)):
+                        if dryness >= 0.3:
+                            style_parts.append("有幽默感，喜欢用轻松或自嘲的方式化解尴尬")
+                        elif dryness <= 0.14:
+                            style_parts.append("语气认真，不习惯开玩笑")
+
+                # steadiness → mood_volatility
                 mv = (
                     cs.emotional_inertia.mood_volatility
                     if hasattr(cs, "emotional_inertia")
                     else None
                 )
-                if isinstance(mv, (int, float)) and mv > 0.65:
-                    style_parts.append("情绪起伏明显，容易被细节触动")
+                if isinstance(mv, (int, float)):
+                    if mv >= 0.5:
+                        style_parts.append("情绪起伏明显，容易被细节触动")
+                    elif mv <= 0.25:
+                        style_parts.append("情绪稳定，不容易被外界影响")
+
                 if style_parts:
                     parts.append("\n【说话方式补充】\n" + "，".join(style_parts) + "。")
             except Exception:
