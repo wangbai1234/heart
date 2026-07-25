@@ -165,13 +165,24 @@ async def insert_message_audit(
     Unlike insert_message(), this does NOT enforce the per-character quota —
     callers (v2 path) have already enforced a per-user quota before calling.
     Caller owns the transaction.
+
+    Rows are written with ``delivered = true``: in the v2 path the message is
+    *actually* delivered inline via ``chat_messages`` (is_proactive=true), so
+    this row is a pure audit/dedup record — it must NOT be re-served by
+    ``fetch_pending`` (delivered=false). Writing it as pending was the root of
+    the "角色主动发消息发两条" duplicate: the frontend rendered it once from
+    chat history (chat_messages) and once again from the /pending injection.
+    The unread badge is unaffected — it counts chat_messages after last_read
+    (routes_companions.py), which already includes the proactive row.
     """
+    now = msg.created_at
     await session.execute(
         text(
             "INSERT INTO proactive_messages "
-            "(id, user_id, character_id, content, trigger_type, created_at, delivered) "
+            "(id, user_id, character_id, content, trigger_type, created_at, "
+            "delivered, delivered_at) "
             "VALUES (:id, :user_id, :character_id, :content, :trigger_type, "
-            ":created_at, false) "
+            ":created_at, true, :delivered_at) "
             "ON CONFLICT DO NOTHING"
         ),
         {
@@ -180,7 +191,8 @@ async def insert_message_audit(
             "character_id": msg.character_id,
             "content": msg.content,
             "trigger_type": msg.trigger_type,
-            "created_at": msg.created_at,
+            "created_at": now,
+            "delivered_at": now,
         },
     )
 
