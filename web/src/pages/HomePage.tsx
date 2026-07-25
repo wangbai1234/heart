@@ -18,8 +18,8 @@ export function HomePage() {
   const loading = false
   const [activeAnnouncement, setActiveAnnouncement] = useState<HomeAnnouncement | null>(null)
   const pageBg = resolvedTheme === 'dark'
-    ? '/assets/backgrounds/暗色聊天背景图.png'
-    : '/assets/backgrounds/聊天背景图.png'
+    ? '/assets/backgrounds/暗色聊天背景图.webp'
+    : '/assets/backgrounds/聊天背景图.webp'
   const heroBg = getHeroBanner(resolvedTheme)
   const latestAnnouncements = [...HOME_ANNOUNCEMENTS]
     .sort((left, right) => right.publishedAt - left.publishedAt)

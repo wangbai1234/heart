@@ -43,7 +43,7 @@ export function ScenarioCard({ scenario, onOpen }: ScenarioCardProps) {
         style={cover_url ? undefined : { background: genreGradient(genre) }}
       >
         {cover_url && (
-          <img src={cover_url} alt="" className="absolute inset-0 w-full h-full object-cover" />
+          <img src={cover_url} alt="" loading="lazy" decoding="async" className="absolute inset-0 w-full h-full object-cover" />
         )}
         {/* Genre chip */}
         <span className="absolute top-2 left-2 inline-flex h-[22px] items-center rounded-full bg-black/25 px-2 text-[11px] font-medium text-white backdrop-blur-[4px]">

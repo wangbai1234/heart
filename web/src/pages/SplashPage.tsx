@@ -48,7 +48,7 @@ export function SplashPage() {
   return (
     <div className="relative h-full w-full overflow-hidden bg-[#F5D0E0]">
       <img
-        src="/assets/backgrounds/加载页.png"
+        src="/assets/backgrounds/加载页.webp"
         alt="yuoyuo 加载页"
         className="absolute inset-0 h-full w-full object-cover"
       />

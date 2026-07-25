@@ -51,6 +51,41 @@ export default defineConfig({
               expiration: { maxEntries: 1, maxAgeSeconds: 60 },
             },
           },
+          {
+            // Story cover images (top priority). Cover bytes for a given slug do
+            // not change → CacheFirst so a refresh serves straight from the SW
+            // cache with zero network, eliminating the cross-border round-trip.
+            urlPattern: /\/api\/story\/covers\//,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'story-covers-cache',
+              expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 30 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+          {
+            // User / character avatars — content-addressed (UUID filename), so
+            // CacheFirst is safe and gives instant refreshes.
+            urlPattern: /\/api\/profile\/avatar-file\//,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'avatars-cache',
+              expiration: { maxEntries: 300, maxAgeSeconds: 60 * 60 * 24 * 30 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+          {
+            // Large full-screen background art. Kept out of precache (globIgnores)
+            // to avoid a ~17MB install, but cached at runtime so it loads once and
+            // then serves from cache on every subsequent page/refresh.
+            urlPattern: /\/assets\/backgrounds\/.*\.(?:webp|png)$/,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'backgrounds-cache',
+              expiration: { maxEntries: 40, maxAgeSeconds: 60 * 60 * 24 * 30 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
         ],
       },
     }),

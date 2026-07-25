@@ -4,19 +4,19 @@ import { useAppStore } from '../stores/appStore'
 
 const steps = [
   {
-    image: '/assets/backgrounds/引导页1背景图_ext.png',
+    image: '/assets/backgrounds/引导页1背景图_ext.webp',
     title: '我是yuoyuo，\n独属于你的虚拟宇宙。',
     description: '我会记得你说过的话，理解你的情绪。',
     objectPosition: 'center 12%',
   },
   {
-    image: '/assets/backgrounds/引导页2背景图_ext.png',
+    image: '/assets/backgrounds/引导页2背景图_ext.webp',
     title: '你的对话只属于你。',
     description: '数据加密存储，注销即记忆全部消散。',
     objectPosition: 'center 10%',
   },
   {
-    image: '/assets/backgrounds/引导页3背景图_ext.png',
+    image: '/assets/backgrounds/引导页3背景图_ext.webp',
     title: '在爱发电赞助即可解锁会员。',
     description: '支持微信/支付宝；赞助后领取兑换码，回到这里输入即可激活。',
     objectPosition: 'center 14%',

@@ -19,8 +19,8 @@ export function RedeemPage() {
   const [showHelp, setShowHelp] = useState(false)
 
   const bgImage = resolvedTheme === 'dark'
-    ? '/assets/backgrounds/暗色聊天背景图.png'
-    : '/assets/backgrounds/聊天背景图.png'
+    ? '/assets/backgrounds/暗色聊天背景图.webp'
+    : '/assets/backgrounds/聊天背景图.webp'
 
   const isCodeComplete = code.replace(/[^a-zA-Z0-9]/g, '').length === 12
 
@@ -82,7 +82,7 @@ export function RedeemPage() {
         {/* Hero Card */}
         <div className="bg-[var(--color-glass-75)] backdrop-blur-[20px] rounded-[24px] border border-[var(--color-border-glass)] shadow-[var(--shadow-hero)] p-6 mt-4 mb-5 text-center">
           <img
-            src="/assets/backgrounds/兑换页礼品盒.png"
+            src="/assets/backgrounds/兑换页礼品盒.webp"
             alt="礼品盒"
             className="w-[120px] h-[120px] object-contain mx-auto mb-4"
           />

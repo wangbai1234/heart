@@ -115,8 +115,8 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
   const avatarUrl = currentCharacter?.avatar_url
   const profile = resolveCharacterProfile(currentCharacterId, displayName, avatarUrl)
   const pageBg = isDark
-    ? '/assets/backgrounds/暗色聊天背景图.png'
-    : '/assets/backgrounds/聊天背景图.png'
+    ? '/assets/backgrounds/暗色聊天背景图.webp'
+    : '/assets/backgrounds/聊天背景图.webp'
 
   const currentCompanion = companions.find((c) => c.character_id === currentCharacterId)
 

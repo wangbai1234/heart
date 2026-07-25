@@ -37,8 +37,8 @@ export function ExplorePage() {
 
   const pageBg =
     resolvedTheme === 'dark'
-      ? '/assets/backgrounds/暗色聊天背景图.png'
-      : '/assets/backgrounds/聊天背景图.png'
+      ? '/assets/backgrounds/暗色聊天背景图.webp'
+      : '/assets/backgrounds/聊天背景图.webp'
 
   // 推荐区：显示热度最高的 4 个 featured 剧情，支持左右滑动
   const featuredTop4 = featuredScenarios.slice(0, 4)
@@ -91,6 +91,8 @@ export function ExplorePage() {
                         <img
                           src={scenario.cover_url}
                           alt=""
+                          loading="lazy"
+                          decoding="async"
                           className="absolute inset-0 w-full h-full object-cover"
                         />
                       )}

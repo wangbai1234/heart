@@ -54,8 +54,8 @@ export function ScenarioDetailPage() {
 
   const pageBg =
     resolvedTheme === 'dark'
-      ? '/assets/backgrounds/暗色聊天背景图.png'
-      : '/assets/backgrounds/聊天背景图.png'
+      ? '/assets/backgrounds/暗色聊天背景图.webp'
+      : '/assets/backgrounds/聊天背景图.webp'
 
   return (
     <div className="relative w-full h-full overflow-hidden">
@@ -84,6 +84,8 @@ export function ScenarioDetailPage() {
                 <img
                   src={scenario.cover_url}
                   alt=""
+                  fetchPriority="high"
+                  decoding="async"
                   className="absolute inset-0 w-full h-full object-cover"
                 />
               )}

@@ -345,7 +345,7 @@ async def test_reference_data_uri_reads_s3_handle_with_credentials(provider):
     not an anonymous GET — this is how UGC MiMo clones are staged."""
     with patch(
         "heart.infra.storage.get_s3_object",
-        new=AsyncMock(return_value=(b"\x00\x01\x02", "audio/mpeg")),
+        new=AsyncMock(return_value=(b"\x00\x01\x02", "audio/mpeg", "etag-abc")),
     ) as mock_get:
         uri = await provider._reference_data_uri("s3://voice-samples/char_x/abc.mp3")
 

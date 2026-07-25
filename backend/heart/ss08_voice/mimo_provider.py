@@ -324,7 +324,7 @@ class MiMoProvider:
                 # UGC MiMo clones are staged (see routes_voice._stage_audio_for_clone).
                 from heart.infra.storage import get_s3_object
 
-                data, ctype = await get_s3_object(handle[len("s3://") :])
+                data, ctype, _etag = await get_s3_object(handle[len("s3://") :])
                 mime = (ctype or "audio/wav").split(";")[0].strip()
                 if mime not in ("audio/mpeg", "audio/mp3", "audio/wav"):
                     mime = "audio/wav"

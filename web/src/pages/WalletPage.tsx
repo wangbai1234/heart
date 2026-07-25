@@ -17,8 +17,8 @@ export function WalletPage() {
   const [selected, setSelected] = useState<ShopItem | null>(null)
 
   const bgImage = resolvedTheme === 'dark'
-    ? '/assets/backgrounds/暗色聊天背景图.png'
-    : '/assets/backgrounds/聊天背景图.png'
+    ? '/assets/backgrounds/暗色聊天背景图.webp'
+    : '/assets/backgrounds/聊天背景图.webp'
 
   useEffect(() => {
     refreshBalance()

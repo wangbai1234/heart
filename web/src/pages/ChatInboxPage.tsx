@@ -116,8 +116,8 @@ export function ChatInboxPage() {
   }, [])
 
   const pageBg = resolvedTheme === 'dark'
-    ? '/assets/backgrounds/暗色聊天背景图.png'
-    : '/assets/backgrounds/聊天背景图.png'
+    ? '/assets/backgrounds/暗色聊天背景图.webp'
+    : '/assets/backgrounds/聊天背景图.webp'
 
   // Catalog: server list when loaded, built-in profiles as fallback.
   const catalog: Array<{ id: string; displayName?: string; avatarUrl?: string | null; isOwner: boolean }> =

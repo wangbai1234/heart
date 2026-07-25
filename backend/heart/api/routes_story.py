@@ -335,18 +335,38 @@ async def delete_run(
 
 
 @router.get("/covers/{slug}")
-async def get_scenario_cover(slug: str) -> Response:
+async def get_scenario_cover(slug: str, request: Request) -> Response:
     """Proxy scenario cover image from S3/MinIO storage.
 
     Used when S3_PUBLIC_BASE_URL is not configured (internal MinIO).
     cover_url in DB is stored as /api/story/covers/{slug}.
+
+    Covers are not replaced/regenerated in place, so we cache them immutably:
+    long-lived Cache-Control + ETag let browsers/Service Worker serve refreshes
+    from cache with zero requests (the main "slow on every refresh" fix). A
+    matching If-None-Match short-circuits to 304 via a cheap head_object.
+
+    NOTE: if a cover is ever re-uploaded for the same slug (upload_scenario_covers
+    --force), the URL is unchanged so cached clients keep the old image — version
+    the cover_url (e.g. ?v=<hash>) at that point to bust the cache.
     """
-    from heart.infra.storage import get_s3_object
+    from heart.infra.storage import get_s3_object, head_s3_object
 
     key = f"scenario_covers/{slug}.png"
+    cache_headers = {"Cache-Control": "public, max-age=31536000, immutable"}
+
     try:
-        data, content_type = await get_s3_object(key)
-        return Response(content=data, media_type=content_type or "image/png")
+        inm = request.headers.get("if-none-match")
+        if inm:
+            etag, _ctype = await head_s3_object(key)
+            if inm.strip('"') == etag:
+                return Response(status_code=304, headers={"ETag": f'"{etag}"', **cache_headers})
+        data, content_type, etag = await get_s3_object(key)
+        return Response(
+            content=data,
+            media_type=content_type or "image/png",
+            headers={"ETag": f'"{etag}"', **cache_headers},
+        )
     except Exception as exc:
         logger.warning("cover_proxy_fetch_failed", slug=slug, error=str(exc))
         raise HTTPException(status_code=404, detail="cover_not_found") from exc
