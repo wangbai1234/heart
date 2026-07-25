@@ -6,6 +6,7 @@ import { useStoryWebSocket } from '../hooks/useStoryWebSocket'
 import { NavigationBar } from '../components/ui/NavigationBar'
 import { Skeleton } from '../components/ui/Skeleton'
 import { ErrorState } from '../components/ui/ErrorState'
+import { splitGmText } from '../utils/storyBubbles'
 
 /**
  * Turn-based story player (/story/:runId).
@@ -67,6 +68,24 @@ export function StoryPlayerPage() {
   const showSkeleton = runLoading && !messages
   const showError = runError && !messages
 
+  // Live-parse the in-flight stream into the SAME bubble structure the server
+  // will commit, so correct 旁白/对话/action bubbles render during generation and
+  // the final message_bubble frames land seamlessly (no grey-text-then-flash).
+  const liveGroups =
+    generating && streamText
+      ? groupMessages(
+          splitGmText(streamText).map((b, i) => ({
+            id: `live-${i}`,
+            turnId: null,
+            seq: Number.MAX_SAFE_INTEGER,
+            role: (b.kind === 'dialogue' ? 'npc' : 'gm') as StoryMessageVM['role'],
+            kind: b.kind,
+            npcName: b.npcName,
+            content: b.content,
+          })),
+        )
+      : []
+
   return (
     <div className="relative w-full h-full overflow-hidden flex flex-col">
       <img src={pageBg} alt="" className="absolute inset-0 w-full h-full object-cover z-0" />
@@ -96,18 +115,13 @@ export function StoryPlayerPage() {
             {groupMessages(messages ?? []).map((group, idx) => (
               <MessageGroup key={group.id || idx} group={group} />
             ))}
-            {/* 流式输出：生成中实时显示累积的原始文本（打字机效果）。
-                收到第一条 message_bubble 后，streamText 被置空、换成结构化气泡。 */}
-            {generating && streamText ? (
-              <div className="w-full flex justify-center">
-                <p className="max-w-[88%] text-center text-[14px] leading-[1.75] text-[var(--color-text-secondary)] whitespace-pre-wrap">
-                  {streamText}
-                  <span className="inline-block w-[2px] h-[1em] ml-0.5 -mb-[2px] bg-[var(--color-text-muted)] animate-pulse" />
-                </p>
-              </div>
-            ) : (
-              generating && <TypingDots />
-            )}
+            {/* 流式输出：生成中把累积文本实时切成结构化气泡（与服务端最终提交的
+                结构一致），收到 message_bubble 后无缝替换，不再出现灰色小字后整体刷新。 */}
+            {liveGroups.length > 0
+              ? liveGroups.map((group, idx) => (
+                  <MessageGroup key={`live-${group.id || idx}`} group={group} />
+                ))
+              : generating && <TypingDots />}
           </div>
         )}
       </div>

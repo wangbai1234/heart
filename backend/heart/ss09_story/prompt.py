@@ -177,6 +177,58 @@ _QUOTED_DIALOGUE_RE = re.compile(
 # A narration prefix.
 _NARRATION_PREFIX_RE = re.compile(r"^\s*【旁白】\s*(?P<rest>.*)$", re.DOTALL)
 
+# ── Off-contract markup normalisation ───────────────────────────────
+# Despite the global _FORMAT_GUIDE, some scenario packs still nudge the model
+# into markup that ISN'T the 【旁白】/**角色名**/（动作）contract: LaTeX \colorbox
+# speech bubbles, ```text``` 心理活动 code fences, 【弹幕】 blocks, horizontal
+# rules. Rendering that raw into a bubble is exactly the "格式混乱" symptom. We
+# normalise it back to the plain contract BEFORE splitting so every scenario
+# classifies cleanly — the parser, not 46 hand-edited scripts, is the guarantee.
+_LATEX_TEXT_RE = re.compile(r"\\text\{([^{}]*)\}")
+_LATEX_TEXTCOLOR_RE = re.compile(r"\\textcolor\{[^{}]*\}\{([^{}]*)\}")
+_LATEX_COLORBOX_RE = re.compile(r"\\colorbox\{[^{}]*\}\{([^{}]*)\}")
+_LATEX_DELIM_RE = re.compile(r"\\[()\[\]]")
+_CODE_FENCE_LINE_RE = re.compile(r"^[ \t　]*```[^\n]*$", re.MULTILINE)
+_DANMU_PREFIX_RE = re.compile(r"^([ \t　]*)【弹幕】[ \t　]*", re.MULTILINE)
+_HR_LINE_RE = re.compile(r"^[ \t　]*[-—*=＝─]{3,}[ \t　]*$", re.MULTILINE)
+
+
+def _preclean_gm_text(text: str) -> str:
+    """Normalise known off-contract markup into the plain bubble contract.
+
+    Lossless for compliant output (no colorbox / code fence / 弹幕 / HR → returns
+    the text unchanged). Never raises. Applied by split_gm_text before line
+    classification; the frontend live-parser mirrors this exactly so streaming,
+    the opening turn, and a reload all render identically.
+    """
+    if not text:
+        return text
+    out = text
+    # 1. Unwrap LaTeX \colorbox speech bubbles → curly-quoted dialogue. Inner-out
+    #    so \colorbox{c}{\textcolor{c}{\text{X}}} collapses to “X”, which the
+    #    quoted-dialogue rule then classifies as a (nameless) dialogue bubble.
+    out = _LATEX_TEXT_RE.sub(r"\1", out)
+    for _ in range(3):
+        new = _LATEX_TEXTCOLOR_RE.sub(r"\1", out)
+        if new == out:
+            break
+        out = new
+    for _ in range(3):
+        new = _LATEX_COLORBOX_RE.sub(r"“\1”", out)
+        if new == out:
+            break
+        out = new
+    out = _LATEX_DELIM_RE.sub("", out)
+    # 2. Drop markdown code-fence lines (```text 心理活动 wrappers); the inner
+    #    prose lines survive and fold into narration.
+    out = _CODE_FENCE_LINE_RE.sub("", out)
+    # 3. Strip a leading 【弹幕】 marker, keeping its text as narration. Anchored
+    #    to the bracket marker so plain "弹幕" in story prose is never touched.
+    out = _DANMU_PREFIX_RE.sub(r"\1", out)
+    # 4. Drop pure horizontal-rule separator lines (---, ———, ***).
+    out = _HR_LINE_RE.sub("", out)
+    return out
+
 
 class Bubble(dict):
     """A single rendered bubble: {kind, npc_name?, content}."""
@@ -271,7 +323,7 @@ def split_gm_text(text: str) -> list[dict[str, Any]]:
     "content": str}``. Degrades to a single narration bubble when no structure is
     recognised so a run never crashes on a parse miss.
     """
-    raw = (text or "").strip()
+    raw = _preclean_gm_text(text or "").strip()
     if not raw:
         return []
 
