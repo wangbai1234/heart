@@ -55,7 +55,8 @@ _FORMAT_GUIDE = (
     "你必须严格按照以下三种格式输出，禁止使用其他格式（如 LaTeX colorbox、markdown 代码块、弹幕等）：\n"
     "1. 旁白（场景/环境/心理描写）：用「【旁白】」开头，或直接写叙述文字。\n"
     "   示例：【旁白】夜色渐深，月光洒在庭院的石板上。\n"
-    "2. 对话（NPC 台词）：用「**角色名**」单独起行，后跟其台词内容（不要加双引号）。\n"
+    "2. 对话（NPC 台词）：在同一行内先写「**角色名**」，紧跟一个空格再写台词，"
+    "禁止把角色名单独放一行、台词另起一行（不要加双引号）。\n"
     "   示例：**李明** 你来了。\n"
     "3. 动作提示：用中文全角括号（）包裹，可单独成行或穿插在旁白中。\n"
     "   示例：（他缓缓走近）\n"
@@ -316,59 +317,133 @@ def _classify_structured_line(stripped: str) -> Optional[list[dict[str, Any]]]:
     return bubbles if has_structured else None
 
 
+def _is_bare_speaker(structured: Optional[list[dict[str, Any]]]) -> bool:
+    """A lone ``**角色名**`` line: one named dialogue bubble with empty 台词.
+
+    The model — nudged by rule 2's old 「单独起行」wording — sometimes puts the
+    speaker name on its own line and the台词 on the next. Emitting that split
+    immediately produces an empty dialogue bubble (空气泡) and orphans the台词 into
+    centered narration. ``split_gm_text`` intercepts this shape and holds the name
+    as a *pending speaker*, attaching the next prose line as its台词 instead.
+    """
+    return (
+        structured is not None
+        and len(structured) == 1
+        and structured[0].get("kind") == "dialogue"
+        and bool(structured[0].get("npc_name"))
+        and not (structured[0].get("content") or "").strip()
+    )
+
+
+class _GmSplitState:
+    """Mutable accumulator for ``split_gm_text``'s per-line state machine.
+
+    Extracted from ``split_gm_text`` so the pending-speaker branching lives here
+    and the public function stays a thin driver (keeps both under ruff's C901).
+    """
+
+    def __init__(self) -> None:
+        self.bubbles: list[dict[str, Any]] = []
+        # Buffer consecutive prose lines into one narration bubble.
+        self.narration_buf: list[str] = []
+        self.pending_speaker: Optional[str] = None  # a bare **name** awaiting its台词
+        self.saw_bare_speaker = False  # guards split_gm_text's degradation fallback
+
+    def flush_narration(self) -> None:
+        if self.narration_buf:
+            content = "\n".join(self.narration_buf).strip()
+            if content:
+                self.bubbles.append({"kind": "narration", "npc_name": None, "content": content})
+            self.narration_buf.clear()
+
+    def feed(self, stripped: str) -> None:
+        """Process one already-stripped line, advancing the state machine."""
+        if not stripped:
+            # Blank line: while a speaker is pending, keep waiting for its台词
+            # (blanks between name and line survive); else it's a paragraph break.
+            if self.pending_speaker is None:
+                self.narration_buf.append("")  # flush strips leading/empties
+            return
+
+        structured = _classify_structured_line(stripped)
+
+        # Bare **角色名** (empty台词) → hold as pending speaker, emit nothing yet.
+        # A prior pending speaker (if any) is overwritten here, i.e. dropped.
+        if _is_bare_speaker(structured):
+            self.flush_narration()
+            self.pending_speaker = structured[0]["npc_name"]  # type: ignore[index]
+            self.saw_bare_speaker = True
+            return
+
+        # Any other structured line (action / quoted / **name**+台词 / mixed).
+        if structured is not None:
+            self.pending_speaker = None  # next line is structured → drop pending speaker
+            self.flush_narration()
+            self.bubbles.extend(structured)
+            return
+
+        # Prose. An explicit 【旁白】 prefix is narration (and drops any pending speaker).
+        narr_m = _NARRATION_PREFIX_RE.match(stripped)
+        if narr_m is not None:
+            self.pending_speaker = None
+            content = narr_m.group("rest").strip()
+            if content:
+                self.narration_buf.append(content)
+            return
+
+        # Unmarked prose. If a speaker is pending, this is its台词 → dialogue bubble.
+        if self.pending_speaker is not None:
+            self.bubbles.append(
+                {"kind": "dialogue", "npc_name": self.pending_speaker, "content": stripped}
+            )
+            self.pending_speaker = None  # attach exactly the first prose line, then clear
+            return
+        self.narration_buf.append(stripped)
+
+
 def split_gm_text(text: str) -> list[dict[str, Any]]:
     """Split a GM response into ordered bubbles.
 
     Returns a list of ``{"kind": narration|dialogue|action, "npc_name": str|None,
     "content": str}``. Degrades to a single narration bubble when no structure is
     recognised so a run never crashes on a parse miss.
+
+    Pending-speaker rule: a bare ``**角色名**`` line (empty台词) is NOT emitted as an
+    empty dialogue bubble. It is held as a pending speaker; the next non-blank prose
+    line becomes that speaker's台词. If a structured line, an explicit 【旁白】, or
+    end-of-text arrives first, the pending speaker is dropped (never an empty bubble).
+    The frontend port (web/src/utils/storyBubbles.ts :: splitGmText) MUST stay
+    behaviourally identical — the same test vectors assert both sides.
     """
     raw = _preclean_gm_text(text or "").strip()
     if not raw:
         return []
 
-    bubbles: list[dict[str, Any]] = []
-    # Buffer consecutive prose lines into one narration bubble.
-    narration_buf: list[str] = []
-
-    def flush_narration() -> None:
-        if narration_buf:
-            content = "\n".join(narration_buf).strip()
-            if content:
-                bubbles.append({"kind": "narration", "npc_name": None, "content": content})
-            narration_buf.clear()
-
+    state = _GmSplitState()
     for line in raw.splitlines():
-        stripped = line.strip()
-        if not stripped:
-            narration_buf.append("")  # paragraph break; flush strips leading/empties
-            continue
+        state.feed(line.strip())
+    state.flush_narration()
+    # A speaker still pending at end-of-text had no台词 → dropped (emit nothing).
 
-        structured = _classify_structured_line(stripped)
-        if structured is not None:
-            flush_narration()
-            bubbles.extend(structured)  # Now returns a list
-            continue
-
-        # Prose: strip an optional 【旁白】 prefix, then buffer.
-        narr_m = _NARRATION_PREFIX_RE.match(stripped)
-        content = narr_m.group("rest").strip() if narr_m else stripped
-        if content:
-            narration_buf.append(content)
-
-    flush_narration()
-
-    # Graceful degradation: nothing recognised → single narration bubble.
-    if not bubbles:
+    # Graceful degradation: nothing recognised → single narration bubble. Guarded by
+    # saw_bare_speaker so a lone dropped **name** never resurfaces as raw narration.
+    if not state.bubbles and not state.saw_bare_speaker:
         return [{"kind": "narration", "npc_name": None, "content": raw}]
-    return bubbles
+    return state.bubbles
 
 
 class StreamingBubbleParser:
     """Incremental parser for streaming GM text into bubbles.
 
     Detects complete lines and emits bubbles as they arrive, maintaining a buffer
-    for incomplete lines. Used by service.py to provide real-time bubble streaming.
+    for incomplete lines.
+
+    NOT ON ANY LIVE OR PERSIST PATH: the streaming turn (service.py) and the
+    opening turn both segment via ``split_gm_text`` on the full accumulated text,
+    and the frontend live-parses via ``storyBubbles.ts``. This class is currently
+    unreferenced. It therefore does NOT carry the pending-speaker fix in
+    ``split_gm_text`` and would still emit an empty bubble for a bare ``**角色名**``
+    line; do not re-wire it into the live path without porting that logic first.
     """
 
     def __init__(self) -> None:

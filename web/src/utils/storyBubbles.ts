@@ -12,6 +12,15 @@
  *
  * This MUST stay behaviourally in sync with the Python source: streaming, the
  * opening turn, and a reload all render from the same contract.
+ *
+ * Pending-speaker rule (matches backend split_gm_text): a lone `**角色名**` line
+ * with no 台词 does NOT emit an empty dialogue bubble — it is held as a pending
+ * speaker and the next plain-prose line becomes that speaker's 台词. If the next
+ * line is structured / 【旁白】 / end-of-text, the pending speaker is dropped
+ * silently (never an empty oval). Live-stream transient: while streamText is
+ * just `**贺听澜**` (or `**贺听澜**\n`) this returns `[]`, so the caller shows
+ * TypingDots instead of an empty bubble; once the 台词 streams in it fills a
+ * proper dialogue bubble with no visible jump.
  */
 
 export type StoryBubbleKind = 'narration' | 'dialogue' | 'action'
@@ -116,6 +125,17 @@ function classifyStructuredLine(stripped: string): ParsedBubble[] | null {
   return hasStructured ? bubbles : null
 }
 
+/** A lone `**角色名**` line: one named dialogue bubble with empty 台词. */
+function isBareSpeaker(structured: ParsedBubble[] | null): boolean {
+  return (
+    structured !== null &&
+    structured.length === 1 &&
+    structured[0].kind === 'dialogue' &&
+    !!structured[0].npcName &&
+    structured[0].content.trim() === ''
+  )
+}
+
 /** Split a GM response into ordered bubbles. Degrades to a single narration
  *  bubble when no structure is recognised (never returns raw markup). */
 export function splitGmText(text: string): ParsedBubble[] {
@@ -124,6 +144,8 @@ export function splitGmText(text: string): ParsedBubble[] {
 
   const bubbles: ParsedBubble[] = []
   let narrationBuf: string[] = []
+  let pendingSpeaker: string | null = null
+  let sawBareSpeaker = false
 
   const flushNarration = () => {
     const content = narrationBuf.join('\n').trim()
@@ -134,21 +156,47 @@ export function splitGmText(text: string): ParsedBubble[] {
   for (const line of raw.split('\n')) {
     const stripped = line.trim()
     if (!stripped) {
+      // Blank lines survive between a pending speaker and its 台词.
+      if (pendingSpeaker !== null) continue
       narrationBuf.push('')
       continue
     }
     const structured = classifyStructuredLine(stripped)
+    if (isBareSpeaker(structured)) {
+      // A prior pending speaker with no 台词 → drop it silently, not an empty bubble.
+      pendingSpeaker = null
+      flushNarration()
+      pendingSpeaker = structured![0].npcName
+      sawBareSpeaker = true
+      continue
+    }
     if (structured !== null) {
+      pendingSpeaker = null
       flushNarration()
       bubbles.push(...structured)
       continue
     }
     const narrMatch = NARRATION_PREFIX_RE.exec(stripped)
-    const content = narrMatch ? narrMatch[1].trim() : stripped
-    if (content) narrationBuf.push(content)
+    if (narrMatch !== null) {
+      pendingSpeaker = null
+      const content = narrMatch[1].trim()
+      if (content) narrationBuf.push(content)
+      continue
+    }
+    // Unmarked prose: attach EXACTLY the first plain line to a pending speaker.
+    if (pendingSpeaker !== null) {
+      bubbles.push({ kind: 'dialogue', npcName: pendingSpeaker, content: stripped })
+      pendingSpeaker = null
+      continue
+    }
+    narrationBuf.push(stripped)
   }
   flushNarration()
 
-  if (bubbles.length === 0) return [{ kind: 'narration', npcName: null, content: raw }]
+  // Pending speaker still set at EOF → dropped (emit nothing). Guard the
+  // degradation fallback so a lone `**name**` never resurfaces as narration.
+  if (bubbles.length === 0 && !sawBareSpeaker) {
+    return [{ kind: 'narration', npcName: null, content: raw }]
+  }
   return bubbles
 }

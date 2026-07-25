@@ -118,6 +118,60 @@ def test_split_empty_returns_empty():
     assert split_gm_text("   \n  ") == []
 
 
+# ── pending-speaker: bare `**角色名**` line + 台词 on the next line ────
+# Regression for the empty-oval bug: the model sometimes splits name and 台词
+# across two lines. The bare speaker must NOT emit an empty dialogue bubble; the
+# following prose line becomes that speaker's 台词.
+
+
+def test_split_bare_speaker_attaches_next_line_as_dialogue():
+    out = split_gm_text("**贺听澜**\n贺家不缺摆件，缺的是能扛事的人。")
+    assert len(out) == 1
+    assert out[0]["kind"] == "dialogue"
+    assert out[0]["npc_name"] == "贺听澜"
+    assert out[0]["content"] == "贺家不缺摆件，缺的是能扛事的人。"
+    # No empty-content bubble slipped through.
+    assert all((b.get("content") or "").strip() for b in out)
+
+
+def test_split_bare_speaker_at_eof_drops_silently():
+    # A lone `**name**` with nothing after it → no bubble at all (no empty oval).
+    assert split_gm_text("**贺听澜**") == []
+
+
+def test_split_bare_speaker_dropped_when_followed_by_narration():
+    out = split_gm_text("**贺听澜**\n【旁白】夜色渐深。")
+    assert len(out) == 1
+    assert out[0]["kind"] == "narration"
+    assert out[0]["npc_name"] is None
+    assert "夜色渐深" in out[0]["content"]
+
+
+def test_split_same_line_speaker_still_works():
+    # Same-line `**name** 台词` is the happy path and must be unchanged.
+    out = split_gm_text("**贺听澜** 你来了。")
+    assert len(out) == 1
+    assert out[0]["kind"] == "dialogue"
+    assert out[0]["npc_name"] == "贺听澜"
+    assert out[0]["content"] == "你来了。"
+
+
+def test_split_bare_speaker_blank_line_before_dialogue_survives():
+    out = split_gm_text("**贺听澜**\n\n贺家不缺摆件。")
+    assert len(out) == 1
+    assert out[0]["kind"] == "dialogue"
+    assert out[0]["npc_name"] == "贺听澜"
+    assert out[0]["content"] == "贺家不缺摆件。"
+
+
+def test_split_consecutive_bare_speakers_first_dropped():
+    out = split_gm_text("**甲**\n**乙** 台词")
+    assert len(out) == 1
+    assert out[0]["kind"] == "dialogue"
+    assert out[0]["npc_name"] == "乙"
+    assert out[0]["content"] == "台词"
+
+
 # ── off-contract markup normalisation (pre-clean) ───────────────────
 
 
