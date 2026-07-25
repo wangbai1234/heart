@@ -87,6 +87,27 @@ async def start_workers() -> None:  # noqa: C901 — pre-existing complexity, tr
     except Exception as e:
         logger.error("memory_consolidator_worker_start_failed", error=str(e))
 
+    # Start consolidation scheduler — enqueues the pending consolidation_jobs that
+    # ConsolidationWorker polls. Without it the consolidator's batch decay + L3→L4
+    # promotion never fire (nothing else inserts a pending job). Gated separately
+    # so ops can disable it without redeploy if episode-summarization cost spikes.
+    if os.getenv("HEART_CONSOLIDATION_SCHEDULER_ENABLED", "true").lower() == "true":
+        try:
+            from heart.workers.consolidation_scheduler import run_consolidation_scheduler_loop
+
+            factory = _get_session_factory()
+            stop_event = asyncio.Event()
+            _worker_stop_events.append(stop_event)
+
+            task = asyncio.create_task(
+                run_consolidation_scheduler_loop(factory, stop_event),
+                name="consolidation_scheduler",
+            )
+            _worker_tasks.append(task)
+            logger.info("consolidation_scheduler_registered")
+        except Exception as e:
+            logger.error("consolidation_scheduler_start_failed", error=str(e))
+
     # Start memory promoter worker (L3 → L4 identity fact promotion)
     try:
         import redis.asyncio as aioredis
