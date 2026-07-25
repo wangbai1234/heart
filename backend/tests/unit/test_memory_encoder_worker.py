@@ -976,3 +976,125 @@ class TestChineseEmbeddingText:
         assert embedded_texts[0] == expected
         assert "养了宠物" in embedded_texts[0]
         assert existing_fact.semantic_vector == [0.2] * 1024
+
+
+# ============================================================
+# L4 Promotion Counter Tests (identity memory regression)
+# ============================================================
+
+
+class TestL4PromotionCounters:
+    """The L4 promoter gates on mention_count (P5 ≥ K1=3) and confidence_ewma
+    (P6 ≥ K2=0.8). The encoder must maintain BOTH so facts can be promoted to
+    identity memory — before this fix it bumped only confirmation_count/
+    confidence, leaving mention_count frozen at 1 and confidence_ewma at the
+    0.5 column default, so identity_memories stayed permanently empty in prod.
+    """
+
+    @pytest.mark.asyncio
+    async def test_reinforce_increments_mention_count_and_rolls_ewma(
+        self, mock_db_session, sample_encoding_event, valid_extraction_output
+    ):
+        existing_fact = FactNode(
+            id=uuid4(),
+            user_id=sample_encoding_event.user_id,
+            character_id=sample_encoding_event.character_id,
+            predicate="has_pet",
+            subject="user",
+            object="猫",
+            literal_text="user has_pet 猫",
+            raw_evidence="之前说的",
+            source_turn_ids=[uuid4()],
+            confidence=0.8,
+            confidence_ewma=0.6,
+            mention_count=2,
+            emotional_charge=0.0,
+            importance=0.5,
+            state="active",
+            confirmation_count=1,
+            last_confirmed_at=datetime.now(timezone.utc),
+            semantic_vector=[0.0] * 1024,
+        )
+        mock_result_1 = MagicMock()
+        mock_result_1.scalar_one_or_none = MagicMock(return_value=existing_fact)
+        mock_result_2 = MagicMock()
+        mock_result_2.scalar_one_or_none = MagicMock(return_value=None)
+        mock_db_session.execute = AsyncMock(side_effect=[mock_result_1, mock_result_2])
+
+        with patch("heart.api.wiring.get_embedding_service", return_value=None):
+            await write_facts_to_l3(
+                mock_db_session, sample_encoding_event, valid_extraction_output
+            )
+
+        # First fact (has_pet, confidence 0.95) reinforces the existing row.
+        # mention_count 2 → 3 crosses the K1=3 promotion gate.
+        assert existing_fact.mention_count == 3
+        # EWMA rolls: 0.7*0.6 + 0.3*0.95 = 0.705 — climbing toward the K2=0.8 gate.
+        assert existing_fact.confidence_ewma == pytest.approx(0.705)
+        # confirmation_count still tracked alongside (unchanged behaviour).
+        assert existing_fact.confirmation_count == 2
+
+    @pytest.mark.asyncio
+    async def test_reinforce_tolerates_null_counters(
+        self, mock_db_session, sample_encoding_event, valid_extraction_output
+    ):
+        """A pre-fix fact constructed without counters (ORM defaults not yet
+        flushed → None at the Python level) must not crash the reinforce path."""
+        existing_fact = FactNode(
+            id=uuid4(),
+            user_id=sample_encoding_event.user_id,
+            character_id=sample_encoding_event.character_id,
+            predicate="has_pet",
+            subject="user",
+            object="猫",
+            literal_text="user has_pet 猫",
+            raw_evidence="之前说的",
+            source_turn_ids=[uuid4()],
+            confidence=0.8,
+            emotional_charge=0.0,
+            importance=0.5,
+            state="active",
+            confirmation_count=0,
+            last_confirmed_at=datetime.now(timezone.utc),
+            semantic_vector=[0.0] * 1024,
+        )
+        existing_fact.mention_count = None  # type: ignore[assignment]
+        existing_fact.confidence_ewma = None  # type: ignore[assignment]
+
+        mock_result_1 = MagicMock()
+        mock_result_1.scalar_one_or_none = MagicMock(return_value=existing_fact)
+        mock_result_2 = MagicMock()
+        mock_result_2.scalar_one_or_none = MagicMock(return_value=None)
+        mock_db_session.execute = AsyncMock(side_effect=[mock_result_1, mock_result_2])
+
+        with patch("heart.api.wiring.get_embedding_service", return_value=None):
+            await write_facts_to_l3(
+                mock_db_session, sample_encoding_event, valid_extraction_output
+            )
+
+        assert existing_fact.mention_count == 2  # None → 1 → +1
+        # None EWMA falls back to 0.5: 0.7*0.5 + 0.3*0.95 = 0.635
+        assert existing_fact.confidence_ewma == pytest.approx(0.635)
+
+    @pytest.mark.asyncio
+    async def test_create_seeds_ewma_from_confidence(
+        self, mock_db_session, sample_encoding_event, valid_extraction_output
+    ):
+        """New facts must seed confidence_ewma from their own confidence, not the
+        0.5 column default — otherwise the K2=0.8 gate is unreachable."""
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none = MagicMock(return_value=None)
+        mock_db_session.execute = AsyncMock(return_value=mock_result)
+
+        with patch("heart.api.wiring.get_embedding_service", return_value=None):
+            await write_facts_to_l3(
+                mock_db_session, sample_encoding_event, valid_extraction_output
+            )
+
+        added = [c.args[0] for c in mock_db_session.add.call_args_list]
+        assert len(added) == 2
+        # valid_extraction_output facts have confidence 0.95 and 0.9.
+        for fact in added:
+            assert fact.confidence_ewma == fact.confidence
+            assert fact.confidence_ewma >= 0.8  # both clear the K2 gate
+            assert fact.mention_count == 1
