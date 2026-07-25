@@ -43,6 +43,37 @@ from sqlalchemy import text
 logger = structlog.get_logger(__name__)
 
 
+def _to_webp(png_bytes: bytes, *, quality: int, max_width: int) -> bytes:
+    """Convert PNG bytes → resized WebP bytes.
+
+    Covers ship as ~2MB full-res PNGs but render into ≤400px thumbnails, so we
+    downscale to `max_width` (keeping aspect) and re-encode as WebP. 102MB of
+    PNG → ~5MB of WebP — the dominant first-load speedup. Pillow is imported
+    lazily so the non-`--webp` path never needs it.
+    """
+    import io
+
+    from PIL import Image
+
+    with Image.open(io.BytesIO(png_bytes)) as img:
+        # Flatten palette/transparency onto white so WebP is predictable; covers
+        # are opaque photos, but guard against P/LA modes just in case.
+        if img.mode in ("RGBA", "LA", "P"):
+            img = img.convert("RGBA")
+            bg = Image.new("RGBA", img.size, (255, 255, 255, 255))
+            img = Image.alpha_composite(bg, img).convert("RGB")
+        else:
+            img = img.convert("RGB")
+
+        if img.width > max_width:
+            new_height = round(img.height * max_width / img.width)
+            img = img.resize((max_width, new_height), Image.LANCZOS)
+
+        out = io.BytesIO()
+        img.save(out, format="WEBP", quality=quality, method=6)
+        return out.getvalue()
+
+
 async def main() -> None:
     parser = argparse.ArgumentParser(
         description="上传剧情封面图片到 S3 并更新数据库",
@@ -62,6 +93,31 @@ async def main() -> None:
         "--force",
         action="store_true",
         help="强制覆盖已有 cover_url 的剧情",
+    )
+    parser.add_argument(
+        "--webp",
+        action="store_true",
+        help="上传前把封面转成 WebP 并等比缩放（大幅减小体积，加速首屏）",
+    )
+    parser.add_argument(
+        "--webp-quality",
+        type=int,
+        default=80,
+        help="WebP 质量 0-100（默认: %(default)s）",
+    )
+    parser.add_argument(
+        "--webp-max-width",
+        type=int,
+        default=800,
+        help="缩放后最大宽度（默认: %(default)s，超过才缩放）",
+    )
+    parser.add_argument(
+        "--cover-version",
+        default="w1",
+        help=(
+            "配合 --webp：给 cover_url 追加 ?v=<版本> 以打破浏览器/SW 的 immutable "
+            "缓存（默认: %(default)s；下次再优化封面时递增，如 w2）"
+        ),
     )
     args = parser.parse_args()
 
@@ -180,12 +236,32 @@ async def main() -> None:
         for scenario_id, slug, title, cover_url, local_path, match_via in need_upload:
             try:
                 data = local_path.read_bytes()
+                # 保持 key 为 .png（后端代理端点硬编码读 scenario_covers/{slug}.png）；
+                # WebP 模式只改字节内容 + content-type，前端凭 content-type 渲染，
+                # 无需改后端。体积从 ~2MB 降到 ~100KB。
                 key = f"scenario_covers/{slug}.png"
-                await upload_file(data, key, content_type="image/png")
+                if args.webp:
+                    original = len(data)
+                    data = _to_webp(
+                        data,
+                        quality=args.webp_quality,
+                        max_width=args.webp_max_width,
+                    )
+                    content_type = "image/webp"
+                    print(
+                        f"   🗜️  {slug}: {original // 1024}KB → {len(data) // 1024}KB (WebP)"
+                    )
+                else:
+                    content_type = "image/png"
+                await upload_file(data, key, content_type=content_type)
 
                 # 决定存哪个 URL
                 if use_proxy:
                     final_url = f"/api/story/covers/{slug}"
+                    # WebP 重传时字节变了但 URL 不变，客户端 immutable 缓存会拿旧图；
+                    # 追加 ?v=<版本> 打破浏览器/SW 缓存（query 不影响 FastAPI 路由）。
+                    if args.webp:
+                        final_url = f"{final_url}?v={args.cover_version}"
                 else:
                     from heart.core.config import settings as s
                     base = s.s3_public_base_url.rstrip("/")

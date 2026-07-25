@@ -59,6 +59,11 @@ httpx>=0.27.0
 aiosmtplib>=3.0.0
 boto3>=1.34.0
 
+# Image processing — cover WebP optimization (scripts/upload_scenario_covers.py
+# --webp). Small manylinux wheel (~4MB), NOT torch/opencv. Only imported by the
+# offline cover-optimization path; the request hot-path never loads it.
+pillow>=10.0.0
+
 # Templating — SS02 memory extractor prompt builder
 # (heart/ss02_memory/extractor/prompt_builder.py imports jinja2 at module load).
 # Was resolved transitively in local venvs, so it passed locally but CI's clean

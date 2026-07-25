@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { ScenarioCardDTO } from '../../services/api'
 
 /**
@@ -37,14 +38,14 @@ export function ScenarioCard({ scenario, onOpen }: ScenarioCardProps) {
       onClick={() => onOpen(id)}
       className="group relative flex flex-col text-left w-full rounded-[20px] overflow-hidden bg-[var(--color-glass-55)] backdrop-blur-[12px] border border-[var(--color-border-glass)] shadow-[var(--shadow-soft)] active:scale-[0.97] transition-transform"
     >
-      {/* Cover */}
+      {/* Cover — the genre gradient always paints instantly as a placeholder so
+          the grid never shows blank tiles while covers stream in; the image
+          fades in on top once decoded. */}
       <div
         className="relative w-full aspect-[3/4]"
-        style={cover_url ? undefined : { background: genreGradient(genre) }}
+        style={{ background: genreGradient(genre) }}
       >
-        {cover_url && (
-          <img src={cover_url} alt="" loading="lazy" decoding="async" className="absolute inset-0 w-full h-full object-cover" />
-        )}
+        {cover_url && <CoverImage src={cover_url} />}
         {/* Genre chip */}
         <span className="absolute top-2 left-2 inline-flex h-[22px] items-center rounded-full bg-black/25 px-2 text-[11px] font-medium text-white backdrop-blur-[4px]">
           {genre}
@@ -74,6 +75,23 @@ export function ScenarioCard({ scenario, onOpen }: ScenarioCardProps) {
         </div>
       </div>
     </button>
+  )
+}
+
+/** Cover image that fades in over the gradient placeholder once loaded. */
+function CoverImage({ src }: { src: string }) {
+  const [loaded, setLoaded] = useState(false)
+  return (
+    <img
+      src={src}
+      alt=""
+      loading="lazy"
+      decoding="async"
+      onLoad={() => setLoaded(true)}
+      className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${
+        loaded ? 'opacity-100' : 'opacity-0'
+      }`}
+    />
   )
 }
 
