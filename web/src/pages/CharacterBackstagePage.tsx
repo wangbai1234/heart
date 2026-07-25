@@ -59,7 +59,9 @@ export function CharacterBackstagePage() {
   const membershipLoaded = useMembershipStore((s) => s.loaded)
   const refreshMembership = useMembershipStore((s) => s.refresh)
 
-  const profile = resolveCharacterProfile(currentCharacterId, displayName, avatarUrl)
+  const profile = resolveCharacterProfile(currentCharacterId, displayName, avatarUrl, {
+    coverUrl: currentCharacter?.cover_url,
+  })
 
   // Hydrate voice setting + voice config from backend on mount
   useEffect(() => {
