@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { getCharacterProfile, type CharacterProfileDTO } from '../services/api'
 import { useCompanionsStore } from '../stores/companionsStore'
 import { useAppStore } from '../stores/appStore'
-import { resolveCharacterProfile } from '../data/uiContent'
+import { DEFAULT_COVER } from '../data/uiContent'
 import { stageWithIntimacy, isColdWar, intimacyPercent } from '../utils/relationship'
 
 /**
@@ -53,13 +53,9 @@ export function CharacterProfilePage() {
   )
   const chatted = !!companion && companion.companion_status !== 'locked'
 
-  // Avatar fallback (blurred cover) uses the bundled visual registry so built-ins
-  // keep their shipped avatar when cover_url is absent.
-  const fallbackAvatar = useMemo(
-    () => resolveCharacterProfile(id, profile?.display_name, profile?.avatar_url).avatar,
-    [id, profile?.display_name, profile?.avatar_url],
-  )
-  const cover = profile?.cover_url || null
+  // Cover-less characters fall back to the shared background image (product
+  // direction 2026-07-25) rather than a blurred avatar placeholder.
+  const cover = profile?.cover_url || DEFAULT_COVER
 
   const openChat = () => navigate(`/chat/${id}`)
   const openBackstage = () => {
@@ -85,15 +81,7 @@ export function CharacterProfilePage() {
     <div className="relative w-full h-full overflow-y-auto bg-[var(--color-bg-page)]">
       {/* ── Full-bleed cover ── */}
       <div className="relative w-full h-[62vh] min-h-[380px] overflow-hidden">
-        {cover ? (
-          <img src={cover} alt={profile?.display_name ?? ''} className="absolute inset-0 w-full h-full object-cover" />
-        ) : (
-          <img
-            src={fallbackAvatar}
-            alt={profile?.display_name ?? ''}
-            className="absolute inset-0 w-full h-full object-cover scale-110 blur-[3px] opacity-90"
-          />
-        )}
+        <img src={cover} alt={profile?.display_name ?? ''} className="absolute inset-0 w-full h-full object-cover" />
         {/* bottom fade into the sheet below */}
         <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-[var(--color-bg-page)] via-[var(--color-bg-page)]/40 to-transparent" />
 
@@ -118,6 +106,12 @@ export function CharacterProfilePage() {
         </h1>
         {profile?.creator_name && (
           <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">by @{profile.creator_name}</p>
+        )}
+
+        {profile?.age_range && (
+          <span className="mt-2 inline-flex h-[24px] items-center rounded-full bg-[var(--color-glass-75)] border border-[var(--color-border-glass)] px-3 text-[12px] font-medium text-[var(--color-text-secondary)] tabular-nums">
+            {profile.age_range} 岁
+          </span>
         )}
 
         {profile?.tagline && (

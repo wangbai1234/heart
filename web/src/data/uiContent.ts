@@ -46,6 +46,36 @@ export const CHARACTER_STYLE_TAGS = [
   '搞笑',
 ] as const
 
+/**
+ * Canonical 角色标签 (role tags) offered as presets in the UGC create form's
+ * tag modal, and used to order the discovery filter chips. Creators may also add
+ * custom tags beyond this list. `推荐` is NOT here — it's an editorial filter.
+ */
+export const CHARACTER_ROLE_TAGS = [
+  '女性向',
+  '全性向',
+  '纯爱',
+  '年上',
+  '同人',
+  '骨科',
+  '病娇',
+  '纯洁',
+  '反差',
+  '男性向',
+] as const
+
+/** Age brackets a creator picks in the UGC form (required, single-select). */
+export const AGE_RANGES = ['18-24', '25-30', '31-39', '40+'] as const
+
+/**
+ * Default cover used when a character has no uploaded cover_url. Per product
+ * direction (2026-07-25) UGC characters no longer upload an avatar, so a
+ * cover-less character falls back to the page background image everywhere the
+ * cover appears (discovery card / profile page / chat background / inbox avatar)
+ * rather than exposing a placeholder portrait.
+ */
+export const DEFAULT_COVER = '/assets/backgrounds/聊天背景图.webp'
+
 /** Discovery filter chip labels that are not data tags. */
 export const DISCOVERY_RECOMMENDED = '推荐'
 export const DISCOVERY_ALL = '全部'

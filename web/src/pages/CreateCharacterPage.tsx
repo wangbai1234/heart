@@ -6,7 +6,6 @@ import { useToastStore } from '../stores/toastStore'
 import { useMembershipStore } from '../stores/membershipStore'
 import {
   ApiError,
-  uploadCharacterAvatar,
   uploadCharacterCover,
   getPresetVoices,
   getPresetVoiceSampleUrl,
@@ -19,9 +18,11 @@ import {
   type PresetVoiceDTO,
 } from '../services/api'
 import { compressImage } from '../utils/imageCompress'
-import { CHARACTER_STYLE_TAGS } from '../data/uiContent'
+import { CHARACTER_ROLE_TAGS, AGE_RANGES } from '../data/uiContent'
+import { Dialog } from '../components/ui/Dialog'
 
-const MAX_TAGS = 5
+const MAX_TAGS = 10
+const MAX_TAG_LEN = 20
 
 function useToast() {
   return useToastStore((s) => s.show)
@@ -72,6 +73,7 @@ function buildDraft(fields: FormFields, avatarUrl?: string, coverUrl?: string): 
     avatar_url: avatarUrl || undefined,
     cover_url: coverUrl || undefined,
     tags: fields.tags.length > 0 ? fields.tags : undefined,
+    age_range: fields.ageRange || undefined,
     persona: fields.persona.trim(),
     greeting_style: fields.greetingStyle,
     gender: fields.gender,
@@ -93,6 +95,7 @@ interface FormFields {
   persona: string
   greetingStyle: GreetingStyle
   gender: 'female' | 'male'
+  ageRange: string
   sliders: Record<keyof CharacterDraftDTO['sliders'], number> // 0-100 UI scale
   samples: string[]
   tags: string[]
@@ -104,6 +107,7 @@ function defaultForm(): FormFields {
     persona: '',
     greetingStyle: 'warm',
     gender: 'female',
+    ageRange: '',
     sliders: {
       warmth:        60,
       talkativeness: 50,
@@ -119,6 +123,8 @@ function defaultForm(): FormFields {
 
 function validateForm(f: FormFields): string | null {
   if (!f.nameZh.trim()) return '请输入角色名字'
+  if (!f.ageRange) return '请选择角色年龄段'
+  if (f.tags.length === 0) return '请至少添加一个角色标签'
   if (f.persona.trim().length < MIN_PERSONA) return `人设描述至少需要 ${MIN_PERSONA} 个字`
   if (f.persona.trim().length > MAX_PERSONA) return `人设描述不能超过 ${MAX_PERSONA} 个字`
   return null
@@ -202,12 +208,15 @@ export function CreateCharacterPage() {
   const [form, setForm] = useState<FormFields>(defaultForm)
   const [submitting, setSubmitting] = useState(false)
   const [step, setStep] = useState<1 | 2 | 3>(1) // 1: basic info, 2: personality, 3: voice
+  // avatarUrl is retained ONLY to pass an existing UGC avatar back through
+  // buildDraft in edit mode — the create form no longer offers avatar upload.
   const [avatarUrl, setAvatarUrl] = useState<string>('')
-  const [avatarUploading, setAvatarUploading] = useState(false)
   const [coverUrl, setCoverUrl] = useState<string>('')
   const [coverUploading, setCoverUploading] = useState(false)
-  const avatarInputRef = useRef<HTMLInputElement>(null)
   const coverInputRef = useRef<HTMLInputElement>(null)
+  // Role-tag modal (required tags). customTag holds the in-progress custom entry.
+  const [tagModalOpen, setTagModalOpen] = useState(false)
+  const [customTag, setCustomTag] = useState('')
 
   // Voice step state
   const [createdCharacterId, setCreatedCharacterId] = useState<string>('')
@@ -319,6 +328,7 @@ export function CreateCharacterPage() {
         persona: draft.persona || '',
         greetingStyle: (draft.greeting_style as GreetingStyle) || 'warm',
         gender: (draft.gender as 'female' | 'male') || 'female',
+        ageRange: draft.age_range ?? '',
         sliders: {
           warmth:        Math.round((draft.sliders?.warmth ?? 0.6) * 100),
           talkativeness: Math.round((draft.sliders?.talkativeness ?? 0.5) * 100),
@@ -343,27 +353,6 @@ export function CreateCharacterPage() {
       if (char) setForm((prev) => ({ ...prev, nameZh: char.display_name }))
     })
   }, [editId])
-
-  async function handleAvatarFile(file: File) {
-    if (!file.type.startsWith('image/')) {
-      showToast('请选择图片文件', 'error')
-      return
-    }
-    setAvatarUploading(true)
-    try {
-      // Compress to 256×256 WebP so that even if the backend has to fall back
-      // to a base64 data URL (S3 not configured), the resulting string stays
-      // well under CharacterDraft.avatar_url max_length=200000.
-      const compressed = await compressImage(file, 256, 0.85).catch(() => file)
-      const { avatar_url } = await uploadCharacterAvatar(compressed)
-      setAvatarUrl(avatar_url)
-    } catch (err) {
-      const msg = err instanceof ApiError ? err.message : '头像上传失败，请重试'
-      showToast(msg, 'error')
-    } finally {
-      setAvatarUploading(false)
-    }
-  }
 
   async function handleCoverFile(file: File) {
     if (!file.type.startsWith('image/')) {
@@ -401,6 +390,24 @@ export function CreateCharacterPage() {
       }
       return { ...prev, tags: [...prev.tags, tag] }
     })
+  }
+
+  function removeTag(tag: string) {
+    setForm((prev) => ({ ...prev, tags: prev.tags.filter((t) => t !== tag) }))
+  }
+
+  function addCustomTag() {
+    const t = customTag.trim().slice(0, MAX_TAG_LEN)
+    if (!t) return
+    setForm((prev) => {
+      if (prev.tags.includes(t)) return prev
+      if (prev.tags.length >= MAX_TAGS) {
+        showToast(`最多选择 ${MAX_TAGS} 个标签`, 'error')
+        return prev
+      }
+      return { ...prev, tags: [...prev.tags, t] }
+    })
+    setCustomTag('')
   }
 
   function setSlider(key: keyof FormFields['sliders'], v: number) {
@@ -732,7 +739,7 @@ export function CreateCharacterPage() {
   const title = isEdit ? '编辑角色' : '创建角色'
   const personaLen = form.persona.trim().length
   const personaOk = personaLen >= MIN_PERSONA && personaLen <= MAX_PERSONA
-  const canProceed = form.nameZh.trim().length > 0 && personaOk
+  const canProceed = form.nameZh.trim().length > 0 && Boolean(form.ageRange) && form.tags.length > 0 && personaOk
 
   return (
     <div
@@ -796,62 +803,6 @@ export function CreateCharacterPage() {
                 <br />描述她的性格与故事。
               </p>
             </div>
-
-            {/* Avatar */}
-            <SectionTitle>角色头像（选填）</SectionTitle>
-            <div className="flex justify-center mb-2">
-              <div className="relative">
-                {/* Avatar preview */}
-                <button
-                  type="button"
-                  onClick={() => avatarInputRef.current?.click()}
-                  className="w-[88px] h-[88px] rounded-full overflow-hidden flex items-center justify-center active:scale-[0.96] transition-transform"
-                  style={{
-                    background: avatarUrl
-                      ? 'transparent'
-                      : 'linear-gradient(135deg, #FFB7C5 0%, #C8B6FF 100%)',
-                  }}
-                >
-                  {avatarUrl ? (
-                    <img src={avatarUrl} alt="头像" className="w-full h-full object-cover" />
-                  ) : avatarUploading ? (
-                    <svg className="animate-spin w-8 h-8 text-white" viewBox="0 0 24 24" fill="none">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                    </svg>
-                  ) : form.nameZh.trim() ? (
-                    <span className="text-[34px] font-bold text-white leading-none select-none">
-                      {form.nameZh.trim().slice(-1)}
-                    </span>
-                  ) : (
-                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-                      <circle cx="12" cy="8" r="4" />
-                      <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
-                    </svg>
-                  )}
-                </button>
-                {/* Edit badge */}
-                <div className="absolute bottom-0 right-0 w-[26px] h-[26px] rounded-full bg-[#FFB7C5] border-2 border-white flex items-center justify-center pointer-events-none">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                  </svg>
-                </div>
-                <input
-                  ref={avatarInputRef}
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp"
-                  className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0]
-                    if (file) handleAvatarFile(file)
-                  }}
-                />
-              </div>
-            </div>
-            <p className="text-center text-[12px] text-[var(--color-text-muted)] mb-2">
-              {avatarUrl ? '点击头像更换' : '不上传则使用角色名最后一个字作为头像'}
-            </p>
 
             {/* Cover — 竖版封面，用于发现页封面卡 + 聊天全屏背景 */}
             <SectionTitle>角色封面（选填）</SectionTitle>
@@ -944,6 +895,29 @@ export function CreateCharacterPage() {
               })}
             </div>
 
+            {/* Age range (required) */}
+            <SectionTitle>角色年龄段 *</SectionTitle>
+            <div className="flex gap-2.5">
+              {AGE_RANGES.map((range) => {
+                const active = form.ageRange === range
+                return (
+                  <button
+                    key={range}
+                    onClick={() => setForm((prev) => ({ ...prev, ageRange: range }))}
+                    className={`flex-1 flex items-center justify-center py-3 rounded-[14px] border transition-all duration-[180ms] active:scale-[0.98] ${
+                      active
+                        ? 'bg-[rgba(255,183,197,0.22)] border-[rgba(255,183,197,0.55)] shadow-[0_2px_12px_rgba(255,143,171,0.15)]'
+                        : isDark
+                        ? 'bg-[var(--color-surface-card)] border-[var(--color-border-subtle)]'
+                        : 'bg-[rgba(255,255,255,0.72)] border-[rgba(255,255,255,0.60)]'
+                    } backdrop-blur-[12px]`}
+                  >
+                    <span className={`text-[14px] font-semibold tabular-nums ${active ? 'text-[#E86083]' : 'text-[var(--color-ink)]'}`}>{range}</span>
+                  </button>
+                )
+              })}
+            </div>
+
             {/* Persona */}
             <SectionTitle>人设描述</SectionTitle>
             <GlassCard>
@@ -968,28 +942,40 @@ export function CreateCharacterPage() {
               </div>
             </GlassCard>
 
-            {/* Tags — 发现页风格筛选（选填） */}
-            <SectionTitle>风格标签（选填，最多 {MAX_TAGS} 个）</SectionTitle>
+            {/* Role tags (required) — presets + custom via modal */}
+            <SectionTitle>角色标签 *（最多 {MAX_TAGS} 个）</SectionTitle>
             <div className="flex flex-wrap gap-2 px-1">
-              {CHARACTER_STYLE_TAGS.map((tag) => {
-                const active = form.tags.includes(tag)
-                return (
+              {form.tags.map((tag) => (
+                <span
+                  key={tag}
+                  className="h-[32px] pl-3.5 pr-2 rounded-full text-[13px] font-medium border bg-[rgba(255,183,197,0.22)] border-[rgba(255,183,197,0.55)] text-[#E86083] inline-flex items-center gap-1.5"
+                >
+                  {tag}
                   <button
-                    key={tag}
                     type="button"
-                    onClick={() => toggleTag(tag)}
-                    className={`h-[32px] px-3.5 rounded-full text-[13px] font-medium border transition-all active:scale-[0.96] ${
-                      active
-                        ? 'bg-[rgba(255,183,197,0.22)] border-[rgba(255,183,197,0.55)] text-[#E86083]'
-                        : isDark
-                        ? 'bg-[var(--color-surface-card)] border-[var(--color-border-subtle)] text-[var(--color-text-secondary)]'
-                        : 'bg-[rgba(255,255,255,0.72)] border-[rgba(255,255,255,0.60)] text-[var(--color-text-secondary)]'
-                    } backdrop-blur-[12px]`}
+                    onClick={() => removeTag(tag)}
+                    aria-label={`移除 ${tag}`}
+                    className="w-[18px] h-[18px] rounded-full flex items-center justify-center active:scale-90 transition-transform"
                   >
-                    {tag}
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#E86083" strokeWidth="2.6" strokeLinecap="round">
+                      <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
                   </button>
-                )
-              })}
+                </span>
+              ))}
+              {form.tags.length < MAX_TAGS && (
+                <button
+                  type="button"
+                  onClick={() => setTagModalOpen(true)}
+                  className={`h-[32px] px-3.5 rounded-full text-[13px] font-medium border border-dashed transition-all active:scale-[0.96] inline-flex items-center gap-1 ${
+                    isDark
+                      ? 'bg-[var(--color-surface-card)] border-[var(--color-border-subtle)] text-[var(--color-text-secondary)]'
+                      : 'bg-[rgba(255,255,255,0.72)] border-[rgba(255,183,197,0.55)] text-[#E86083]'
+                  } backdrop-blur-[12px]`}
+                >
+                  <span className="text-[15px] leading-none">＋</span>添加标签
+                </button>
+              )}
             </div>
 
             {/* Speech samples */}
@@ -1196,44 +1182,6 @@ export function CreateCharacterPage() {
                 ))}
               </div>
             </GlassCard>
-
-            {/* Preview summary */}
-            <SectionTitle>预览</SectionTitle>
-            <GlassCard className="px-5 py-4">
-              <div className="flex items-start gap-4">
-                <div className="w-[52px] h-[52px] rounded-full shrink-0 shadow-[0_4px_12px_rgba(255,183,197,0.30)] overflow-hidden">
-                  {avatarUrl ? (
-                    <img src={avatarUrl} alt="头像" className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full bg-gradient-to-br from-[#FFB7C5] to-[#C8B6FF] flex items-center justify-center">
-                      {form.nameZh.trim() ? (
-                        <span className="text-[22px] font-bold text-white leading-none">
-                          {form.nameZh.trim().slice(-1)}
-                        </span>
-                      ) : (
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                          <circle cx="12" cy="8" r="4" />
-                          <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" />
-                        </svg>
-                      )}
-                    </div>
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-[16px] font-semibold text-[var(--color-ink)] truncate">
-                    {form.nameZh.trim() || '未命名'}
-                  </p>
-                  <p className="text-[13px] text-[var(--color-text-secondary)] mt-1 leading-[1.6] line-clamp-2">
-                    {form.persona.trim() || '人设描述将在这里显示…'}
-                  </p>
-                  <div className="flex flex-wrap gap-1.5 mt-2">
-                    <span className="text-[11px] text-[#E86083] bg-[rgba(255,183,197,0.20)] rounded-full px-2.5 py-[3px]">
-                      {GREETING_STYLES.find((s) => s.value === form.greetingStyle)?.label}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </GlassCard>
           </>
         )}
       </div>
@@ -1295,10 +1243,10 @@ export function CreateCharacterPage() {
           ) : step === 1 ? (
             <button
               onClick={() => {
-                if (!canProceed) {
-                  if (!form.nameZh.trim()) {
-                    return
-                  }
+                const err = validateForm(form)
+                if (err) {
+                  showToast(err, 'error')
+                  return
                 }
                 setStep(2)
               }}
@@ -1325,6 +1273,67 @@ export function CreateCharacterPage() {
           )}
         </div>
       </div>
+
+      {/* Role-tag picker modal: presets (multi-select) + custom entry */}
+      <Dialog
+        open={tagModalOpen}
+        onClose={() => setTagModalOpen(false)}
+        title="添加角色标签"
+        actions={
+          <button
+            onClick={() => setTagModalOpen(false)}
+            className="flex-1 h-[46px] rounded-[14px] bg-gradient-to-r from-[#FFB7C5] to-[#FF8FAB] text-white text-[15px] font-semibold active:scale-[0.98] transition-transform"
+          >
+            完成（已选 {form.tags.length}/{MAX_TAGS}）
+          </button>
+        }
+      >
+        <div className="text-left">
+          <p className="text-[12px] text-[var(--color-text-muted)] mb-2">选择预设标签</p>
+          <div className="flex flex-wrap gap-2 mb-4">
+            {CHARACTER_ROLE_TAGS.map((tag) => {
+              const active = form.tags.includes(tag)
+              return (
+                <button
+                  key={tag}
+                  type="button"
+                  onClick={() => toggleTag(tag)}
+                  className={`h-[32px] px-3.5 rounded-full text-[13px] font-medium border transition-all active:scale-[0.96] ${
+                    active
+                      ? 'bg-[rgba(255,183,197,0.22)] border-[rgba(255,183,197,0.55)] text-[#E86083]'
+                      : isDark
+                      ? 'bg-[var(--color-surface-card)] border-[var(--color-border-subtle)] text-[var(--color-text-secondary)]'
+                      : 'bg-[rgba(255,255,255,0.72)] border-[rgba(255,255,255,0.60)] text-[var(--color-text-secondary)]'
+                  }`}
+                >
+                  {tag}
+                </button>
+              )
+            })}
+          </div>
+          <p className="text-[12px] text-[var(--color-text-muted)] mb-2">或添加自定义标签</p>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={customTag}
+              onChange={(e) => setCustomTag(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCustomTag() } }}
+              placeholder="输入标签…"
+              maxLength={MAX_TAG_LEN}
+              className={`flex-1 h-[40px] px-3.5 rounded-[12px] text-[14px] text-[var(--color-ink)] bg-transparent outline-none border ${
+                isDark ? 'border-[var(--color-border-subtle)]' : 'border-[rgba(255,183,197,0.45)]'
+              } placeholder:text-[var(--color-text-placeholder)]`}
+            />
+            <button
+              type="button"
+              onClick={addCustomTag}
+              className="w-[52px] h-[40px] rounded-[12px] bg-[rgba(255,183,197,0.22)] text-[#E86083] text-[20px] font-medium leading-none active:scale-[0.96] transition-transform"
+            >
+              ＋
+            </button>
+          </div>
+        </div>
+      </Dialog>
     </div>
   )
 }

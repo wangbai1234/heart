@@ -474,6 +474,8 @@ export interface CharacterProfileDTO {
   creator_name: string
   avatar_url: string | null
   cover_url: string | null
+  /** Age bracket the creator picked (e.g. "18-24"); null when unset. */
+  age_range?: string | null
   tags: string[]
   tagline: string
   archetype_label: string
@@ -496,12 +498,14 @@ export interface CharacterDraftDTO {
   avatar_url?: string
   /** Portrait cover (short S3 proxy URL from POST /api/characters/cover — never base64). */
   cover_url?: string
-  /** Up to 10 style/category tags for the discovery filter. */
+  /** Up to 10 role/category tags for the discovery filter. */
   tags?: string[]
   persona: string
   greeting_style: 'warm' | 'cool' | 'playful' | 'reserved' | 'intense'
   speech_samples?: string[]
   gender?: 'male' | 'female'
+  /** Age bracket the creator picked (e.g. "18-24"); one of AGE_RANGES. */
+  age_range?: string
   sliders: {
     warmth: number
     talkativeness: number

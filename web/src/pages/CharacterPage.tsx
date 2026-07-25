@@ -4,7 +4,8 @@ import { useThemeStore } from '../stores/themeStore'
 import { TabBar } from '../components/ui/TabBar'
 import {
   resolveCharacterProfile,
-  CHARACTER_STYLE_TAGS,
+  CHARACTER_ROLE_TAGS,
+  DEFAULT_COVER,
   DISCOVERY_RECOMMENDED,
   DISCOVERY_ALL,
   type CharacterProfile,
@@ -96,8 +97,8 @@ export function CharacterPage() {
     })
   }, [serverCharacters, companions, companionById])
 
-  // Filter chips: leading editorial filters (推荐 / 全部) + data-derived style
-  // tags, ordered by the canonical CHARACTER_STYLE_TAGS priority so curated
+  // Filter chips: leading editorial filters (推荐 / 全部) + data-derived role
+  // tags, ordered by the canonical CHARACTER_ROLE_TAGS priority so curated
   // categories lead, then any remaining tags in first-seen order. `推荐` never
   // appears as a data tag here — it's the editorial lead filter.
   const tagChips = useMemo(() => {
@@ -108,7 +109,7 @@ export function CharacterPage() {
       }
     }
     const ordered: string[] = []
-    for (const t of CHARACTER_STYLE_TAGS) {
+    for (const t of CHARACTER_ROLE_TAGS) {
       if (present.has(t)) {
         ordered.push(t)
         present.delete(t)
@@ -266,7 +267,7 @@ function DiscoveryCard({ item, onOpen }: { item: GridItem; onOpen: () => void })
         className="relative w-full aspect-[3/4]"
         style={{ background: `linear-gradient(135deg, ${profile.tagBg}, transparent)` }}
       >
-        <CoverFill cover={profile.cover} avatar={profile.avatar} alt={profile.name} />
+        <CoverFill cover={profile.cover} alt={profile.name} />
 
         {/* bottom scrim for legibility */}
         <div className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black/72 via-black/28 to-transparent" />
@@ -303,33 +304,23 @@ function DiscoveryCard({ item, onOpen }: { item: GridItem; onOpen: () => void })
 
 /**
  * Cover image that fades in over the gradient placeholder. When no cover_url is
- * available we derive a filler from the avatar (blurred + scaled to fill the tall
- * tile) so UGC / cover-less characters still get a full-bleed portrait rather
- * than a bare gradient.
+ * available we fall back to the shared DEFAULT_COVER background image (product
+ * direction 2026-07-25: UGC characters no longer have an avatar, so a cover-less
+ * card shows the page background rather than a blurred placeholder portrait).
  */
-function CoverFill({ cover, avatar, alt }: { cover?: string | null; avatar: string; alt: string }) {
+function CoverFill({ cover, alt }: { cover?: string | null; alt: string }) {
   const [loaded, setLoaded] = useState(false)
-  if (cover) {
-    return (
-      <img
-        src={cover}
-        alt={alt}
-        loading="lazy"
-        decoding="async"
-        onLoad={() => setLoaded(true)}
-        className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${
-          loaded ? 'opacity-100' : 'opacity-0'
-        }`}
-      />
-    )
-  }
+  const src = cover || DEFAULT_COVER
   return (
     <img
-      src={avatar}
+      src={src}
       alt={alt}
       loading="lazy"
       decoding="async"
-      className="absolute inset-0 w-full h-full object-cover scale-110 blur-[2px] opacity-90"
+      onLoad={() => setLoaded(true)}
+      className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${
+        loaded ? 'opacity-100' : 'opacity-0'
+      }`}
     />
   )
 }
