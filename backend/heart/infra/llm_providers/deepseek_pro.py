@@ -10,6 +10,7 @@ from typing import AsyncIterator, Dict, Optional
 
 import httpx
 
+from heart.infra.llm_providers._http import make_async_client
 from heart.infra.llm_providers.base import (
     CircuitBreakerInterface,
     CostEstimate,
@@ -76,8 +77,8 @@ class DeepSeekV4ProProvider(LLMProvider):
     async def _get_client(self) -> httpx.AsyncClient:
         """Get or create async HTTP client."""
         if self._client is None:
-            self._client = httpx.AsyncClient(
-                base_url=self.base_url or "",
+            self._client = make_async_client(
+                base_url=self.base_url,
                 headers={
                     "Authorization": f"Bearer {self.api_key}",
                     "Content-Type": "application/json",

@@ -4,6 +4,7 @@ Provides call_main(), call_cheap(), stream_main() for legacy callers, and
 stream_for() / call_for() for multi-model failover.
 """
 
+import time
 from typing import AsyncGenerator, Optional
 
 import structlog
@@ -213,6 +214,12 @@ class ModelRouter:
         usable = [c for c in chain if self._registry.has_model(c)]
         last_error: Optional[Exception] = None
 
+        # Measured from the router call to the first *content* byte reaching the
+        # caller — i.e. the user-facing TTFT, spanning any failover hops. This is
+        # the number to watch when diagnosing "转很久才出字": network to the
+        # upstream/relay + model prefill, isolated from token throughput.
+        t_start = time.perf_counter()
+
         for i, candidate in enumerate(usable):
             provider = self._registry.get_provider_for_model(candidate)
             is_last = i == len(usable) - 1
@@ -237,9 +244,19 @@ class ModelRouter:
                             # (not the first raw frame) so a stream that emits
                             # only a finish-reason frame still counts as empty
                             # and can fail over.
+                            ttft_ms = round((time.perf_counter() - t_start) * 1000.0, 1)
                             if meta is not None:
                                 meta["served_model"] = candidate
                                 meta["degraded_to"] = candidate if i > 0 else None
+                                meta["ttft_ms"] = ttft_ms
+                            logger.info(
+                                "stream_ttft",
+                                agent_name=agent_name,
+                                model=candidate,
+                                requested=model,
+                                attempt=i + 1,
+                                ttft_ms=ttft_ms,
+                            )
                             yielded_content = True
                         yield chunk.content
                 if yielded_content:
