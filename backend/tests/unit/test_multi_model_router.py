@@ -11,6 +11,7 @@ Fake providers are used — no real HTTP calls. Tests verify:
 - Config fields for grok/claude are present with correct defaults
 """
 
+import asyncio
 from typing import AsyncIterator
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -350,6 +351,125 @@ async def test_stream_for_meta_not_required():
     async for chunk in router.stream_for("deepseek", _messages()):
         chunks.append(chunk)
     assert chunks
+
+
+# ---------------------------------------------------------------------------
+# TTFT watchdog — a stalled first token must fail over (卡住的气泡 guard).
+# A relay observed to take 19.5s to first byte would otherwise hang the bubble
+# until the 45s whole-turn timeout; the router aborts at TTFT_FAILOVER_S instead.
+# ---------------------------------------------------------------------------
+
+
+class SlowFirstTokenProvider:
+    """Sleeps before yielding any content — trips the TTFT watchdog."""
+
+    def __init__(self, delay: float, content: str = "late answer"):
+        self._delay = delay
+        self._content = content
+        self.calls = 0
+
+    async def stream(self, request: LLMRequest) -> AsyncIterator[StreamChunk]:
+        self.calls += 1
+        await asyncio.sleep(self._delay)
+        for word in self._content.split():
+            yield StreamChunk(content=word + " ")
+
+
+@pytest.mark.asyncio
+async def test_stream_for_ttft_timeout_fails_over(monkeypatch):
+    """First model stalls past the TTFT budget → fail over to the next model."""
+    monkeypatch.setattr("heart.infra.llm_providers.router.TTFT_FAILOVER_S", 0.05)
+    slow = SlowFirstTokenProvider(delay=0.5, content="too slow")
+    fast = FakeProvider(content="deepseek quick")
+    reg = _make_registry(
+        ("claude", slow, ["claude"]),
+        ("deepseek", fast, ["deepseek"]),
+    )
+    router = _router(reg)
+
+    meta: dict = {}
+    chunks = []
+    async for chunk in router.stream_for("claude", _messages(), failover=["deepseek"], meta=meta):
+        chunks.append(chunk)
+
+    assert "deepseek quick" in "".join(chunks)
+    assert meta["served_model"] == "deepseek"
+    assert meta["degraded_to"] == "deepseek"
+    assert slow.calls == 1
+    assert fast.calls == 1
+
+
+@pytest.mark.asyncio
+async def test_stream_for_ttft_ok_when_first_token_within_budget(monkeypatch):
+    """A model that answers within the budget is NOT aborted."""
+    monkeypatch.setattr("heart.infra.llm_providers.router.TTFT_FAILOVER_S", 0.5)
+    quick = SlowFirstTokenProvider(delay=0.02, content="in time")
+    reg = _make_registry(("grok", quick, ["grok"]))
+    router = _router(reg)
+
+    chunks = []
+    async for chunk in router.stream_for("grok", _messages(), failover=[]):
+        chunks.append(chunk)
+    assert "".join(chunks).strip() == "in time"
+    assert quick.calls == 1
+
+
+@pytest.mark.asyncio
+async def test_stream_for_all_candidates_slow_raises_exhaustion(monkeypatch):
+    monkeypatch.setattr("heart.infra.llm_providers.router.TTFT_FAILOVER_S", 0.05)
+    slow = SlowFirstTokenProvider(delay=0.5)
+    reg = _make_registry(("claude", slow, ["claude"]))
+    router = _router(reg)
+
+    with pytest.raises(ProviderError) as exc_info:
+        async for _ in router.stream_for("claude", _messages(), failover=[]):
+            pass
+    assert "exhausted" in str(exc_info.value).lower()
+
+
+# ---------------------------------------------------------------------------
+# Mid-stream error after content — must NOT fail over (would concatenate a
+# second model's full answer onto the partial one). Surface the error instead.
+# ---------------------------------------------------------------------------
+
+
+class MidStreamFailProvider:
+    """Yields one content chunk, then raises ProviderError mid-stream."""
+
+    def __init__(self, prefix: str = "partial "):
+        self._prefix = prefix
+        self.calls = 0
+
+    async def stream(self, request: LLMRequest) -> AsyncIterator[StreamChunk]:
+        self.calls += 1
+        yield StreamChunk(content=self._prefix)
+        raise ProviderError(
+            "connection dropped mid-stream",
+            provider="claude",
+            model="claude",
+            retriable=True,
+        )
+
+
+@pytest.mark.asyncio
+async def test_stream_for_midstream_error_after_content_raises_not_failover():
+    mid = MidStreamFailProvider(prefix="hello ")
+    deepseek = FakeProvider(content="second answer should not append")
+    reg = _make_registry(
+        ("claude", mid, ["claude"]),
+        ("deepseek", deepseek, ["deepseek"]),
+    )
+    router = _router(reg)
+
+    chunks = []
+    with pytest.raises(ProviderError):
+        async for chunk in router.stream_for("claude", _messages(), failover=["deepseek"]):
+            chunks.append(chunk)
+
+    # Partial content was delivered; the fallback model was NOT invoked, so no
+    # garbled concatenation reaches the client.
+    assert "hello " in "".join(chunks)
+    assert deepseek.calls == 0
 
 
 # ---------------------------------------------------------------------------
