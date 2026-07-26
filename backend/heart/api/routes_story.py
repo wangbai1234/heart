@@ -311,7 +311,15 @@ async def get_run(
     run = await repo.get_run(db, run_id, user_id)
     if run is None:
         raise HTTPException(404, "run_not_found")
-    messages = await repo.list_messages(db, run_id, after_seq=after_seq)
+    # Resume default (after_seq=0) returns the most-recent window so a long run
+    # lands back on the story just played; after_seq>0 is forward-pagination for
+    # scrollback. (Returning the oldest slice here dropped recent turns — the
+    # "剧情消失" resume bug.)
+    messages = (
+        await repo.list_messages(db, run_id, after_seq=after_seq)
+        if after_seq > 0
+        else await repo.recent_transcript(db, run_id)
+    )
     return {
         "run": _run_dto(run),
         "player_identity": run.player_identity_json,
