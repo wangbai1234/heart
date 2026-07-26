@@ -284,6 +284,59 @@ class ModelRouter:
             except Exception:
                 logger.debug("stream_for_aclose_failed", from_model=candidate)
 
+    def _failover_error_or_raise(
+        self, exc: Exception, *, got_content: bool, candidate: str, requested: str
+    ) -> Exception:
+        """Classify an exception raised while streaming a candidate.
+
+        Returns the error to record as ``last_error`` and continue the failover
+        loop, or re-raises when the failure happened mid-stream (content already
+        on the wire) and cannot be recovered.
+
+        Covers three cases collapsed into one caller ``except``:
+          - ``asyncio.TimeoutError``: first token missed ``TTFT_FAILOVER_S``.
+            Only reachable before any content, so always safe to fail over.
+          - ``ProviderError``: a provider-wrapped connection/status failure.
+          - any other ``Exception``: a raw relay/transport/parse error that the
+            provider did not wrap (the claude "生成失败无兜底" report — such an
+            error must not skip grok→deepseek). ``asyncio.CancelledError`` is a
+            ``BaseException`` and never reaches here, so turn cancellation is
+            preserved.
+        """
+        if isinstance(exc, asyncio.TimeoutError):
+            logger.warning(
+                "stream_for_ttft_timeout",
+                from_model=candidate,
+                requested=requested,
+                ttft_budget_s=TTFT_FAILOVER_S,
+            )
+            return ProviderError(
+                f"first-token timeout (>{TTFT_FAILOVER_S}s) from {candidate}",
+                provider=candidate,
+                model=candidate,
+                retriable=True,
+            )
+        if got_content:
+            # Bytes are already on the wire to the client — re-streaming a second
+            # model would concatenate a whole new answer onto the partial one
+            # (garbled output). We cannot un-send, so surface the failure.
+            logger.warning(
+                "stream_for_midstream_error",
+                from_model=candidate,
+                requested=requested,
+                error=str(exc),
+                provider_error=isinstance(exc, ProviderError),
+            )
+            raise exc
+        logger.warning(
+            "stream_for_failover",
+            from_model=candidate,
+            requested=requested,
+            error=str(exc),
+            provider_error=isinstance(exc, ProviderError),
+        )
+        return exc
+
     async def stream_for(
         self,
         model: str,
@@ -366,37 +419,14 @@ class ModelRouter:
                     meta["served_model"] = candidate
                     meta["degraded_to"] = candidate if i > 0 else None
                 return
-            except asyncio.TimeoutError:
-                # First token missed TTFT_FAILOVER_S. Only reachable before any
-                # content was yielded, so failing over is safe.
-                logger.warning(
-                    "stream_for_ttft_timeout",
-                    from_model=candidate,
-                    requested=model,
-                    ttft_budget_s=TTFT_FAILOVER_S,
+            except Exception as exc:
+                # One handler for TTFT timeout, ProviderError, and any raw
+                # (unwrapped) relay/transport error. _failover_error_or_raise
+                # decides: record-and-continue before the first byte, re-raise
+                # mid-stream. CancelledError is a BaseException → not caught here.
+                last_error = self._failover_error_or_raise(
+                    exc, got_content=got_content, candidate=candidate, requested=model
                 )
-                last_error = ProviderError(
-                    f"first-token timeout (>{TTFT_FAILOVER_S}s) from {candidate}",
-                    provider=candidate,
-                    model=candidate,
-                    retriable=True,
-                )
-                continue
-            except ProviderError as e:
-                if got_content:
-                    # Bytes are already on the wire to the client — re-streaming a
-                    # second model would concatenate a whole new answer onto the
-                    # partial one (garbled output). We cannot un-send, so surface
-                    # the mid-stream failure instead of failing over.
-                    logger.warning(
-                        "stream_for_midstream_error",
-                        from_model=candidate,
-                        requested=model,
-                        error=str(e),
-                    )
-                    raise
-                logger.warning("stream_for_failover", from_model=candidate, error=str(e))
-                last_error = e
                 continue
 
         msg = f"All models in failover chain exhausted: {chain}"

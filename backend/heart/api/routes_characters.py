@@ -19,7 +19,7 @@ from heart.ss01_soul.character_catalog import (
     CharacterRow,
     build_catalog_entries,
     coerce_tags,
-    is_known_character,
+    ensure_character_loaded,
 )
 from heart.ss01_soul.character_content import CharacterContent, get_display_name
 from heart.ss01_soul.draft import CharacterDraft
@@ -43,9 +43,16 @@ class VoiceProviderUpdate(BaseModel):
     provider: str  # 'mimo' (日常语音) | 'fish' (真人语音)
 
 
-def _require_known_character(character_id: str) -> None:
-    """Reject a ``character_id`` that has no loaded Soul Spec (boundary guard)."""
-    if not is_known_character(character_id):
+async def _require_known_character(character_id: str, db: AsyncSession) -> None:
+    """Reject a ``character_id`` that has no loaded Soul Spec (boundary guard).
+
+    DB-authoritative with lazy hydrate: with ``--workers 2`` a UGC character
+    created on the other worker is absent from this process's in-memory
+    registry, so ``is_known_character`` alone would 404 management calls (e.g.
+    clear-conversations → "清空失败") for a character that plainly exists. The
+    DB fallback hydrates it on hit.
+    """
+    if not await ensure_character_loaded(character_id, db):
         raise HTTPException(status_code=404, detail=f"未知角色: {character_id}")
 
 
@@ -297,7 +304,7 @@ async def get_character_settings(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """Get per-character settings (voice toggle)."""
-    _require_known_character(character_id)
+    await _require_known_character(character_id, db)
     uid = uuid.UUID(current_user.user_id)
     result = await db.execute(
         text("""
@@ -322,7 +329,7 @@ async def update_character_settings(
     Returns 409 when voice_enabled=True is requested but the character has no
     voice configured yet (has_voice=FALSE).
     """
-    _require_known_character(character_id)
+    await _require_known_character(character_id, db)
     uid = uuid.UUID(current_user.user_id)
 
     if body.voice_enabled:
@@ -370,7 +377,7 @@ async def set_voice_provider(
     voice row (both are pre-cloned for built-in rin/dorothy), so switching is
     instant — no re-configuration.
     """
-    _require_known_character(character_id)
+    await _require_known_character(character_id, db)
     uid = uuid.UUID(current_user.user_id)
 
     provider = body.provider
@@ -422,7 +429,7 @@ async def clear_character_conversations(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """Clear persisted chat messages for one character only."""
-    _require_known_character(character_id)
+    await _require_known_character(character_id, db)
     uid = uuid.UUID(current_user.user_id)
 
     try:
