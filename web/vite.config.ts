@@ -21,10 +21,19 @@ export default defineConfig({
     react(),
     tailwindcss(),
     VitePWA({
-      // 'prompt' (not 'autoUpdate'): a new deploy no longer silently reloads
-      // the page. Instead useRegisterSW() surfaces a "有新版本，是否刷新" dialog
-      // (see src/components/UpdatePrompt.tsx) and the user chooses when to apply.
-      registerType: 'prompt',
+      // ⚠️ ONE-TIME RESCUE (autoUpdate): existing clients are stuck on an old SW
+      // that predates UpdatePrompt.tsx — with 'prompt'+skipWaiting:false the new
+      // SW installs but never activates (mobile users can't force-refresh, and
+      // the prompt code lives in the not-yet-active bundle → chicken-and-egg).
+      // 'autoUpdate' makes the new SW skipWaiting()+clientsClaim() and the client
+      // self-reloads, flushing every stuck client onto a prompt-capable bundle in
+      // ≤2 reloads with zero user action.
+      //
+      // TODO(revert-to-prompt): once telemetry/anecdote confirms the fleet has
+      // migrated off pre-UpdatePrompt bundles, switch this back to 'prompt' so new
+      // deploys surface the civil "发现新版本" dialog (UpdatePrompt.tsx, kept below)
+      // instead of silently reloading mid-conversation.
+      registerType: 'autoUpdate',
       // Precache the built app shell; SPA routes fall back to index.html offline.
       includeAssets: ['apple-touch-icon.png', 'favicon-96.png'],
       manifest: {
