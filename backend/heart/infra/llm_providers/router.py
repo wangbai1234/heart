@@ -4,8 +4,9 @@ Provides call_main(), call_cheap(), stream_main() for legacy callers, and
 stream_for() / call_for() for multi-model failover.
 """
 
+import asyncio
 import time
-from typing import AsyncGenerator, Optional
+from typing import AsyncGenerator, Optional, cast
 
 import structlog
 
@@ -23,6 +24,16 @@ logger = structlog.get_logger()
 
 # Default failover chain: highest quality → cheapest (DeepSeek is free).
 DEFAULT_FAILOVER = ["claude", "grok", "deepseek"]
+
+# Time-to-first-token deadline for the streaming path. If a candidate model does
+# not produce its first *content* byte within this window, we abort it and fail
+# over to the next model in the chain. This is the "卡住的气泡" guard: a relay
+# that accepts the connection but stalls on prefill (observed grok TTFT of 19.5s)
+# would otherwise leave the user staring at an empty bubble until the 45s
+# whole-turn timeout. 6s is chosen so a healthy HK→relay cold prefill (usually
+# <6s) still succeeds, while a genuine stall degrades fast. Only applied before
+# the first byte — once content flows we never interrupt a live stream.
+TTFT_FAILOVER_S = 6.0
 
 
 class ModelRouter:
@@ -185,6 +196,94 @@ class ModelRouter:
             retriable=False,
         ) from last_error
 
+    @staticmethod
+    async def _anext_with_ttft(
+        agen: "AsyncGenerator[StreamChunk, None]", *, budget_s: Optional[float]
+    ) -> StreamChunk:
+        """Await the next chunk.
+
+        ``budget_s`` bounds the wait for the *first* content byte (TTFT guard): a
+        non-positive budget or a slow first token raises ``asyncio.TimeoutError``
+        so the caller can fail over. Once content is flowing the caller passes
+        ``None`` → we wait unbounded and never interrupt a live stream.
+        """
+        if budget_s is None:
+            return await agen.__anext__()
+        if budget_s <= 0:
+            raise asyncio.TimeoutError()
+        return await asyncio.wait_for(agen.__anext__(), timeout=budget_s)
+
+    async def _stream_candidate(
+        self,
+        provider,
+        request: LLMRequest,
+        *,
+        candidate: str,
+        requested: str,
+        agent_name: str,
+        attempt_idx: int,
+        t_start: float,
+        meta: Optional[dict],
+    ) -> AsyncGenerator[str, None]:
+        """Drive one provider's stream with a first-token watchdog.
+
+        Yields content strings. Completing without yielding = an empty response
+        (the caller decides whether to fail over). Raises ``asyncio.TimeoutError``
+        if the first content byte exceeds ``TTFT_FAILOVER_S``, or ``ProviderError``
+        on a provider failure. Sets ``meta`` on the first content chunk. Always
+        closes the upstream connection in ``finally``.
+        """
+        # `t_candidate` resets per attempt so each model gets its own fresh TTFT
+        # budget. Cast: the abstract `stream` is declared `async def -> Iterator`
+        # but every concrete provider is an async *generator*, so the runtime
+        # object has __anext__/aclose.
+        t_candidate = time.perf_counter()
+        yielded_content = False
+        agen = cast("AsyncGenerator[StreamChunk, None]", provider.stream(request))
+        try:
+            while True:
+                budget = (
+                    None
+                    if yielded_content
+                    else TTFT_FAILOVER_S - (time.perf_counter() - t_candidate)
+                )
+                try:
+                    chunk = await self._anext_with_ttft(agen, budget_s=budget)
+                except StopAsyncIteration:
+                    break
+                if not chunk.content:
+                    continue
+                if not yielded_content:
+                    # Lock in served_model on the first *content* chunk (not the
+                    # first raw frame) so a stream that emits only a finish-reason
+                    # frame still counts as empty and can fail over.
+                    yielded_content = True
+                    ttft_ms = round((time.perf_counter() - t_start) * 1000.0, 1)
+                    if meta is not None:
+                        meta["served_model"] = candidate
+                        meta["degraded_to"] = candidate if attempt_idx > 0 else None
+                        meta["ttft_ms"] = ttft_ms
+                    logger.info(
+                        "stream_ttft",
+                        agent_name=agent_name,
+                        model=candidate,
+                        requested=requested,
+                        attempt=attempt_idx + 1,
+                        ttft_ms=ttft_ms,
+                    )
+                yield chunk.content
+        finally:
+            # Release the upstream connection whether we exhausted, failed over,
+            # or aborted on timeout. aclose() throws GeneratorExit into the
+            # provider's `async with client.stream(...)`, closing the HTTP
+            # response cleanly. Best-effort: a cancelled __anext__ can leave the
+            # generator in a state where aclose() itself errors, and that must not
+            # mask the real failover/return path.
+            try:
+                await agen.aclose()
+            except Exception:
+                logger.debug("stream_for_aclose_failed", from_model=candidate)
+
     async def stream_for(
         self,
         model: str,
@@ -202,10 +301,11 @@ class ModelRouter:
           meta["degraded_to"]  = served_model if failover occurred, else None
 
         Failover triggers on (a) connection/status errors (ProviderError raised
-        before any chunk is yielded) and (b) an error-free stream that produces
-        no content — an empty response is useless, so we fall through to the next
-        model (the "deepseek 兜底"). Once real content has been yielded, a
-        mid-stream error propagates as-is (we cannot un-send bytes).
+        before any chunk is yielded), (b) an error-free stream that produces no
+        content — an empty response is useless, so we fall through to the next
+        model (the "deepseek 兜底") — and (c) a stalled prefill that misses the
+        TTFT_FAILOVER_S first-token deadline. Once real content has been yielded,
+        a mid-stream error propagates as-is (we cannot un-send bytes).
         """
         chain = self._get_failover_chain(model, failover or DEFAULT_FAILOVER)
         # Narrow to candidates with a registered provider so we know which
@@ -223,50 +323,35 @@ class ModelRouter:
         for i, candidate in enumerate(usable):
             provider = self._registry.get_provider_for_model(candidate)
             is_last = i == len(usable) - 1
-
             # candidate is a routing slug (e.g. "deepseek"); the vendor API needs
             # the canonical model name (e.g. "deepseek-chat"). served_model stays
             # the slug for billing/label purposes.
             api_model = self._registry.get_canonical_model(candidate)
             request = self._build_request(messages, api_model, temperature, max_tokens, stream=True)
+            logger.info(
+                "stream_for_attempt", agent_name=agent_name, model=candidate, requested=model
+            )
+
+            got_content = False
             try:
-                logger.info(
-                    "stream_for_attempt",
-                    agent_name=agent_name,
-                    model=candidate,
+                async for content in self._stream_candidate(
+                    provider,
+                    request,
+                    candidate=candidate,
                     requested=model,
-                )
-                yielded_content = False
-                async for chunk in provider.stream(request):  # type: ignore[attr-defined]
-                    if chunk.content:
-                        if not yielded_content:
-                            # Lock in served_model on the first *content* chunk
-                            # (not the first raw frame) so a stream that emits
-                            # only a finish-reason frame still counts as empty
-                            # and can fail over.
-                            ttft_ms = round((time.perf_counter() - t_start) * 1000.0, 1)
-                            if meta is not None:
-                                meta["served_model"] = candidate
-                                meta["degraded_to"] = candidate if i > 0 else None
-                                meta["ttft_ms"] = ttft_ms
-                            logger.info(
-                                "stream_ttft",
-                                agent_name=agent_name,
-                                model=candidate,
-                                requested=model,
-                                attempt=i + 1,
-                                ttft_ms=ttft_ms,
-                            )
-                            yielded_content = True
-                        yield chunk.content
-                if yielded_content:
+                    agent_name=agent_name,
+                    attempt_idx=i,
+                    t_start=t_start,
+                    meta=meta,
+                ):
+                    got_content = True
+                    yield content
+                if got_content:
                     return
                 # Stream finished without any content.
                 if not is_last:
                     logger.warning(
-                        "stream_for_empty_failover",
-                        from_model=candidate,
-                        requested=model,
+                        "stream_for_empty_failover", from_model=candidate, requested=model
                     )
                     last_error = ProviderError(
                         f"empty response from {candidate}",
@@ -281,12 +366,36 @@ class ModelRouter:
                     meta["served_model"] = candidate
                     meta["degraded_to"] = candidate if i > 0 else None
                 return
-            except ProviderError as e:
+            except asyncio.TimeoutError:
+                # First token missed TTFT_FAILOVER_S. Only reachable before any
+                # content was yielded, so failing over is safe.
                 logger.warning(
-                    "stream_for_failover",
+                    "stream_for_ttft_timeout",
                     from_model=candidate,
-                    error=str(e),
+                    requested=model,
+                    ttft_budget_s=TTFT_FAILOVER_S,
                 )
+                last_error = ProviderError(
+                    f"first-token timeout (>{TTFT_FAILOVER_S}s) from {candidate}",
+                    provider=candidate,
+                    model=candidate,
+                    retriable=True,
+                )
+                continue
+            except ProviderError as e:
+                if got_content:
+                    # Bytes are already on the wire to the client — re-streaming a
+                    # second model would concatenate a whole new answer onto the
+                    # partial one (garbled output). We cannot un-send, so surface
+                    # the mid-stream failure instead of failing over.
+                    logger.warning(
+                        "stream_for_midstream_error",
+                        from_model=candidate,
+                        requested=model,
+                        error=str(e),
+                    )
+                    raise
+                logger.warning("stream_for_failover", from_model=candidate, error=str(e))
                 last_error = e
                 continue
 
