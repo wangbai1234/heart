@@ -706,3 +706,71 @@ async def test_stream_for_sends_canonical_model_not_slug():
     assert "".join(chunks).strip() == "hello world"
     assert meta["served_model"] == "deepseek"  # slug preserved
     assert rec.seen_models == ["deepseek-chat"]  # canonical reached the provider
+
+
+# ---------------------------------------------------------------------------
+# stream_for — non-ProviderError failover (Bug: "claude 生成失败无兜底")
+# ---------------------------------------------------------------------------
+
+
+class MidStreamRaiseProvider:
+    """Streams some content, then raises a non-ProviderError mid-stream."""
+
+    def __init__(self, content: str, exc: Exception):
+        self._content = content
+        self._exc = exc
+        self.calls = 0
+
+    async def stream(self, request: LLMRequest) -> AsyncIterator[StreamChunk]:
+        self.calls += 1
+        for word in self._content.split():
+            yield StreamChunk(content=word + " ")
+        raise self._exc
+
+
+@pytest.mark.asyncio
+async def test_stream_for_non_provider_error_before_first_byte_fails_over():
+    """A raw (non-ProviderError) exception escaping the provider *before* any
+    content must still fail over to the next model — this is the claude
+    '生成失败无兜底' report: a relay/transport error that isn't wrapped as a
+    ProviderError must not skip grok→deepseek."""
+    claude_fake = FakeProvider(raises=RuntimeError("raw relay boom"))
+    grok_fake = FakeProvider(content="grok saved it")
+    reg = _make_registry(
+        ("claude", claude_fake, ["claude"]),
+        ("grok", grok_fake, ["grok"]),
+    )
+    router = _router(reg)
+
+    meta: dict = {}
+    chunks = []
+    async for chunk in router.stream_for("claude", _messages(), failover=["grok"], meta=meta):
+        chunks.append(chunk)
+
+    assert "".join(chunks).strip() == "grok saved it"
+    assert meta["served_model"] == "grok"
+    assert meta["degraded_to"] == "grok"
+    assert claude_fake.calls == 1
+    assert grok_fake.calls == 1
+
+
+@pytest.mark.asyncio
+async def test_stream_for_non_provider_error_after_first_byte_reraises():
+    """Once real content is on the wire, a non-ProviderError must propagate — we
+    cannot un-send bytes, so failing over would concatenate a second answer."""
+    claude_mid = MidStreamRaiseProvider(content="partial answer", exc=RuntimeError("boom"))
+    grok_fake = FakeProvider(content="should not be reached")
+    reg = _make_registry(
+        ("claude", claude_mid, ["claude"]),
+        ("grok", grok_fake, ["grok"]),
+    )
+    router = _router(reg)
+
+    chunks = []
+    with pytest.raises(RuntimeError, match="boom"):
+        async for chunk in router.stream_for("claude", _messages(), failover=["grok"]):
+            chunks.append(chunk)
+
+    # Partial content was delivered before the raise; no failover to grok.
+    assert "".join(chunks).strip() == "partial answer"
+    assert grok_fake.calls == 0

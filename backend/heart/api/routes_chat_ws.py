@@ -21,7 +21,7 @@ from sqlalchemy import text as sql_text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from heart.core.auth import TokenData, auth_manager, get_current_user
-from heart.ss01_soul.character_catalog import is_known_character
+from heart.ss01_soul.character_catalog import ensure_character_loaded
 
 from .wiring import _get_engine, get_db, get_orchestrator, get_voice_service
 
@@ -829,9 +829,15 @@ async def _handle_chat_message(
         )
         return
 
-    # Boundary guard: reject ids with no loaded Soul Spec (in-memory, no DB hit)
-    # before they reach billing / orchestrator / persistence.
-    if not is_known_character(character_id):
+    # Boundary guard: reject ids with no loaded Soul Spec before they reach
+    # billing / orchestrator / persistence. DB-authoritative with lazy hydrate —
+    # a character created on the *other* uvicorn worker (--workers 2) is not in
+    # this process's in-memory registry yet, so we fall back to a one-shot DB
+    # lookup that hydrates it. Without this, a freshly-created character rejects
+    # ~50% of first messages as SOUL_NOT_LOADED depending on worker routing.
+    async with AsyncSession(_get_engine(), expire_on_commit=False) as _known_db:
+        _known = await ensure_character_loaded(character_id, _known_db)
+    if not _known:
         await ws.send_json(
             {
                 "type": "error",

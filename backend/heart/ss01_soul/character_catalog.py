@@ -17,11 +17,15 @@ without a database:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Optional, Sequence
+from typing import Any, Optional, Sequence
 from uuid import UUID
+
+import structlog
 
 from heart.ss01_soul.character_content import get_display_name
 from heart.ss01_soul.registry import get_soul_registry
+
+logger = structlog.get_logger()
 
 
 @dataclass(frozen=True)
@@ -129,3 +133,44 @@ def is_known_character(character_id: str) -> bool:
         return character_id in set(get_soul_registry().list_characters())
     except Exception:
         return False
+
+
+async def ensure_character_loaded(character_id: str, db: Any) -> bool:
+    """DB-authoritative boundary check with lazy per-process hydration.
+
+    ``is_known_character`` only sees the *current worker's* in-memory registry.
+    Prod runs multiple uvicorn workers (``--workers 2``), and a UGC character is
+    hot-loaded (``reload_character``) into just the one worker that handled its
+    creation — the other worker(s) stay ignorant of it until the next restart's
+    DB warm (``load_db_overlay`` in the lifespan). That window makes a
+    freshly-created character fail ~50% of the time, flakily by which worker the
+    request lands on: chat rejects it as ``SOUL_NOT_LOADED`` ("角色加载中") and
+    clear-conversations 404s ("清空失败").
+
+    This closes the gap on the hot path: if the id isn't in this process's
+    registry, fetch its single active spec from the DB once and overlay it, so
+    any worker can serve any character that actually exists. Returns True iff the
+    character is (now) known. A DB error fails closed (returns the in-memory
+    answer) rather than waving unknown ids through.
+    """
+    if is_known_character(character_id):
+        return True
+
+    # Not in this worker's registry — it may have been created on another worker
+    # after startup. Authoritatively check the DB and hydrate on hit.
+    from heart.ss01_soul.spec_store import fetch_active_spec
+
+    try:
+        row = await fetch_active_spec(db, character_id)
+    except Exception:
+        logger.exception("ensure_character_loaded_fetch_failed", character_id=character_id)
+        return False
+
+    if row is None:
+        return False
+
+    get_soul_registry().load_db_overlay([row])
+    known = is_known_character(character_id)
+    if known:
+        logger.info("ensure_character_loaded_lazy_hydrated", character_id=character_id)
+    return known
