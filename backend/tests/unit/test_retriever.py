@@ -373,8 +373,8 @@ class TestRetrievalOrchestrator:
     """Tests for RetrievalOrchestrator."""
 
     @pytest.mark.asyncio
-    async def test_orchestrator_runs_strategies_in_parallel(self, mock_db_session, query_context):
-        """Should run all strategies in parallel."""
+    async def test_orchestrator_runs_all_strategies(self, mock_db_session, query_context):
+        """Should invoke every enabled strategy (serialized on the shared session)."""
         orchestrator = RetrievalOrchestrator(mock_db_session)
 
         # Mock strategies to return empty results
@@ -650,23 +650,45 @@ class TestPerformance:
     """Performance tests for retriever."""
 
     @pytest.mark.asyncio
-    async def test_parallel_execution_is_faster(self, mock_db_session, query_context):
-        """Parallel execution should be faster than sequential."""
+    async def test_strategies_run_serialized_on_shared_session(
+        self, mock_db_session, query_context
+    ):
+        """Strategies MUST run one-at-a-time, never concurrently.
+
+        All strategies share one AsyncSession (== one asyncpg connection), and a
+        single connection can execute only one operation at a time. Fanning them
+        out with asyncio.gather raised in production and poisoned the turn's
+        connection:
+
+            asyncpg InterfaceError: cannot perform operation:
+            another operation is in progress
+
+        This guards the regression by asserting no two strategy retrieve() calls
+        are ever in flight simultaneously.
+        """
         orchestrator = RetrievalOrchestrator(mock_db_session)
 
-        # Mock slow strategies (50ms each)
-        async def slow_retrieve(*args, **kwargs):
-            await asyncio.sleep(0.05)
+        in_flight = 0
+        max_in_flight = 0
+
+        async def tracked_retrieve(*args, **kwargs):
+            nonlocal in_flight, max_in_flight
+            in_flight += 1
+            max_in_flight = max(max_in_flight, in_flight)
+            await asyncio.sleep(0.01)  # yield so overlap would be observable
+            in_flight -= 1
             return []
 
         with (
-            patch.object(VectorRetriever, "retrieve", slow_retrieve),
-            patch.object(RecencyRetriever, "retrieve", slow_retrieve),
-            patch.object(EmotionalRetriever, "retrieve", slow_retrieve),
-            patch.object(IdentityLookup, "retrieve", slow_retrieve),
+            patch.object(VectorRetriever, "retrieve", tracked_retrieve),
+            patch.object(RecencyRetriever, "retrieve", tracked_retrieve),
+            patch.object(EmotionalRetriever, "retrieve", tracked_retrieve),
+            patch.object(IdentityLookup, "retrieve", tracked_retrieve),
         ):
-            result = await orchestrator.retrieve(query_context)
+            await orchestrator.retrieve(query_context)
 
-            # 4 strategies × 50ms = 200ms if sequential
-            # Should be ~50ms if parallel
-            assert result.retrieval_time_ms < 150  # Allow some overhead
+        assert max_in_flight == 1, (
+            f"strategies overlapped (max_in_flight={max_in_flight}); they must be "
+            "serialized on the shared session to avoid asyncpg 'another operation "
+            "is in progress'"
+        )
