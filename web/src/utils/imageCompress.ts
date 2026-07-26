@@ -48,3 +48,43 @@ export function compressImage(file: File, maxSize: number, quality = 0.85): Prom
     img.src = objectUrl
   })
 }
+
+/**
+ * Compress an image until it fits under `targetBytes`, degrading gracefully
+ * instead of rejecting the user's upload.
+ *
+ * The old behaviour hard-rejected anything still over the cap after a single
+ * 800px/0.8 pass ("封面图太大了，请换一张更小的图片") — unreasonable, since a
+ * normal phone photo is several MB and users won't hand-shrink it. Instead we
+ * step the WebP quality down, then the max dimension down, re-encoding until the
+ * result is under budget. If even the smallest attempt overshoots we return that
+ * smallest attempt (best effort) rather than blocking the upload — the backend
+ * still enforces its own 8MB hard limit.
+ */
+export async function compressImageToTarget(
+  file: File,
+  targetBytes: number,
+  { startSize = 800, minSize = 320 }: { startSize?: number; minSize?: number } = {},
+): Promise<File> {
+  // (maxSize, quality) ladder from best→smallest. Quality drops first (cheap,
+  // preserves framing), then dimensions.
+  const ladder: Array<[number, number]> = [
+    [startSize, 0.8],
+    [startSize, 0.65],
+    [startSize, 0.5],
+    [640, 0.6],
+    [480, 0.6],
+    [minSize, 0.55],
+  ]
+
+  let smallest: File | null = null
+  for (const [maxSize, quality] of ladder) {
+    const out = await compressImage(file, maxSize, quality).catch(() => null)
+    if (!out) continue
+    if (out.size <= targetBytes) return out
+    if (!smallest || out.size < smallest.size) smallest = out
+  }
+  // Everything overshot — hand back the smallest we produced (or the original if
+  // every encode failed) and let the backend be the final gatekeeper.
+  return smallest ?? file
+}

@@ -1,12 +1,14 @@
 import { create } from 'zustand'
 import {
   getCharacters,
+  getCharacterProfile,
   createCharacter as apiCreateCharacter,
   updateCharacter as apiUpdateCharacter,
   setCharacterVisibility as apiSetVisibility,
   disableCharacter as apiDisableCharacter,
   type CharacterDTO,
   type CharacterDraftDTO,
+  type CharacterProfileDTO,
 } from '../services/api'
 import { CHARACTER_PROFILES } from '../data/uiContent'
 
@@ -31,6 +33,13 @@ interface CharactersState {
   loading: boolean
   load: (force?: boolean) => Promise<void>
 
+  // Per-id profile cache for /character/:id. Mirrors storyStore.detailById so a
+  // re-entry is instant (no ~1s spinner). System characters never change their
+  // cover/copy; a user editing their own character re-fetches via force=true
+  // (createCharacter / updateCharacter clear the affected entry below).
+  profileById: Record<string, CharacterProfileDTO>
+  loadProfile: (id: string, force?: boolean) => Promise<CharacterProfileDTO | null>
+
   // UGC actions — each calls the API and then force-reloads the catalog.
   createCharacter: (draft: CharacterDraftDTO) => Promise<{ id: string; display_name: string }>
   updateCharacter: (id: string, draft: CharacterDraftDTO) => Promise<void>
@@ -40,11 +49,33 @@ interface CharactersState {
 
 // Deduplicate concurrent / repeated loads across the app.
 let inflight: Promise<void> | null = null
+// Per-id inflight dedup for profile fetches (two components mounting the same
+// /character/:id at once share one request).
+const profileInflight: Record<string, Promise<CharacterProfileDTO | null>> = {}
 
 export const useCharactersStore = create<CharactersState>((set, get) => ({
   characters: [],
   loaded: false,
   loading: false,
+  profileById: {},
+
+  loadProfile: async (id, force = false) => {
+    const cached = get().profileById[id]
+    if (cached && !force) return cached
+    const pending = profileInflight[id]
+    if (pending) return pending
+    const req = getCharacterProfile(id)
+      .then((profile) => {
+        set((s) => ({ profileById: { ...s.profileById, [id]: profile } }))
+        return profile
+      })
+      .catch(() => null)
+      .finally(() => {
+        delete profileInflight[id]
+      })
+    profileInflight[id] = req
+    return req
+  },
 
   load: async (force = false) => {
     if (!force && (get().loaded || get().loading)) return
@@ -73,6 +104,12 @@ export const useCharactersStore = create<CharactersState>((set, get) => ({
 
   updateCharacter: async (id, draft) => {
     await apiUpdateCharacter(id, draft)
+    // Drop the stale profile so /character/:id re-fetches the edited cover/copy.
+    set((s) => {
+      const next = { ...s.profileById }
+      delete next[id]
+      return { profileById: next }
+    })
     await get().load(true)
   },
 

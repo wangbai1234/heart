@@ -17,7 +17,7 @@ import {
   type CharacterDraftDTO,
   type PresetVoiceDTO,
 } from '../services/api'
-import { compressImage } from '../utils/imageCompress'
+import { compressImageToTarget } from '../utils/imageCompress'
 import { CHARACTER_ROLE_TAGS, AGE_RANGES } from '../data/uiContent'
 import { Dialog } from '../components/ui/Dialog'
 
@@ -361,14 +361,11 @@ export function CreateCharacterPage() {
     }
     setCoverUploading(true)
     try {
-      // Portrait cover: compress to 800px WebP (matches the seed importer's
-      // budget). The backend is S3-only and rejects with 413 if storage is
-      // unavailable — never base64-inlines — so guard the client artifact too.
-      const compressed = await compressImage(file, 800, 0.8).catch(() => file)
-      if (compressed.size > 200 * 1024) {
-        showToast('封面图太大了，请换一张更小的图片', 'error')
-        return
-      }
+      // Portrait cover: adaptively compress to 800px WebP under ~200KB (matches
+      // the seed importer's budget). Users upload multi-MB phone photos and
+      // won't hand-shrink them, so we degrade quality/dimensions until it fits
+      // rather than rejecting — the backend still enforces its 8MB hard cap.
+      const compressed = await compressImageToTarget(file, 200 * 1024)
       const { cover_url } = await uploadCharacterCover(compressed)
       setCoverUrl(cover_url)
     } catch (err) {

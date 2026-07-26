@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { getCharacterProfile, type CharacterProfileDTO } from '../services/api'
+import type { CharacterProfileDTO } from '../services/api'
+import { useCharactersStore } from '../stores/charactersStore'
 import { useCompanionsStore } from '../stores/companionsStore'
 import { useAppStore } from '../stores/appStore'
 import { DEFAULT_COVER } from '../data/uiContent'
@@ -23,8 +24,14 @@ export function CharacterProfilePage() {
   const setCharacter = useAppStore((s) => s.setCharacter)
   const companions = useCompanionsStore((s) => s.companions)
   const loadCompanions = useCompanionsStore((s) => s.load)
+  const loadProfile = useCharactersStore((s) => s.loadProfile)
 
-  const [profile, setProfile] = useState<CharacterProfileDTO | null>(null)
+  // Seed synchronously from the store cache so a re-entry paints instantly with
+  // no spinner (system covers/copy never change). A cold entry starts null and
+  // fetches below.
+  const [profile, setProfile] = useState<CharacterProfileDTO | null>(
+    () => useCharactersStore.getState().profileById[id] ?? null,
+  )
   const [error, setError] = useState(false)
 
   useEffect(() => {
@@ -33,19 +40,20 @@ export function CharacterProfilePage() {
 
   useEffect(() => {
     let alive = true
-    setProfile(null)
+    const cached = useCharactersStore.getState().profileById[id]
+    // Show cache immediately (or blank for a cold id); never flash a spinner
+    // over already-good data.
+    setProfile(cached ?? null)
     setError(false)
-    getCharacterProfile(id)
+    loadProfile(id)
       .then((p) => {
-        if (alive) setProfile(p)
-      })
-      .catch(() => {
-        if (alive) setError(true)
+        if (alive && p) setProfile(p)
+        else if (alive && !p && !cached) setError(true)
       })
     return () => {
       alive = false
     }
-  }, [id])
+  }, [id, loadProfile])
 
   const companion = useMemo(
     () => companions.find((c) => c.character_id === id),
