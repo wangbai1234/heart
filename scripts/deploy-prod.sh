@@ -15,6 +15,8 @@
 # 用法：
 #   bash scripts/deploy-prod.sh                完整部署（首次或更新）
 #   bash scripts/deploy-prod.sh --update       仅拉代码 + 重建镜像 + 重启（保留 DB）
+#   bash scripts/deploy-prod.sh --update-backend  仅后端更新（前端已本机构建+rsync，跳过服务器
+#                                              构建避免小 VPS OOM）。顺序：build→up→migrate
 #   bash scripts/deploy-prod.sh --migrate      仅跑数据库迁移
 #   bash scripts/deploy-prod.sh --status       查看服务健康
 #   bash scripts/deploy-prod.sh --logs [name]  查看日志（api/encoder-worker/caddy/all）
@@ -247,11 +249,11 @@ start_app_layer() {
 # 运行数据库迁移
 # ──────────────────────────────────────────────────────────────────────────────
 run_migrations() {
-    log "运行数据库迁移（多 head DAG，升到全部 head）..."
-    # 多 head Alembic DAG：022_identity_narrative_backfill 是悬挂 head，主线到
-    # 039_dual_provider_voices。`upgrade heads`（复数）一次升到所有 head，避免"新加
-    # 迁移忘改硬编码版本号"导致生产 DB 落后代码（曾漏升 039 → 语音双 provider 表缺列）。
-    # `upgrade head`（单数）会因多 head 报错，务必用复数。
+    log "运行数据库迁移（升到全部 head）..."
+    # 当前是单 head（046_merge_022_045 已合并早期 022/045 悬挂 head，主线到 050）。
+    # 仍用 `upgrade heads`（复数）作为防御默认：若将来有人又引入悬挂 head，复数会一次
+    # 升到所有 head，而 `upgrade head`（单数）会因多 head 直接报错中断部署。曾漏升某 head
+    # → 生产 DB 落后代码、表缺列（撒谎式绿灯），故宁可用复数。
     DC exec -T api python -m alembic upgrade heads
 
     echo ""
@@ -310,6 +312,22 @@ main() {
             DC build api encoder-worker
             DC up -d
             run_migrations
+            print_summary
+            ;;
+        --update-backend)
+            # 后端 only 更新。前提：前端已在【本机】构建并 rsync 到 web/dist（小 VPS
+            # 上 docker 构建前端会 OOM 静默卡退，见 memory: project_prod_frontend_build_oom）。
+            # 关键顺序：build → up -d → migrate。必须先 up 再 migrate——
+            #   `DC build` 只构建新镜像，运行中的仍是旧容器；`DC up -d` 才把容器换成新镜像
+            #   并重读 .env.prod。若在 up 前 `DC exec ... alembic upgrade`，exec 进的是【旧
+            #   容器】，跑的是旧迁移文件 + 旧代码，新拉的迁移根本不生效（撒谎式绿灯）。
+            log "后端增量更新（前端已本机 rsync，跳过服务器构建；顺序 build→up→migrate）"
+            cd "$REPO_ROOT"
+            git pull --ff-only origin main
+            [[ -d "$REPO_ROOT/web/dist" ]] || warn "web/dist 不存在——前端是否已本机构建 + rsync？"
+            DC build api encoder-worker
+            DC up -d                 # 先 up：换新镜像 + 重读 .env.prod
+            run_migrations           # 再 migrate：exec 进的是刚换上的新容器
             print_summary
             ;;
         --migrate)
