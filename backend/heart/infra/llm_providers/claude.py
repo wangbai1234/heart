@@ -16,6 +16,7 @@ from typing import AsyncIterator, Dict, List, Optional
 
 import httpx
 
+from heart.infra.llm_providers._http import make_async_client
 from heart.infra.llm_providers.base import (
     CircuitBreakerInterface,
     CostEstimate,
@@ -85,8 +86,8 @@ class ClaudeProvider(LLMProvider):
                     "anthropic-version": self.ANTHROPIC_VERSION,
                     "Content-Type": "application/json",
                 }
-            self._client = httpx.AsyncClient(
-                base_url=self.base_url or "",
+            self._client = make_async_client(
+                base_url=self.base_url,
                 headers=headers,
                 timeout=self.timeout,
             )
