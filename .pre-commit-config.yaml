@@ -25,3 +25,14 @@ repos:
         files: ^backend/
         pass_filenames: false
         always_run: false
+
+      - id: bump-web-version
+        name: bump web version (patch)
+        entry: bash scripts/bump-web-version.sh
+        language: system
+        # Only bump when frontend source changes — pure backend/docs/config
+        # commits keep the version stable. version.json itself is excluded so
+        # the hook re-staging it never re-triggers.
+        files: ^web/src/
+        pass_filenames: false
+        always_run: false

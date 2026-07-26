@@ -1,0 +1,71 @@
+import { useEffect, useState } from 'react'
+import { useRegisterSW } from 'virtual:pwa-register/react'
+import { Dialog } from './ui/Dialog'
+import { Button } from './ui/Button'
+
+// PWA users can't just "点刷新" — a standalone-installed app has no address bar
+// and its service worker keeps serving the cached shell across app restarts.
+// So a new deploy is invisible until the SW is explicitly told to activate.
+//
+// With registerType: 'prompt' (vite.config.ts) the SW installs the new version
+// but waits. useRegisterSW() flips `needRefresh` when that happens; we show a
+// dialog and only reload when the user confirms. `updateServiceWorker(true)`
+// calls skipWaiting() on the waiting SW and reloads the page onto it.
+export function UpdatePrompt() {
+  const {
+    needRefresh: [needRefresh, setNeedRefresh],
+    updateServiceWorker,
+  } = useRegisterSW()
+
+  const [latestVersion, setLatestVersion] = useState<string | null>(null)
+
+  // When an update is waiting, fetch the freshly-deployed version.json to show
+  // the user which version they'll get. version.json is not precached (not in
+  // workbox globPatterns), and we bypass every cache layer, so this reflects
+  // the new deploy — not the stale bundle this client is still running.
+  useEffect(() => {
+    if (!needRefresh) return
+    let cancelled = false
+    fetch(`/version.json?_=${Date.now()}`, { cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!cancelled && data?.version) setLatestVersion(String(data.version))
+      })
+      .catch(() => {
+        /* best-effort: dialog still works without the exact new version */
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [needRefresh])
+
+  if (!needRefresh) return null
+
+  return (
+    <Dialog
+      open={needRefresh}
+      onClose={() => setNeedRefresh(false)}
+      title="发现新版本"
+      actions={
+        <>
+          <Button variant="ghost" size="sm" onClick={() => setNeedRefresh(false)} className="flex-1">
+            暂不
+          </Button>
+          <Button variant="primary" size="sm" onClick={() => updateServiceWorker(true)} className="flex-1">
+            确认刷新
+          </Button>
+        </>
+      }
+    >
+      <p className="leading-[1.7]">
+        当前有版本更新，刷新即可使用最新功能。
+      </p>
+      <p className="mt-2 text-[13px] text-[var(--color-text-muted)]">
+        当前版本 v{__APP_VERSION__}
+        {latestVersion && latestVersion !== __APP_VERSION__ && (
+          <> · 最新版本 v{latestVersion}</>
+        )}
+      </p>
+    </Dialog>
+  )
+}

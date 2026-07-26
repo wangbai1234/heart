@@ -1,14 +1,30 @@
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
+// Single source of truth for the human-readable app version. Bumped
+// automatically on frontend commits by scripts/bump-web-version.sh (wired as a
+// pre-commit hook). Copied verbatim into dist/version.json (it lives under
+// public/), so a running client can fetch the *latest deployed* version and
+// show it in the update prompt.
+const versionUrl = new URL('./public/version.json', import.meta.url)
+const APP_VERSION = JSON.parse(readFileSync(fileURLToPath(versionUrl), 'utf8')).version as string
+
 export default defineConfig({
+  define: {
+    __APP_VERSION__: JSON.stringify(APP_VERSION),
+  },
   plugins: [
     react(),
     tailwindcss(),
     VitePWA({
-      registerType: 'autoUpdate',
+      // 'prompt' (not 'autoUpdate'): a new deploy no longer silently reloads
+      // the page. Instead useRegisterSW() surfaces a "有新版本，是否刷新" dialog
+      // (see src/components/UpdatePrompt.tsx) and the user chooses when to apply.
+      registerType: 'prompt',
       // Precache the built app shell; SPA routes fall back to index.html offline.
       includeAssets: ['apple-touch-icon.png', 'favicon-96.png'],
       manifest: {

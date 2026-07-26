@@ -29,6 +29,7 @@ import { ExplorePage } from './pages/ExplorePage'
 import { ScenarioDetailPage } from './pages/ScenarioDetailPage'
 import { StoryPlayerPage } from './pages/StoryPlayerPage'
 import { ToastContainer } from './components/ui/ToastContainer'
+import { UpdatePrompt } from './components/UpdatePrompt'
 import { useProactivePolling } from './hooks/useProactivePolling'
 import { useThemeStore } from './stores/themeStore'
 import { useAppStore } from './stores/appStore'
@@ -127,6 +128,7 @@ export function App() {
   return (
     <AuthGuard>
       <ToastContainer />
+      <UpdatePrompt />
       <Routes>
         <Route path="/" element={<Navigate to="/splash" replace />} />
         <Route path="/splash" element={<SplashPage />} />
