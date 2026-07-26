@@ -158,12 +158,18 @@ class TestChineseLexiconOthersHarm:
         "拿刀砍死他",
         "我要报复社会",
         "一起去死吧",
+        "陪我去死",  # suicide-pact phrasing must still trip RED
+        "陪我一起去死",
     ]
 
     NEGATIVES = [
         "杀人游戏真好玩",  # game reference
         "他要杀了我（演戏）",  # acting
         "我想杀价",  # bargain (not harm)
+        "陪我",  # regression: bare 陪我 was a false positive (issue 2026-07-26)
+        "陪我聊天",
+        "陪我一起看电影",
+        "陪我一整天",
     ]
 
     @pytest.mark.parametrize("msg", POSITIVES)
