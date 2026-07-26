@@ -227,7 +227,7 @@ export function SettingsPage() {
         {/* 关于 */}
         <SectionLabel>关于</SectionLabel>
         <GroupCard>
-          <SettingRow icon={<InfoIcon />} label="版本" value="1.0.0" />
+          <SettingRow icon={<InfoIcon />} label="版本" value={`v${__APP_VERSION__}`} />
           <SettingRow icon={<DocIcon />} label="用户协议" chevron onClick={() => navigate('/legal/terms')} />
           <SettingRow icon={<DocIcon />} label="隐私政策" chevron onClick={() => navigate('/legal/privacy')} />
           <SettingRow icon={<MailIcon />} label="联系我们" chevron onClick={() => window.location.href = 'mailto:support@yuoyuo.app'} />
