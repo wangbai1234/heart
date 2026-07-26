@@ -100,6 +100,21 @@ export default defineConfig({
             },
           },
           {
+            // Character cover images (/character list + /character/:id + /chat
+            // header). Content-addressed filename per character, so CacheFirst
+            // serves the ~1s cross-border cover fetch straight from cache on
+            // every re-open. When a user edits their own character the filename
+            // changes, so the new cover is a cache miss (correctly re-fetched)
+            // rather than a stale hit.
+            urlPattern: /\/api\/profile\/cover-file\//,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'character-covers-cache',
+              expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 30 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+          {
             // Large full-screen background art. Kept out of precache (globIgnores)
             // to avoid a ~17MB install, but cached at runtime so it loads once and
             // then serves from cache on every subsequent page/refresh.
