@@ -15,6 +15,13 @@ import { useCompanionsStore } from '../stores/companionsStore'
 import { stageWithIntimacy, isColdWar } from '../utils/relationship'
 import type { CompanionDTO } from '../services/api'
 
+/** Visibility badge config for owned UGC character cards. */
+const VIS_BADGE: Record<string, { label: string; color: string; bg: string }> = {
+  public:   { label: '公开',   color: '#5FC8E8', bg: 'rgba(95,200,232,0.35)' },
+  unlisted: { label: '链接可见', color: '#A7C7E7', bg: 'rgba(167,199,231,0.35)' },
+  private:  { label: '私密',   color: '#FFFFFF', bg: 'rgba(255,255,255,0.25)' },
+}
+
 /**
  * 角色发现页 (Nimoo-style discovery catalog).
  *
@@ -34,6 +41,7 @@ interface GridItem {
   profile: CharacterProfile
   isOwner: boolean
   isBuiltin: boolean
+  visibility?: string
   companion?: CompanionDTO
 }
 
@@ -72,6 +80,7 @@ export function CharacterPage() {
           id: c.id,
           isOwner,
           isBuiltin: c.is_builtin,
+          visibility: c.visibility,
           companion: companionById.get(c.id),
           profile: resolveCharacterProfile(c.id, c.display_name, c.avatar_url, {
             isOwner,
@@ -87,6 +96,7 @@ export function CharacterPage() {
         id: c.character_id,
         isOwner,
         isBuiltin: c.is_builtin,
+        visibility: c.visibility,
         companion: c,
         profile: resolveCharacterProfile(c.character_id, c.display_name, c.avatar_url, {
           isOwner,
@@ -257,10 +267,13 @@ export function CharacterPage() {
 }
 
 function DiscoveryCard({ item, onOpen }: { item: GridItem; onOpen: () => void }) {
-  const { profile, isOwner, companion } = item
+  const { profile, isOwner, companion, visibility } = item
   const tags = (profile.tags ?? []).slice(0, 3)
   const chatted = !!companion && companion.companion_status !== 'locked'
   const hook = profile.tagline || profile.summary || ''
+
+  // Visibility badge for owned UGC characters
+  const visInfo = isOwner ? VIS_BADGE[visibility ?? 'private'] ?? VIS_BADGE.private : null
 
   return (
     <button
@@ -276,10 +289,13 @@ function DiscoveryCard({ item, onOpen }: { item: GridItem; onOpen: () => void })
         {/* bottom scrim for legibility */}
         <div className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black/72 via-black/28 to-transparent" />
 
-        {/* owner chip */}
-        {isOwner && (
-          <span className="absolute top-2 left-2 inline-flex h-[22px] items-center rounded-full bg-black/35 px-2 text-[11px] font-medium text-white backdrop-blur-[4px]">
-            私密
+        {/* visibility badge for owned UGC characters */}
+        {visInfo && (
+          <span
+            className="absolute top-2 left-2 inline-flex h-[22px] items-center rounded-full px-2 text-[11px] font-medium backdrop-blur-[4px]"
+            style={{ background: visInfo.bg, color: visInfo.color }}
+          >
+            {visInfo.label}
           </span>
         )}
 

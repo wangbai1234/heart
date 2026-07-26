@@ -31,7 +31,11 @@ interface CharacterCardProps {
 }
 
 function CharacterCard({ char, onEdit, onVisibility, onDisable }: CharacterCardProps) {
-  const profile = resolveCharacterProfile(char.id, char.display_name, char.avatar_url, { isOwner: char.is_owner && !char.is_builtin })
+  const profile = resolveCharacterProfile(char.id, char.display_name, char.avatar_url, {
+    isOwner: char.is_owner && !char.is_builtin,
+    coverUrl: char.cover_url,
+    tags: char.tags,
+  })
   const vis = VIS_LABELS[char.visibility] ?? VIS_LABELS.private
   const [menuOpen, setMenuOpen] = useState(false)
   const [visMenuOpen, setVisMenuOpen] = useState(false)
@@ -45,15 +49,13 @@ function CharacterCard({ char, onEdit, onVisibility, onDisable }: CharacterCardP
     <div className={`relative backdrop-blur-[18px] rounded-[20px] shadow-[0_4px_16px_rgba(255,183,197,0.10)] overflow-visible ${menuOpen ? 'z-50' : ''} ${isDark ? 'bg-[var(--color-surface-card)] border border-[var(--color-border-subtle)]' : 'bg-[rgba(255,255,255,0.78)] border border-[rgba(255,255,255,0.65)]'}`}>
       <div className="flex items-center gap-4 px-5 py-4">
         {/* Avatar */}
-        <div className="w-[52px] h-[52px] rounded-full overflow-hidden border-[2px] border-[rgba(255,255,255,0.85)] shadow-[0_2px_8px_rgba(255,183,197,0.20)] shrink-0">
+        <div className="w-[52px] h-[52px] rounded-full overflow-hidden border-[2px] border-[rgba(255,255,255,0.85)] shadow-[0_2px_8px_rgba(255,183,197,0.20)] shrink-0 bg-gradient-to-br from-[#FFB7C5] to-[#C8B6FF] flex items-center justify-center">
           <img
             src={profile.avatar}
             alt={char.display_name}
             className="w-full h-full object-cover"
             onError={(e) => {
-              // fallback gradient placeholder
-              const el = e.currentTarget
-              el.style.display = 'none'
+              e.currentTarget.style.display = 'none'
             }}
           />
         </div>

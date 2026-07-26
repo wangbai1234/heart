@@ -168,6 +168,56 @@ export const CHARACTER_PROFILES: Record<string, CharacterProfile> = {
     summary: '来自虚构舞台的陪伴者，明亮、热情，也足够认真地记得每一次对话。',
     homeIntro: '刚刚和你聊过 · 心情：元气',
   },
+  lu_chen: { id: 'lu_chen', name: '陆辰', shortName: '陆辰', statusLabel: '在线', moodLabel: '在线', avatar: '/assets/characters/character_lu_chen_avatar.webp', tag: '现代豪门', tagColor: '#8B5CF6', tagBg: 'rgba(200,182,255,0.3)', summary: '温柔深情的豪门继承人。', homeIntro: '等待你来探索' },
+  yun_zhi: { id: 'yun_zhi', name: '云芝', shortName: '云芝', statusLabel: '在线', moodLabel: '在线', avatar: '/assets/characters/character_yun_zhi_avatar.webp', tag: '修仙', tagColor: '#8B5CF6', tagBg: 'rgba(200,182,255,0.3)', summary: '清冷出尘的修仙天才。', homeIntro: '等待你来探索' },
+  su_yueyao: { id: 'su_yueyao', name: '苏月瑶', shortName: '苏月瑶', statusLabel: '在线', moodLabel: '在线', avatar: '/assets/characters/character_su_yueyao_avatar.webp', tag: '古风宫斗', tagColor: '#8B5CF6', tagBg: 'rgba(200,182,255,0.3)', summary: '明媚如月的古风少女。', homeIntro: '等待你来探索' },
+  murong_jin: { id: 'murong_jin', name: '慕容锦', shortName: '慕容锦', statusLabel: '在线', moodLabel: '在线', avatar: '/assets/characters/character_murong_jin_avatar.webp', tag: '现代豪门', tagColor: '#8B5CF6', tagBg: 'rgba(200,182,255,0.3)', summary: '腹黑霸道的世家公子。', homeIntro: '等待你来探索' },
+  su_wan: { id: 'su_wan', name: '苏婉', shortName: '苏婉', statusLabel: '在线', moodLabel: '在线', avatar: '/assets/characters/character_su_wan_avatar.webp', tag: '古风宫斗', tagColor: '#8B5CF6', tagBg: 'rgba(200,182,255,0.3)', summary: '温婉如水的大家闺秀。', homeIntro: '等待你来探索' },
+  xuan_ye: { id: 'xuan_ye', name: '玄夜', shortName: '玄夜', statusLabel: '在线', moodLabel: '在线', avatar: '/assets/characters/character_xuan_ye_avatar.webp', tag: '西幻', tagColor: '#8B5CF6', tagBg: 'rgba(200,182,255,0.3)', summary: '神秘莫测的暗夜行者。', homeIntro: '等待你来探索' },
+  bai_zhi: { id: 'bai_zhi', name: '白枝', shortName: '白枝', statusLabel: '在线', moodLabel: '在线', avatar: '/assets/characters/character_bai_zhi_avatar.webp', tag: '西幻', tagColor: '#8B5CF6', tagBg: 'rgba(200,182,255,0.3)', summary: '天真烂漫的精灵少女。', homeIntro: '等待你来探索' },
+  mu_beihan: { id: 'mu_beihan', name: '慕北寒', shortName: '慕北寒', statusLabel: '在线', moodLabel: '在线', avatar: '/assets/characters/character_mu_beihan_avatar.webp', tag: '古风宫斗', tagColor: '#8B5CF6', tagBg: 'rgba(200,182,255,0.3)', summary: '冷峻孤傲的北境之王。', homeIntro: '等待你来探索' },
+  ye_lan: { id: 'ye_lan', name: '叶兰', shortName: '叶兰', statusLabel: '在线', moodLabel: '在线', avatar: '/assets/characters/character_ye_lan_avatar.webp', tag: '现代豪门', tagColor: '#8B5CF6', tagBg: 'rgba(200,182,255,0.3)', summary: '知性优雅的都市丽人。', homeIntro: '等待你来探索' },
+  bai_qinghuan: { id: 'bai_qinghuan', name: '白清欢', shortName: '白清欢', statusLabel: '在线', moodLabel: '在线', avatar: '/assets/characters/character_bai_qinghuan_avatar.webp', tag: '古风宫斗', tagColor: '#8B5CF6', tagBg: 'rgba(200,182,255,0.3)', summary: '风流倜傥的江湖侠客。', homeIntro: '等待你来探索' },
+  jiang_ye: { id: 'jiang_ye', name: '江夜', shortName: '江夜', statusLabel: '在线', moodLabel: '在线', avatar: '/assets/characters/character_jiang_ye_avatar.webp', tag: '现代豪门', tagColor: '#8B5CF6', tagBg: 'rgba(200,182,255,0.3)', summary: '沉默寡言的天才医生。', homeIntro: '等待你来探索' },
+  shen_guhong: { id: 'shen_guhong', name: '沈孤鸿', shortName: '沈孤鸿', statusLabel: '在线', moodLabel: '在线', avatar: '/assets/characters/character_shen_guhong_avatar.webp', tag: '修仙', tagColor: '#8B5CF6', tagBg: 'rgba(200,182,255,0.3)', summary: '孤高冷傲的剑修。', homeIntro: '等待你来探索' },
+  pei_jue: { id: 'pei_jue', name: '裴珏', shortName: '裴珏', statusLabel: '在线', moodLabel: '在线', avatar: '/assets/characters/character_pei_jue_avatar.webp', tag: '现代豪门', tagColor: '#8B5CF6', tagBg: 'rgba(200,182,255,0.3)', summary: '表面纨绔实则深藏不露。', homeIntro: '等待你来探索' },
+  jiang_yanzhou: { id: 'jiang_yanzhou', name: '姜衍舟', shortName: '姜衍舟', statusLabel: '在线', moodLabel: '在线', avatar: '/assets/characters/character_jiang_yanzhou_avatar.webp', tag: '古风宫斗', tagColor: '#8B5CF6', tagBg: 'rgba(200,182,255,0.3)', summary: '温润如玉的世家公子。', homeIntro: '等待你来探索' },
+  luo_yin: { id: 'luo_yin', name: '洛吟', shortName: '洛吟', statusLabel: '在线', moodLabel: '在线', avatar: '/assets/characters/character_luo_yin_avatar.webp', tag: '古风宫斗', tagColor: '#8B5CF6', tagBg: 'rgba(200,182,255,0.3)', summary: '才华横溢的诗人。', homeIntro: '等待你来探索' },
+  free_muse: { id: 'free_muse', name: '缪斯', shortName: '缪斯', statusLabel: '在线', moodLabel: '在线', avatar: '/assets/characters/character_free_muse_avatar.webp', tag: '其他', tagColor: '#8B5CF6', tagBg: 'rgba(200,182,255,0.3)', summary: '自由奔放的艺术家。', homeIntro: '等待你来探索' },
+  shi_yue: { id: 'shi_yue', name: '石月', shortName: '石月', statusLabel: '在线', moodLabel: '在线', avatar: '/assets/characters/character_shi_yue_avatar.webp', tag: '古风宫斗', tagColor: '#8B5CF6', tagBg: 'rgba(200,182,255,0.3)', summary: '坚韧不拔的女将军。', homeIntro: '等待你来探索' },
+  gu_xingmian: { id: 'gu_xingmian', name: '顾行勉', shortName: '顾行勉', statusLabel: '在线', moodLabel: '在线', avatar: '/assets/characters/character_gu_xingmian_avatar.webp', tag: '校园恋爱', tagColor: '#8B5CF6', tagBg: 'rgba(200,182,255,0.3)', summary: '勤勉踏实的青年才俊。', homeIntro: '等待你来探索' },
+  ye_bai: { id: 'ye_bai', name: '叶白', shortName: '叶白', statusLabel: '在线', moodLabel: '在线', avatar: '/assets/characters/character_ye_bai_avatar.webp', tag: '修仙', tagColor: '#8B5CF6', tagBg: 'rgba(200,182,255,0.3)', summary: '潇洒飘逸的游侠。', homeIntro: '等待你来探索' },
+  bo_jin: { id: 'bo_jin', name: '薄锦', shortName: '薄锦', statusLabel: '在线', moodLabel: '在线', avatar: '/assets/characters/character_bo_jin_avatar.webp', tag: '现代豪门', tagColor: '#8B5CF6', tagBg: 'rgba(200,182,255,0.3)', summary: '高冷禁欲的商界帝王。', homeIntro: '等待你来探索' },
+  pei_shen: { id: 'pei_shen', name: '裴深', shortName: '裴深', statusLabel: '在线', moodLabel: '在线', avatar: '/assets/characters/character_pei_shen_avatar.webp', tag: '古风宫斗', tagColor: '#8B5CF6', tagBg: 'rgba(200,182,255,0.3)', summary: '城府极深的谋略家。', homeIntro: '等待你来探索' },
+  lin_xiaoman: { id: 'lin_xiaoman', name: '林小满', shortName: '林小满', statusLabel: '在线', moodLabel: '在线', avatar: '/assets/characters/character_lin_xiaoman_avatar.webp', tag: '校园恋爱', tagColor: '#8B5CF6', tagBg: 'rgba(200,182,255,0.3)', summary: '活泼可爱的邻家女孩。', homeIntro: '等待你来探索' },
+  cheng_zhi: { id: 'cheng_zhi', name: '程之', shortName: '程之', statusLabel: '在线', moodLabel: '在线', avatar: '/assets/characters/character_cheng_zhi_avatar.webp', tag: '现代豪门', tagColor: '#8B5CF6', tagBg: 'rgba(200,182,255,0.3)', summary: '正直刚毅的青年军官。', homeIntro: '等待你来探索' },
+  zhu_xing: { id: 'zhu_xing', name: '竹星', shortName: '竹星', statusLabel: '在线', moodLabel: '在线', avatar: '/assets/characters/character_zhu_xing_avatar.webp', tag: '古风宫斗', tagColor: '#8B5CF6', tagBg: 'rgba(200,182,255,0.3)', summary: '清雅脱俗的乐师。', homeIntro: '等待你来探索' },
+  shen_yichen: { id: 'shen_yichen', name: '沈一尘', shortName: '沈一尘', statusLabel: '在线', moodLabel: '在线', avatar: '/assets/characters/character_shen_yichen_avatar.webp', tag: '修仙', tagColor: '#8B5CF6', tagBg: 'rgba(200,182,255,0.3)', summary: '不染尘埃的世外高人。', homeIntro: '等待你来探索' },
+  xie_yuntang: { id: 'xie_yuntang', name: '谢云棠', shortName: '谢云棠', statusLabel: '在线', moodLabel: '在线', avatar: '/assets/characters/character_xie_yuntang_avatar.webp', tag: '现代豪门', tagColor: '#8B5CF6', tagBg: 'rgba(200,182,255,0.3)', summary: '温婉大方的名门千金。', homeIntro: '等待你来探索' },
+  huo_cheng: { id: 'huo_cheng', name: '霍成', shortName: '霍成', statusLabel: '在线', moodLabel: '在线', avatar: '/assets/characters/character_huo_cheng_avatar.webp', tag: '现代豪门', tagColor: '#8B5CF6', tagBg: 'rgba(200,182,255,0.3)', summary: '雷厉风行的商业精英。', homeIntro: '等待你来探索' },
+  shen_yuchuan: { id: 'shen_yuchuan', name: '沈予川', shortName: '沈予川', statusLabel: '在线', moodLabel: '在线', avatar: '/assets/characters/character_shen_yuchuan_avatar.webp', tag: '校园恋爱', tagColor: '#8B5CF6', tagBg: 'rgba(200,182,255,0.3)', summary: '深情内敛的青梅竹马。', homeIntro: '等待你来探索' },
+  jiang_wan: { id: 'jiang_wan', name: '姜晚', shortName: '姜晚', statusLabel: '在线', moodLabel: '在线', avatar: '/assets/characters/character_jiang_wan_avatar.webp', tag: '校园恋爱', tagColor: '#8B5CF6', tagBg: 'rgba(200,182,255,0.3)', summary: '温柔恬静的治愈系少女。', homeIntro: '等待你来探索' },
+  lu_tingsheng: { id: 'lu_tingsheng', name: '陆霆笙', shortName: '陆霆笙', statusLabel: '在线', moodLabel: '在线', avatar: '/assets/characters/character_lu_tingsheng_avatar.webp', tag: '现代豪门', tagColor: '#8B5CF6', tagBg: 'rgba(200,182,255,0.3)', summary: '权势滔天的家族掌门人。', homeIntro: '等待你来探索' },
+  lu_zhao: { id: 'lu_zhao', name: '陆昭', shortName: '陆昭', statusLabel: '在线', moodLabel: '在线', avatar: '/assets/characters/character_lu_zhao_avatar.webp', tag: '校园恋爱', tagColor: '#8B5CF6', tagBg: 'rgba(200,182,255,0.3)', summary: '阳光开朗的运动少年。', homeIntro: '等待你来探索' },
+  gu_han: { id: 'gu_han', name: '顾寒', shortName: '顾寒', statusLabel: '在线', moodLabel: '在线', avatar: '/assets/characters/character_gu_han_avatar.webp', tag: '现代豪门', tagColor: '#8B5CF6', tagBg: 'rgba(200,182,255,0.3)', summary: '冷面热心的特警队长。', homeIntro: '等待你来探索' },
+  gu_nanqiao: { id: 'gu_nanqiao', name: '顾南桥', shortName: '顾南桥', statusLabel: '在线', moodLabel: '在线', avatar: '/assets/characters/character_gu_nanqiao_avatar.webp', tag: '校园恋爱', tagColor: '#8B5CF6', tagBg: 'rgba(200,182,255,0.3)', summary: '风度翩翩的大学教授。', homeIntro: '等待你来探索' },
+  gu_qingwan: { id: 'gu_qingwan', name: '顾清婉', shortName: '顾清婉', statusLabel: '在线', moodLabel: '在线', avatar: '/assets/characters/character_gu_qingwan_avatar.webp', tag: '古风宫斗', tagColor: '#8B5CF6', tagBg: 'rgba(200,182,255,0.3)', summary: '冰雪聪明的谋士。', homeIntro: '等待你来探索' },
+  gu_xingzhou: { id: 'gu_xingzhou', name: '顾行舟', shortName: '顾行舟', statusLabel: '在线', moodLabel: '在线', avatar: '/assets/characters/character_gu_xingzhou_avatar.webp', tag: '其他', tagColor: '#8B5CF6', tagBg: 'rgba(200,182,255,0.3)', summary: '沉稳内敛的船长。', homeIntro: '等待你来探索' },
+  gu_beichen: { id: 'gu_beichen', name: '顾北辰', shortName: '顾北辰', statusLabel: '在线', moodLabel: '在线', avatar: '/assets/characters/character_gu_beichen_avatar.webp', tag: '现代豪门', tagColor: '#8B5CF6', tagBg: 'rgba(200,182,255,0.3)', summary: '光芒万丈的巨星。', homeIntro: '等待你来探索' },
+  huo_shiyu: { id: 'huo_shiyu', name: '霍时雨', shortName: '霍时雨', statusLabel: '在线', moodLabel: '在线', avatar: '/assets/characters/character_huo_shiyu_avatar.webp', tag: '其他', tagColor: '#8B5CF6', tagBg: 'rgba(200,182,255,0.3)', summary: '细腻温柔的画家。', homeIntro: '等待你来探索' },
+  jiang_li: { id: 'jiang_li', name: '姜离', shortName: '姜离', statusLabel: '在线', moodLabel: '在线', avatar: '/assets/characters/character_jiang_li_avatar.webp', tag: '古风宫斗', tagColor: '#8B5CF6', tagBg: 'rgba(200,182,255,0.3)', summary: '洒脱不羁的酒馆老板娘。', homeIntro: '等待你来探索' },
+  jiang_yueze: { id: 'jiang_yueze', name: '姜越泽', shortName: '姜越泽', statusLabel: '在线', moodLabel: '在线', avatar: '/assets/characters/character_jiang_yueze_avatar.webp', tag: '古风宫斗', tagColor: '#8B5CF6', tagBg: 'rgba(200,182,255,0.3)', summary: '意气风发的少年将军。', homeIntro: '等待你来探索' },
+  li_jue: { id: 'li_jue', name: '李珏', shortName: '李珏', statusLabel: '在线', moodLabel: '在线', avatar: '/assets/characters/character_li_jue_avatar.webp', tag: '校园恋爱', tagColor: '#8B5CF6', tagBg: 'rgba(200,182,255,0.3)', summary: '沉稳可靠的青梅竹马。', homeIntro: '等待你来探索' },
+  lin_shen: { id: 'lin_shen', name: '林深', shortName: '林深', statusLabel: '在线', moodLabel: '在线', avatar: '/assets/characters/character_lin_shen_avatar.webp', tag: '其他', tagColor: '#8B5CF6', tagBg: 'rgba(200,182,255,0.3)', summary: '神秘低调的收藏家。', homeIntro: '等待你来探索' },
+  linyuan_manor: { id: 'linyuan_manor', name: '林远', shortName: '林远', statusLabel: '在线', moodLabel: '在线', avatar: '/assets/characters/character_linyuan_manor_avatar.webp', tag: '其他', tagColor: '#8B5CF6', tagBg: 'rgba(200,182,255,0.3)', summary: '庄园主人温润儒雅的绅士。', homeIntro: '等待你来探索' },
+  su_nian: { id: 'su_nian', name: '苏念', shortName: '苏念', statusLabel: '在线', moodLabel: '在线', avatar: '/assets/characters/character_su_nian_avatar.webp', tag: '其他', tagColor: '#8B5CF6', tagBg: 'rgba(200,182,255,0.3)', summary: '心思细腻的作家。', homeIntro: '等待你来探索' },
+  su_yun: { id: 'su_yun', name: '苏云', shortName: '苏云', statusLabel: '在线', moodLabel: '在线', avatar: '/assets/characters/character_su_yun_avatar.webp', tag: '古风宫斗', tagColor: '#8B5CF6', tagBg: 'rgba(200,182,255,0.3)', summary: '飘逸如云的琴师。', homeIntro: '等待你来探索' },
+  wen_yining: { id: 'wen_yining', name: '温以宁', shortName: '温以宁', statusLabel: '在线', moodLabel: '在线', avatar: '/assets/characters/character_wen_yining_avatar.webp', tag: '校园恋爱', tagColor: '#8B5CF6', tagBg: 'rgba(200,182,255,0.3)', summary: '安静内向的图书管理员。', homeIntro: '等待你来探索' },
+  xiao_yao: { id: 'xiao_yao', name: '萧遥', shortName: '萧遥', statusLabel: '在线', moodLabel: '在线', avatar: '/assets/characters/character_xiao_yao_avatar.webp', tag: '修仙', tagColor: '#8B5CF6', tagBg: 'rgba(200,182,255,0.3)', summary: '逍遥自在的浪子。', homeIntro: '等待你来探索' },
+  xingye: { id: 'xingye', name: '星野', shortName: '星野', statusLabel: '在线', moodLabel: '在线', avatar: '/assets/characters/character_xingye_avatar.webp', tag: '末日无限流', tagColor: '#8B5CF6', tagBg: 'rgba(200,182,255,0.3)', summary: '来自异世界的旅人。', homeIntro: '等待你来探索' },
+  qingyu_band: { id: 'qingyu_band', name: '青羽', shortName: '青羽', statusLabel: '在线', moodLabel: '在线', avatar: '/assets/characters/character_qingyu_band_avatar.webp', tag: '其他', tagColor: '#8B5CF6', tagBg: 'rgba(200,182,255,0.3)', summary: '摇滚乐队主唱。', homeIntro: '等待你来探索' },
+  qin_xiao: { id: 'qin_xiao', name: '秦霄', shortName: '秦霄', statusLabel: '在线', moodLabel: '在线', avatar: '/assets/characters/character_qin_xiao_avatar.webp', tag: '校园恋爱', tagColor: '#8B5CF6', tagBg: 'rgba(200,182,255,0.3)', summary: '桀骜不驯的天才少年。', homeIntro: '等待你来探索' },
+  cang_wu: { id: 'cang_wu', name: '苍梧', shortName: '苍梧', statusLabel: '在线', moodLabel: '在线', avatar: '/assets/characters/character_cang_wu_avatar.webp', tag: '古风宫斗', tagColor: '#8B5CF6', tagBg: 'rgba(200,182,255,0.3)', summary: '深沉内敛的古风王者。', homeIntro: '等待你来探索' },
 }
 
 /** Neutral profile used for characters we have no bundled assets for (e.g. a new
@@ -175,12 +225,30 @@ export const CHARACTER_PROFILES: Record<string, CharacterProfile> = {
 export const DEFAULT_CHARACTER_PROFILE: Omit<CharacterProfile, 'id' | 'name' | 'shortName'> = {
   statusLabel: '在线',
   moodLabel: '在线',
-  avatar: '/assets/characters/character_shenwuyue_avatar.png',
+  avatar: '',
   tag: '角色',
   tagColor: '#8B5CF6',
   tagBg: 'rgba(200,182,255,0.3)',
   summary: '',
   homeIntro: '',
+}
+
+/**
+ * Generate an SVG data-URL avatar showing the first character of `name` on a
+ * soft gradient circle. Used as the final fallback when a UGC character has
+ * neither an uploaded avatar nor a cover image.
+ */
+function generateInitialAvatar(name: string): string {
+  const ch = (name || '?').charAt(0)
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 120 120">
+  <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+  <stop offset="0%" stop-color="#FFB7C5"/><stop offset="100%" stop-color="#C8B6FF"/>
+  </linearGradient></defs>
+  <circle cx="60" cy="60" r="60" fill="url(#g)"/>
+  <text x="60" y="60" text-anchor="middle" dominant-baseline="central"
+    font-family="system-ui,sans-serif" font-size="48" font-weight="600"
+    fill="#fff">${ch}</text></svg>`
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`
 }
 
 /**
@@ -222,9 +290,8 @@ export function resolveCharacterProfile(
     // Avatar priority: explicit UGC avatar → derive from the portrait cover
     // (Avatar renders it with object-cover, so the cover is center-cropped into
     // the circle — memory-safe, cover is already a compressed WebP proxy URL) →
-    // neutral bundled fallback. Seeded catalog characters ship a cover but no
-    // avatar_url, so without the cover fallback they'd wrongly show 神无月凛.
-    avatar: avatarUrl || opts?.coverUrl || DEFAULT_CHARACTER_PROFILE.avatar,
+    // first-character SVG placeholder. No longer falls back to 神无月凛.
+    avatar: avatarUrl || opts?.coverUrl || generateInitialAvatar(name),
     tag: isOwner ? '私密' : DEFAULT_CHARACTER_PROFILE.tag,
     tagColor: isOwner ? '#5A88F8' : DEFAULT_CHARACTER_PROFILE.tagColor,
     tagBg: isOwner ? 'rgba(120,150,255,0.24)' : DEFAULT_CHARACTER_PROFILE.tagBg,

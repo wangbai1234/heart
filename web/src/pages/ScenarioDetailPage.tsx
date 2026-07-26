@@ -153,16 +153,14 @@ export function ScenarioDetailPage() {
                   <button
                     onClick={handleUnlock}
                     disabled={unlocking}
-                    className="w-full h-[52px] rounded-[26px] text-white text-[16px] font-semibold shadow-[var(--shadow-soft)] active:scale-[0.97] transition-transform disabled:opacity-60"
-                    style={{ background: 'linear-gradient(120deg, #FF7EB3 0%, #9F7AEA 100%)' }}
+                    className="w-full h-[52px] rounded-[26px] bg-gradient-to-r from-[#FFB7C5] to-[#FF8FAB] text-white text-[16px] font-semibold shadow-[var(--shadow-btn)] active:scale-[0.97] transition-transform disabled:opacity-60"
                   >
                     {unlocking ? '解锁中…' : `解锁 · ${scenario.unlock_cost_coins} 悠悠币`}
                   </button>
                 ) : (
                   <button
                     onClick={() => navigate('/membership')}
-                    className="w-full h-[52px] rounded-[26px] text-white text-[16px] font-semibold shadow-[var(--shadow-soft)] active:scale-[0.97] transition-transform"
-                    style={{ background: 'linear-gradient(120deg, #FF7EB3 0%, #9F7AEA 100%)' }}
+                    className="w-full h-[52px] rounded-[26px] bg-gradient-to-r from-[#FFB7C5] to-[#FF8FAB] text-white text-[16px] font-semibold shadow-[var(--shadow-btn)] active:scale-[0.97] transition-transform"
                   >
                     升级会员解锁
                   </button>
@@ -178,8 +176,7 @@ export function ScenarioDetailPage() {
                 </button>
                 <button
                   onClick={() => navigate(`/story/${activeRun.run_id}`)}
-                  className="h-[52px] flex-[1.4] rounded-[26px] text-white text-[16px] font-semibold shadow-[var(--shadow-soft)] active:scale-[0.97] transition-transform"
-                  style={{ background: 'linear-gradient(120deg, #FF7EB3 0%, #9F7AEA 100%)' }}
+                  className="h-[52px] flex-[1.4] rounded-[26px] bg-gradient-to-r from-[#FFB7C5] to-[#FF8FAB] text-white text-[16px] font-semibold shadow-[var(--shadow-btn)] active:scale-[0.97] transition-transform"
                 >
                   继续游玩
                 </button>
@@ -187,8 +184,7 @@ export function ScenarioDetailPage() {
             ) : (
               <button
                 onClick={() => setSheetOpen(true)}
-                className="w-full h-[52px] rounded-[26px] text-white text-[16px] font-semibold shadow-[var(--shadow-soft)] active:scale-[0.97] transition-transform"
-                style={{ background: 'linear-gradient(120deg, #FF7EB3 0%, #9F7AEA 100%)' }}
+                className="w-full h-[52px] rounded-[26px] bg-gradient-to-r from-[#FFB7C5] to-[#FF8FAB] text-white text-[16px] font-semibold shadow-[var(--shadow-btn)] active:scale-[0.97] transition-transform"
               >
                 开始剧情
               </button>

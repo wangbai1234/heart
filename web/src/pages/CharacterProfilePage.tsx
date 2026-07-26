@@ -160,12 +160,11 @@ export function CharacterProfilePage() {
           )}
           <button
             onClick={openChat}
-            className={`h-[48px] rounded-full text-white text-[16px] font-semibold shadow-[var(--shadow-soft)] active:scale-[0.97] transition-transform ${
+            className={`h-[48px] rounded-full bg-gradient-to-r from-[#FFB7C5] to-[#FF8FAB] text-white text-[16px] font-semibold shadow-[var(--shadow-btn)] active:scale-[0.97] transition-transform ${
               chatted ? 'px-7' : 'flex-1'
             }`}
-            style={{ background: 'linear-gradient(120deg, #FF7EB3 0%, #9F7AEA 100%)' }}
           >
-            和Ta聊天
+            开始聊天
           </button>
         </div>
       </div>
