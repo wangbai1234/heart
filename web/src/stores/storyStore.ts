@@ -48,6 +48,40 @@ function bubbleToVM(b: StoryBubbleDTO): StoryMessageVM {
 }
 
 /**
+ * Merge the authoritative server transcript with the in-memory one on re-entry,
+ * WITHOUT dropping an in-flight optimistic turn.
+ *
+ * The transcript store is in-memory, so a turn that completed server-side while
+ * the player was away (navigated off mid-turn → socket dropped → the server
+ * drained + persisted it) must be pulled back in on re-entry — otherwise it
+ * stays invisible until a full reload ("剧情消失" bug). The server is the source
+ * of truth for everything it has persisted.
+ *
+ * The one thing the server may NOT yet have is a turn still in flight: a
+ * reconcile can resolve just after the player sent a line, before its bubbles
+ * are committed. So while `generating`, we re-append any optimistic tail — the
+ * player line (sentinel MAX_SAFE_INTEGER seq) or live split bubbles (synthetic
+ * negative seq) — whose turn the server hasn't returned yet, so the reconcile
+ * can't wipe what the player just sent.
+ */
+export function reconcileTranscript(
+  current: StoryMessageVM[],
+  serverMsgs: StoryMessageVM[],
+  generating: boolean,
+): StoryMessageVM[] {
+  if (!generating) return serverMsgs
+  const serverTurnIds = new Set(
+    serverMsgs.map((m) => m.turnId).filter((t): t is string => !!t),
+  )
+  const optimisticTail = current.filter(
+    (m) =>
+      (m.seq === Number.MAX_SAFE_INTEGER || m.seq < 0) &&
+      (!m.turnId || !serverTurnIds.has(m.turnId)),
+  )
+  return [...serverMsgs, ...optimisticTail]
+}
+
+/**
  * Read-only catalog state for Story/剧情 mode (SS09), PR2 scope.
  *
  * Mirrors the charactersStore pattern: a cached list + genres for the Explore
@@ -245,19 +279,36 @@ export const useStoryStore = create<StoryState>((set, get) => ({
   },
 
   loadRun: async (runId, force = false) => {
-    // Already hydrated (e.g. just started) — don't clobber live state.
-    if (!force && get().messagesByRun[runId]) return
-    set({ runLoading: true, runError: false })
+    // Always reconcile with the server on entry — never early-return on cached
+    // state. The store is in-memory, so a turn persisted server-side while we
+    // were away (left mid-turn → socket dropped → server drained it) would
+    // otherwise stay invisible until a full reload. `force` (error-retry) shows
+    // the skeleton even when cached; otherwise we reconcile silently in the
+    // background so re-entry never flashes empty.
+    const hadCache = !!get().messagesByRun[runId]
+    set({ runLoading: force || !hadCache, runError: false })
     try {
       const { run, messages } = await apiGetRun(runId)
-      set((s) => ({
-        runMetaById: { ...s.runMetaById, [runId]: run },
-        messagesByRun: { ...s.messagesByRun, [runId]: messages.map(bubbleToVM) },
-        streamTextByRun: { ...s.streamTextByRun, [runId]: null },
-        runLoading: false,
-      }))
+      set((s) => {
+        const serverMsgs = messages.map(bubbleToVM)
+        const generating = s.generatingByRun[runId] ?? false
+        return {
+          runMetaById: { ...s.runMetaById, [runId]: run },
+          messagesByRun: {
+            ...s.messagesByRun,
+            [runId]: reconcileTranscript(s.messagesByRun[runId] ?? [], serverMsgs, generating),
+          },
+          // Leave a live stream buffer alone mid-generation; otherwise clear it.
+          streamTextByRun: generating
+            ? s.streamTextByRun
+            : { ...s.streamTextByRun, [runId]: null },
+          runLoading: false,
+        }
+      })
     } catch {
-      set({ runLoading: false, runError: true })
+      // Network miss: keep whatever we have; only surface an error when there's
+      // nothing cached, so a flaky re-entry never blanks a good transcript.
+      set((s) => ({ runLoading: false, runError: !s.messagesByRun[runId] }))
     }
   },
 

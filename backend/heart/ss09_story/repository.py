@@ -405,7 +405,12 @@ async def recent_messages(
 async def list_messages(
     session: AsyncSession, run_id: UUID, after_seq: int = 0, limit: int = 200
 ) -> list[StoryMessage]:
-    """Paginated transcript for resume, ascending seq."""
+    """Forward-paginated transcript, ascending seq (seq > after_seq).
+
+    NB: for a fresh resume (after_seq=0) this returns the OLDEST slice, so a run
+    longer than ``limit`` drops its tail — use :func:`recent_transcript` for the
+    resume default instead (it returns the newest window).
+    """
     result = await session.execute(
         text(
             """
@@ -417,6 +422,34 @@ async def list_messages(
             """
         ),
         {"rid": str(run_id), "after": after_seq, "limit": max(1, min(limit, 500))},
+    )
+    return [_message_from_row(r) for r in result.fetchall()]
+
+
+async def recent_transcript(
+    session: AsyncSession, run_id: UUID, limit: int = 400
+) -> list[StoryMessage]:
+    """The most-recent ``limit`` messages for a run, ascending seq.
+
+    The resume default. Unlike ``list_messages(after_seq=0)`` — which returns the
+    OLDEST slice and so silently drops the tail of a long run — this returns the
+    newest window, so a returning player always lands back on the story they just
+    played (older turns are folded into ``run.summary`` anyway).
+    """
+    result = await session.execute(
+        text(
+            """
+            SELECT * FROM (
+                SELECT id, run_id, turn_id, seq, role, kind, npc_name, content, created_at
+                FROM story_messages
+                WHERE run_id = :rid
+                ORDER BY seq DESC
+                LIMIT :limit
+            ) sub
+            ORDER BY seq ASC
+            """
+        ),
+        {"rid": str(run_id), "limit": max(1, min(limit, 1000))},
     )
     return [_message_from_row(r) for r in result.fetchall()]
 
