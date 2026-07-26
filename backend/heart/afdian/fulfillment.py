@@ -71,6 +71,76 @@ def _resolve_fulfillment(
     return None, None, 0
 
 
+def _to_float(value: object) -> float:
+    """Best-effort parse of Afdian's amount (sent as a string like '6.00')."""
+    try:
+        return float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return 0.0
+
+
+async def record_order(db: AsyncSession, order: dict, raw_body: object) -> str:
+    """Idempotently persist one Afdian order for audit. Returns out_trade_no.
+
+    Shared by the webhook and the reconcile path so both land the same row shape.
+    ON CONFLICT keeps the first-seen row (Afdian may re-push; reconcile may race a
+    webhook). Commits its own transaction. Raises ValueError if out_trade_no is
+    missing.
+    """
+    out_trade_no = str(order.get("out_trade_no") or "").strip()
+    if not out_trade_no:
+        raise ValueError("missing out_trade_no")
+
+    await db.execute(
+        text(
+            """
+            INSERT INTO afdian_orders
+                (out_trade_no, plan_id, sku_detail, total_amount, remark, raw_payload)
+            VALUES (:otn, :plan, :sku, :amount, :remark, :raw)
+            ON CONFLICT (out_trade_no) DO NOTHING
+            """
+        ),
+        {
+            "otn": out_trade_no,
+            "plan": str(order.get("plan_id") or ""),
+            "sku": json.dumps(order.get("sku_detail")),
+            "amount": _to_float(order.get("total_amount")),
+            "remark": str(order.get("remark") or ""),
+            "raw": json.dumps(raw_body),
+        },
+    )
+    await db.commit()
+    return out_trade_no
+
+
+async def reconcile_order(db: AsyncSession, out_trade_no: str) -> tuple[bool, str]:
+    """Pull an order from Afdian's API, record it, and fulfill it.
+
+    Backfills orders the webhook missed or that predate SKU-map configuration.
+    Idempotent end to end: record_order dedupes the audit row and fulfill_order
+    skips already-fulfilled orders. Returns ``(success, message)``.
+    """
+    from heart.afdian.api_client import AfdianAPIError, query_order
+
+    try:
+        order = await query_order(out_trade_no)
+    except AfdianAPIError as e:
+        logger.error("afdian_reconcile_api_error", out_trade_no=out_trade_no, error=str(e))
+        return False, f"afdian_api_error: {e}"
+
+    if order is None:
+        return False, "order_not_found_in_afdian"
+
+    await record_order(db, order, order)
+    return await fulfill_order(
+        db,
+        out_trade_no,
+        str(order.get("plan_id") or ""),
+        str(order.get("remark") or ""),
+        order.get("sku_detail"),
+    )
+
+
 async def resolve_user_by_binding_code(db: AsyncSession, remark: str) -> Optional[uuid.UUID]:
     """Extract binding code from remark and look up the user.
 

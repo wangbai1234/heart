@@ -176,6 +176,33 @@ async def admin_fulfill_afdian_order(
     return {"ok": True, "fulfilled": detail, "out_trade_no": body.out_trade_no}
 
 
+class ReconcileOrderRequest(BaseModel):
+    out_trade_no: str = Field(..., description="爱发电订单号")
+
+
+@router.post("/afdian/reconcile")
+async def admin_reconcile_afdian_order(
+    body: ReconcileOrderRequest,
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """从爱发电 API 拉取订单并重新履约（补偿漏掉的 webhook / 配置前下的单）。
+
+    自动按备注里的绑定码匹配用户。若匹配不到用户或 SKU 未配置，订单会被记录
+    但返回 success=False，此时改用 POST /api/admin/afdian/fulfill 指定 user_id。
+    """
+    from heart.afdian.fulfillment import reconcile_order
+
+    success, message = await reconcile_order(db, body.out_trade_no.strip())
+    logger.info(
+        "admin_afdian_reconcile",
+        out_trade_no=body.out_trade_no,
+        success=success,
+        message=message,
+    )
+    return {"ok": success, "message": message, "out_trade_no": body.out_trade_no}
+
+
 class GrantMembershipRequest(BaseModel):
     user_id: str | None = Field(None, description="用户 UUID（与 email 二选一）")
     email: str | None = Field(None, description="用户邮箱（与 user_id 二选一）")

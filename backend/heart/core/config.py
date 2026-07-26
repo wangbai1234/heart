@@ -173,6 +173,11 @@ class Settings(BaseSettings):
     credits_cost_voice_message: int = 500  # 5 display credits per voice message
     afdian_user_id: str = ""
     afdian_webhook_token: str = ""
+    # Afdian open-API token (开发者页面 → API Token). Used to query/reconcile
+    # orders server-side (backfill missed webhooks, re-fulfill orders placed
+    # before the SKU map was configured). Often equal to afdian_webhook_token
+    # when the same secret is reused as the webhook URL query token.
+    afdian_api_token: str = ""
     afdian_sponsor_url: str = "https://ifdian.net/a/yuoyuo"
 
     # Per-action pricing (display coins; ×100 = fen internally)
