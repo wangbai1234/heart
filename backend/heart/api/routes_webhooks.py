@@ -16,11 +16,9 @@ Afdian (爱发电) webhook contract — see https://guide.afdian.com/creator/dev
 from __future__ import annotations
 
 import hmac
-import json
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from heart.core.config import settings
@@ -87,26 +85,12 @@ async def afdian_webhook(
     plan_id = str(order.get("plan_id") or "")
     remark = str(order.get("remark") or "")
 
+    from heart.afdian.fulfillment import fulfill_order, record_order
+
     # Idempotent insert for audit (duplicate pushes are expected — Afdian may
     # re-push; ON CONFLICT keeps the first row).
     try:
-        await db.execute(
-            text("""
-                INSERT INTO afdian_orders
-                    (out_trade_no, plan_id, sku_detail, total_amount, remark, raw_payload)
-                VALUES (:otn, :plan, :sku, :amount, :remark, :raw)
-                ON CONFLICT (out_trade_no) DO NOTHING
-            """),
-            {
-                "otn": out_trade_no,
-                "plan": plan_id,
-                "sku": json.dumps(order.get("sku_detail")),
-                "amount": _to_float(order.get("total_amount")),
-                "remark": remark,
-                "raw": json.dumps(body),
-            },
-        )
-        await db.commit()
+        await record_order(db, order, body)
     except Exception as e:
         await db.rollback()
         logger.error("afdian_webhook_db_error", error=str(e))
@@ -117,19 +101,9 @@ async def afdian_webhook(
 
     # Auto-fulfill: match remark binding code → grant membership/coins.
     try:
-        from heart.afdian.fulfillment import fulfill_order
-
         await fulfill_order(db, out_trade_no, plan_id, remark, order.get("sku_detail"))
     except Exception:
         logger.exception("afdian_auto_fulfill_error", out_trade_no=out_trade_no)
         # Ack anyway — admin can reconcile unmatched/failed orders manually.
 
     return {"ec": 200, "em": "success"}
-
-
-def _to_float(value: object) -> float:
-    """Best-effort parse of Afdian's amount (sent as a string like '5.00')."""
-    try:
-        return float(value)  # type: ignore[arg-type]
-    except (TypeError, ValueError):
-        return 0.0
