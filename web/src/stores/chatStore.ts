@@ -76,6 +76,12 @@ interface ChatState {
   // audio (audioData) is carried over so playback stays instant.
   reconcileHistory: (characterId: CharacterId, serverMsgs: Message[]) => void
   appendToLast: (characterId: CharacterId, delta: string) => void
+  // Remove the assistant placeholder bubble for a turn that ended without any
+  // content. A turn_start optimistically adds an empty assistant bubble; if the
+  // turn then errors / times out / yields empty text, that blank bubble must be
+  // swept or it lingers on screen ("空气泡"). Only drops when the bubble has
+  // neither text nor audio, so a voice reply that produced audio is preserved.
+  dropEmptyAssistantTurn: (characterId: CharacterId, turnId: string) => void
   setMessageAudio: (characterId: CharacterId, turnId: string, audioData: string, duration: number, format: string) => void
   setMessageAudioUrl: (characterId: CharacterId, turnId: string, audioUrl: string) => void
   appendMessageAudio: (
@@ -235,6 +241,19 @@ export const useChatStore = create<ChatState>()(
         msgs[msgs.length - 1] = { ...last, content: last.content + delta }
       }
       return { messages: { ...s.messages, [characterId]: msgs } }
+    }),
+  dropEmptyAssistantTurn: (characterId, turnId) =>
+    set((s) => {
+      const msgs = s.messages[characterId] ?? []
+      const filtered = msgs.filter((m) => {
+        if (m.id !== turnId || m.role !== 'assistant') return true
+        const hasText = !!m.content && m.content.trim().length > 0
+        const hasAudio =
+          !!m.audioData || !!m.audioUrl || (m.audioChunks?.length ?? 0) > 0
+        return hasText || hasAudio // keep only if it actually rendered something
+      })
+      if (filtered.length === msgs.length) return {}
+      return { messages: { ...s.messages, [characterId]: filtered } }
     }),
   setMessageAudio: (characterId, turnId, audioData, duration, format) =>
     set((s) => ({

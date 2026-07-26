@@ -15,7 +15,6 @@ Author: 心屿团队
 
 from __future__ import annotations
 
-import asyncio
 import time
 from typing import Dict, List, Optional
 
@@ -136,7 +135,7 @@ class RetrievalOrchestrator:
             strategies=[s.strategy_name for s in self.strategies],
         )
 
-        strategy_results = await self._run_strategies_parallel(query_context)
+        strategy_results = await self._run_strategies_sequential(query_context)
 
         # Merge candidates
         merged_candidates = self._merge_candidates(strategy_results)
@@ -185,12 +184,28 @@ class RetrievalOrchestrator:
             strategy_times=self._extract_strategy_times(strategy_results),
         )
 
-    async def _run_strategies_parallel(
+    async def _run_strategies_sequential(
         self,
         query_context: QueryContext,
     ) -> Dict[str, List[ScoredMemory]]:
         """
-        Run all strategies in parallel using asyncio.gather.
+        Run all strategies sequentially on the shared session.
+
+        The strategies MUST NOT be fanned out with asyncio.gather: all 5 share
+        one AsyncSession (== one asyncpg connection), and a single connection can
+        execute only one operation at a time. Running them concurrently raised in
+        production and poisoned the turn's connection mid-protocol:
+
+            asyncpg InterfaceError: cannot perform operation:
+            another operation is in progress
+
+        Retrieval is a handful of small indexed queries whose latency is
+        negligible next to LLM streaming, so we serialize on the shared
+        connection rather than check out 5 connections per turn (which would 5×
+        pool pressure and risk pool exhaustion under concurrent turns).
+
+        One failing strategy must not sink the others, so each is isolated in its
+        own try/except (mirrors the old gather(return_exceptions=True) behavior).
 
         Args:
             query_context: Query cues
@@ -198,25 +213,20 @@ class RetrievalOrchestrator:
         Returns:
             Dict of {strategy_name: [ScoredMemory]}
         """
-        # Create tasks for all strategies
-        tasks = [self._run_strategy_timed(strategy, query_context) for strategy in self.strategies]
-
-        # Execute in parallel
-        results = await asyncio.gather(*tasks, return_exceptions=True)
-
-        # Build result dict
-        strategy_results = {}
-        for strategy, result in zip(self.strategies, results, strict=False):
-            if isinstance(result, BaseException):
+        strategy_results: Dict[str, List[ScoredMemory]] = {}
+        for strategy in self.strategies:
+            try:
+                strategy_results[strategy.strategy_name] = await self._run_strategy_timed(
+                    strategy, query_context
+                )
+            except Exception as e:
                 logger.error(
                     "strategy_failed",
                     strategy=strategy.strategy_name,
-                    error=str(result),
-                    exc_info=result,
+                    error=str(e),
+                    exc_info=True,
                 )
                 strategy_results[strategy.strategy_name] = []
-            else:
-                strategy_results[strategy.strategy_name] = result
 
         return strategy_results
 

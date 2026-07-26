@@ -92,6 +92,7 @@ export function useWebSocket() {
 
   const addMessage = useChatStore(s => s.addMessage)
   const appendToLast = useChatStore(s => s.appendToLast)
+  const dropEmptyAssistantTurn = useChatStore(s => s.dropEmptyAssistantTurn)
   const setGenerating = useChatStore(s => s.setGenerating)
   const setStreaming = useChatStore(s => s.setStreaming)
   const setPlaying = useChatStore(s => s.setPlaying)
@@ -153,6 +154,10 @@ export function useWebSocket() {
         setPlaying(false)
         setCurrentTurnId(null)
         setPendingAssistantTurnId(null)
+        // Sweep the blank placeholder bubble for the hung turn so it doesn't
+        // linger as an empty气泡 after the watchdog gives up.
+        const stuckTurnId = activeTurnByCharRef.current[cid]
+        if (stuckTurnId) dropEmptyAssistantTurn(cid, stuckTurnId)
         delete activeTurnByCharRef.current[cid]
         pendingVoiceTurnRef.current = false
         useToastStore.getState().show('响应超时，请重试', 'error')
@@ -313,11 +318,19 @@ export function useWebSocket() {
           setPlaying(false)
           setCurrentTurnId(null)
           setPendingAssistantTurnId(null)
-          // Sync last assistant message to threads for HomePage
+          // A turn can end without content (empty text + no audio) — e.g. the
+          // backend's EMPTY_RESPONSE path also emits turn_end. Sweep the blank
+          // placeholder so it doesn't persist as a空气泡. finalizeMessageAudio ran
+          // above, so a voice reply already has audioData and is preserved.
+          if (msg.turn_id) dropEmptyAssistantTurn(cid, msg.turn_id)
+          // Sync last assistant message to threads for HomePage — only when the
+          // last bubble is THIS turn's (id === turn_id). After a placeholder
+          // sweep the trailing message is a prior, already-synced turn; re-syncing
+          // it would duplicate it in the HomePage preview.
           {
             const msgs = useChatStore.getState().messages[cid] ?? []
             const lastMsg = msgs[msgs.length - 1]
-            if (lastMsg && lastMsg.role === 'assistant') {
+            if (lastMsg && lastMsg.role === 'assistant' && lastMsg.id === msg.turn_id) {
               const { appendMessage } = useChatStore.getState()
               appendMessage(cid, {
                 id: lastMsg.id,
@@ -386,6 +399,13 @@ export function useWebSocket() {
           setStreaming(cid, false)
           setPlaying(false)
           setPendingAssistantTurnId(null)
+          // Remove the blank placeholder bubble for the failed turn (STREAM_ERROR
+          // / EMPTY_RESPONSE / TURN_TIMEOUT all land here). Without this the empty
+          // assistant bubble added on turn_start stays on screen after the error
+          // toast. Voice bubbles that already got audio are preserved by the
+          // store's empty-check.
+          const failedTurnId = msg.turn_id ?? activeTurnByCharRef.current[cid]
+          if (failedTurnId) dropEmptyAssistantTurn(cid, failedTurnId)
           delete activeTurnByCharRef.current[cid]
           pendingVoiceTurnRef.current = false
           const errCode = msg.code
@@ -454,7 +474,7 @@ export function useWebSocket() {
     ws.onerror = (err) => {
       console.error('[ws] error', err)
     }
-  }, [addMessage, appendMessageAudio, appendToLast, finalizeMessageAudio, setMessageAudioUrl, setGenerating, setStreaming, setPlaying, setCurrentTurnId, setPendingAssistantTurnId, setVad])
+  }, [addMessage, appendMessageAudio, appendToLast, dropEmptyAssistantTurn, finalizeMessageAudio, setMessageAudioUrl, setGenerating, setStreaming, setPlaying, setCurrentTurnId, setPendingAssistantTurnId, setVad])
 
   useEffect(() => {
     connectRef.current = connect

@@ -453,7 +453,11 @@ class Orchestrator:
                         "active_emotions": active_emotions or [],
                     }
         except Exception as exc:
-            logger.error("compose_stream_failed", error=str(exc))
+            # Swallow so the turn still ends cleanly (routes turns an empty
+            # full_text into a user-facing EMPTY_RESPONSE rather than leaking a
+            # raw error string). But keep the full traceback — otherwise the
+            # cause of a blank reply ("空气泡") is invisible in prod logs.
+            logger.error("compose_stream_failed", error=str(exc), exc_info=True)
 
         # Flush remaining
         tail = splitter.flush()
