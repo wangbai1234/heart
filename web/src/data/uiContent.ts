@@ -237,12 +237,11 @@ const now = Date.now()
 export const HOME_ANNOUNCEMENTS: HomeAnnouncement[] = [
   {
     id: 'notice-douyin-ban',
-    title: '抖音账号暂时被封禁，请加QQ群交流',
-    summary: '因为有用户举报，暂时抖音账号被封禁，新用户请进QQ群交流：460919879。',
-    content:
-      '因为有用户举报，暂时抖音账号被封禁。\n\n新用户请进 QQ 群交流：\n\n**460919879**\n\n我们会尽快处理并恢复，感谢大家的理解与支持！',
+    title: '遇到售后或使用问题，欢迎进群交流',
+    summary: '遇到售后或使用问题，欢迎进群交流，QQ群：460919879。',
+    content: '遇到售后或使用问题，欢迎进群交流，QQ群：460919879。',
     publishedAt: now,
-    tag: '重要',
+    tag: '公告',
   },
   {
     id: 'notice-0709',

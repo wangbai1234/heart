@@ -48,6 +48,19 @@ export function SettingsPage() {
 
   const displayName = user?.display_name || user?.email?.split('@')[0] || '用户'
 
+  // navigate(-1) is a no-op when Settings is the first entry in this session's
+  // history (e.g. PWA cold-start restoring /settings as the last route via
+  // `replace`, or a hard refresh) — there's nothing before it to pop back to,
+  // so the back button silently does nothing. Fall back to /home in that case.
+  const handleBack = () => {
+    const idx = (window.history.state as { idx?: number } | null)?.idx
+    if (typeof idx === 'number' && idx > 0) {
+      navigate(-1)
+    } else {
+      navigate('/home', { replace: true })
+    }
+  }
+
   const handleLogout = async () => {
     try { await apiLogout(refreshToken || undefined) } catch { /* ignore */ }
     clearSession()
@@ -114,7 +127,7 @@ export function SettingsPage() {
 
       {/* Navigation bar */}
       <nav className="relative z-20 flex items-center justify-between px-5 h-[44px] shrink-0">
-        <button onClick={() => navigate(-1)} className="w-[44px] h-[44px] flex items-center justify-center">
+        <button onClick={handleBack} className="w-[44px] h-[44px] flex items-center justify-center">
           <svg width="12" height="20" viewBox="0 0 12 20" fill="none" stroke="var(--color-ink)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="10,2 2,10 10,18" />
           </svg>
