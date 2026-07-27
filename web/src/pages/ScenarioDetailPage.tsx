@@ -149,22 +149,13 @@ export function ScenarioDetailPage() {
                 <p className="mb-2 text-center text-[12px] text-[var(--color-text-muted)]">
                   一次性解锁 · 解锁后 {scenario.minute_cost_coins} 悠悠币/分钟
                 </p>
-                {scenario.tier_allowed ? (
-                  <button
-                    onClick={handleUnlock}
-                    disabled={unlocking}
-                    className="w-full h-[52px] rounded-[26px] bg-gradient-to-r from-[#FFB7C5] to-[#FF8FAB] text-white text-[16px] font-semibold shadow-[var(--shadow-btn)] active:scale-[0.97] transition-transform disabled:opacity-60"
-                  >
-                    {unlocking ? '解锁中…' : `解锁 · ${scenario.unlock_cost_coins} 悠悠币`}
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => navigate('/membership')}
-                    className="w-full h-[52px] rounded-[26px] bg-gradient-to-r from-[#FFB7C5] to-[#FF8FAB] text-white text-[16px] font-semibold shadow-[var(--shadow-btn)] active:scale-[0.97] transition-transform"
-                  >
-                    升级会员解锁
-                  </button>
-                )}
+                <button
+                  onClick={handleUnlock}
+                  disabled={unlocking}
+                  className="w-full h-[52px] rounded-[26px] bg-gradient-to-r from-[#FFB7C5] to-[#FF8FAB] text-white text-[16px] font-semibold shadow-[var(--shadow-btn)] active:scale-[0.97] transition-transform disabled:opacity-60"
+                >
+                  {unlocking ? '解锁中…' : `解锁 · ${scenario.unlock_cost_coins} 悠悠币`}
+                </button>
               </>
             ) : activeRun ? (
               <div className="flex gap-3">
