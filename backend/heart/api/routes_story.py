@@ -36,11 +36,10 @@ router = APIRouter(prefix="/api/story", tags=["story"])
 def _tier_can_unlock(tier: str, free_tier: bool) -> bool:
     """Whether *tier* is eligible to unlock a scenario.
 
-    Free (普通) users may only unlock the ``free_tier`` demo scenarios;
-    plus/immersive members may unlock the full catalog. Membership grants
-    *eligibility* only — it does not waive the unlock fee.
+    All tiers (including free/普通) may now unlock all scenarios.
+    Membership no longer gates scenario access; users pay an unlock fee instead.
     """
-    return free_tier or tier in ("plus", "immersive")
+    return True
 
 
 @router.get("/scenarios")
@@ -124,8 +123,7 @@ async def get_scenario(
         "play_count": scenario.play_count,
         # Player card template drives the StartRunSheet form.
         "player_template": template,
-        # Billing / gating (PR C1). `unlocked` = permanently paid for;
-        # `tier_allowed` = this tier may unlock it (free users: free_tier only).
+        # Billing / gating: all tiers may unlock all scenarios (for 40 coins each).
         "free_tier": scenario.free_tier,
         "unlocked": unlocked,
         "tier_allowed": _tier_can_unlock(tier, scenario.free_tier),
@@ -249,11 +247,8 @@ async def start_run(
     if scenario is None or scenario.status != "published":
         raise HTTPException(404, "scenario_not_found")
 
-    # Gating: must be eligible for this scenario's tier AND have unlocked it.
+    # Gating: user must have unlocked the scenario (paid the unlock fee).
     user_id = uuid.UUID(current_user.user_id)
-    tier = await get_effective_tier(db, user_id)
-    if not _tier_can_unlock(tier, scenario.free_tier):
-        raise HTTPException(403, "tier_required")
     if not await repo.is_scenario_unlocked(db, user_id, body.scenario_id):
         raise HTTPException(403, "unlock_required")
 

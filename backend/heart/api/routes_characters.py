@@ -110,7 +110,21 @@ async def list_characters(
             if row.avatar_url:
                 avatar_urls[row.character_id] = row.avatar_url
 
-    entries = build_catalog_entries(rows, uid, avatar_urls)
+    # Compute popularity by counting distinct chat users per character
+    popularity: dict[str, int] = {}
+    pop_result = await db.execute(
+        text(
+            """
+            SELECT character_id, COUNT(DISTINCT user_id) AS cnt
+            FROM chat_messages
+            GROUP BY character_id
+            """
+        )
+    )
+    for row in pop_result:
+        popularity[row.character_id] = int(row.cnt)
+
+    entries = build_catalog_entries(rows, uid, avatar_urls, popularity)
     result_list = []
     for e in entries:
         entry_dict = asdict(e)
