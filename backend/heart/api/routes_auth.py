@@ -20,6 +20,7 @@ from typing import Optional
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from passlib.context import CryptContext
 from pydantic import BaseModel, EmailStr
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -31,6 +32,7 @@ from heart.infra.email.sender import (
     OTP_SUBJECT,
     render_otp_email,
 )
+from heart.invite.service import record_invite_signup
 
 from .rate_limit import limiter
 from .wiring import get_db
@@ -38,6 +40,9 @@ from .wiring import get_db
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
+
+# ── Password hashing context ────────────────────────────────────────
+_pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # ── OTP helpers ─────────────────────────────────────────────────────
 
@@ -58,16 +63,128 @@ def _generate_code(length: int = 6) -> str:
     return "".join(str(secrets.randbelow(10)) for _ in range(length))
 
 
+# ── Password helpers ────────────────────────────────────────────────
+
+
+def _hash_password(pwd: str) -> str:
+    """Hash password using bcrypt."""
+    return _pwd_ctx.hash(pwd)
+
+
+def _verify_password(pwd: str, hash: str) -> bool:
+    """Verify password against hash."""
+    return _pwd_ctx.verify(pwd, hash)
+
+
+def _validate_password_strength(pwd: str) -> str | None:
+    """Validate password strength.
+
+    Returns None if valid, or error message if invalid.
+    """
+    if len(pwd) < 8:
+        return "Password must be at least 8 characters"
+    return None
+
+
+async def _verify_otp_and_mark_consumed(
+    db: AsyncSession, email: str, otp_code: str, purpose: str
+) -> uuid.UUID:
+    """Verify OTP code and mark it as consumed.
+
+    Raises HTTPException if OTP is invalid, expired, or already used.
+    Returns the OTP record ID.
+    """
+    result = await db.execute(
+        text("""
+            SELECT id, code_hash, expires_at, consumed_at, attempts
+            FROM email_otp_codes
+            WHERE email = :email AND purpose = :purpose
+            ORDER BY created_at DESC
+            LIMIT 1
+        """),
+        {"email": email, "purpose": purpose},
+    )
+    row = result.mappings().first()
+
+    # Always do a dummy compare to prevent timing attacks
+    dummy_hash = _hash_code("000000")
+    if row is None:
+        _constant_time_compare(dummy_hash, dummy_hash)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired OTP"
+        )
+
+    if row["consumed_at"] is not None:
+        _constant_time_compare(dummy_hash, dummy_hash)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="OTP already used")
+
+    if row["expires_at"] < datetime.now(timezone.utc):
+        _constant_time_compare(dummy_hash, dummy_hash)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="OTP expired")
+
+    if row["attempts"] >= settings.otp_max_attempts:
+        _constant_time_compare(dummy_hash, dummy_hash)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Too many OTP attempts")
+
+    # Increment attempts
+    await db.execute(
+        text("UPDATE email_otp_codes SET attempts = attempts + 1 WHERE id = :id"),
+        {"id": row["id"]},
+    )
+
+    # Constant-time compare
+    code_hash = _hash_code(otp_code.strip())
+    if not _constant_time_compare(code_hash, row["code_hash"]):
+        await db.commit()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid OTP")
+
+    # Mark OTP consumed
+    await db.execute(
+        text("UPDATE email_otp_codes SET consumed_at = NOW() WHERE id = :id"),
+        {"id": row["id"]},
+    )
+
+    return row["id"]
+
+
 # ── Request / Response models ───────────────────────────────────────
 
 
 class OtpRequest(BaseModel):
     email: EmailStr
+    purpose: str = "login"  # 'login' | 'register' | 'password_reset'
 
 
 class OtpVerify(BaseModel):
     email: EmailStr
     code: str
+
+
+class RegisterRequest(BaseModel):
+    email: EmailStr
+    otp_code: str
+    password: str
+    invite_code: Optional[str] = None
+
+
+class LoginPasswordRequest(BaseModel):
+    email: EmailStr
+    password: str
+
+
+class PasswordResetRequest(BaseModel):
+    email: EmailStr
+    otp_code: str
+    new_password: str
+
+
+class SetPasswordRequest(BaseModel):
+    password: str
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
 
 
 class RefreshRequest(BaseModel):
@@ -87,6 +204,7 @@ class UserResponse(BaseModel):
     birthdate: Optional[str] = None
     age_verified: bool = False
     credits_balance: float = 0.0
+    has_password: bool = False
 
 
 class TokenResponse(BaseModel):
@@ -178,16 +296,18 @@ async def request_otp(
     code_hash = _hash_code(code)
     expires_at = datetime.now(timezone.utc) + timedelta(seconds=settings.otp_ttl_seconds)
     request_ip = request.client.host if request.client else None
+    purpose = body.purpose or "login"
 
     await db.execute(
         text("""
             INSERT INTO email_otp_codes (id, email, code_hash, purpose, expires_at, request_ip)
-            VALUES (:id, :email, :code_hash, 'login', :expires_at, :request_ip)
+            VALUES (:id, :email, :code_hash, :purpose, :expires_at, :request_ip)
         """),
         {
             "id": uuid.uuid4(),
             "email": email,
             "code_hash": code_hash,
+            "purpose": purpose,
             "expires_at": expires_at,
             "request_ip": request_ip,
         },
@@ -285,7 +405,7 @@ async def verify_otp(
     user_result = await db.execute(
         text("""
             SELECT id, email, display_name, avatar_url, gender, birthdate,
-                   age_verified_at, credits_balance, status, deletion_grace_end
+                   age_verified_at, credits_balance, status, deletion_grace_end, password_hash
             FROM users WHERE email = :email
         """),
         {"email": email},
@@ -337,6 +457,7 @@ async def verify_otp(
                     birthdate=str(user_row["birthdate"]) if user_row["birthdate"] else None,
                     age_verified=user_row["age_verified_at"] is not None,
                     credits_balance=user_row["credits_balance"] / 100,
+                    has_password=user_row["password_hash"] is not None,
                 ),
                 needs_profile=False,
                 needs_restoration=True,
@@ -451,6 +572,7 @@ async def verify_otp(
             birthdate=str(user_row["birthdate"]) if user_row["birthdate"] else None,
             age_verified=user_row["age_verified_at"] is not None,
             credits_balance=user_row["credits_balance"] / 100,
+            has_password=user_row["password_hash"] is not None,
         ),
         needs_profile=needs_profile,
     )
@@ -578,7 +700,7 @@ async def get_me(
     result = await db.execute(
         text("""
             SELECT id, email, display_name, avatar_url, gender, birthdate,
-                   age_verified_at, credits_balance, status
+                   age_verified_at, credits_balance, status, password_hash
             FROM users WHERE id = :id
         """),
         {"id": uuid.UUID(current_user.user_id)},
@@ -597,5 +719,447 @@ async def get_me(
             "birthdate": str(user["birthdate"]) if user["birthdate"] else None,
             "age_verified": user["age_verified_at"] is not None,
             "credits_balance": user["credits_balance"] / 100,
+            "has_password": user["password_hash"] is not None,
         }
     }
+
+
+# ── Password-based authentication endpoints ─────────────────────────
+
+
+@router.post("/register")
+@limiter.limit("5/minute")
+async def register(
+    request: Request,
+    body: RegisterRequest,
+    db: AsyncSession = Depends(get_db),
+) -> TokenResponse:
+    """Register with email, OTP, password, and optional invite code.
+
+    Creates or updates user with password_hash.
+    If invite_code provided: bind the invite.
+    Returns TokenResponse with access/refresh tokens.
+    """
+    email = body.email.strip().lower()
+    password = body.password
+
+    # Validate password strength
+    pwd_err = _validate_password_strength(password)
+    if pwd_err:
+        raise HTTPException(status_code=400, detail=pwd_err)
+
+    # Verify OTP
+    await _verify_otp_and_mark_consumed(db, email, body.otp_code, "register")
+
+    # Hash password
+    password_hash = _hash_password(password)
+
+    # Validate invite code if provided
+    if body.invite_code:
+        upper_code = body.invite_code.upper()
+        invite_row = await db.execute(
+            text("SELECT user_id FROM user_invite_codes WHERE code = :code"),
+            {"code": upper_code},
+        )
+        if not invite_row.mappings().first():
+            raise HTTPException(status_code=400, detail="invalid_invite_code")
+
+    # Upsert user with password_hash
+    user_id = uuid.uuid4()
+    await db.execute(
+        text("""
+            INSERT INTO users (id, email, password_hash, credits_balance, status)
+            VALUES (:id, :email, :pwd, :credits, 'active')
+            ON CONFLICT (email) DO UPDATE SET password_hash = EXCLUDED.password_hash
+        """),
+        {
+            "id": user_id,
+            "email": email,
+            "pwd": password_hash,
+            "credits": settings.signup_grant_credits,
+        },
+    )
+
+    # Re-query to get the actual user (in case of conflict)
+    user_result = await db.execute(
+        text("""
+            SELECT id, email, display_name, avatar_url, gender, birthdate,
+                   age_verified_at, credits_balance, status, password_hash
+            FROM users WHERE email = :email
+        """),
+        {"email": email},
+    )
+    user_row = user_result.mappings().first()
+    if user_row is None:
+        raise HTTPException(status_code=500, detail="User creation failed")
+
+    user_id = user_row["id"]
+
+    # Idempotent signup grant (only for new users)
+    await db.execute(
+        text("""
+            INSERT INTO credit_transactions (id, user_id, delta, balance_after, type, idempotency_key, created_at)
+            VALUES (:id, :uid, :delta, :balance, 'grant', :idem_key, NOW())
+            ON CONFLICT (idempotency_key) DO NOTHING
+        """),
+        {
+            "id": uuid.uuid4(),
+            "uid": user_id,
+            "delta": settings.signup_grant_credits,
+            "balance": settings.signup_grant_credits,
+            "idem_key": f"signup_grant:{user_id}",
+        },
+    )
+
+    # Bind invite code if provided
+    if body.invite_code:
+        result = await record_invite_signup(db, user_id, body.invite_code)
+        if result != "ok" and result != "already_bound":
+            logger.warning("invite_binding_failed", result=result, user_id=str(user_id))
+
+    # Update last_login_at
+    await db.execute(
+        text("UPDATE users SET last_login_at = NOW() WHERE id = :id"),
+        {"id": user_id},
+    )
+
+    await db.commit()
+
+    # Generate tokens
+    access_token = auth_manager.create_access_token(user_id=str(user_id), email=email)
+    refresh_token_raw = secrets.token_hex(32)
+    refresh_hash = hashlib.sha256(refresh_token_raw.encode()).hexdigest()
+
+    await db.execute(
+        text("""
+            INSERT INTO auth_sessions (id, user_id, refresh_token_hash, expires_at, user_agent, ip)
+            VALUES (:id, :uid, :hash, :expires, :ua, :ip)
+        """),
+        {
+            "id": uuid.uuid4(),
+            "uid": user_id,
+            "hash": refresh_hash,
+            "expires": datetime.now(timezone.utc)
+            + timedelta(days=settings.refresh_token_expire_days),
+            "ua": request.headers.get("user-agent"),
+            "ip": request.client.host if request.client else None,
+        },
+    )
+    await db.commit()
+
+    needs_profile = user_row["birthdate"] is None or user_row["age_verified_at"] is None
+
+    logger.info("register_success", user_id=str(user_id), has_invite=bool(body.invite_code))
+
+    return TokenResponse(
+        access_token=access_token.access_token,
+        refresh_token=refresh_token_raw,
+        expires_in=access_token.expires_in,
+        user=UserResponse(
+            id=str(user_row["id"]),
+            email=user_row["email"],
+            display_name=user_row["display_name"],
+            avatar_url=user_row["avatar_url"],
+            gender=user_row["gender"],
+            birthdate=str(user_row["birthdate"]) if user_row["birthdate"] else None,
+            age_verified=user_row["age_verified_at"] is not None,
+            credits_balance=user_row["credits_balance"] / 100,
+            has_password=user_row["password_hash"] is not None,
+        ),
+        needs_profile=needs_profile,
+    )
+
+
+@router.post("/login/password")
+@limiter.limit("10/minute")
+async def login_with_password(
+    request: Request,
+    body: LoginPasswordRequest,
+    db: AsyncSession = Depends(get_db),
+) -> TokenResponse:
+    """Login with email and password.
+
+    Returns 400 if user has no password set (should use OTP instead).
+    """
+    email = body.email.strip().lower()
+    password = body.password
+
+    # Get user by email
+    user_result = await db.execute(
+        text("""
+            SELECT id, email, display_name, avatar_url, gender, birthdate,
+                   age_verified_at, credits_balance, status, password_hash
+            FROM users WHERE email = :email AND status = 'active'
+        """),
+        {"email": email},
+    )
+    user_row = user_result.mappings().first()
+
+    if user_row is None or user_row["password_hash"] is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "no_password_set",
+                "message": "This email does not have a password. Please use OTP login or register.",
+            },
+        )
+
+    # Verify password
+    if not _verify_password(password, user_row["password_hash"]):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid password")
+
+    user_id = user_row["id"]
+
+    # Update last_login_at
+    await db.execute(
+        text("UPDATE users SET last_login_at = NOW() WHERE id = :id"),
+        {"id": user_id},
+    )
+
+    # Generate tokens
+    access_token = auth_manager.create_access_token(user_id=str(user_id), email=email)
+    refresh_token_raw = secrets.token_hex(32)
+    refresh_hash = hashlib.sha256(refresh_token_raw.encode()).hexdigest()
+
+    await db.execute(
+        text("""
+            INSERT INTO auth_sessions (id, user_id, refresh_token_hash, expires_at, user_agent, ip)
+            VALUES (:id, :uid, :hash, :expires, :ua, :ip)
+        """),
+        {
+            "id": uuid.uuid4(),
+            "uid": user_id,
+            "hash": refresh_hash,
+            "expires": datetime.now(timezone.utc)
+            + timedelta(days=settings.refresh_token_expire_days),
+            "ua": request.headers.get("user-agent"),
+            "ip": request.client.host if request.client else None,
+        },
+    )
+    await db.commit()
+
+    needs_profile = user_row["birthdate"] is None or user_row["age_verified_at"] is None
+
+    logger.info("login_password_success", user_id=str(user_id))
+
+    return TokenResponse(
+        access_token=access_token.access_token,
+        refresh_token=refresh_token_raw,
+        expires_in=access_token.expires_in,
+        user=UserResponse(
+            id=str(user_row["id"]),
+            email=user_row["email"],
+            display_name=user_row["display_name"],
+            avatar_url=user_row["avatar_url"],
+            gender=user_row["gender"],
+            birthdate=str(user_row["birthdate"]) if user_row["birthdate"] else None,
+            age_verified=user_row["age_verified_at"] is not None,
+            credits_balance=user_row["credits_balance"] / 100,
+            has_password=user_row["password_hash"] is not None,
+        ),
+        needs_profile=needs_profile,
+    )
+
+
+@router.post("/password/reset")
+@limiter.limit("5/minute")
+async def reset_password(
+    request: Request,
+    body: PasswordResetRequest,
+    db: AsyncSession = Depends(get_db),
+) -> TokenResponse:
+    """Reset password with email, OTP, and new password.
+
+    Auto-logs in the user after successful reset.
+    """
+    email = body.email.strip().lower()
+    new_password = body.new_password
+
+    # Validate password strength
+    pwd_err = _validate_password_strength(new_password)
+    if pwd_err:
+        raise HTTPException(status_code=400, detail=pwd_err)
+
+    # Verify OTP
+    await _verify_otp_and_mark_consumed(db, email, body.otp_code, "password_reset")
+
+    # Get user by email
+    user_result = await db.execute(
+        text("""
+            SELECT id, email, display_name, avatar_url, gender, birthdate,
+                   age_verified_at, credits_balance, status, password_hash
+            FROM users WHERE email = :email
+        """),
+        {"email": email},
+    )
+    user_row = user_result.mappings().first()
+
+    if user_row is None:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    user_id = user_row["id"]
+
+    # Hash new password
+    password_hash = _hash_password(new_password)
+
+    # Update password_hash
+    await db.execute(
+        text("UPDATE users SET password_hash = :pwd WHERE id = :id"),
+        {"pwd": password_hash, "id": user_id},
+    )
+
+    # Update last_login_at
+    await db.execute(
+        text("UPDATE users SET last_login_at = NOW() WHERE id = :id"),
+        {"id": user_id},
+    )
+
+    # Generate tokens (auto-login)
+    access_token = auth_manager.create_access_token(user_id=str(user_id), email=email)
+    refresh_token_raw = secrets.token_hex(32)
+    refresh_hash = hashlib.sha256(refresh_token_raw.encode()).hexdigest()
+
+    await db.execute(
+        text("""
+            INSERT INTO auth_sessions (id, user_id, refresh_token_hash, expires_at, user_agent, ip)
+            VALUES (:id, :uid, :hash, :expires, :ua, :ip)
+        """),
+        {
+            "id": uuid.uuid4(),
+            "uid": user_id,
+            "hash": refresh_hash,
+            "expires": datetime.now(timezone.utc)
+            + timedelta(days=settings.refresh_token_expire_days),
+            "ua": request.headers.get("user-agent"),
+            "ip": request.client.host if request.client else None,
+        },
+    )
+    await db.commit()
+
+    needs_profile = user_row["birthdate"] is None or user_row["age_verified_at"] is None
+
+    logger.info("password_reset_success", user_id=str(user_id))
+
+    return TokenResponse(
+        access_token=access_token.access_token,
+        refresh_token=refresh_token_raw,
+        expires_in=access_token.expires_in,
+        user=UserResponse(
+            id=str(user_row["id"]),
+            email=user_row["email"],
+            display_name=user_row["display_name"],
+            avatar_url=user_row["avatar_url"],
+            gender=user_row["gender"],
+            birthdate=str(user_row["birthdate"]) if user_row["birthdate"] else None,
+            age_verified=user_row["age_verified_at"] is not None,
+            credits_balance=user_row["credits_balance"] / 100,
+            has_password=user_row["password_hash"] is not None,
+        ),
+        needs_profile=needs_profile,
+    )
+
+
+@router.post("/password/set")
+@limiter.limit("10/minute")
+async def set_password(
+    request: Request,
+    body: SetPasswordRequest,
+    current_user: TokenData = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Set password for current user (OTP-only users).
+
+    Returns 409 Conflict if user already has a password.
+    """
+    user_id = uuid.UUID(current_user.user_id)
+    password = body.password
+
+    # Validate password strength
+    pwd_err = _validate_password_strength(password)
+    if pwd_err:
+        raise HTTPException(status_code=400, detail=pwd_err)
+
+    # Get user
+    user_result = await db.execute(
+        text("SELECT password_hash FROM users WHERE id = :id"),
+        {"id": user_id},
+    )
+    user_row = user_result.mappings().first()
+
+    if user_row is None:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Check that password_hash is NULL
+    if user_row["password_hash"] is not None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Password already set")
+
+    # Hash and set password
+    password_hash = _hash_password(password)
+    await db.execute(
+        text("UPDATE users SET password_hash = :pwd WHERE id = :id"),
+        {"pwd": password_hash, "id": user_id},
+    )
+    await db.commit()
+
+    logger.info("password_set_success", user_id=str(user_id))
+
+    return {"ok": True}
+
+
+@router.post("/password/change")
+@limiter.limit("10/minute")
+async def change_password(
+    request: Request,
+    body: ChangePasswordRequest,
+    current_user: TokenData = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Change password for current user (requires existing password).
+
+    Returns 400 if user has no password set.
+    """
+    user_id = uuid.UUID(current_user.user_id)
+    current_password = body.current_password
+    new_password = body.new_password
+
+    # Validate new password strength
+    pwd_err = _validate_password_strength(new_password)
+    if pwd_err:
+        raise HTTPException(status_code=400, detail=pwd_err)
+
+    # Get user
+    user_result = await db.execute(
+        text("SELECT password_hash FROM users WHERE id = :id"),
+        {"id": user_id},
+    )
+    user_row = user_result.mappings().first()
+
+    if user_row is None:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Check that password_hash is NOT NULL
+    if user_row["password_hash"] is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No password set. Use POST /api/auth/password/set to set one.",
+        )
+
+    # Verify current password
+    if not _verify_password(current_password, user_row["password_hash"]):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Current password is incorrect"
+        )
+
+    # Hash new password
+    new_password_hash = _hash_password(new_password)
+
+    # Update password
+    await db.execute(
+        text("UPDATE users SET password_hash = :pwd WHERE id = :id"),
+        {"pwd": new_password_hash, "id": user_id},
+    )
+    await db.commit()
+
+    logger.info("password_changed_success", user_id=str(user_id))
+
+    return {"ok": True}

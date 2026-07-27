@@ -4,8 +4,10 @@ import type { ReactElement } from 'react'
 import { setNavigate } from './services/navigation'
 import { AuthGuard } from './components/AuthGuard'
 import { SplashPage } from './pages/SplashPage'
-import { OnboardingPage } from './pages/OnboardingPage'
 import { LoginPage } from './pages/LoginPage'
+import { RegisterPage } from './pages/RegisterPage'
+import { ForgotPasswordPage } from './pages/ForgotPasswordPage'
+import { ChangePasswordPage } from './pages/ChangePasswordPage'
 import { HomePage } from './pages/HomePage'
 import { ChatInboxPage } from './pages/ChatInboxPage'
 import { ChatLightPage } from './pages/ChatLightPage'
@@ -53,7 +55,7 @@ function NotFoundRedirect(): ReactElement {
   return <Navigate to={isAuthenticated() ? '/home' : '/splash'} replace />
 }
 
-const SKIP_SAVE_ROUTES = new Set(['/splash', '/onboarding', '/login', '/redeem', '/age-gate', '/'])
+const SKIP_SAVE_ROUTES = new Set(['/splash', '/login', '/register', '/forgot-password', '/redeem', '/age-gate', '/'])
 
 export function App() {
   const { fontScale } = useAppStore()
@@ -132,8 +134,9 @@ export function App() {
       <Routes>
         <Route path="/" element={<Navigate to="/splash" replace />} />
         <Route path="/splash" element={<SplashPage />} />
-        <Route path="/onboarding" element={<OnboardingPage />} />
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/redeem" element={<RedeemPage />} />
         <Route path="/home" element={<HomePage />} />
         <Route path="/chat" element={<ChatInboxPage />} />
@@ -146,6 +149,7 @@ export function App() {
         <Route path="/character/:id" element={<CharacterProfilePage />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/settings/profile" element={<ProfileEditPage />} />
+        <Route path="/settings/change-password" element={<ChangePasswordPage />} />
         <Route path="/credits/transactions" element={<TransactionsPage />} />
         <Route path="/membership" element={<MembershipPage />} />
         <Route path="/wallet" element={<WalletPage />} />

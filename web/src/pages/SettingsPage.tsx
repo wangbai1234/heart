@@ -228,6 +228,8 @@ export function SettingsPage() {
         {/* 隐私与数据 */}
         <SectionLabel>隐私与数据</SectionLabel>
         <GroupCard>
+          <SettingRow icon={<KeyIcon />} label="修改密码" chevron onClick={() => navigate('/settings/change-password')} />
+          <Divider />
           <SettingRow icon={<LogoutIcon />} label="退出登录" onClick={() => setShowLogoutDialog(true)} />
           <Divider />
           <SettingRow icon={<TrashIcon />} label="清除聊天缓存" onClick={() => setShowClearDialog(true)} />
@@ -434,6 +436,9 @@ function ScaledText({ as: Component, children, className = '' }: ScaledTextProps
 /* ── Icons ─────────────────────────────────────────────────────── */
 function LogoutIcon() {
   return <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--color-primary)" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16,17 21,12 16,7" /><line x1="21" y1="12" x2="9" y2="12" /></svg>
+}
+function KeyIcon() {
+  return <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--color-primary)" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><circle cx="7.5" cy="15.5" r="4.5" /><path d="M10.5 12.5L21 2m-4 2 2 2m-5 1 2 2" /></svg>
 }
 function CrownIcon() {
   return <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--color-primary)" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M2 20h20L19 8l-5 5-2-7-2 7-5-5-3 12z" /></svg>

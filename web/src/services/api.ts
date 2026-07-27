@@ -109,19 +109,114 @@ export function detailToMessage(detail: unknown, fallback: string): string {
 
 export class ApiError extends Error {
   status: number
-  constructor(status: number, message: string) {
+  code?: string // structured error code from FastAPI detail (e.g. 'no_password_set')
+  constructor(status: number, message: string, code?: string) {
     super(message)
     this.name = 'ApiError'
     this.status = status
+    this.code = code
   }
 }
 
 // ── Auth API ──────────────────────────────────────────────────────
 
-export async function requestOtp(email: string): Promise<{ sent: boolean; cooldown: number; expires_in: number }> {
+export type OtpPurpose = 'login' | 'register' | 'password_reset'
+
+export async function requestOtp(
+  email: string,
+  purpose: OtpPurpose = 'login',
+): Promise<{ sent: boolean; cooldown: number; expires_in: number }> {
   return request('/auth/otp/request', {
     method: 'POST',
-    body: JSON.stringify({ email }),
+    body: JSON.stringify({ email, purpose }),
+  })
+}
+
+/** Shape returned by all token-issuing auth endpoints. */
+export interface TokenResponse {
+  access_token: string
+  refresh_token: string
+  expires_in: number
+  user: AuthUser
+  needs_profile: boolean
+  needs_restoration?: boolean
+  grace_end?: string | null
+}
+
+/** Register a new account: email + OTP(purpose=register) + password (+ optional invite). Auto-logs in. */
+export async function registerWithPassword(
+  email: string,
+  otpCode: string,
+  password: string,
+  inviteCode?: string,
+): Promise<TokenResponse> {
+  return request('/auth/register', {
+    method: 'POST',
+    body: JSON.stringify({
+      email,
+      otp_code: otpCode,
+      password,
+      invite_code: inviteCode || null,
+    }),
+  })
+}
+
+/**
+ * Login with email + password.
+ *
+ * Uses a raw fetch (not `request()`) so the structured `detail.code` survives:
+ * the backend returns 400 `{ detail: { code: 'no_password_set', message } }`
+ * for OTP-only accounts, and the caller (LoginPage) auto-switches to the OTP
+ * tab on that code. `detailToMessage()` in `request()` would flatten it away.
+ */
+export async function loginWithPassword(email: string, password: string): Promise<TokenResponse> {
+  const res = await fetch(`${BASE_URL}/auth/login/password`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  })
+
+  if (!res.ok) {
+    const errorBody = await res.json().catch(() => ({ detail: 'Request failed' }))
+    const detail = errorBody?.detail
+    const code =
+      detail && typeof detail === 'object' && typeof detail.code === 'string'
+        ? detail.code
+        : undefined
+    throw new ApiError(res.status, detailToMessage(detail, 'Request failed'), code)
+  }
+
+  return res.json()
+}
+
+/** Reset password via email + OTP(purpose=password_reset) + new password. Auto-logs in. */
+export async function resetPassword(
+  email: string,
+  otpCode: string,
+  newPassword: string,
+): Promise<TokenResponse> {
+  return request('/auth/password/reset', {
+    method: 'POST',
+    body: JSON.stringify({ email, otp_code: otpCode, new_password: newPassword }),
+  })
+}
+
+/** Set a password for an OTP-only account (Bearer required). 409 if already set. */
+export async function setPassword(password: string): Promise<{ ok: boolean }> {
+  return request('/auth/password/set', {
+    method: 'POST',
+    body: JSON.stringify({ password }),
+  })
+}
+
+/** Change password for an account that already has one (Bearer required). */
+export async function changePassword(
+  currentPassword: string,
+  newPassword: string,
+): Promise<{ ok: boolean }> {
+  return request('/auth/password/change', {
+    method: 'POST',
+    body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
   })
 }
 
@@ -174,6 +269,7 @@ export interface AuthUser {
   birthdate: string | null
   age_verified: boolean
   credits_balance: number
+  has_password?: boolean
 }
 
 // ── Credits API ────────────────────────────────────────────────────
