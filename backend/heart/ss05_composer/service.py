@@ -939,6 +939,11 @@ class ComposerService:
         # the LLM sometimes emits raw prose that mixes action and dialog
         # inline (rin turn 2 in TEST_REPORT_20260712 follow-up) and every
         # segment falls through to a plain text bubble.
+        # A positive one-shot example matters more than the rules alone: UGC
+        # characters few-shot off their creator's speech_samples (Layer 3),
+        # which rarely use （）, so the model imitates unbracketed prose and the
+        # bubble splitter collapses action + dialog into one bubble. The example
+        # below gives the model a concrete target format to copy.
         parts.append(
             "\n【表达格式（重要）】\n"
             "- 所有动作、神态、心理描写、旁白必须用中文全角括号（）包裹。\n"
@@ -946,7 +951,9 @@ class ComposerService:
             "- 一条消息里动作与对白可以多次穿插，每个动作片段独立用一对（）。\n"
             "- 禁止把动作描写和对白混在同一段裸文本里，例如"
             "「目光微微闪动，随即移开视线 不。」是错误的，正确是"
-            "「（目光微微闪动，随即移开视线）不。」。"
+            "「（目光微微闪动，随即移开视线）不。」。\n"
+            "- 输出示例（务必照此格式）：（他停下脚步，偏头看你）好久不见。"
+            "（唇角微微扬起）最近过得怎么样？"
         )
 
         # ── Layer 4: Hard constraints (compiled, never raw strings) ──

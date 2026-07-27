@@ -340,25 +340,60 @@ class Bubble(dict):
     """A single rendered bubble: {kind, npc_name?, content}."""
 
 
+_NPC_REST_QUOTE_RE = re.compile(r"^[\x22“”「]|[\x22“”」]$")
+_INLINE_ACTION_RE = re.compile(r"（(?P<inner>[^）]+)）")
+
+
+def _split_npc_rest(name: str, rest: str) -> list[dict[str, Any]]:
+    """Segment the text after a ``**角色名**`` marker into ordered bubbles.
+
+    On a speaker line, inline （动作） is a separate action bubble; every other
+    span (quoted or bare prose) is that speaker's 台词 → a dialogue bubble
+    carrying ``name``. An empty ``rest`` yields a single empty-content dialogue
+    bubble so the bare-speaker / pending-speaker path (_is_bare_speaker) still
+    recognises a lone ``**角色名**`` line.
+    """
+    if not rest:
+        return [{"kind": "dialogue", "npc_name": name, "content": ""}]
+
+    bubbles: list[dict[str, Any]] = []
+
+    def push_dialogue(text: str) -> None:
+        text = _NPC_REST_QUOTE_RE.sub("", text.strip()).strip()
+        if text:
+            bubbles.append({"kind": "dialogue", "npc_name": name, "content": text})
+
+    cursor = 0
+    for m in _INLINE_ACTION_RE.finditer(rest):
+        push_dialogue(rest[cursor : m.start()])
+        inner = m.group("inner").strip()
+        if inner:
+            bubbles.append({"kind": "action", "npc_name": None, "content": inner})
+        cursor = m.end()
+    push_dialogue(rest[cursor:])
+
+    # A lone action with no 台词 still returns [action]; but a rest that stripped
+    # down to nothing (e.g. only stray quotes) degrades to an empty dialogue so
+    # the pending-speaker path can hold it rather than emitting nothing.
+    if not bubbles:
+        return [{"kind": "dialogue", "npc_name": name, "content": ""}]
+    return bubbles
+
+
 def _classify_structured_line(stripped: str) -> Optional[list[dict[str, Any]]]:
     """Split a line into action/dialogue/narration segments.
 
     Returns a list of bubbles extracted from the line, or None if the line is
     pure narration. Handles mixed cases like `（他走近你）"你来了。"`.
     """
-    # 1. Check for **角色名** dialogue (highest priority, takes entire line)
+    # 1. Check for **角色名** dialogue (highest priority, takes the whole line).
+    #    The rest is re-scanned so an inline （动作） splits into its own action
+    #    bubble instead of being swallowed into the speaker's dialogue bubble
+    #    (regression: `**贺听澜**（他走近你）"你来了。"` used to render as one
+    #    dialogue bubble with the action embedded). See _split_npc_rest.
     npc_m = _NPC_LINE_RE.match(stripped)
     if npc_m:
-        content = npc_m.group("rest").strip()
-        # Strip surrounding quotes if present (ASCII + Chinese curly/corner quotes)
-        content = re.sub(r"^[\x22\u201c\u201d\u300c]|[\x22\u201c\u201d\u300d]$", "", content)
-        return [
-            {
-                "kind": "dialogue",
-                "npc_name": npc_m.group("name").strip(),
-                "content": content,
-            }
-        ]
+        return _split_npc_rest(npc_m.group("name").strip(), npc_m.group("rest").strip())
 
     # 2. Check if line starts with 【旁白】 prefix → pure narration, let caller strip it
     if _NARRATION_PREFIX_RE.match(stripped):

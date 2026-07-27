@@ -61,3 +61,31 @@ describe('splitGmText pending-speaker (empty-oval regression)', () => {
     expect(splitGmText('**贺听澜**\n')).toEqual([])
   })
 })
+
+// These vectors MUST match backend/tests/unit/test_story_prompt.py
+// (_split_npc_rest section). An inline （动作） on a **角色名** line splits into
+// its own action bubble instead of being embedded in the dialogue bubble.
+describe('splitGmText **角色名** inline action', () => {
+  it('speaker + inline action + dialogue → action then dialogue', () => {
+    const out = splitGmText('**贺听澜**（他缓缓走近你）“你来了。”')
+    expect(out).toHaveLength(2)
+    expect(out[0]).toEqual({ kind: 'action', npcName: null, content: '他缓缓走近你' })
+    expect(out[1]).toEqual({ kind: 'dialogue', npcName: '贺听澜', content: '你来了。' })
+  })
+
+  it('speaker + action + bare 台词', () => {
+    const out = splitGmText('**贺听澜** （目光扫过你）今晚别走。')
+    expect(out.map((b) => b.kind)).toEqual(['action', 'dialogue'])
+    expect(out[0].content).toBe('目光扫过你')
+    expect(out[1].npcName).toBe('贺听澜')
+    expect(out[1].content).toBe('今晚别走。')
+  })
+
+  it('dialogue → action → dialogue order preserved, name carried on 台词', () => {
+    const out = splitGmText('**林**你来了。（转身离开）还是算了。')
+    expect(out.map((b) => b.kind)).toEqual(['dialogue', 'action', 'dialogue'])
+    expect(out[0]).toEqual({ kind: 'dialogue', npcName: '林', content: '你来了。' })
+    expect(out[1].content).toBe('转身离开')
+    expect(out[2]).toEqual({ kind: 'dialogue', npcName: '林', content: '还是算了。' })
+  })
+})

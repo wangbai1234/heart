@@ -185,6 +185,39 @@ def test_split_consecutive_bare_speakers_first_dropped():
     assert out[0]["content"] == "台词"
 
 
+# ── **角色名** line with inline （动作）: action must split out ───────
+# Vectors mirror web/src/utils/storyBubbles.test.ts (splitNpcRest).
+
+
+def test_split_speaker_inline_action_becomes_separate_bubble():
+    # The opening-turn shape: `**name**（action）"台词"` previously rendered as a
+    # single dialogue bubble with the action embedded (action/对白未分离).
+    out = split_gm_text('**贺听澜**（他缓缓走近你）“你来了。”')
+    assert len(out) == 2
+    assert out[0]["kind"] == "action"
+    assert out[0]["npc_name"] is None
+    assert out[0]["content"] == "他缓缓走近你"
+    assert out[1]["kind"] == "dialogue"
+    assert out[1]["npc_name"] == "贺听澜"
+    assert out[1]["content"] == "你来了。"
+
+
+def test_split_speaker_action_then_bare_dialogue():
+    out = split_gm_text("**贺听澜** （目光扫过你）今晚别走。")
+    assert [b["kind"] for b in out] == ["action", "dialogue"]
+    assert out[0]["content"] == "目光扫过你"
+    assert out[1]["npc_name"] == "贺听澜"
+    assert out[1]["content"] == "今晚别走。"
+
+
+def test_split_speaker_dialogue_action_dialogue_order_preserved():
+    out = split_gm_text("**林**你来了。（转身离开）还是算了。")
+    assert [b["kind"] for b in out] == ["dialogue", "action", "dialogue"]
+    assert out[0]["npc_name"] == "林" and out[0]["content"] == "你来了。"
+    assert out[1]["content"] == "转身离开"
+    assert out[2]["npc_name"] == "林" and out[2]["content"] == "还是算了。"
+
+
 # ── off-contract markup normalisation (pre-clean) ───────────────────
 
 

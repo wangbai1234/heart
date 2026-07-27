@@ -72,14 +72,47 @@ function precleanGmText(text: string): string {
   return out
 }
 
+// Inline （action） span, used to re-scan the text after a **角色名** marker.
+const INLINE_ACTION_RE = /（([^）]+)）/g
+
+/** Segment the text after a `**角色名**` marker into ordered bubbles.
+ *  Mirrors backend prompt.py :: _split_npc_rest — inline （动作） becomes its own
+ *  action bubble; every other span is that speaker's 台词 (dialogue). An empty
+ *  rest yields a single empty-content dialogue bubble so the bare-speaker /
+ *  pending-speaker path still recognises a lone `**角色名**` line. */
+function splitNpcRest(name: string, rest: string): ParsedBubble[] {
+  if (!rest) return [{ kind: 'dialogue', npcName: name, content: '' }]
+
+  const bubbles: ParsedBubble[] = []
+  const pushDialogue = (text: string) => {
+    const t = text.trim().replace(QUOTE_STRIP_RE, '').trim()
+    if (t) bubbles.push({ kind: 'dialogue', npcName: name, content: t })
+  }
+
+  let cursor = 0
+  INLINE_ACTION_RE.lastIndex = 0
+  let m: RegExpExecArray | null
+  while ((m = INLINE_ACTION_RE.exec(rest)) !== null) {
+    pushDialogue(rest.slice(cursor, m.index))
+    const inner = m[1].trim()
+    if (inner) bubbles.push({ kind: 'action', npcName: null, content: inner })
+    cursor = m.index + m[0].length
+  }
+  pushDialogue(rest.slice(cursor))
+
+  if (bubbles.length === 0) return [{ kind: 'dialogue', npcName: name, content: '' }]
+  return bubbles
+}
+
 /** Split a single line into ordered action/dialogue/narration segments, or
  *  null when the line is pure narration (caller buffers it). */
 function classifyStructuredLine(stripped: string): ParsedBubble[] | null {
-  // 1. **角色名** dialogue (highest priority, takes the whole line).
+  // 1. **角色名** dialogue (highest priority, takes the whole line). The rest is
+  //    re-scanned so an inline （动作） splits into its own action bubble instead
+  //    of being swallowed into the speaker's dialogue bubble.
   const npcMatch = NPC_LINE_RE.exec(stripped)
   if (npcMatch) {
-    const content = npcMatch[2].trim().replace(QUOTE_STRIP_RE, '')
-    return [{ kind: 'dialogue', npcName: npcMatch[1].trim(), content }]
+    return splitNpcRest(npcMatch[1].trim(), npcMatch[2].trim())
   }
 
   // 2. 【旁白】 prefix → pure narration; let the caller strip it.
