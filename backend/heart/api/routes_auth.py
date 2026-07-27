@@ -82,7 +82,7 @@ def _validate_password_strength(pwd: str) -> str | None:
     Returns None if valid, or error message if invalid.
     """
     if len(pwd) < 8:
-        return "Password must be at least 8 characters"
+        return "password_too_short"
     return None
 
 
@@ -748,13 +748,17 @@ async def register(
     if pwd_err:
         raise HTTPException(status_code=400, detail=pwd_err)
 
-    # Verify OTP
-    await _verify_otp_and_mark_consumed(db, email, body.otp_code, "register")
+    # Reject already-registered emails BEFORE consuming the OTP (so a mistaken
+    # re-registration doesn't burn the user's code) and never silently overwrite
+    # an existing account's password. Existing users log in / reset instead.
+    existing = await db.execute(
+        text("SELECT id FROM users WHERE email = :email"),
+        {"email": email},
+    )
+    if existing.mappings().first() is not None:
+        raise HTTPException(status_code=409, detail="email_already_registered")
 
-    # Hash password
-    password_hash = _hash_password(password)
-
-    # Validate invite code if provided
+    # Validate invite code if provided (also before consuming OTP)
     if body.invite_code:
         upper_code = body.invite_code.upper()
         invite_row = await db.execute(
@@ -764,13 +768,21 @@ async def register(
         if not invite_row.mappings().first():
             raise HTTPException(status_code=400, detail="invalid_invite_code")
 
-    # Upsert user with password_hash
+    # Verify OTP
+    await _verify_otp_and_mark_consumed(db, email, body.otp_code, "register")
+
+    # Hash password
+    password_hash = _hash_password(password)
+
+    # Insert new user. ON CONFLICT DO NOTHING guards against a race with a
+    # concurrent signup on the same email (the existence check above already
+    # handles the common case).
     user_id = uuid.uuid4()
     await db.execute(
         text("""
             INSERT INTO users (id, email, password_hash, credits_balance, status)
             VALUES (:id, :email, :pwd, :credits, 'active')
-            ON CONFLICT (email) DO UPDATE SET password_hash = EXCLUDED.password_hash
+            ON CONFLICT (email) DO NOTHING
         """),
         {
             "id": user_id,
@@ -895,7 +907,12 @@ async def login_with_password(
     )
     user_row = user_result.mappings().first()
 
-    if user_row is None or user_row["password_hash"] is None:
+    # Distinguish "no such account" from "account exists but has no password":
+    # the former should be told to register; the latter is an OTP-only account
+    # and the frontend auto-switches to the verification-code tab on this code.
+    if user_row is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="email_not_registered")
+    if user_row["password_hash"] is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={
@@ -906,7 +923,7 @@ async def login_with_password(
 
     # Verify password
     if not _verify_password(password, user_row["password_hash"]):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid password")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid_credentials")
 
     user_id = user_row["id"]
 
@@ -995,7 +1012,7 @@ async def reset_password(
     user_row = user_result.mappings().first()
 
     if user_row is None:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=404, detail="email_not_registered")
 
     user_id = user_row["id"]
 
@@ -1087,11 +1104,11 @@ async def set_password(
     user_row = user_result.mappings().first()
 
     if user_row is None:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=404, detail="user_not_found")
 
     # Check that password_hash is NULL
     if user_row["password_hash"] is not None:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Password already set")
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="password_already_set")
 
     # Hash and set password
     password_hash = _hash_password(password)
@@ -1135,19 +1152,19 @@ async def change_password(
     user_row = user_result.mappings().first()
 
     if user_row is None:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=404, detail="user_not_found")
 
     # Check that password_hash is NOT NULL
     if user_row["password_hash"] is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No password set. Use POST /api/auth/password/set to set one.",
+            detail="no_password_to_change",
         )
 
     # Verify current password
     if not _verify_password(current_password, user_row["password_hash"]):
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Current password is incorrect"
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="wrong_current_password"
         )
 
     # Hash new password

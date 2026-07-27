@@ -152,6 +152,9 @@ export function ForgotPasswordPage() {
                 <PasswordInput icon={LockIcon} placeholder="新密码（至少 8 位）" value={password} onChange={setPassword} autoComplete="new-password" />
                 <PasswordInput icon={LockIcon} placeholder="确认新密码" value={confirm} onChange={setConfirm} autoComplete="new-password" />
               </div>
+              <p className="text-xs text-[var(--color-text-muted)] mt-2 px-1">
+                验证码为 6 位数字；新密码至少 8 位。
+              </p>
               <div className="h-4" />
               <Button variant="primary" size="lg" loading={loading} disabled={!canReset} onClick={handleReset}>
                 重置密码并登录

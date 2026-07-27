@@ -118,6 +118,10 @@ export function ChangePasswordPage() {
             />
           </div>
 
+          <p className="text-xs text-[var(--color-text-muted)] -mt-4 mb-6 px-1">
+            密码至少 8 位，建议包含字母和数字。
+          </p>
+
           <Button variant="primary" size="lg" loading={loading} disabled={!canSubmit} onClick={handleSubmit}>
             {hasPassword ? '确认修改' : '确认设置'}
           </Button>

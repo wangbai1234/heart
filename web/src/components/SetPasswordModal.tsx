@@ -83,6 +83,7 @@ export function SetPasswordModal({ open, onClose }: { open: boolean; onClose: ()
             autoComplete="new-password"
           />
         </div>
+        <p className="text-[12px] text-[var(--color-text-muted)] mt-2 text-center">密码至少 8 位</p>
         {error && <p className="text-[12px] text-[var(--color-error)] mt-2 text-center">{error}</p>}
       </div>
     </Dialog>

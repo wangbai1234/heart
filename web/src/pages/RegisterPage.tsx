@@ -169,6 +169,10 @@ export function RegisterPage() {
             <Input icon={GiftIcon} placeholder="邀请码（选填）" value={inviteCode} onChange={setInviteCode} />
           </div>
 
+          <p className="text-xs text-[var(--color-text-muted)] mt-2 px-1">
+            验证码为 6 位数字；密码至少 8 位。
+          </p>
+
           {/* Legal checkbox */}
           <label className="flex items-start gap-2 mt-4 mb-4 cursor-pointer">
             <input
