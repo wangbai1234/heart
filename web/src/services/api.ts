@@ -71,25 +71,71 @@ async function request<T>(
   }
 
   if (!res.ok) {
-    const errorBody = await res.json().catch(() => ({ detail: 'Request failed' }))
-    throw new ApiError(res.status, detailToMessage(errorBody?.detail, 'Request failed'))
+    const fallback = statusFallback(res.status)
+    const errorBody = await res.json().catch(() => ({ detail: fallback }))
+    throw new ApiError(res.status, detailToMessage(errorBody?.detail, fallback))
   }
 
   return res.json()
 }
 
 /**
+ * Stable backend error signals → friendly Chinese copy.
+ *
+ * Keyed by BOTH the machine codes the auth routes now emit
+ * (e.g. `email_already_registered`) AND the legacy English OTP `detail`
+ * strings, so every auth failure surfaces readable Chinese instead of a raw
+ * "Not Found" / "Request failed" / English fragment. When you add a new
+ * backend detail, add its friendly copy here too.
+ */
+const FRIENDLY_MESSAGES: Record<string, string> = {
+  // ── Registration / login / password (machine codes) ──
+  email_already_registered: '该邮箱已注册，请直接登录，或使用「忘记密码」找回。',
+  invalid_invite_code: '邀请码无效，请检查后重试。',
+  no_password_set: '该账号尚未设置密码，请使用验证码登录。',
+  password_too_short: '密码至少 8 位，请重新设置。',
+  invalid_credentials: '邮箱或密码错误，请重试。',
+  email_not_registered: '该邮箱尚未注册，请先注册账号。',
+  user_not_found: '账号不存在，请重新登录。',
+  password_already_set: '你已设置过密码，请前往「修改密码」。',
+  wrong_current_password: '当前密码不正确，请重试。',
+  no_password_to_change: '你还没有设置密码，请先设置密码。',
+  // ── OTP (legacy English detail strings) ──
+  'Invalid or expired OTP': '验证码错误或已过期，请重新获取。',
+  'Invalid or expired code': '验证码错误或已过期，请重新获取。',
+  'OTP already used': '验证码已被使用，请重新获取。',
+  'OTP expired': '验证码已过期，请重新获取。',
+  'Code expired': '验证码已过期，请重新获取。',
+  'Too many OTP attempts': '尝试次数过多，请稍后重新获取验证码。',
+  'Too many attempts, request a new code': '尝试次数过多，请稍后重新获取验证码。',
+  'Invalid OTP': '验证码错误，请重试。',
+  'Invalid code': '验证码错误，请重试。',
+  'User creation failed': '账号创建失败，请稍后重试。',
+}
+
+/** HTTP-status → generic Chinese fallback (never leak English / "Not Found"). */
+export function statusFallback(status: number): string {
+  if (status === 404) return '请求的服务暂不可用，请稍后重试。'
+  if (status === 429) return '操作过于频繁，请稍后再试。'
+  if (status >= 500) return '服务器开小差了，请稍后重试。'
+  if (status === 401 || status === 403) return '登录状态已失效，请重新登录。'
+  return '操作失败，请稍后重试。'
+}
+
+/**
  * Normalize a FastAPI error `detail` into a human-readable string.
  *
  * `detail` can be:
- *   - a string (plain HTTPException)
+ *   - a string (plain HTTPException — either a machine code or legacy English)
  *   - an array of {loc, msg, type} (Pydantic v2 validation errors)
  *   - an object with a `code` (our structured errors, e.g. tier_forbidden)
  * Passing an object/array straight into an Error message renders as
  * "[object Object]", which is exactly the clone-upload bug this fixes.
  */
 export function detailToMessage(detail: unknown, fallback: string): string {
-  if (typeof detail === 'string') return detail || fallback
+  if (typeof detail === 'string') {
+    return FRIENDLY_MESSAGES[detail] ?? (detail || fallback)
+  }
   if (Array.isArray(detail)) {
     return (
       detail.map((d: any) => (d?.msg ?? JSON.stringify(d))).join('; ') || fallback
@@ -101,6 +147,9 @@ export function detailToMessage(detail: unknown, fallback: string): string {
       const label = d.provider === 'fish' ? '真人语音（Fish）' : '音色'
       return `${label}克隆需要会员权限，请先升级会员后再试。`
     }
+    if (typeof d.code === 'string' && FRIENDLY_MESSAGES[d.code]) {
+      return FRIENDLY_MESSAGES[d.code]
+    }
     if (typeof d.message === 'string') return d.message
     if (typeof d.msg === 'string') return d.msg
   }
@@ -109,19 +158,117 @@ export function detailToMessage(detail: unknown, fallback: string): string {
 
 export class ApiError extends Error {
   status: number
-  constructor(status: number, message: string) {
+  code?: string // structured error code from FastAPI detail (e.g. 'no_password_set')
+  constructor(status: number, message: string, code?: string) {
     super(message)
     this.name = 'ApiError'
     this.status = status
+    this.code = code
   }
 }
 
 // ── Auth API ──────────────────────────────────────────────────────
 
-export async function requestOtp(email: string): Promise<{ sent: boolean; cooldown: number; expires_in: number }> {
+export type OtpPurpose = 'login' | 'register' | 'password_reset'
+
+export async function requestOtp(
+  email: string,
+  purpose: OtpPurpose = 'login',
+): Promise<{ sent: boolean; cooldown: number; expires_in: number }> {
   return request('/auth/otp/request', {
     method: 'POST',
-    body: JSON.stringify({ email }),
+    body: JSON.stringify({ email, purpose }),
+  })
+}
+
+/** Shape returned by all token-issuing auth endpoints. */
+export interface TokenResponse {
+  access_token: string
+  refresh_token: string
+  expires_in: number
+  user: AuthUser
+  needs_profile: boolean
+  needs_restoration?: boolean
+  grace_end?: string | null
+}
+
+/** Register a new account: email + OTP(purpose=register) + password (+ optional invite). Auto-logs in. */
+export async function registerWithPassword(
+  email: string,
+  otpCode: string,
+  password: string,
+  inviteCode?: string,
+): Promise<TokenResponse> {
+  return request('/auth/register', {
+    method: 'POST',
+    body: JSON.stringify({
+      email,
+      otp_code: otpCode,
+      password,
+      invite_code: inviteCode || null,
+    }),
+  })
+}
+
+/**
+ * Login with email + password.
+ *
+ * Uses a raw fetch (not `request()`) so the structured `detail.code` survives:
+ * the backend returns 400 `{ detail: { code: 'no_password_set', message } }`
+ * for OTP-only accounts, and the caller (LoginPage) auto-switches to the OTP
+ * tab on that code. `detailToMessage()` in `request()` would flatten it away.
+ */
+export async function loginWithPassword(email: string, password: string): Promise<TokenResponse> {
+  const res = await fetch(`${BASE_URL}/auth/login/password`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password }),
+  })
+
+  if (!res.ok) {
+    const fallback = statusFallback(res.status)
+    const errorBody = await res.json().catch(() => ({ detail: fallback }))
+    const detail = errorBody?.detail
+    const code =
+      detail && typeof detail === 'object' && typeof detail.code === 'string'
+        ? detail.code
+        : typeof detail === 'string'
+          ? detail
+          : undefined
+    throw new ApiError(res.status, detailToMessage(detail, fallback), code)
+  }
+
+  return res.json()
+}
+
+/** Reset password via email + OTP(purpose=password_reset) + new password. Auto-logs in. */
+export async function resetPassword(
+  email: string,
+  otpCode: string,
+  newPassword: string,
+): Promise<TokenResponse> {
+  return request('/auth/password/reset', {
+    method: 'POST',
+    body: JSON.stringify({ email, otp_code: otpCode, new_password: newPassword }),
+  })
+}
+
+/** Set a password for an OTP-only account (Bearer required). 409 if already set. */
+export async function setPassword(password: string): Promise<{ ok: boolean }> {
+  return request('/auth/password/set', {
+    method: 'POST',
+    body: JSON.stringify({ password }),
+  })
+}
+
+/** Change password for an account that already has one (Bearer required). */
+export async function changePassword(
+  currentPassword: string,
+  newPassword: string,
+): Promise<{ ok: boolean }> {
+  return request('/auth/password/change', {
+    method: 'POST',
+    body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
   })
 }
 
@@ -174,6 +321,7 @@ export interface AuthUser {
   birthdate: string | null
   age_verified: boolean
   credits_balance: number
+  has_password?: boolean
 }
 
 // ── Credits API ────────────────────────────────────────────────────

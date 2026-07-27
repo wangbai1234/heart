@@ -3,9 +3,20 @@ import { useNavigate, Link } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
+import { PasswordInput } from '../components/ui/PasswordInput'
 import { OTPInput } from '../components/ui/OTPInput'
 import { Toast } from '../components/ui/Toast'
-import { requestOtp, verifyOtp, updateProfile, logout, restoreAccount } from '../services/api'
+import { SetPasswordModal } from '../components/SetPasswordModal'
+import {
+  requestOtp,
+  verifyOtp,
+  loginWithPassword,
+  updateProfile,
+  logout,
+  restoreAccount,
+  ApiError,
+  type TokenResponse,
+} from '../services/api'
 import { useVisualViewport } from '../hooks/useVisualViewport'
 
 const SESSION_KEY = 'yuoyuo-login-flow'
@@ -37,18 +48,40 @@ function clearSnapshot() {
   sessionStorage.removeItem(SESSION_KEY)
 }
 
+const MailIcon = (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="2" y="4" width="20" height="16" rx="2" />
+    <polyline points="22,6 12,13 2,6" />
+  </svg>
+)
+const LockIcon = (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="11" width="18" height="11" rx="2" />
+    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+  </svg>
+)
+
+type Mode = 'password' | 'otp'
 type Step = 'email' | 'code' | 'restoration'
 
 export function LoginPage() {
   const snap = readSnapshot()
   const now = Date.now()
 
+  // Password login is the default; OTP is the backward-compat path for
+  // existing accounts that never set a password. A saved snapshot means the
+  // user was mid-OTP-flow, so resume there.
+  const [mode, setMode] = useState<Mode>(snap ? 'otp' : 'password')
   const [step, setStep] = useState<Step>(snap?.step ?? 'email')
   const [email, setEmail] = useState(snap?.email ?? '')
+  const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [toast, setToast] = useState({ visible: false, message: '' })
   const [restorationGraceEnd, setRestorationGraceEnd] = useState<string | null>(null)
-  // cooldown is derived from wall-clock; -1 means "not counting"
+  // After auth, OTP-only users are invited to set a password before we route on.
+  const [showSetPassword, setShowSetPassword] = useState(false)
+  const [pendingDest, setPendingDest] = useState<string>('/home')
+  // cooldown is derived from wall-clock; 0 means "not counting"
   const [cooldownEndAt, setCooldownEndAt] = useState<number>(
     snap && snap.cooldownEndAt > now ? snap.cooldownEndAt : 0
   )
@@ -68,11 +101,12 @@ export function LoginPage() {
     return () => clearInterval(t)
   }, [cooldownEndAt])
 
-  // Persist flow state to sessionStorage whenever it changes
+  // Persist OTP flow state to sessionStorage whenever it changes
   useEffect(() => {
+    if (mode !== 'otp') return
     if (step === 'email' && !email && !cooldownEndAt) return
     writeSnapshot({ step, email, cooldownEndAt })
-  }, [step, email, cooldownEndAt])
+  }, [mode, step, email, cooldownEndAt])
 
   // Restore state on bfcache restore (iOS Safari back navigation)
   useEffect(() => {
@@ -80,6 +114,7 @@ export function LoginPage() {
       if (!e.persisted) return
       const restored = readSnapshot()
       if (!restored) return
+      setMode('otp')
       setStep(restored.step)
       setEmail(restored.email)
       setCooldownEndAt(restored.cooldownEndAt)
@@ -90,11 +125,64 @@ export function LoginPage() {
 
   const isValidEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
 
+  // Shared post-auth routing. OTP-only users (has_password === false) get the
+  // SetPasswordModal before we navigate; everyone else routes immediately.
+  const finishLogin = useCallback(async (res: TokenResponse) => {
+    setSession({
+      accessToken: res.access_token,
+      refreshToken: res.refresh_token,
+      user: res.user,
+    })
+    acceptLegalVersion('v1.0')
+    clearSnapshot()
+
+    if (res.needs_restoration) {
+      setRestorationGraceEnd(res.grace_end ?? null)
+      setStep('restoration')
+      return
+    }
+
+    // Sync browser timezone to server on every login (handles cross-timezone travel)
+    try {
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
+      if (tz) await updateProfile({ timezone: tz })
+    } catch {
+      // Non-fatal: server will use the stored or default timezone
+    }
+
+    const dest = res.needs_profile ? '/settings/profile' : '/home'
+    if (!res.user.has_password) {
+      setPendingDest(dest)
+      setShowSetPassword(true)
+      return
+    }
+    navigate(dest, { replace: true })
+  }, [setSession, acceptLegalVersion, navigate])
+
+  const handlePasswordLogin = useCallback(async () => {
+    if (!isValidEmail || password.length === 0 || loading) return
+    setLoading(true)
+    try {
+      const res = await loginWithPassword(email.trim().toLowerCase(), password)
+      await finishLogin(res)
+    } catch (err: unknown) {
+      if (err instanceof ApiError && err.code === 'no_password_set') {
+        setMode('otp')
+        setStep('email')
+        setToast({ visible: true, message: '该账号尚未设置密码，请使用验证码登录' })
+      } else {
+        setToast({ visible: true, message: err instanceof Error ? err.message : '登录失败，请重试' })
+      }
+    } finally {
+      setLoading(false)
+    }
+  }, [email, password, isValidEmail, loading, finishLogin])
+
   const handleSendOtp = useCallback(async () => {
     if (!isValidEmail || loading) return
     setLoading(true)
     try {
-      const res = await requestOtp(email.trim().toLowerCase())
+      const res = await requestOtp(email.trim().toLowerCase(), 'login')
       setCooldownEndAt(Date.now() + res.cooldown * 1000)
       setStep('code')
     } catch {
@@ -109,45 +197,20 @@ export function LoginPage() {
     setLoading(true)
     try {
       const res = await verifyOtp(email.trim().toLowerCase(), code)
-      setSession({
-        accessToken: res.access_token,
-        refreshToken: res.refresh_token,
-        user: res.user,
-      })
-      acceptLegalVersion('v1.0')
-      clearSnapshot()
-
-      if (res.needs_restoration) {
-        setRestorationGraceEnd(res.grace_end ?? null)
-        setStep('restoration')
-        return
-      }
-
-      // Sync browser timezone to server on every login (handles cross-timezone travel)
-      try {
-        const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
-        if (tz) await updateProfile({ timezone: tz })
-      } catch {
-        // Non-fatal: server will use the stored or default timezone
-      }
-      if (res.needs_profile) {
-        navigate('/settings/profile', { replace: true })
-      } else {
-        navigate('/home', { replace: true })
-      }
+      await finishLogin(res)
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : '验证码错误，请重试'
       setToast({ visible: true, message: msg })
     } finally {
       setLoading(false)
     }
-  }, [email, loading, setSession, navigate])
+  }, [email, loading, finishLogin])
 
   const handleResend = useCallback(async () => {
     if (cooldown > 0 || loading) return
     setLoading(true)
     try {
-      const res = await requestOtp(email.trim().toLowerCase())
+      const res = await requestOtp(email.trim().toLowerCase(), 'login')
       setCooldownEndAt(Date.now() + res.cooldown * 1000)
       setToast({ visible: true, message: '验证码已重新发送' })
     } catch {
@@ -157,12 +220,20 @@ export function LoginPage() {
     }
   }, [email, cooldown, loading])
 
+  const switchMode = (next: Mode) => {
+    if (next === mode) return
+    setMode(next)
+    setStep('email')
+    setCooldownEndAt(0)
+    if (next === 'password') clearSnapshot()
+  }
+
   return (
     <div className="relative w-full h-full flex flex-col bg-[var(--color-bg-login)] overflow-hidden">
       {/* Hero illustration — collapses when keyboard is open */}
       <div
         className="relative w-full shrink-0 overflow-hidden transition-[height] duration-200 ease-out"
-        style={{ height: keyboardOpen ? '80px' : '45%' }}
+        style={{ height: keyboardOpen ? '80px' : '38%' }}
       >
         <img
           src="/assets/backgrounds/background_login_hero.webp"
@@ -175,7 +246,7 @@ export function LoginPage() {
       {/* Scrollable content */}
       <div className="flex-1 overflow-y-auto px-5">
         {/* Brand zone */}
-        <div className="text-center mb-5">
+        <div className="text-center mb-4">
           <h1 className="text-[40px] font-bold text-[var(--color-ink)] tracking-[0.02em] font-brand">
             yuoyuo
           </h1>
@@ -205,72 +276,111 @@ export function LoginPage() {
                 const { refreshToken, clearSession } = useAuthStore.getState()
                 try { await logout(refreshToken ?? undefined) } catch { /* best-effort */ }
                 clearSession()
+                setMode('password')
                 setStep('email')
+                setPassword('')
               }}
             />
-          ) : step === 'email' ? (
-            <>
-              <Input
-                icon={
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="2" y="4" width="20" height="16" rx="2" />
-                    <polyline points="22,6 12,13 2,6" />
-                  </svg>
-                }
-                placeholder="你的邮箱"
-                value={email}
-                onChange={setEmail}
-                type="email"
-              />
-              <p className="text-[12px] text-[var(--color-text-secondary)] mt-2 mb-4 leading-[1.6]">
-                我们会向你的邮箱发送 6 位验证码，5 分钟内有效。
-              </p>
-              <Button
-                variant="primary"
-                size="lg"
-                loading={loading}
-                disabled={!isValidEmail}
-                onClick={handleSendOtp}
-              >
-                发送验证码
-              </Button>
-            </>
           ) : (
             <>
-              <p className="text-[13px] text-[var(--color-text-secondary)] text-center mb-4">
-                验证码已发送至 <span className="text-[var(--color-ink)] font-medium">{email}</span>
-              </p>
-              <div className="flex justify-center mb-4">
-                <OTPInput
-                  length={6}
-                  groupSize={3}
-                  onComplete={handleVerify}
-                />
-              </div>
-              <div className="flex items-center justify-between">
-                <button
-                  onClick={() => { setStep('email'); setCooldownEndAt(0) }}
-                  className="text-[13px] text-[var(--color-primary)]"
-                >
-                  换邮箱
-                </button>
-                {cooldown > 0 ? (
-                  <span className="text-[13px] text-[var(--color-text-muted)]">
-                    {cooldown}s 后可重发
-                  </span>
-                ) : (
+              {/* Mode tabs */}
+              <div className="flex mb-5 rounded-[14px] bg-[var(--color-glass-35)] p-1">
+                {(['password', 'otp'] as Mode[]).map((m) => (
                   <button
-                    onClick={handleResend}
-                    disabled={loading}
-                    className="text-[13px] text-[var(--color-primary)]"
+                    key={m}
+                    onClick={() => switchMode(m)}
+                    className={`flex-1 py-2 rounded-[11px] text-[14px] font-medium transition-colors ${
+                      mode === m
+                        ? 'bg-[var(--color-primary)] text-white shadow-sm'
+                        : 'text-[var(--color-text-secondary)]'
+                    }`}
                   >
-                    重新发送
+                    {m === 'password' ? '密码登录' : '验证码登录'}
                   </button>
-                )}
+                ))}
               </div>
+
+              {mode === 'password' ? (
+                <>
+                  <div className="divide-y divide-[var(--color-divider-inset)] mb-2">
+                    <Input icon={MailIcon} placeholder="邮箱" value={email} onChange={setEmail} type="email" />
+                    <PasswordInput icon={LockIcon} placeholder="密码" value={password} onChange={setPassword} autoComplete="current-password" />
+                  </div>
+                  <div className="flex justify-end mb-4">
+                    <Link to="/forgot-password" className="text-[13px] text-[var(--color-primary)]">忘记密码？</Link>
+                  </div>
+                  <Button
+                    variant="primary"
+                    size="lg"
+                    loading={loading}
+                    disabled={!isValidEmail || password.length === 0}
+                    onClick={handlePasswordLogin}
+                  >
+                    登录
+                  </Button>
+                </>
+              ) : step === 'email' ? (
+                <>
+                  <Input icon={MailIcon} placeholder="你的邮箱" value={email} onChange={setEmail} type="email" />
+                  <p className="text-[12px] text-[var(--color-text-secondary)] mt-2 mb-4 leading-[1.6]">
+                    我们会向你的邮箱发送 6 位验证码，5 分钟内有效。
+                  </p>
+                  <Button
+                    variant="primary"
+                    size="lg"
+                    loading={loading}
+                    disabled={!isValidEmail}
+                    onClick={handleSendOtp}
+                  >
+                    发送验证码
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <p className="text-[13px] text-[var(--color-text-secondary)] text-center mb-4">
+                    验证码已发送至 <span className="text-[var(--color-ink)] font-medium">{email}</span>
+                  </p>
+                  <div className="flex justify-center mb-4">
+                    <OTPInput
+                      length={6}
+                      groupSize={3}
+                      onComplete={handleVerify}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <button
+                      onClick={() => { setStep('email'); setCooldownEndAt(0) }}
+                      className="text-[13px] text-[var(--color-primary)]"
+                    >
+                      换邮箱
+                    </button>
+                    {cooldown > 0 ? (
+                      <span className="text-[13px] text-[var(--color-text-muted)]">
+                        {cooldown}s 后可重发
+                      </span>
+                    ) : (
+                      <button
+                        onClick={handleResend}
+                        disabled={loading}
+                        className="text-[13px] text-[var(--color-primary)]"
+                      >
+                        重新发送
+                      </button>
+                    )}
+                  </div>
+                </>
+              )}
             </>
           )}
         </div>
+
+        {/* Register entry */}
+        {step !== 'restoration' && (
+          <p className="text-center text-[13px] text-[var(--color-text-secondary)] mb-3">
+            没有账号？
+            <Link to="/register" className="text-[var(--color-primary)] font-medium">点击注册</Link>
+          </p>
+        )}
 
         {/* Legal text */}
         <p className="text-center text-[12px] text-[var(--color-text-secondary)] mb-3">
@@ -279,12 +389,18 @@ export function LoginPage() {
           与
           <Link to="/legal/privacy" className="text-[var(--color-primary)]">《隐私政策》</Link>
         </p>
-
-
       </div>
 
       {/* Bottom safe area */}
       <div style={{ height: 'var(--safe-bottom)' }} />
+
+      <SetPasswordModal
+        open={showSetPassword}
+        onClose={() => {
+          setShowSetPassword(false)
+          navigate(pendingDest, { replace: true })
+        }}
+      />
 
       <Toast visible={toast.visible} message={toast.message} onDismiss={() => setToast({ visible: false, message: '' })} />
     </div>

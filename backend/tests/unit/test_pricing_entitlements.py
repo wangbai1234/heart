@@ -75,10 +75,10 @@ class TestActionCostFen:
 class TestStoryPricing:
     """Story mode (SS09) unlock + per-minute pricing. 1 coin = 100 fen."""
 
-    def test_unlock_costs_8000_fen(self):
+    def test_unlock_costs_4000_fen(self):
         from heart.billing.pricing import story_unlock_cost_fen
-        # Default config: story_unlock_cost_coins=80 → 8000 fen.
-        assert story_unlock_cost_fen() == 8000
+        # Default config: story_unlock_cost_coins=40 → 4000 fen (changed to allow new users to unlock 2 scenarios).
+        assert story_unlock_cost_fen() == 4000
 
     def test_minute_costs_100_fen(self):
         from heart.billing.pricing import story_minute_cost_fen
@@ -87,15 +87,16 @@ class TestStoryPricing:
 
 
 class TestStoryTierGating:
-    """_tier_can_unlock: free users only free_tier; plus/immersive unlock all."""
+    """_tier_can_unlock: all tiers can unlock all scenarios (fee-based, not tier-gated)."""
 
     def test_free_user_can_unlock_free_tier(self):
         from heart.api.routes_story import _tier_can_unlock
         assert _tier_can_unlock("free", free_tier=True) is True
 
-    def test_free_user_cannot_unlock_non_free(self):
+    def test_free_user_can_unlock_non_free(self):
         from heart.api.routes_story import _tier_can_unlock
-        assert _tier_can_unlock("free", free_tier=False) is False
+        # All tiers now unlock all scenarios (tier gating removed, only unlock fee applies)
+        assert _tier_can_unlock("free", free_tier=False) is True
 
     def test_plus_user_can_unlock_non_free(self):
         from heart.api.routes_story import _tier_can_unlock

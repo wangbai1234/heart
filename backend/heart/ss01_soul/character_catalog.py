@@ -91,8 +91,9 @@ def build_catalog_entries(
     rows: Sequence[CharacterRow],
     viewer_id: UUID,
     avatar_urls: dict[str, str | None] | None = None,
+    popularity: dict[str, int] | None = None,
 ) -> list[CharacterEntry]:
-    """Shape visible rows into API entries, built-ins first then by id.
+    """Shape visible rows into API entries, built-ins first then by popularity.
 
     Display names are derived from the Soul Spec (single source of truth for
     identity) rather than stored on the row.
@@ -100,8 +101,11 @@ def build_catalog_entries(
     Args:
         avatar_urls: Optional mapping of character_id → avatar_url (from draft).
             Built-in characters don't have UGC avatars; they're resolved client-side.
+        popularity: Optional mapping of character_id → chat user count.
+            Higher count = more engagement. Used to sort UGC characters.
     """
     avatar_urls = avatar_urls or {}
+    popularity = popularity or {}
     entries = [
         CharacterEntry(
             id=row.id,
@@ -116,8 +120,16 @@ def build_catalog_entries(
         for row in rows
         if visible_to(row, viewer_id)
     ]
-    # Built-ins first (stable, familiar ordering), then user characters by id.
-    entries.sort(key=lambda e: (not e.is_builtin, e.id))
+
+    # Built-ins first (stable, familiar ordering), then user characters by engagement (chat user count).
+    # Exclude rin/dorothy from popularity sorting as they were the only characters available at launch.
+    def sort_key(e):
+        # Rin and dorothy stay in their natural builtin position, not sorted by popularity
+        if e.id in ("rin", "dorothy"):
+            return (False, 0, e.id)  # Builtin, zero popularity sort, then by id
+        return (not e.is_builtin, -popularity.get(e.id, 0), e.id)
+
+    entries.sort(key=sort_key)
     return entries
 
 

@@ -47,8 +47,12 @@ from heart.ss09_story.models import GENRES
 
 
 def _free_tier_slugs() -> set[str]:
-    """The demo slugs free (普通) users may unlock, from config (CSV)."""
-    return {s.strip() for s in settings.story_free_tier_slugs.split(",") if s.strip()}
+    """The demo slugs free (普通) users may unlock.
+
+    Changed 2026-07-27: All scenarios now require paid unlock (40 coins each).
+    No free-tier scenarios. All imported scenarios set free_tier=False.
+    """
+    return set()
 
 logger = structlog.get_logger(__name__)
 

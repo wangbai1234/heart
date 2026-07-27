@@ -1,13 +1,11 @@
 import { useEffect, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
-import { useAppStore } from '../stores/appStore'
 
 export function SplashPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
-  const hasSeenOnboarding = useAppStore((s) => s.hasSeenOnboarding)
   const freeze = searchParams.get('qa') === 'freeze'
   // Fires exactly once per component mount. Deps in the original useEffect
   // used `isAuthenticated` (a function reference from zustand) which is stable
@@ -29,21 +27,19 @@ export function SplashPage() {
     const timer = setTimeout(() => {
       if (isAuthenticated()) {
         const lastRoute = localStorage.getItem('yuoyuo-last-route')
-        const skip = ['/splash', '/onboarding', '/login', '/redeem', '/age-gate', '/', '']
+        const skip = ['/splash', '/login', '/register', '/forgot-password', '/redeem', '/age-gate', '/', '']
         if (lastRoute && !skip.includes(lastRoute) && !lastRoute.startsWith('/legal/')) {
           navigate(lastRoute, { replace: true })
         } else {
           navigate('/home', { replace: true })
         }
-      } else if (!hasSeenOnboarding) {
-        navigate('/onboarding', { replace: true })
       } else {
         navigate('/login', { replace: true })
       }
     }, delay)
 
     return () => clearTimeout(timer)
-  }, [isAuthenticated, hasSeenOnboarding, navigate, freeze])
+  }, [isAuthenticated, navigate, freeze])
 
   return (
     <div className="relative h-full w-full overflow-hidden bg-[#F5D0E0]">
