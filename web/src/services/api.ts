@@ -381,6 +381,8 @@ export interface CompanionDTO {
   source: 'built_in' | 'user_created'
   is_owner: boolean
   is_builtin: boolean
+  /** Catalog visibility (built-ins are always 'public'); drives the 可见范围 label. */
+  visibility: 'public' | 'unlisted' | 'private'
   has_voice: boolean
   companion_status: 'locked' | 'encountered' | 'companioned'
   relationship_stage: string // RAW enum: STRANGER/ACQUAINTANCE/FRIEND/CONFIDANT/ROMANTIC_INTEREST/LOVER/BONDED/cold_war

@@ -293,6 +293,10 @@ async def list_companions(
                 "source": "built_in" if e.is_builtin else "user_created",
                 "is_owner": e.is_owner,
                 "is_builtin": e.is_builtin,
+                # Visibility label (公开/不公开/私密) — the bond-center card renders this.
+                # Carried on the catalog entry but previously dropped from the payload,
+                # which left the frontend reading an undefined `visibility`.
+                "visibility": e.visibility,
                 "has_voice": has_voice_map.get(e.id, False),
                 # V1: everyone is a full companion; encounter/lock flow is a later wave.
                 "companion_status": "companioned",
