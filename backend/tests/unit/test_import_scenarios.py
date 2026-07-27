@@ -250,6 +250,31 @@ async def test_import_one_publish_sets_status(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_import_one_pins_title_to_filename_not_llm(tmp_path):
+    """Regression: persisted title == filename stem, ignoring the LLM's 简洁标题.
+
+    Root cause of prod title drift: the cheap model re-summarizes a fresh title
+    on every import, so re-running the importer silently rewrote titles
+    (群星背叛者 → 星陨号卧底调查, …). The title is the scenario's stable identity and
+    must be pinned to the human-authored filename so re-imports are idempotent.
+    """
+    f = tmp_path / "群星背叛者.txt"
+    f.write_text("正文", encoding="utf-8")
+    db = _FakeDB()
+    router = _FakeRouter(out='{"title":"星陨号卧底调查","genre":"悬疑","maturity":"adult"}')
+
+    res = await imp.import_one(db, router, f, publish=True, dry_run=False)
+
+    assert res.action == "created"
+    assert db.upserts[0]["slug"] == "群星背叛者"
+    assert db.upserts[0]["title"] == "群星背叛者"  # NOT the LLM's 星陨号卧底调查
+    # LLM still drives the non-identity card fields.
+    assert db.upserts[0]["genre"] == "悬疑"
+    # dry-run preview reflects the pinned title too.
+    assert res.metadata is not None and res.metadata.title == "群星背叛者"
+
+
+@pytest.mark.asyncio
 async def test_import_one_skips_unchanged_hash(tmp_path):
     """Same source_hash already in DB → skip without LLM or write."""
     raw = "稳定的正文内容"

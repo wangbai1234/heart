@@ -382,6 +382,14 @@ async def import_one(
 
     meta = await extract_metadata(router, raw, default_title=slug)
 
+    # Title is the scenario's stable identity — it MUST be the human-authored
+    # filename (== slug), NOT the cheap-model's "简洁标题". The LLM re-summarizes
+    # on every run, so a plain re-import silently rewrote titles (兄弟盖饭 ← 一笔写的出两个谢,
+    # 星陨号卧底调查 ← 群星背叛者, …) and drifted prod out of sync with local. We
+    # keep the LLM only for genre/blurb/maturity/player_template; the title is
+    # pinned to the filename so re-imports are idempotent for identity.
+    meta.title = slug
+
     if dry_run:
         return ImportResult(slug=slug, action="dry-run", metadata=meta)
 
