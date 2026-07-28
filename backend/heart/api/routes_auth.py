@@ -268,6 +268,21 @@ async def request_otp(
 
     email = body.email.strip().lower()
 
+    # For login purpose, check if email exists before sending OTP
+    if body.purpose == "login":
+        user_result = await db.execute(
+            text("SELECT id, status, deletion_grace_end FROM users WHERE email = :email"),
+            {"email": email},
+        )
+        user_row = user_result.mappings().first()
+        # Reject if email is not registered OR grace period expired
+        if user_row is None or (
+            user_row["status"] == "deleted"
+            and user_row["deletion_grace_end"] is not None
+            and user_row["deletion_grace_end"] < datetime.now(timezone.utc)
+        ):
+            raise HTTPException(status_code=404, detail="email_not_registered")
+
     # Redis checks
     r = aioredis.from_url(settings.redis_url)
     try:
@@ -475,53 +490,9 @@ async def verify_otp(
 
     is_new_user = user_row is None
     if is_new_user:
-        user_id = uuid.uuid4()
-        await db.execute(
-            text("""
-                INSERT INTO users (id, email, credits_balance, status)
-                VALUES (:id, :email, :credits, 'active')
-                ON CONFLICT (email) DO NOTHING
-            """),
-            {"id": user_id, "email": email, "credits": settings.signup_grant_credits},
-        )
-        # Re-query in case of concurrent insert
-        user_result = await db.execute(
-            text("""
-                SELECT id, email, display_name, avatar_url, gender, birthdate,
-                       age_verified_at, credits_balance, status
-                FROM users WHERE email = :email
-            """),
-            {"email": email},
-        )
-        user_row = user_result.mappings().first()
-        if user_row is None:
-            raise HTTPException(status_code=500, detail="User creation failed")
-        user_id = user_row["id"]
-        # Idempotent signup grant
-        await db.execute(
-            text("""
-                INSERT INTO credit_transactions (id, user_id, delta, balance_after, type, idempotency_key, created_at)
-                VALUES (:id, :uid, :delta, :balance, 'grant', :idem_key, NOW())
-                ON CONFLICT (idempotency_key) DO NOTHING
-            """),
-            {
-                "id": uuid.uuid4(),
-                "uid": user_id,
-                "delta": settings.signup_grant_credits,
-                "balance": settings.signup_grant_credits,
-                "idem_key": f"signup_grant:{user_id}",
-            },
-        )
-        # Re-fetch user
-        user_result = await db.execute(
-            text("""
-                SELECT id, email, display_name, avatar_url, gender, birthdate,
-                       age_verified_at, credits_balance, status
-                FROM users WHERE id = :id
-            """),
-            {"id": user_id},
-        )
-        user_row = user_result.mappings().first()
+        # OTP login no longer auto-creates users. Unregistered emails must go
+        # through /register (which has its own purpose="register" OTP + password).
+        raise HTTPException(status_code=404, detail="email_not_registered")
     else:
         user_id = user_row["id"]
 
