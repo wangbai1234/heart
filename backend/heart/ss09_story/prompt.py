@@ -53,6 +53,28 @@ _SETUP_DONE_NOTICE = (
     "／问答的方式打断开场。"
 )
 
+# Applied ONLY to the very first (opening) GM turn — see build_gm_messages,
+# which passes is_opening = not recent_turns. The opening is where churn is
+# highest: several imported scripts open by dumping a setting wall, asking the
+# 主控 to pick a mode/fill a sheet (already collected — see _SETUP_DONE_NOTICE),
+# or slamming straight into the power/intimacy climax with no lead-in. This
+# directive makes every opening bring the lead character on-stage with a hook
+# and one concrete choice, so stickiness improves from the prompt layer without
+# hand-editing 46 out-of-repo scripts. Omitted on every subsequent turn so it
+# never constrains ongoing pacing.
+_OPENING_HOOK_DIRECTIVE = (
+    "【开场铺陈 — 仅本回合（开场）适用】\n"
+    "这是整段剧情的第一幕，直接决定主控是否留下，请务必抓人：\n"
+    "1. 让核心角色（主要 NPC）先登场：用 1–2 句具体的动作/神态/一句台词把 TA 带到主控面前，"
+    "而不是先铺一大段世界观或设定清单。\n"
+    "2. 营造一个当下的张力或悬念钩子（一个未解的场面、一句意味深长的话、一个突发状况），"
+    "让主控立刻想知道接下来会怎样。\n"
+    "3. 结尾自然收在一个主控可以立刻行动的具体岔口（给 TA 一个明确、当下可做的选择或应对空间），"
+    "但不要用「请选择 A/B/C」式的填表口吻，而是把选择藏进情境里。\n"
+    "禁止：开场复述人设/背景清单、要求主控填写或重选任何档案信息（已备齐）、"
+    "跳过铺垫直接进入亲密或冲突的高潮场景。开场篇幅克制，重在钩子而非交代。"
+)
+
 _FORMAT_GUIDE = (
     "【输出格式 — 严格遵守】\n"
     "你必须严格按照以下三种格式输出，禁止使用其他格式（如 LaTeX colorbox、markdown 代码块、弹幕等）：\n"
@@ -215,8 +237,14 @@ def _render_story_memory(memory: dict[str, Any]) -> str:
     return "【角色记忆 / 剧情档案】\n" + "\n".join(lines)
 
 
-def build_gm_system_prompt(scenario: Scenario, run: Run) -> str:
-    """Compose the GM system message: role + raw scenario + player card + summary."""
+def build_gm_system_prompt(scenario: Scenario, run: Run, *, is_opening: bool = False) -> str:
+    """Compose the GM system message: role + raw scenario + player card + summary.
+
+    ``is_opening`` (only the first GM turn — build_gm_messages derives it from an
+    empty ``recent_turns``) injects _OPENING_HOOK_DIRECTIVE so every scenario's
+    opening leads with the character + a hook + one concrete choice, regardless
+    of how its raw script opens.
+    """
     parts = [
         _GM_ROLE_HEADER,
         "──────────【剧本设定（原文）】──────────",
@@ -238,6 +266,10 @@ def build_gm_system_prompt(scenario: Scenario, run: Run) -> str:
     memory_block = _render_story_memory(getattr(run, "story_memory", {}) or {})
     if memory_block:
         parts.append(memory_block)
+    # Opening-only hook directive sits right before the format guide so it is the
+    # last narrative instruction the model reads before the output-format rules.
+    if is_opening:
+        parts.append(_OPENING_HOOK_DIRECTIVE)
     parts.append(_FORMAT_GUIDE)
     return "\n\n".join(parts)
 
@@ -253,8 +285,12 @@ def build_gm_messages(
     output from the model's perspective). ``recent_turns`` must be ordered by
     ascending ``seq``.
     """
+    # The opening turn is the only call with no prior turns (start_run →
+    # _generate(recent_turns=[])); every advance turn carries at least the just-
+    # persisted player line. So an empty window uniquely marks the opening.
+    is_opening = not recent_turns
     messages: list[dict[str, str]] = [
-        {"role": "system", "content": build_gm_system_prompt(scenario, run)}
+        {"role": "system", "content": build_gm_system_prompt(scenario, run, is_opening=is_opening)}
     ]
     for m in recent_turns:
         if m.role == "player":

@@ -309,6 +309,33 @@ def test_build_messages_role_mapping():
     assert "**林深**" in msgs[3]["content"]
 
 
+# ── opening-hook directive (Omega/意大利小狗 churn fix) ──────────────
+
+
+def test_system_prompt_includes_opening_hook_when_opening():
+    sp = build_gm_system_prompt(_scenario(), _run(), is_opening=True)
+    assert "开场铺陈" in sp
+
+
+def test_system_prompt_omits_opening_hook_by_default():
+    # Default (advance turns) must NOT carry the opening directive.
+    sp = build_gm_system_prompt(_scenario(), _run())
+    assert "开场铺陈" not in sp
+
+
+def test_build_messages_opening_turn_injects_hook():
+    # Empty recent_turns uniquely marks the opening turn (start_run path).
+    msgs = build_gm_messages(_scenario(), _run(), [])
+    assert "开场铺陈" in msgs[0]["content"]
+
+
+def test_build_messages_advance_turn_omits_hook():
+    # Any prior turn present ⇒ not the opening ⇒ no directive.
+    turns = [_msg("player", "我推开门。", 1)]
+    msgs = build_gm_messages(_scenario(), _run(), turns)
+    assert "开场铺陈" not in msgs[0]["content"]
+
+
 # ââ Chinese curly-quote dialogue (regression: 2026-07 bubble bug) ââââ
 # DeepSeek emits full-width curly quotes ââ¦â (U+201C/U+201D), not ASCII ".
 # The old regex only matched U+0022 â dialogue fell through to narration.
