@@ -73,7 +73,14 @@ async function request<T>(
   if (!res.ok) {
     const fallback = statusFallback(res.status)
     const errorBody = await res.json().catch(() => ({ detail: fallback }))
-    throw new ApiError(res.status, detailToMessage(errorBody?.detail, fallback))
+    const detail = errorBody?.detail
+    const code =
+      detail && typeof detail === 'object' && typeof detail.code === 'string'
+        ? detail.code
+        : typeof detail === 'string'
+          ? detail
+          : undefined
+    throw new ApiError(res.status, detailToMessage(detail, fallback), code)
   }
 
   return res.json()
