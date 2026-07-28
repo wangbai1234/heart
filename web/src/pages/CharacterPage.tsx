@@ -140,6 +140,23 @@ export function CharacterPage() {
     return [DISCOVERY_RECOMMENDED, DISCOVERY_ALL, ...ordered]
   }, [items])
 
+  // Virtual heat mapping: sort by real chat_user_count DESC, map rank → 500-5000
+  const heatMap = useMemo(() => {
+    const withHeat = items
+      .map((it, idx) => ({ id: it.id, real: it.chatUserCount ?? 0, idx }))
+      .filter((x) => x.real > 0)
+    withHeat.sort((a, b) => b.real - a.real)
+    const map = new Map<string, number>()
+    const n = withHeat.length
+    if (n === 0) return map
+    withHeat.forEach((x, rank) => {
+      // Linear interpolation: rank 0 → 5000, rank (n-1) → 500
+      const virtual = n === 1 ? 2750 : Math.round(5000 - (rank / (n - 1)) * 4500)
+      map.set(x.id, virtual)
+    })
+    return map
+  }, [items])
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
     return items.filter((it) => {
@@ -257,7 +274,7 @@ export function CharacterPage() {
           ) : (
             <div className="grid grid-cols-2 gap-3">
               {filtered.map((it) => (
-                <DiscoveryCard key={it.id} item={it} onOpen={() => navigate(`/character/${it.id}`)} />
+                <DiscoveryCard key={it.id} item={it} heatMap={heatMap} onOpen={() => navigate(`/character/${it.id}`)} />
               ))}
             </div>
           )}
@@ -269,11 +286,12 @@ export function CharacterPage() {
   )
 }
 
-function DiscoveryCard({ item, onOpen }: { item: GridItem; onOpen: () => void }) {
+function DiscoveryCard({ item, heatMap, onOpen }: { item: GridItem; heatMap: Map<string, number>; onOpen: () => void }) {
   const { profile, isOwner, companion, visibility, chatUserCount } = item
   const tags = profile.tags ?? []
   const chatted = !!companion && companion.companion_status !== 'locked'
   const hook = profile.tagline || profile.summary || ''
+  const virtualHeat = chatUserCount && chatUserCount > 0 ? heatMap.get(item.id) : undefined
 
   // Visibility badge for owned UGC characters
   const visInfo = isOwner ? VIS_BADGE[visibility ?? 'private'] ?? VIS_BADGE.private : null
@@ -316,11 +334,11 @@ function DiscoveryCard({ item, onOpen }: { item: GridItem; onOpen: () => void })
         <div className="absolute inset-x-0 bottom-0 p-2.5">
           <p className="text-[15px] font-bold leading-tight text-white line-clamp-1">{profile.name}</p>
           {hook && <p className="mt-0.5 text-[11px] leading-tight text-white/80 line-clamp-1">{hook}</p>}
-          {/* Heat indicator (only when > 0) */}
-          {chatUserCount !== undefined && chatUserCount > 0 && (
+          {/* Heat indicator (virtual value 500-5000, preserves real ranking) */}
+          {virtualHeat !== undefined && (
             <div className="mt-1 flex items-center gap-1">
               <span className="text-[11px] text-white/85">🔥</span>
-              <span className="text-[11px] text-white/85">{formatPlays(chatUserCount)}</span>
+              <span className="text-[11px] text-white/85">{formatPlays(virtualHeat)}</span>
             </div>
           )}
           {/* Tags row — show all tags instead of slice(0,3) */}
