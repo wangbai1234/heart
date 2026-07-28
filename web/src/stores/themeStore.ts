@@ -29,8 +29,8 @@ let autoThemeInterval: ReturnType<typeof setInterval> | null = null
 export const useThemeStore = create<ThemeState>()(
   persist(
     (set, get) => ({
-      theme: 'light',
-      resolvedTheme: 'light',
+      theme: 'dark',
+      resolvedTheme: 'dark',
       setTheme: (theme) => {
         const resolved = resolveTheme(theme)
         applyTheme(resolved)

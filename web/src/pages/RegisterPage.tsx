@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useNavigate, Link, useSearchParams } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
@@ -40,8 +40,9 @@ export function RegisterPage() {
   const setSession = useAuthStore((s) => s.setSession)
   const acceptLegalVersion = useAuthStore((s) => s.acceptLegalVersion)
   const { keyboardOpen } = useVisualViewport()
+  const [searchParams] = useSearchParams()
 
-  const [email, setEmail] = useState('')
+  const [email, setEmail] = useState(searchParams.get('email') || '')
   const [code, setCode] = useState('')
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
@@ -117,7 +118,7 @@ export function RegisterPage() {
       if (res.needs_profile) {
         navigate('/settings/profile', { replace: true })
       } else {
-        navigate('/home', { replace: true })
+        navigate('/character', { replace: true })
       }
     } catch (err: unknown) {
       showToast(err instanceof Error ? err.message : '注册失败，请重试', 'error')
@@ -170,7 +171,7 @@ export function RegisterPage() {
           </div>
 
           <p className="text-xs text-[var(--color-text-muted)] mt-2 px-1">
-            验证码为 6 位数字；密码至少 8 位。
+            验证码为 6 位数字；密码至少 8 位。推荐使用 QQ 邮箱注册，验证码会以 QQ 通知形式送达，无需另开邮箱。
           </p>
 
           {/* Legal checkbox */}

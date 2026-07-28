@@ -150,7 +150,7 @@ export function LoginPage() {
       // Non-fatal: server will use the stored or default timezone
     }
 
-    const dest = res.needs_profile ? '/settings/profile' : '/home'
+    const dest = res.needs_profile ? '/settings/profile' : '/character'
     if (!res.user.has_password) {
       setPendingDest(dest)
       setShowSetPassword(true)
@@ -185,12 +185,17 @@ export function LoginPage() {
       const res = await requestOtp(email.trim().toLowerCase(), 'login')
       setCooldownEndAt(Date.now() + res.cooldown * 1000)
       setStep('code')
-    } catch {
-      setToast({ visible: true, message: '发送失败，请重试' })
+    } catch (err: unknown) {
+      if (err instanceof ApiError && err.code === 'email_not_registered') {
+        setToast({ visible: true, message: '该邮箱未注册，正在前往注册页…' })
+        setTimeout(() => navigate(`/register?email=${encodeURIComponent(email.trim().toLowerCase())}`), 1500)
+      } else {
+        setToast({ visible: true, message: '发送失败，请重试' })
+      }
     } finally {
       setLoading(false)
     }
-  }, [email, isValidEmail, loading])
+  }, [email, isValidEmail, loading, navigate])
 
   const handleVerify = useCallback(async (code: string) => {
     if (code.length !== 6 || loading) return
@@ -199,12 +204,17 @@ export function LoginPage() {
       const res = await verifyOtp(email.trim().toLowerCase(), code)
       await finishLogin(res)
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : '验证码错误，请重试'
-      setToast({ visible: true, message: msg })
+      if (err instanceof ApiError && err.code === 'email_not_registered') {
+        setToast({ visible: true, message: '该邮箱未注册，正在前往注册页…' })
+        setTimeout(() => navigate(`/register?email=${encodeURIComponent(email.trim().toLowerCase())}`), 1500)
+      } else {
+        const msg = err instanceof Error ? err.message : '验证码错误，请重试'
+        setToast({ visible: true, message: msg })
+      }
     } finally {
       setLoading(false)
     }
-  }, [email, loading, finishLogin])
+  }, [email, loading, finishLogin, navigate])
 
   const handleResend = useCallback(async () => {
     if (cooldown > 0 || loading) return
@@ -213,12 +223,17 @@ export function LoginPage() {
       const res = await requestOtp(email.trim().toLowerCase(), 'login')
       setCooldownEndAt(Date.now() + res.cooldown * 1000)
       setToast({ visible: true, message: '验证码已重新发送' })
-    } catch {
-      setToast({ visible: true, message: '发送失败，请重试' })
+    } catch (err: unknown) {
+      if (err instanceof ApiError && err.code === 'email_not_registered') {
+        setToast({ visible: true, message: '该邮箱未注册，正在前往注册页…' })
+        setTimeout(() => navigate(`/register?email=${encodeURIComponent(email.trim().toLowerCase())}`), 1500)
+      } else {
+        setToast({ visible: true, message: '发送失败，请重试' })
+      }
     } finally {
       setLoading(false)
     }
-  }, [email, cooldown, loading])
+  }, [email, cooldown, loading, navigate])
 
   const switchMode = (next: Mode) => {
     if (next === mode) return

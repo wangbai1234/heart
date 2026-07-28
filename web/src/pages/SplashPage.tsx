@@ -31,7 +31,7 @@ export function SplashPage() {
         if (lastRoute && !skip.includes(lastRoute) && !lastRoute.startsWith('/legal/')) {
           navigate(lastRoute, { replace: true })
         } else {
-          navigate('/home', { replace: true })
+          navigate('/character', { replace: true })
         }
       } else {
         navigate('/login', { replace: true })
