@@ -292,6 +292,36 @@ async def list_runs(
     return {"runs": [_run_dto(r) for r in runs]}
 
 
+@router.get("/recent-scenarios")
+@limiter.limit("60/minute")
+async def list_recent_scenarios(
+    request: Request,
+    limit: int = Query(4, ge=1, le=20),
+    current_user: TokenData = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """User's most recently played active scenarios (deduplicated).
+
+    Drives the "近期玩过" horizontal carousel on the Explore page.
+    Returns scenario metadata joined from the latest active run per scenario.
+    """
+    rows = await repo.list_recent_active_runs(db, uuid.UUID(current_user.user_id), limit)
+    return {
+        "scenarios": [
+            {
+                "run_id": str(r["run_id"]),
+                "scenario_id": str(r["scenario_id"]),
+                "title": r["title"],
+                "cover_url": r["cover_url"],
+                "genre": r["genre"],
+                "turn_count": r["turn_count"],
+                "last_activity_at": r["last_activity_at"].isoformat(),
+            }
+            for r in rows
+        ]
+    }
+
+
 @router.get("/runs/{run_id}")
 @limiter.limit("60/minute")
 async def get_run(

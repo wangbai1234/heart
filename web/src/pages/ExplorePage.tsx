@@ -7,7 +7,7 @@ import { TabBar } from '../components/ui/TabBar'
 import { Skeleton } from '../components/ui/Skeleton'
 import { ErrorState } from '../components/ui/ErrorState'
 import { EmptyState } from '../components/ui/EmptyState'
-import { ScenarioCard } from '../components/story/ScenarioCard'
+import { ScenarioCard, genreGradient } from '../components/story/ScenarioCard'
 import { resolveCharacterProfile } from '../data/uiContent'
 
 /**
@@ -26,14 +26,17 @@ export function ExplorePage() {
     loading,
     loaded,
     error,
+    recentScenarios,
     loadCatalog,
+    loadRecentScenarios,
     setGenre,
   } = useStoryStore()
   const characters = useCharactersStore((s) => s.characters)
 
   useEffect(() => {
     void loadCatalog()
-  }, [loadCatalog])
+    void loadRecentScenarios()
+  }, [loadCatalog, loadRecentScenarios])
 
   const pageBg =
     resolvedTheme === 'dark'
@@ -98,7 +101,7 @@ export function ExplorePage() {
                       )}
                       <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent" />
                       <div className="absolute top-3 left-3 inline-flex h-[24px] items-center rounded-full bg-white/85 px-2.5 text-[12px] font-semibold text-[var(--color-primary-600)]">
-                        ✨ 热门推荐
+                        热门推荐
                       </div>
                       <div className="absolute bottom-0 left-0 right-0 p-4 text-left">
                         <p className="text-[20px] font-bold text-white leading-[1.3] line-clamp-1">
@@ -109,11 +112,54 @@ export function ExplorePage() {
                         </p>
                         <div className="mt-2 flex items-center gap-2 text-[12px] text-white/80">
                           <span className="rounded-full bg-white/20 px-2 py-0.5">{scenario.genre}</span>
-                          <span>🔥 {scenario.play_count} 人玩过</span>
+                          <span>{scenario.play_count} 人玩过</span>
                         </div>
                       </div>
                     </button>
                   ))}
+                </div>
+              )}
+
+              {/* Recent scenarios (近期玩过) */}
+              {recentScenarios.length > 0 && (
+                <div className="mb-5">
+                  <div className="flex items-center gap-1.5 mb-3">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--color-primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="12" cy="12" r="10" />
+                      <polyline points="12 6 12 12 16 14" />
+                    </svg>
+                    <span className="text-[16px] font-bold text-[var(--color-ink)]">近期玩过</span>
+                  </div>
+                  <div className="flex gap-3 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none">
+                    {recentScenarios.map((item) => (
+                      <button
+                        key={item.run_id}
+                        onClick={() => navigate(`/explore/${item.scenario_id}`)}
+                        className="shrink-0 w-[100px] active:scale-[0.97] transition-transform"
+                      >
+                        <div
+                          className="w-[100px] h-[130px] rounded-[16px] overflow-hidden"
+                          style={{ background: genreGradient(item.genre) }}
+                        >
+                          {item.cover_url && (
+                            <img
+                              src={item.cover_url}
+                              alt=""
+                              loading="lazy"
+                              decoding="async"
+                              className="w-full h-full object-cover"
+                            />
+                          )}
+                        </div>
+                        <p className="mt-1.5 text-[12px] text-[var(--color-ink)] line-clamp-1 text-center font-medium">
+                          {item.title}
+                        </p>
+                        <p className="mt-0.5 text-[10px] text-[var(--color-primary)] text-center font-medium">
+                          继续游玩
+                        </p>
+                      </button>
+                    ))}
+                  </div>
                 </div>
               )}
 

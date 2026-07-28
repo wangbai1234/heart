@@ -7,12 +7,14 @@ import {
   unlockScenario as apiUnlockScenario,
   startRun as apiStartRun,
   getRun as apiGetRun,
+  getRecentScenarios,
   type ScenarioCardDTO,
   type ScenarioDetailDTO,
   type StoryBubbleDTO,
   type StoryRunDTO,
   type StoryKind,
   type StoryRole,
+  type RecentScenarioDTO,
 } from '../services/api'
 
 /**
@@ -109,6 +111,10 @@ interface StoryState {
   // undefined = not yet checked; null = checked, no active run.
   activeRunByScenario: Record<string, StoryRunDTO | null>
 
+  // ── Recent scenarios (近期玩过) ─────────────────────────────────
+  recentScenarios: RecentScenarioDTO[]
+  recentLoading: boolean
+
   // ── Run / player state (PR4) ──────────────────────────────────────
   runMetaById: Record<string, StoryRunDTO>
   messagesByRun: Record<string, StoryMessageVM[]>
@@ -125,6 +131,7 @@ interface StoryState {
   setGenre: (genre: string | null) => Promise<void>
   loadScenario: (id: string, force?: boolean) => Promise<ScenarioDetailDTO | null>
   loadActiveRun: (scenarioId: string, force?: boolean) => Promise<StoryRunDTO | null>
+  loadRecentScenarios: (force?: boolean) => Promise<void>
   // Permanently unlock (pay for) a scenario; updates the detail cache on success.
   unlockScenario: (scenarioId: string) => Promise<{ ok: boolean; balance: number }>
 
@@ -182,6 +189,9 @@ export const useStoryStore = create<StoryState>((set, get) => ({
   detailError: false,
 
   activeRunByScenario: {},
+
+  recentScenarios: [],
+  recentLoading: false,
 
   runMetaById: {},
   messagesByRun: {},
@@ -241,6 +251,18 @@ export const useStoryStore = create<StoryState>((set, get) => ({
       // Best-effort: on failure leave it unchecked so the CTA falls back to
       // "开始剧情" (a first-time-play affordance is the safe default).
       return null
+    }
+  },
+
+  loadRecentScenarios: async (force = false) => {
+    if (!force && get().recentScenarios.length > 0) return
+    if (get().recentLoading) return
+    set({ recentLoading: true })
+    try {
+      const { scenarios } = await getRecentScenarios(4)
+      set({ recentScenarios: scenarios, recentLoading: false })
+    } catch {
+      set({ recentLoading: false })
     }
   },
 

@@ -21,7 +21,7 @@ const GENRE_GRADIENT: Record<string, string> = {
   其他: 'linear-gradient(135deg, #E0D6F0 0%, #C8B6FF 100%)',
 }
 
-function genreGradient(genre: string): string {
+export function genreGradient(genre: string): string {
   return GENRE_GRADIENT[genre] ?? GENRE_GRADIENT['其他']
 }
 

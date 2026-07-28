@@ -366,6 +366,40 @@ async def list_runs(session: AsyncSession, user_id: UUID) -> list[Run]:
     return [_run_from_row(r) for r in result.fetchall()]
 
 
+async def list_recent_active_runs(
+    session: AsyncSession, user_id: UUID, limit: int = 4
+) -> list[dict[str, Any]]:
+    """User's most recently played active scenarios (deduplicated by scenario_id).
+
+    Returns the latest run per scenario for active runs only, joined with
+    scenario metadata (cover_url, genre) for the "近期玩过" section on the
+    Explore page.
+    """
+    result = await session.execute(
+        text(
+            """
+            SELECT DISTINCT ON (sr.scenario_id)
+                sr.id AS run_id,
+                sr.scenario_id,
+                sr.title,
+                sr.turn_count,
+                sr.last_activity_at,
+                ss.cover_url,
+                ss.genre
+            FROM story_runs sr
+            JOIN story_scenarios ss ON ss.id = sr.scenario_id
+            WHERE sr.user_id = :uid
+              AND sr.status = 'active'
+              AND ss.status = 'published'
+            ORDER BY sr.scenario_id, sr.last_activity_at DESC
+            LIMIT :limit
+            """
+        ),
+        {"uid": str(user_id), "limit": max(1, min(limit, 20))},
+    )
+    return [dict(r._mapping) for r in result.fetchall()]
+
+
 async def soft_delete_run(session: AsyncSession, run_id: UUID, user_id: UUID) -> bool:
     """Logical-delete a run. Returns True if a row was affected."""
     result = await session.execute(
