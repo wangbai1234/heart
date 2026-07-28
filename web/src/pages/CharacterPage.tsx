@@ -43,6 +43,7 @@ interface GridItem {
   isBuiltin: boolean
   visibility?: string
   companion?: CompanionDTO
+  chatUserCount?: number
 }
 
 export function CharacterPage() {
@@ -82,6 +83,7 @@ export function CharacterPage() {
           isBuiltin: c.is_builtin,
           visibility: c.visibility,
           companion: companionById.get(c.id),
+          chatUserCount: c.chat_user_count,
           profile: resolveCharacterProfile(c.id, c.display_name, c.avatar_url, {
             isOwner,
             coverUrl: c.cover_url,
@@ -98,6 +100,7 @@ export function CharacterPage() {
         isBuiltin: c.is_builtin,
         visibility: c.visibility,
         companion: c,
+        chatUserCount: undefined,
         profile: resolveCharacterProfile(c.character_id, c.display_name, c.avatar_url, {
           isOwner,
           coverUrl: c.cover_url,
@@ -267,8 +270,8 @@ export function CharacterPage() {
 }
 
 function DiscoveryCard({ item, onOpen }: { item: GridItem; onOpen: () => void }) {
-  const { profile, isOwner, companion, visibility } = item
-  const tags = (profile.tags ?? []).slice(0, 3)
+  const { profile, isOwner, companion, visibility, chatUserCount } = item
+  const tags = profile.tags ?? []
   const chatted = !!companion && companion.companion_status !== 'locked'
   const hook = profile.tagline || profile.summary || ''
 
@@ -313,6 +316,14 @@ function DiscoveryCard({ item, onOpen }: { item: GridItem; onOpen: () => void })
         <div className="absolute inset-x-0 bottom-0 p-2.5">
           <p className="text-[15px] font-bold leading-tight text-white line-clamp-1">{profile.name}</p>
           {hook && <p className="mt-0.5 text-[11px] leading-tight text-white/80 line-clamp-1">{hook}</p>}
+          {/* Heat indicator (only when > 0) */}
+          {chatUserCount !== undefined && chatUserCount > 0 && (
+            <div className="mt-1 flex items-center gap-1">
+              <span className="text-[11px] text-white/85">🔥</span>
+              <span className="text-[11px] text-white/85">{formatPlays(chatUserCount)}</span>
+            </div>
+          )}
+          {/* Tags row — show all tags instead of slice(0,3) */}
           {tags.length > 0 && (
             <p className="mt-1 text-[10px] leading-tight text-white/70 line-clamp-1">{tags.join(' · ')}</p>
           )}
@@ -320,6 +331,11 @@ function DiscoveryCard({ item, onOpen }: { item: GridItem; onOpen: () => void })
       </div>
     </button>
   )
+}
+
+function formatPlays(n: number): string {
+  if (n >= 10000) return `${(n / 10000).toFixed(1)}w 人玩过`
+  return `${n} 人玩过`
 }
 
 /**

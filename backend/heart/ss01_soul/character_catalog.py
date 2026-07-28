@@ -52,6 +52,7 @@ class CharacterEntry:
     avatar_url: Optional[str] = None
     tags: list[str] = field(default_factory=list)
     cover_url: Optional[str] = None
+    chat_user_count: int = 0
 
 
 def coerce_tags(raw: object) -> list[str]:
@@ -116,6 +117,7 @@ def build_catalog_entries(
             avatar_url=avatar_urls.get(row.id),
             tags=list(row.tags or []),
             cover_url=row.cover_url,
+            chat_user_count=popularity.get(row.id, 0),
         )
         for row in rows
         if visible_to(row, viewer_id)

@@ -606,6 +606,8 @@ export interface CharacterDTO {
   cover_url?: string | null
   /** Style/category tags used by the discovery filter chips. */
   tags?: string[]
+  /** Engagement heat: distinct user count who chatted with this character. */
+  chat_user_count?: number
 }
 
 export async function getCharacters(): Promise<{ characters: CharacterDTO[] }> {
@@ -1052,6 +1054,21 @@ export async function startRun(
 
 export async function getRuns(): Promise<{ runs: StoryRunDTO[] }> {
   return request('/story/runs')
+}
+
+/** A scenario the user recently played (deduplicated by scenario_id). */
+export interface RecentScenarioDTO {
+  run_id: string
+  scenario_id: string
+  title: string
+  cover_url: string | null
+  genre: string
+  turn_count: number
+  last_activity_at: string
+}
+
+export async function getRecentScenarios(limit = 4): Promise<{ scenarios: RecentScenarioDTO[] }> {
+  return request(`/story/recent-scenarios?limit=${limit}`)
 }
 
 /** The caller's current active run for a scenario, or null (resume vs restart). */
