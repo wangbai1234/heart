@@ -98,6 +98,37 @@ _ACTION_SUBJECTS_LIST: tuple[str, ...] = (
     # 心境
     "心跳",
     "心口",
+    # 身体扩展 — 2026-07-29 补充
+    "肩膀",
+    "肩",
+    "额头",
+    "额",
+    "瞳孔",
+    "瞳",
+    "背影",
+    "背",
+    "腰",
+    "腰身",
+    "胸口",
+    "胸膛",
+    "下巴",
+    "鼻尖",
+    "鼻",
+    "喉咙",
+    "喉结",
+    "脖颈",
+    "颈",
+    "手腕",
+    "手背",
+    "脊背",
+    "侧脸",
+    "发丝",
+    "发",
+    # 状态扩展
+    "笑意",
+    "笑容",
+    "泪",
+    "眼泪",
 )
 # Pattern is intentionally UNANCHORED so `.search()` can find a subject noun
 # anywhere in the segment (needed for the "转身，目光带着审视 你..." case
@@ -190,6 +221,18 @@ _DIALOG_STARTERS_LIST: tuple[str, ...] = (
     "唉",
     "喂",
     "嘿",
+    # Time/interrogative adverbs — safe dialog openers that never start
+    # action prose (unlike verb-like words such as "问/找/给").
+    "最近",
+    "刚才",
+    "难道",
+    "怎么",
+    "什么",
+    "为什么",
+    "凭什么",
+    "明明",
+    "还是",
+    "或者",
 )
 _DIALOG_START_RE = re.compile(r"(?:" + "|".join(_DIALOG_STARTERS_LIST) + r")")
 
@@ -197,16 +240,25 @@ _DIALOG_START_RE = re.compile(r"(?:" + "|".join(_DIALOG_STARTERS_LIST) + r")")
 def _wrap_bare_actions(text: str) -> str:
     """Wrap action-prose segments that the LLM forgot to bracket.
 
-    Operates on terminator-split pieces; segments that already contain any
-    action bracket are left untouched so we never double-wrap. See module
-    docstring for the two-part rule.
+    Legacy entry point — kept for backward compatibility. Now only used when
+    the ENTIRE response has no brackets at all.  For partial-bracket cases,
+    ``split_response`` calls ``_wrap_bare_actions_segment`` per text segment.
     """
     if not text:
         return text
-    # If the LLM used ANY explicit bracket in this reply, assume it followed
-    # the format contract and don't second-guess it — keeps the heuristic
-    # well away from correctly-formatted turns.
     if any(marker in text for marker in ("（", "(", "【", "[")):
+        return text
+    return _wrap_bare_actions_segment(text)
+
+
+def _wrap_bare_actions_segment(text: str) -> str:
+    """Wrap action-prose in a single bracket-free text segment.
+
+    Same heuristic as the legacy ``_wrap_bare_actions``, but designed to run
+    on individual text segments AFTER explicit brackets have been extracted.
+    Does NOT bail out on brackets (caller guarantees none are present).
+    """
+    if not text:
         return text
 
     parts = _TERM_RE.split(text)
@@ -283,27 +335,38 @@ def split_response(text: str) -> list[Segment]:
     if not text:
         return []
 
-    # 0. Pre-process: if the LLM emitted an action-prose seam without brackets,
-    #    wrap it now so the downstream splitter can recognise it as an action.
-    text = _wrap_bare_actions(text)
-
-    # 1. Walk the text, splitting action spans out from the dialog.
+    # 1. Extract explicitly bracketed actions from the raw text.
     interleaved = _split_actions_and_dialog(text)
 
-    # 2. Break each dialog segment further by sentence terminators.
-    exploded: list[Segment] = []
+    # 2. For each remaining text segment, attempt to wrap bare actions that
+    #    the LLM forgot to bracket (fixes the "partial bracket" failure mode
+    #    where _wrap_bare_actions used to bail on the whole text).
+    refined: list[Segment] = []
     for seg in interleaved:
+        if seg["kind"] == "action":
+            refined.append(seg)
+            continue
+        wrapped = _wrap_bare_actions_segment(seg["content"])
+        if wrapped != seg["content"]:
+            sub_segments = _split_actions_and_dialog(wrapped)
+            refined.extend(sub_segments)
+        else:
+            refined.append(seg)
+
+    # 3. Break each dialog segment further by sentence terminators.
+    exploded: list[Segment] = []
+    for seg in refined:
         if seg["kind"] == "action":
             exploded.append(seg)
             continue
         for sentence in _split_by_terminators(seg["content"]):
             exploded.append({"kind": "text", "content": sentence})
 
-    # 3. Merge tiny dialog bubbles with the next dialog bubble so we don't
+    # 4. Merge tiny dialog bubbles with the next dialog bubble so we don't
     #    emit a "嗯。" solo bubble.
     merged = _merge_short_text(exploded, MIN_TEXT_CHARS)
 
-    # 4. Cap the number of text bubbles by folding the smallest adjacent
+    # 5. Cap the number of text bubbles by folding the smallest adjacent
     #    text pair together.
     return _cap_text_bubbles(merged, MAX_TEXT_BUBBLES)
 

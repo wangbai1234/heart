@@ -929,8 +929,14 @@ class ComposerService:
         if vd_lines:
             parts.append("\n【说话方式】\n" + "\n".join(vd_lines))
         if example_lines:
-            ex_block = "\n".join(f"「{ex}」" for ex in example_lines[:5])
-            parts.append(f"\n【真实声音示例】\n{ex_block}")
+            from heart.ss05_composer.message_splitter import _wrap_bare_actions_segment
+
+            formatted = [_wrap_bare_actions_segment(ex) for ex in example_lines[:5]]
+            ex_block = "\n".join(f"「{ex}」" for ex in formatted)
+            parts.append(
+                "\n【真实声音示例】\n"
+                "（注：以下展示语气风格，实际输出时所有动作须加（）括号）\n" + ex_block
+            )
 
         # ── Layer 3.5: Message-format contract (bubble splitter) ──────
         # The frontend renders the reply as a mix of grey action pills and
@@ -949,9 +955,10 @@ class ComposerService:
             "- 所有动作、神态、心理描写、旁白必须用中文全角括号（）包裹。\n"
             "- 括号里只写动作/神态，不写对白；对白直接写在括号外。\n"
             "- 一条消息里动作与对白可以多次穿插，每个动作片段独立用一对（）。\n"
-            "- 禁止把动作描写和对白混在同一段裸文本里，例如"
-            "「目光微微闪动，随即移开视线 不。」是错误的，正确是"
-            "「（目光微微闪动，随即移开视线）不。」。\n"
+            "- 如果你用了（），就必须确保消息中所有动作/神态都加（），不能遗漏。\n"
+            "- 禁止把动作描写和对白混在同一段裸文本里。\n"
+            "- 错误示例：（微微一笑）你来了。目光中带着审视 最近在忙什么？\n"
+            "- 正确示例：（微微一笑）你来了。（目光中带着审视）最近在忙什么？\n"
             "- 输出示例（务必照此格式）：（他停下脚步，偏头看你）好久不见。"
             "（唇角微微扬起）最近过得怎么样？"
         )

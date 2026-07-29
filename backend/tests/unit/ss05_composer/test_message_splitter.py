@@ -319,3 +319,30 @@ def test_halfwidth_corner_quote_mixed_with_fullwidth():
     assert len(result) == 1
     assert result[0]["kind"] == "text"
     assert "内层" in result[0]["content"] and "外层" in result[0]["content"]
+
+
+# ── Partial-bracket (FM1) regression tests ─────────────────────────────────
+
+
+def test_partial_bracket_bare_action_still_wrapped():
+    """FM1: LLM brackets some actions but leaves others bare."""
+    result = split_response("（微微一笑）你来了。目光中带着审视 最近在忙什么？")
+    actions = [s for s in result if s["kind"] == "action"]
+    texts = [s for s in result if s["kind"] == "text"]
+    assert len(actions) >= 2
+    assert any("目光" in a["content"] for a in actions)
+    assert any("最近" in t["content"] for t in texts)
+
+
+def test_partial_bracket_interleaved():
+    """Multiple bracketed + bare actions in one message."""
+    result = split_response("（凛抬眸）你来了。唇角微扬 怎么这么久？（伸出手）走吧。")
+    actions = [s for s in result if s["kind"] == "action"]
+    assert any("唇角" in a["content"] for a in actions)
+
+
+def test_partial_bracket_expanded_vocab():
+    """New subject nouns (肩膀, 笑意) are correctly detected."""
+    result = split_response("（微笑）你好。肩膀微微放松 那就这样吧。")
+    actions = [s for s in result if s["kind"] == "action"]
+    assert any("肩膀" in a["content"] for a in actions)
