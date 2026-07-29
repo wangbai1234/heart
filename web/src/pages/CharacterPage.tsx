@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useThemeStore } from '../stores/themeStore'
+import { useScrollRestore } from '../hooks/useScrollRestore'
 import { TabBar } from '../components/ui/TabBar'
 import {
   resolveCharacterProfile,
+  CHARACTER_STYLE_TAGS,
   CHARACTER_ROLE_TAGS,
   DEFAULT_COVER,
   DISCOVERY_RECOMMENDED,
@@ -46,6 +48,56 @@ interface GridItem {
   chatUserCount?: number
 }
 
+const FEATURED_CHARACTER_ORDER = ['gu_beichen', 'qin_xiao', 'li_jue', 'jiang_yueze', 'gu_xingzhou', 'jiang_ye'] as const
+const FEATURED_CHARACTER_INDEX = new Map<string, number>(FEATURED_CHARACTER_ORDER.map((id, index) => [id, index]))
+const DISCOVERY_TAG_PRIORITY = [
+  ...CHARACTER_ROLE_TAGS,
+  ...CHARACTER_STYLE_TAGS,
+  '都市',
+  '夜色',
+  '职场',
+  '异国',
+  '欧风',
+  '拳手',
+  '管家',
+  '血族',
+  '血仆',
+  '调酒师',
+  '赌王',
+  '学霸',
+  '贵公子',
+  '危险关系',
+  '救赎',
+  '占有欲',
+  '克制',
+  '忠犬',
+  '暗恋',
+  '博弈',
+] as const
+const EDITORIAL_HEAT_OVERRIDES = new Map<string, number>([
+  ['zhou_jin', 5867],
+  ['song_ye', 4218],
+  ['pei_tinglan', 5732],
+  ['vito_rosetti', 3976],
+  ['xie_ci', 5421],
+  ['fu_mingxiu', 5894],
+  ['shen_liao', 4685],
+  ['xize', 3512],
+  ['lu_wenjing', 5238],
+  ['luo_fei', 4879],
+  ['jiang_ran', 4356],
+  ['gu_yanli', 5608],
+  ['xu_zhihan', 3167],
+])
+
+function stableShuffleScore(id: string): number {
+  let hash = 0
+  for (let i = 0; i < id.length; i += 1) {
+    hash = (hash * 131 + id.charCodeAt(i)) % 1000003
+  }
+  return hash
+}
+
 export function CharacterPage() {
   const navigate = useNavigate()
   const { resolvedTheme } = useThemeStore()
@@ -57,6 +109,7 @@ export function CharacterPage() {
   const [activeTag, setActiveTag] = useState<string>(DISCOVERY_RECOMMENDED)
   const [showSearch, setShowSearch] = useState(false)
   const [query, setQuery] = useState('')
+  const scrollRef = useScrollRestore()
 
   useEffect(() => {
     void loadCharacters()
@@ -110,26 +163,39 @@ export function CharacterPage() {
     })
   }, [serverCharacters, companions, companionById])
 
+  const rankedItems = useMemo(() => {
+    return [...items].sort((left, right) => {
+      const leftFeatured = FEATURED_CHARACTER_INDEX.get(left.id)
+      const rightFeatured = FEATURED_CHARACTER_INDEX.get(right.id)
+      if (leftFeatured !== undefined || rightFeatured !== undefined) {
+        if (leftFeatured === undefined) return 1
+        if (rightFeatured === undefined) return -1
+        return leftFeatured - rightFeatured
+      }
+      return stableShuffleScore(left.id) - stableShuffleScore(right.id)
+    })
+  }, [items])
+
   // Filter chips: leading editorial filters (推荐 / 全部) + data-derived role
   // tags, ordered by the canonical CHARACTER_ROLE_TAGS priority so curated
   // categories lead, then any remaining tags in first-seen order. `推荐` never
   // appears as a data tag here — it's the editorial lead filter.
   const tagChips = useMemo(() => {
     const present = new Set<string>()
-    for (const it of items) {
+    for (const it of rankedItems) {
       for (const t of it.profile.tags ?? []) {
         if (t && t !== DISCOVERY_RECOMMENDED) present.add(t)
       }
     }
     const ordered: string[] = []
-    for (const t of CHARACTER_ROLE_TAGS) {
+    for (const t of DISCOVERY_TAG_PRIORITY) {
       if (present.has(t)) {
         ordered.push(t)
         present.delete(t)
       }
     }
     // leftover non-curated tags, first-seen order
-    for (const it of items) {
+    for (const it of rankedItems) {
       for (const t of it.profile.tags ?? []) {
         if (t && t !== DISCOVERY_RECOMMENDED && present.has(t)) {
           ordered.push(t)
@@ -138,34 +204,33 @@ export function CharacterPage() {
       }
     }
     return [DISCOVERY_RECOMMENDED, DISCOVERY_ALL, ...ordered]
-  }, [items])
+  }, [rankedItems])
 
-  // Virtual heat mapping: sort by real chat_user_count DESC, map rank → 500-5000
+  // Editorial heat mapping: featured characters are fixed at the front, the
+  // remainder follow a stable pseudo-random order.
   const heatMap = useMemo(() => {
-    const withHeat = items
-      .map((it, idx) => ({ id: it.id, real: it.chatUserCount ?? 0, idx }))
-      .filter((x) => x.real > 0)
-    withHeat.sort((a, b) => b.real - a.real)
+    const withHeat = rankedItems.map((it) => ({ id: it.id }))
     const map = new Map<string, number>()
     const n = withHeat.length
     if (n === 0) return map
     withHeat.forEach((x, rank) => {
-      // Linear interpolation: rank 0 → 5000, rank (n-1) → 500
+      const override = EDITORIAL_HEAT_OVERRIDES.get(x.id)
+      if (override !== undefined) {
+        map.set(x.id, override)
+        return
+      }
       const virtual = n === 1 ? 2750 : Math.round(5000 - (rank / (n - 1)) * 4500)
       map.set(x.id, virtual)
     })
     return map
-  }, [items])
+  }, [rankedItems])
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
-    return items.filter((it) => {
+    const result = rankedItems.filter((it) => {
       const tags = it.profile.tags ?? []
-      // Tag/category filter only applies when there is no search query.
-      // Typing should search across the full catalog regardless of the active tab.
       if (!q) {
         if (activeTag === DISCOVERY_RECOMMENDED) {
-          // Editorial: built-ins + anything explicitly tagged 推荐 on import.
           if (!(it.isBuiltin || tags.includes(DISCOVERY_RECOMMENDED))) return false
         } else if (activeTag !== DISCOVERY_ALL && !tags.includes(activeTag)) {
           return false
@@ -177,7 +242,15 @@ export function CharacterPage() {
       }
       return true
     })
-  }, [items, activeTag, query])
+    if (activeTag === DISCOVERY_RECOMMENDED && !q) {
+      result.sort((a, b) => {
+        const aFem = (a.profile.tags ?? []).includes('女性向') ? 0 : 1
+        const bFem = (b.profile.tags ?? []).includes('女性向') ? 0 : 1
+        return aFem - bFem
+      })
+    }
+    return result
+  }, [rankedItems, activeTag, query])
 
   const pageBg =
     resolvedTheme === 'dark'
@@ -198,7 +271,7 @@ export function CharacterPage() {
               <polyline points="10,2 2,10 10,18" />
             </svg>
           </button>
-          <span className="text-[17px] font-medium text-[var(--color-ink)]">角色</span>
+          <div className="flex-1" />
           <div className="flex items-center gap-2">
             <button
               onClick={() => setShowSearch((v) => !v)}
@@ -264,7 +337,7 @@ export function CharacterPage() {
         )}
 
         {/* Discovery grid */}
-        <div className="relative z-10 flex-1 overflow-y-auto px-4 pt-1 pb-[80px]">
+        <div ref={scrollRef} className="relative z-10 flex-1 overflow-y-auto px-4 pt-1 pb-[80px]">
           {filtered.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-center gap-2 pb-20">
               <span className="text-[15px] text-[var(--color-text-secondary)]">
@@ -287,11 +360,11 @@ export function CharacterPage() {
 }
 
 function DiscoveryCard({ item, heatMap, onOpen }: { item: GridItem; heatMap: Map<string, number>; onOpen: () => void }) {
-  const { profile, isOwner, companion, visibility, chatUserCount } = item
+  const { profile, isOwner, companion, visibility } = item
   const tags = profile.tags ?? []
   const chatted = !!companion && companion.companion_status !== 'locked'
   const hook = profile.tagline || profile.summary || ''
-  const virtualHeat = chatUserCount && chatUserCount > 0 ? heatMap.get(item.id) : undefined
+  const virtualHeat = heatMap.get(item.id)
 
   // Visibility badge for owned UGC characters
   const visInfo = isOwner ? VIS_BADGE[visibility ?? 'private'] ?? VIS_BADGE.private : null
@@ -334,7 +407,7 @@ function DiscoveryCard({ item, heatMap, onOpen }: { item: GridItem; heatMap: Map
         <div className="absolute inset-x-0 bottom-0 p-2.5">
           <p className="text-[15px] font-bold leading-tight text-white line-clamp-1">{profile.name}</p>
           {hook && <p className="mt-0.5 text-[11px] leading-tight text-white/80 line-clamp-1">{hook}</p>}
-          {/* Heat indicator (virtual value 500-5000, preserves real ranking) */}
+          {/* Heat indicator (editorial overrides + virtual value, preserves real ranking) */}
           {virtualHeat !== undefined && (
             <div className="mt-1 flex items-center gap-1">
               <span className="text-[11px] text-white/85">🔥</span>
