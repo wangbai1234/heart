@@ -13,7 +13,7 @@ from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from heart.api.wiring import get_db, get_safety_agent
+from heart.api.wiring import get_db
 from heart.core.auth import TokenData, get_current_user
 from heart.ss01_soul.character_catalog import (
     CharacterRow,
@@ -643,11 +643,9 @@ async def create_character(
     draft: CharacterDraft,
     current_user: TokenData = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-    safety_agent=Depends(get_safety_agent),
 ) -> dict:
     """Create a new private UGC character and hot-load it into the registry."""
     from heart.ss01_soul.content_store import upsert_content
-    from heart.ss01_soul.persona_screen import PersonaRejectedError, screen_persona
     from heart.ss01_soul.reload import reload_character
     from heart.ss01_soul.spec_builder import build_soul_spec_from_draft
     from heart.ss01_soul.spec_store import insert_spec
@@ -662,15 +660,6 @@ async def create_character(
     active_count = count_result.scalar() or 0
     if active_count >= _UGC_MAX_PER_USER:
         raise HTTPException(status_code=422, detail=f"最多创建 {_UGC_MAX_PER_USER} 个自定义角色")
-
-    # Safety screen
-    if safety_agent is not None:
-        try:
-            await screen_persona(
-                draft, user_id=str(uid), character_id="pending", safety_agent=safety_agent
-            )
-        except PersonaRejectedError as exc:
-            raise HTTPException(status_code=422, detail=f"人设审核未通过：{exc.reason}") from exc
 
     # Mint id
     name_zh = draft.display_name.zh
@@ -755,25 +744,15 @@ async def update_character(
     draft: CharacterDraft,
     current_user: TokenData = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
-    safety_agent=Depends(get_safety_agent),
 ) -> dict:
     """Edit a UGC character — bumps semver minor, supersedes old spec."""
     from heart.ss01_soul.content_store import upsert_content
-    from heart.ss01_soul.persona_screen import PersonaRejectedError, screen_persona
     from heart.ss01_soul.reload import reload_character
     from heart.ss01_soul.spec_builder import build_soul_spec_from_draft
     from heart.ss01_soul.spec_store import insert_spec, supersede_active
 
     uid = uuid.UUID(current_user.user_id)
     row = await _require_owner(character_id, uid, db)
-
-    if safety_agent is not None:
-        try:
-            await screen_persona(
-                draft, user_id=str(uid), character_id=character_id, safety_agent=safety_agent
-            )
-        except PersonaRejectedError as exc:
-            raise HTTPException(status_code=422, detail=f"人设审核未通过：{exc.reason}") from exc
 
     # Bump semver minor (1.0.0 → 1.1.0)
     old_ver = row.get("soul_spec_version") or "1.0.0"

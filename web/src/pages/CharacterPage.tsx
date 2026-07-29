@@ -231,7 +231,7 @@ export function CharacterPage() {
       const tags = it.profile.tags ?? []
       if (!q) {
         if (activeTag === DISCOVERY_RECOMMENDED) {
-          if (!(it.isBuiltin || tags.includes(DISCOVERY_RECOMMENDED))) return false
+          if (!(it.isOwner || it.isBuiltin || tags.includes(DISCOVERY_RECOMMENDED))) return false
         } else if (activeTag !== DISCOVERY_ALL && !tags.includes(activeTag)) {
           return false
         }
