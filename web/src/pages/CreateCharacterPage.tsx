@@ -4,6 +4,7 @@ import { useThemeStore } from '../stores/themeStore'
 import { useCharactersStore } from '../stores/charactersStore'
 import { useToastStore } from '../stores/toastStore'
 import { useMembershipStore } from '../stores/membershipStore'
+import { useSafeBack } from '../hooks/useSafeBack'
 import {
   ApiError,
   uploadCharacterCover,
@@ -195,6 +196,7 @@ function SliderRow({ field, value, onChange }: SliderRowProps) {
 
 export function CreateCharacterPage() {
   const navigate = useNavigate()
+  const goBack = useSafeBack('/home')
   const [searchParams] = useSearchParams()
   const { resolvedTheme } = useThemeStore()
   const isDark = resolvedTheme === 'dark'
@@ -754,10 +756,10 @@ export function CreateCharacterPage() {
       <nav className="relative z-20 flex items-center justify-between px-5 h-[44px] shrink-0">
         <button
           onClick={() => {
-            if (step === 3 && isVoiceOnly) navigate(-1)
+            if (step === 3 && isVoiceOnly) goBack()
             else if (step === 3) setStep(2)
             else if (step === 2) setStep(1)
-            else navigate(-1)
+            else goBack()
           }}
           className="w-[44px] h-[44px] flex items-center justify-center rounded-full active:bg-[rgba(255,183,197,0.15)] transition-colors"
         >
@@ -1200,7 +1202,7 @@ export function CreateCharacterPage() {
                   } else if (createdCharacterId) {
                     navigate(`/chat/${createdCharacterId}`, { replace: true })
                   } else {
-                    navigate(-1)
+                    goBack()
                   }
                 }}
                 disabled={submitting || voiceSaving}

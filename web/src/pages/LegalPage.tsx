@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import Markdown from 'react-markdown'
+import { useSafeBack } from '../hooks/useSafeBack'
 
 export function LegalPage() {
   const { type } = useParams<{ type: string }>()
-  const navigate = useNavigate()
+  const goBack = useSafeBack('/settings')
   const [content, setContent] = useState('')
 
   useEffect(() => {
@@ -23,7 +24,7 @@ export function LegalPage() {
   return (
     <div className="w-full h-full flex flex-col" style={{ background: 'var(--color-bg)' }}>
       <div className="flex items-center px-5 pt-4 pb-3" style={{ paddingTop: 'var(--safe-top)' }}>
-        <button onClick={() => navigate(-1 as any)} className="w-[44px] h-[44px] flex items-center justify-center active:opacity-60 transition-opacity" aria-label="返回">
+        <button onClick={goBack} className="w-[44px] h-[44px] flex items-center justify-center active:opacity-60 transition-opacity" aria-label="返回">
           <svg width="12" height="20" viewBox="0 0 12 20" fill="none" stroke="var(--color-ink)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="10,2 2,10 10,18" />
           </svg>

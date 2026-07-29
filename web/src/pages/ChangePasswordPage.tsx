@@ -1,11 +1,11 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
 import { useThemeStore } from '../stores/themeStore'
 import { Button } from '../components/ui/Button'
 import { PasswordInput } from '../components/ui/PasswordInput'
 import { Toast } from '../components/ui/Toast'
 import { changePassword, setPassword } from '../services/api'
+import { useSafeBack } from '../hooks/useSafeBack'
 
 const LockIcon = (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
@@ -15,7 +15,7 @@ const LockIcon = (
 )
 
 export function ChangePasswordPage() {
-  const navigate = useNavigate()
+  const goBack = useSafeBack('/settings')
   const user = useAuthStore((s) => s.user)
   const setUser = useAuthStore((s) => s.setUser)
   const { resolvedTheme } = useThemeStore()
@@ -61,7 +61,7 @@ export function ChangePasswordPage() {
         setUser({ has_password: true })
       }
       showToast('密码已更新', 'success')
-      setTimeout(() => navigate(-1), 800)
+      setTimeout(goBack, 800)
     } catch (err: unknown) {
       showToast(err instanceof Error ? err.message : '操作失败，请重试', 'error')
     } finally {
@@ -76,7 +76,7 @@ export function ChangePasswordPage() {
       <div className="relative z-10 w-full h-full flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-5 pt-4 pb-3" style={{ paddingTop: 'var(--safe-top)' }}>
-          <button onClick={() => navigate(-1)} className="w-[44px] h-[44px] flex items-center justify-center active:opacity-60 transition-opacity" aria-label="返回">
+          <button onClick={goBack} className="w-[44px] h-[44px] flex items-center justify-center active:opacity-60 transition-opacity" aria-label="返回">
             <svg width="12" height="20" viewBox="0 0 12 20" fill="none" stroke="var(--color-ink)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="10,2 2,10 10,18" />
             </svg>

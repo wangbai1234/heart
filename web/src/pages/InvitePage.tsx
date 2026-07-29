@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { useThemeStore } from '../stores/themeStore'
 import { useToastStore } from '../stores/toastStore'
 import { getInviteStatus, type InviteStatus } from '../services/api'
 import { Skeleton } from '../components/ui/Skeleton'
+import { useSafeBack } from '../hooks/useSafeBack'
 
 export function InvitePage() {
-  const navigate = useNavigate()
+  const goBack = useSafeBack('/home')
   const { resolvedTheme } = useThemeStore()
   const showToast = useToastStore((s) => s.show)
   const [status, setStatus] = useState<InviteStatus | null>(null)
@@ -43,7 +43,7 @@ export function InvitePage() {
       <div style={{ height: 'var(--safe-top)' }} />
 
       <nav className="relative z-20 flex items-center justify-between px-5 h-[44px] shrink-0">
-        <button onClick={() => navigate(-1)} className="w-[44px] h-[44px] flex items-center justify-center">
+        <button onClick={goBack} className="w-[44px] h-[44px] flex items-center justify-center">
           <svg width="12" height="20" viewBox="0 0 12 20" fill="none" stroke="var(--color-ink)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="10,2 2,10 10,18" />
           </svg>

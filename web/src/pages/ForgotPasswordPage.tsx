@@ -7,6 +7,7 @@ import { PasswordInput } from '../components/ui/PasswordInput'
 import { Toast } from '../components/ui/Toast'
 import { requestOtp, resetPassword } from '../services/api'
 import { useVisualViewport } from '../hooks/useVisualViewport'
+import { useSafeBack } from '../hooks/useSafeBack'
 
 const MailIcon = (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
@@ -30,6 +31,7 @@ type Phase = 'email' | 'reset'
 
 export function ForgotPasswordPage() {
   const navigate = useNavigate()
+  const goBack = useSafeBack('/login')
   const setSession = useAuthStore((s) => s.setSession)
   const { keyboardOpen } = useVisualViewport()
 
@@ -102,7 +104,7 @@ export function ForgotPasswordPage() {
     <div className="relative w-full h-full flex flex-col bg-[var(--color-bg-login)] overflow-hidden">
       {/* Header */}
       <div className="flex items-center px-5 pt-4 pb-2" style={{ paddingTop: 'calc(var(--safe-top) + 8px)' }}>
-        <button onClick={() => navigate(-1)} className="w-[44px] h-[44px] flex items-center justify-center active:opacity-60" aria-label="返回">
+        <button onClick={goBack} className="w-[44px] h-[44px] flex items-center justify-center active:opacity-60" aria-label="返回">
           <svg width="12" height="20" viewBox="0 0 12 20" fill="none" stroke="var(--color-ink)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="10,2 2,10 10,18" />
           </svg>

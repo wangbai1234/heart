@@ -10,6 +10,8 @@ interface SwipeOptions {
   threshold?: number
   /** Maximum starting X (from left edge) for the swipe zone. Default 40. */
   edgeWidth?: number
+  /** Fallback route when history is empty. Default '/home'. */
+  fallback?: string
   /** Disabled when true — hook still mounts, just no-ops. */
   disabled?: boolean
   /**
@@ -39,6 +41,7 @@ export function useSwipeNavigation({
   onRightSwipe,
   threshold = 60,
   edgeWidth = 40,
+  fallback = '/home',
   disabled = false,
   priority = 1,
 }: SwipeOptions = {}) {
@@ -97,7 +100,12 @@ export function useSwipeNavigation({
         if (onRightSwipe) {
           onRightSwipe()
         } else {
-          navigate(-1)
+          const idx = (window.history.state as { idx?: number } | null)?.idx
+          if (typeof idx === 'number' && idx > 0) {
+            navigate(-1)
+          } else {
+            navigate(fallback, { replace: true })
+          }
         }
       }
     }
@@ -111,5 +119,5 @@ export function useSwipeNavigation({
       el.removeEventListener('touchmove', onTouchMove)
       el.removeEventListener('touchend', onTouchEnd)
     }
-  }, [disabled, elementRef, navigate, onRightSwipe, threshold, edgeWidth, priority])
+  }, [disabled, elementRef, navigate, onRightSwipe, threshold, edgeWidth, fallback, priority])
 }

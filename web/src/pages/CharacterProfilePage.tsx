@@ -6,6 +6,7 @@ import { useCompanionsStore } from '../stores/companionsStore'
 import { useAppStore } from '../stores/appStore'
 import { DEFAULT_COVER } from '../data/uiContent'
 import { stageWithIntimacy, isColdWar, intimacyPercent } from '../utils/relationship'
+import { useSafeBack } from '../hooks/useSafeBack'
 
 /**
  * 角色档案页 (Nimoo-style rich profile) at /character/:id.
@@ -20,6 +21,7 @@ import { stageWithIntimacy, isColdWar, intimacyPercent } from '../utils/relation
  */
 export function CharacterProfilePage() {
   const navigate = useNavigate()
+  const goBack = useSafeBack('/character')
   const { id = '' } = useParams<{ id: string }>()
   const setCharacter = useAppStore((s) => s.setCharacter)
   const companions = useCompanionsStore((s) => s.companions)
@@ -96,7 +98,7 @@ export function CharacterProfilePage() {
         {/* back button (no share button, by design) */}
         <div className="absolute left-0 top-0 z-10" style={{ height: 'var(--safe-top)' }} />
         <button
-          onClick={() => navigate(-1)}
+          onClick={goBack}
           aria-label="返回"
           className="absolute left-4 z-10 w-[38px] h-[38px] rounded-full bg-black/30 backdrop-blur-[8px] flex items-center justify-center active:scale-[0.95] transition-transform"
           style={{ top: 'calc(var(--safe-top) + 8px)' }}

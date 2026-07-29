@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { useThemeStore } from '../stores/themeStore'
 import { useCreditsStore } from '../stores/creditsStore'
 import { redeemCode } from '../services/api'
@@ -7,9 +6,10 @@ import { OTPInput } from '../components/ui/OTPInput'
 import { Button } from '../components/ui/Button'
 import { Toast } from '../components/ui/Toast'
 import { Dialog } from '../components/ui/Dialog'
+import { useSafeBack } from '../hooks/useSafeBack'
 
 export function RedeemPage() {
-  const navigate = useNavigate()
+  const goBack = useSafeBack('/wallet')
   const { resolvedTheme } = useThemeStore()
   const creditsStore = useCreditsStore()
   const [code, setCode] = useState('')
@@ -68,7 +68,7 @@ export function RedeemPage() {
 
       {/* Navigation bar */}
       <nav className="relative z-20 flex items-center justify-between px-5 h-[44px] shrink-0">
-        <button onClick={() => navigate(-1)} className="w-[44px] h-[44px] flex items-center justify-center">
+        <button onClick={goBack} className="w-[44px] h-[44px] flex items-center justify-center">
           <svg width="12" height="20" viewBox="0 0 12 20" fill="none" stroke="var(--color-ink)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="10,2 2,10 10,18" />
           </svg>
@@ -166,12 +166,12 @@ export function RedeemPage() {
       </div>
 
       {/* Success Dialog */}
-      <Dialog open={showSuccess} onClose={() => { setShowSuccess(false); navigate(-1) }} title="激活成功">
+      <Dialog open={showSuccess} onClose={() => { setShowSuccess(false); goBack() }} title="激活成功">
         <p>兑换成功！当前余额 {creditsStore.balance} yuoyuo币，尽情享受吧！</p>
         <Button
           variant="primary"
           size="sm"
-          onClick={() => { setShowSuccess(false); navigate(-1) }}
+          onClick={() => { setShowSuccess(false); goBack() }}
           className="mt-4 w-full"
         >
           好的

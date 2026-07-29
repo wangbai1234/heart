@@ -6,6 +6,7 @@ import { useCharactersStore } from '../stores/charactersStore'
 import { useToastStore } from '../stores/toastStore'
 import { resolveCharacterProfile } from '../data/uiContent'
 import { useScrollRestore } from '../hooks/useScrollRestore'
+import { useSafeBack } from '../hooks/useSafeBack'
 
 function useToast() {
   return useToastStore((s) => s.show)
@@ -191,6 +192,7 @@ function MenuButton({
 
 export function MyCharactersPage() {
   const navigate = useNavigate()
+  const goBack = useSafeBack('/home')
   const { characters, loaded, load, setVisibility, disableCharacter } = useCharactersStore()
   const showToast = useToast()
   const { resolvedTheme } = useThemeStore()
@@ -245,7 +247,7 @@ export function MyCharactersPage() {
       {/* Nav bar */}
       <nav className="relative z-20 flex items-center justify-between px-5 h-[44px] shrink-0">
         <button
-          onClick={() => navigate(-1)}
+          onClick={goBack}
           className="w-[44px] h-[44px] flex items-center justify-center rounded-full active:bg-[rgba(255,183,197,0.15)] transition-colors"
         >
           <svg width="11" height="19" viewBox="0 0 11 19" fill="none" stroke="var(--color-ink)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

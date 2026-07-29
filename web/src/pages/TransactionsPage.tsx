@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { useCreditsStore } from '../stores/creditsStore'
 import { getTransactions } from '../services/api'
 import { Skeleton } from '../components/ui/Skeleton'
 import { useScrollRestore } from '../hooks/useScrollRestore'
+import { useSafeBack } from '../hooks/useSafeBack'
 
 interface Transaction {
   delta: number
@@ -28,7 +28,7 @@ const TYPE_LABELS: Record<string, string> = {
 }
 
 export function TransactionsPage() {
-  const navigate = useNavigate()
+  const goBack = useSafeBack('/wallet')
   const { balance, refresh: refreshCredits } = useCreditsStore()
   const scrollRef = useScrollRestore()
   const [items, setItems] = useState<Transaction[]>([])
@@ -79,7 +79,7 @@ export function TransactionsPage() {
     <div className="relative w-full h-full flex flex-col overflow-hidden">
       {/* Header */}
       <nav className="relative z-20 flex items-center justify-between px-5 h-[44px] shrink-0" style={{ paddingTop: 'var(--safe-top)' }}>
-        <button onClick={() => navigate(-1)} className="w-[44px] h-[44px] flex items-center justify-center">
+        <button onClick={goBack} className="w-[44px] h-[44px] flex items-center justify-center">
           <svg width="12" height="20" viewBox="0 0 12 20" fill="none" stroke="var(--color-ink)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="10,2 2,10 10,18" />
           </svg>

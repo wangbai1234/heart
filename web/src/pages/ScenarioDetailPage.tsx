@@ -6,6 +6,7 @@ import { ErrorState } from '../components/ui/ErrorState'
 import { StartRunSheet } from '../components/story/StartRunSheet'
 import { DEFAULT_COVER } from '../data/uiContent'
 import { ApiError } from '../services/api'
+import { useSafeBack } from '../hooks/useSafeBack'
 
 /**
  * Scenario detail (探索/:id). Adopts the /character/:id visual language
@@ -17,6 +18,7 @@ import { ApiError } from '../services/api'
  */
 export function ScenarioDetailPage() {
   const navigate = useNavigate()
+  const goBack = useSafeBack('/explore')
   const { scenarioId = '' } = useParams()
   const { detailById, detailLoading, detailError, loadScenario, loadActiveRun } = useStoryStore()
   const unlockScenario = useStoryStore((s) => s.unlockScenario)
@@ -60,7 +62,7 @@ export function ScenarioDetailPage() {
   // Floating glass back button (shared with CharacterProfilePage).
   const backButton = (
     <button
-      onClick={() => navigate(-1)}
+      onClick={goBack}
       aria-label="返回"
       className="absolute left-4 z-20 w-[38px] h-[38px] rounded-full bg-black/30 backdrop-blur-[8px] flex items-center justify-center active:scale-[0.95] transition-transform"
       style={{ top: 'calc(var(--safe-top) + 8px)' }}

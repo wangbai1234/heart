@@ -6,9 +6,11 @@ import { useMembershipStore } from '../stores/membershipStore'
 import { getPricing, type Pricing, type ShopItem } from '../services/api'
 import { AfdianBindingCard } from '../components/AfdianBindingCard'
 import { Skeleton } from '../components/ui/Skeleton'
+import { useSafeBack } from '../hooks/useSafeBack'
 
 export function WalletPage() {
   const navigate = useNavigate()
+  const goBack = useSafeBack('/settings')
   const { resolvedTheme } = useThemeStore()
   const { balance, refresh: refreshBalance } = useCreditsStore()
   const membership = useMembershipStore()
@@ -35,7 +37,7 @@ export function WalletPage() {
       <div style={{ height: 'var(--safe-top)' }} />
 
       <nav className="relative z-20 flex items-center justify-between px-5 h-[44px] shrink-0">
-        <button onClick={() => navigate(-1)} className="w-[44px] h-[44px] flex items-center justify-center">
+        <button onClick={goBack} className="w-[44px] h-[44px] flex items-center justify-center">
           <svg width="12" height="20" viewBox="0 0 12 20" fill="none" stroke="var(--color-ink)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="10,2 2,10 10,18" />
           </svg>
