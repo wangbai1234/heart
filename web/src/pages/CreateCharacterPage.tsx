@@ -69,6 +69,8 @@ function toApiSlider(v: number): number {
 }
 
 function buildDraft(fields: FormFields, avatarUrl?: string, coverUrl?: string): CharacterDraftDTO {
+  const hardNever = fields.hardNever.map((s) => s.trim()).filter(Boolean)
+  const catchphrases = fields.catchphrases.map((s) => s.trim()).filter(Boolean)
   return {
     display_name: { zh: fields.nameZh.trim() || undefined },
     avatar_url: avatarUrl || undefined,
@@ -76,6 +78,9 @@ function buildDraft(fields: FormFields, avatarUrl?: string, coverUrl?: string): 
     tags: fields.tags.length > 0 ? fields.tags : undefined,
     age_range: fields.ageRange || undefined,
     persona: fields.persona.trim(),
+    backstory: fields.backstory.trim() || undefined,
+    hard_never_user: hardNever.length > 0 ? hardNever : undefined,
+    catchphrases: catchphrases.length > 0 ? catchphrases : undefined,
     greeting_style: fields.greetingStyle,
     gender: fields.gender,
     speech_samples: fields.samples.map((s) => s.trim()).filter(Boolean),
@@ -100,6 +105,9 @@ interface FormFields {
   sliders: Record<keyof CharacterDraftDTO['sliders'], number> // 0-100 UI scale
   samples: string[]
   tags: string[]
+  backstory: string
+  hardNever: string[]
+  catchphrases: string[]
 }
 
 function defaultForm(): FormFields {
@@ -119,6 +127,9 @@ function defaultForm(): FormFields {
     },
     samples: ['', '', ''],
     tags: [],
+    backstory: '',
+    hardNever: [''],
+    catchphrases: [''],
   }
 }
 
@@ -129,6 +140,17 @@ function validateForm(f: FormFields): string | null {
   if (f.persona.trim().length < MIN_PERSONA) return `人设描述至少需要 ${MIN_PERSONA} 个字`
   if (f.persona.trim().length > MAX_PERSONA) return `人设描述不能超过 ${MAX_PERSONA} 个字`
   return null
+}
+
+function validateFormFields(f: FormFields): Record<string, string> {
+  const errors: Record<string, string> = {}
+  if (!f.nameZh.trim()) errors.nameZh = '请输入角色名字（1-20字）'
+  if (!f.ageRange) errors.ageRange = '请选择角色年龄段'
+  if (f.tags.length === 0) errors.tags = '请至少添加一个角色标签'
+  const pLen = f.persona.trim().length
+  if (pLen < MIN_PERSONA) errors.persona = `人设描述至少需要 ${MIN_PERSONA} 个字（当前 ${pLen} 字）`
+  else if (pLen > MAX_PERSONA) errors.persona = `人设描述不能超过 ${MAX_PERSONA} 个字`
+  return errors
 }
 
 // ── Sub-components ─────────────────────────────────────────────────
@@ -210,6 +232,8 @@ export function CreateCharacterPage() {
   const [form, setForm] = useState<FormFields>(defaultForm)
   const [submitting, setSubmitting] = useState(false)
   const [step, setStep] = useState<1 | 2 | 3>(1) // 1: basic info, 2: personality, 3: voice
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
+  const [advancedOpen, setAdvancedOpen] = useState(false)
   // avatarUrl is retained ONLY to pass an existing UGC avatar back through
   // buildDraft in edit mode — the create form no longer offers avatar upload.
   const [avatarUrl, setAvatarUrl] = useState<string>('')
@@ -345,10 +369,16 @@ export function CreateCharacterPage() {
           draft.speech_samples?.[2] || '',
         ],
         tags: draft.tags ?? [],
+        backstory: draft.backstory || '',
+        hardNever: draft.hard_never_user?.length ? draft.hard_never_user : [''],
+        catchphrases: draft.catchphrases?.length ? draft.catchphrases : [''],
       })
       if (draft.avatar_url) setAvatarUrl(draft.avatar_url)
       if (draft.cover_url) setCoverUrl(draft.cover_url)
       if (voiceConfig?.preset_voice_id) setSelectedPreset(voiceConfig.preset_voice_id)
+      if (draft.backstory || draft.hard_never_user?.length || draft.catchphrases?.length) {
+        setAdvancedOpen(true)
+      }
     }).catch(() => {
       // Fallback: at least load display name from catalog
       const char = characters.find((c) => c.id === editId)
@@ -857,17 +887,28 @@ export function CreateCharacterPage() {
             </p>
 
             {/* Name */}
-            <SectionTitle>角色名字</SectionTitle>
+            <SectionTitle>角色名字 *</SectionTitle>
             <GlassCard>
-              <div className="px-5 py-4">
+              <div id="field-nameZh" className="px-5 py-4">
                 <input
                   type="text"
                   placeholder="比如：小雪、明月、夏树…"
                   value={form.nameZh}
-                  onChange={(e) => setForm((prev) => ({ ...prev, nameZh: e.target.value }))}
+                  onChange={(e) => {
+                    setForm((prev) => ({ ...prev, nameZh: e.target.value }))
+                    if (fieldErrors.nameZh) setFieldErrors((p) => { const { nameZh: _, ...rest } = p; return rest })
+                  }}
                   maxLength={20}
-                  className="w-full text-[17px] text-[var(--color-ink)] bg-transparent outline-none placeholder:text-[var(--color-text-placeholder)]"
+                  className={`w-full text-[17px] text-[var(--color-ink)] bg-transparent outline-none placeholder:text-[var(--color-text-placeholder)] ${fieldErrors.nameZh ? 'border-b border-[var(--color-error)]' : ''}`}
                 />
+                <div className="flex items-center justify-between mt-1.5">
+                  {fieldErrors.nameZh ? (
+                    <span className="text-[12px] text-[var(--color-error)]">{fieldErrors.nameZh}</span>
+                  ) : (
+                    <span className="text-[12px] text-[var(--color-text-muted)]">1-20字</span>
+                  )}
+                  <span className="text-[12px] text-[var(--color-text-muted)] tabular-nums">{form.nameZh.length}/20</span>
+                </div>
               </div>
             </GlassCard>
 
@@ -895,6 +936,7 @@ export function CreateCharacterPage() {
             </div>
 
             {/* Age range (required) */}
+            <div id="field-ageRange">
             <SectionTitle>角色年龄段 *</SectionTitle>
             <div className="flex gap-2.5">
               {AGE_RANGES.map((range) => {
@@ -916,32 +958,47 @@ export function CreateCharacterPage() {
                 )
               })}
             </div>
+            {fieldErrors.ageRange && <p className="text-[12px] text-[var(--color-error)] mt-1.5 px-1">{fieldErrors.ageRange}</p>}
+            </div>
 
             {/* Persona */}
-            <SectionTitle>人设描述</SectionTitle>
+            <SectionTitle>人设描述 *</SectionTitle>
             <GlassCard>
-              <div className="px-5 pt-4 pb-3">
+              <div id="field-persona" className="px-5 pt-4 pb-3">
                 <textarea
                   placeholder={`描述她的性格、背景、说话方式…\n\n例：小雪是一个喜欢静静陪伴的女孩，说话温柔却藏着细腻的心思。她喜欢在深夜聊星星，也喜欢在早晨用一句"今天也要加油哦"开启你的一天…`}
                   value={form.persona}
-                  onChange={(e) => setForm((prev) => ({ ...prev, persona: e.target.value }))}
+                  onChange={(e) => {
+                    setForm((prev) => ({ ...prev, persona: e.target.value }))
+                    if (fieldErrors.persona) setFieldErrors((p) => { const { persona: _, ...rest } = p; return rest })
+                  }}
                   maxLength={MAX_PERSONA}
                   rows={8}
                   className="w-full text-[16px] leading-[1.7] text-[var(--color-ink)] bg-transparent outline-none resize-none placeholder:text-[var(--color-text-placeholder)]"
                 />
-                <div className={`text-right text-[12px] mt-1 tabular-nums ${
-                  personaLen > MAX_PERSONA
-                    ? 'text-[var(--color-error)]'
-                    : personaLen < MIN_PERSONA && personaLen > 0
-                    ? 'text-[var(--color-warning)]'
-                    : 'text-[var(--color-text-muted)]'
-                }`}>
-                  {personaLen} / {MAX_PERSONA}
+                <div className="flex items-center justify-between mt-1">
+                  {fieldErrors.persona ? (
+                    <span className="text-[12px] text-[var(--color-error)]">{fieldErrors.persona}</span>
+                  ) : personaLen > 0 && personaLen < MIN_PERSONA ? (
+                    <span className="text-[12px] text-[var(--color-warning)]">至少 {MIN_PERSONA} 字</span>
+                  ) : (
+                    <span className="text-[12px] text-[var(--color-text-muted)]">至少 {MIN_PERSONA} 字</span>
+                  )}
+                  <span className={`text-[12px] tabular-nums ${
+                    personaLen > MAX_PERSONA
+                      ? 'text-[var(--color-error)]'
+                      : personaLen < MIN_PERSONA && personaLen > 0
+                      ? 'text-[var(--color-warning)]'
+                      : 'text-[var(--color-text-muted)]'
+                  }`}>
+                    {personaLen}/{MAX_PERSONA}
+                  </span>
                 </div>
               </div>
             </GlassCard>
 
             {/* Role tags (required) — presets + custom via modal */}
+            <div id="field-tags">
             <SectionTitle>角色标签 *（最多 {MAX_TAGS} 个）</SectionTitle>
             <div className="flex flex-wrap gap-2 px-1">
               {form.tags.map((tag) => (
@@ -975,6 +1032,8 @@ export function CreateCharacterPage() {
                   <span className="text-[15px] leading-none">＋</span>添加标签
                 </button>
               )}
+            </div>
+            {fieldErrors.tags && <p className="text-[12px] text-[var(--color-error)] mt-1.5 px-1">{fieldErrors.tags}</p>}
             </div>
 
             {/* Speech samples */}
@@ -1033,6 +1092,111 @@ export function CreateCharacterPage() {
                 )
               })}
             </div>
+
+            {/* ── Advanced optional fields (collapsible) ── */}
+            <button
+              type="button"
+              onClick={() => setAdvancedOpen((v) => !v)}
+              className="mt-6 mb-3 flex items-center gap-2 px-1"
+            >
+              <svg
+                width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="var(--color-text-muted)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"
+                className={`transition-transform duration-200 ${advancedOpen ? 'rotate-90' : ''}`}
+              >
+                <polyline points="4,2 8,6 4,10" />
+              </svg>
+              <span className="text-[13px] font-medium text-[var(--color-text-muted)] uppercase tracking-[0.08em]">
+                高阶设定（选填）
+              </span>
+            </button>
+
+            {advancedOpen && (
+              <>
+                {/* Backstory */}
+                <SectionTitle>背景故事</SectionTitle>
+                <GlassCard>
+                  <div className="px-5 pt-4 pb-3">
+                    <textarea
+                      placeholder="角色的过往经历、世界观设定…"
+                      value={form.backstory}
+                      onChange={(e) => setForm((prev) => ({ ...prev, backstory: e.target.value }))}
+                      maxLength={1500}
+                      rows={6}
+                      className="w-full text-[16px] leading-[1.7] text-[var(--color-ink)] bg-transparent outline-none resize-none placeholder:text-[var(--color-text-placeholder)]"
+                    />
+                    <div className="text-right text-[12px] mt-1 tabular-nums text-[var(--color-text-muted)]">
+                      {form.backstory.length}/1500
+                    </div>
+                  </div>
+                </GlassCard>
+
+                {/* Hard-never rules */}
+                <SectionTitle>禁止行为（最多 10 条）</SectionTitle>
+                <GlassCard>
+                  <div className="divide-y divide-[var(--color-divider)]">
+                    {form.hardNever.map((item, i) => (
+                      <div key={i} className="px-5 py-3 flex items-center gap-3">
+                        <span className="text-[12px] text-[var(--color-text-muted)] w-4 shrink-0">{i + 1}</span>
+                        <input
+                          type="text"
+                          placeholder={i === 0 ? '例：不会主动谈论前任' : '添加更多禁止行为…'}
+                          value={item}
+                          onChange={(e) => {
+                            const next = [...form.hardNever]
+                            next[i] = e.target.value
+                            setForm((prev) => ({ ...prev, hardNever: next }))
+                          }}
+                          maxLength={200}
+                          className="flex-1 text-[16px] text-[var(--color-ink)] bg-transparent outline-none placeholder:text-[var(--color-text-placeholder)]"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                  {form.hardNever.length < 10 && (
+                    <button
+                      type="button"
+                      onClick={() => setForm((prev) => ({ ...prev, hardNever: [...prev.hardNever, ''] }))}
+                      className="w-full py-3 text-[14px] text-[#E86083] font-medium active:bg-[rgba(255,183,197,0.08)] transition-colors"
+                    >
+                      ＋ 添加一条
+                    </button>
+                  )}
+                </GlassCard>
+
+                {/* Catchphrases */}
+                <SectionTitle>口头禅（最多 5 条）</SectionTitle>
+                <GlassCard>
+                  <div className="divide-y divide-[var(--color-divider)]">
+                    {form.catchphrases.map((item, i) => (
+                      <div key={i} className="px-5 py-3 flex items-center gap-3">
+                        <span className="text-[12px] text-[var(--color-text-muted)] w-4 shrink-0">{i + 1}</span>
+                        <input
+                          type="text"
+                          placeholder={i === 0 ? '例：真是的～' : '添加更多口头禅…'}
+                          value={item}
+                          onChange={(e) => {
+                            const next = [...form.catchphrases]
+                            next[i] = e.target.value
+                            setForm((prev) => ({ ...prev, catchphrases: next }))
+                          }}
+                          maxLength={50}
+                          className="flex-1 text-[16px] text-[var(--color-ink)] bg-transparent outline-none placeholder:text-[var(--color-text-placeholder)]"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                  {form.catchphrases.length < 5 && (
+                    <button
+                      type="button"
+                      onClick={() => setForm((prev) => ({ ...prev, catchphrases: [...prev.catchphrases, ''] }))}
+                      className="w-full py-3 text-[14px] text-[#E86083] font-medium active:bg-[rgba(255,183,197,0.08)] transition-colors"
+                    >
+                      ＋ 添加一条
+                    </button>
+                  )}
+                </GlassCard>
+              </>
+            )}
           </>
         )}
 
@@ -1242,11 +1406,16 @@ export function CreateCharacterPage() {
           ) : step === 1 ? (
             <button
               onClick={() => {
-                const err = validateForm(form)
-                if (err) {
-                  showToast(err, 'error')
+                const errors = validateFormFields(form)
+                if (Object.keys(errors).length > 0) {
+                  setFieldErrors(errors)
+                  const firstKey = Object.keys(errors)[0]
+                  const el = document.getElementById(`field-${firstKey}`)
+                  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                  showToast(Object.values(errors)[0], 'error')
                   return
                 }
+                setFieldErrors({})
                 setStep(2)
               }}
               disabled={!canProceed}

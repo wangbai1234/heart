@@ -662,6 +662,12 @@ export interface CharacterDraftDTO {
   persona: string
   greeting_style: 'warm' | 'cool' | 'playful' | 'reserved' | 'intense'
   speech_samples?: string[]
+  /** Optional background history (0–1500 chars). */
+  backstory?: string
+  /** Up to 5 signature catchphrases (each ≤50 chars). */
+  catchphrases?: string[]
+  /** Up to 10 hard-never rules from the creator (each ≤200 chars). */
+  hard_never_user?: string[]
   gender?: 'male' | 'female'
   /** Age bracket the creator picked (e.g. "18-24"); one of AGE_RANGES. */
   age_range?: string
