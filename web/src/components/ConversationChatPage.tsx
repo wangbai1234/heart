@@ -243,7 +243,9 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
           try {
             const result = await generateOpening(currentCharacterId)
             if (!result.already_exists && result.messages.length > 0) {
-              reconcileHistory(currentCharacterId, result.messages.map(historyItemToMessage))
+              reconcileHistory(currentCharacterId, result.messages.map(m =>
+                historyItemToMessage({...m, created_at: m.created_at ?? new Date().toISOString()} as HistoryItem)
+              ))
             }
           } catch {
             // Opening generation failed — fall through to empty state
