@@ -1216,8 +1216,21 @@ async def generate_chat_opening(
     """
     uid = uuid.UUID(current_user.user_id)
 
-    # Idempotency check
-    existing = await db.execute(
+    # Idempotency: check opening_history first
+    oh = await db.execute(
+        sql_text("""
+            SELECT EXISTS(
+                SELECT 1 FROM opening_history
+                WHERE user_id = :uid AND character_id = :cid
+            )
+        """),
+        {"uid": uid, "cid": character_id},
+    )
+    if oh.scalar():
+        return {"already_exists": True, "messages": []}
+
+    # Fallback: existing messages (covers users who chatted before this feature)
+    cm = await db.execute(
         sql_text("""
             SELECT EXISTS(
                 SELECT 1 FROM chat_messages
@@ -1226,7 +1239,16 @@ async def generate_chat_opening(
         """),
         {"uid": uid, "cid": character_id},
     )
-    if existing.scalar():
+    if cm.scalar():
+        await db.execute(
+            sql_text("""
+                INSERT INTO opening_history (user_id, character_id)
+                VALUES (:uid, :cid)
+                ON CONFLICT DO NOTHING
+            """),
+            {"uid": uid, "cid": character_id},
+        )
+        await db.commit()
         return {"already_exists": True, "messages": []}
 
     # Ensure character is loaded
