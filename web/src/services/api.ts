@@ -594,6 +594,30 @@ export async function getChatHistory(
   return request(`/chat/history?${params}`)
 }
 
+/**
+ * Generate first-encounter opening scene for a character.
+ * Idempotent: returns {already_exists: true} if the user already has messages.
+ */
+export async function generateOpening(characterId: string): Promise<{
+  already_exists: boolean
+  messages: Array<{
+    id: string
+    role: string
+    content: string
+    modality: string
+    audio_url: string | null
+    audio_duration_ms: number | null
+    credits_charged: number | null
+    turn_id: string | null
+    created_at: string | null
+    kind: 'text' | 'action' | null
+  }>
+}> {
+  return request(`/chat/opening?character_id=${encodeURIComponent(characterId)}`, {
+    method: 'POST',
+  })
+}
+
 // ── Character Catalog API ──────────────────────────────────────────
 
 /**

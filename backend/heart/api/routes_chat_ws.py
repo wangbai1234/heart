@@ -1200,6 +1200,60 @@ async def get_chat_history(
     }
 
 
+# ── REST: Opening Scene Generation ────────────────────────────────────
+
+
+@router.post("/api/chat/opening")
+async def generate_chat_opening(
+    character_id: str = Query(...),
+    current_user: TokenData = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Generate first-encounter opening scene for a new character chat.
+
+    Idempotent: if the user already has messages with this character,
+    returns {already_exists: true, messages: []}.
+    """
+    uid = uuid.UUID(current_user.user_id)
+
+    # Idempotency check
+    existing = await db.execute(
+        sql_text("""
+            SELECT EXISTS(
+                SELECT 1 FROM chat_messages
+                WHERE user_id = :uid AND character_id = :cid
+            )
+        """),
+        {"uid": uid, "cid": character_id},
+    )
+    if existing.scalar():
+        return {"already_exists": True, "messages": []}
+
+    # Ensure character is loaded
+    _known = await ensure_character_loaded(character_id, db)
+    if not _known:
+        from fastapi import HTTPException as _HTTPExc
+
+        raise _HTTPExc(status_code=404, detail=f"未知角色: {character_id}")
+
+    from heart.ss10_opening.generator import generate_opening
+
+    from .wiring import get_model_router, get_soul_registry
+
+    model_router = get_model_router()
+    soul_registry = get_soul_registry()
+
+    messages = await generate_opening(
+        user_id=uid,
+        character_id=character_id,
+        db=db,
+        model_router=model_router,
+        soul_registry=soul_registry,
+    )
+
+    return {"already_exists": False, "messages": messages}
+
+
 @router.get("/api/chat/inbox-summary")
 async def get_inbox_summary(
     current_user: TokenData = Depends(get_current_user),

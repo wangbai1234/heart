@@ -9,7 +9,7 @@ import { useCompanionsStore } from '../stores/companionsStore'
 import { stageLabel, stageWithIntimacy, stageOrderIndex } from '../utils/relationship'
 import { useWebSocket } from '../hooks/useWebSocket'
 import { useProactiveStore } from '../stores/proactiveStore'
-import { getChatHistory, ackProactive, markCharacterRead, transcribeAudio } from '../services/api'
+import { getChatHistory, generateOpening, ackProactive, markCharacterRead, transcribeAudio } from '../services/api'
 // DISABLED 2026-07-24: 角色↔剧情关联功能暂停，见下方渲染块注释
 // import { StoryInviteCard, isHookOnCooldown } from './StoryInviteCard'
 import { BreathingDots } from './ui/BreathingDots'
@@ -54,6 +54,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
   const params = useParams<{ characterId?: string }>()
   const [input, setInput] = useState('')
   const [historyLoaded, setHistoryLoaded] = useState(false)
+  const [generatingOpening, setGeneratingOpening] = useState(false)
   const [expandedVoiceTextIds, setExpandedVoiceTextIds] = useState<Set<string>>(new Set())
   const scrollRef = useRef<HTMLDivElement>(null)
 
@@ -233,8 +234,26 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
     }
 
     getChatHistory(currentCharacterId, undefined, 50)
-      .then((data) => {
+      .then(async (data) => {
         const reversed = [...data.items].reverse()
+
+        // Empty history → generate first-encounter opening scene
+        if (reversed.length === 0 && !isCleared) {
+          setGeneratingOpening(true)
+          try {
+            const result = await generateOpening(currentCharacterId)
+            if (!result.already_exists && result.messages.length > 0) {
+              reconcileHistory(currentCharacterId, result.messages.map(historyItemToMessage))
+            }
+          } catch {
+            // Opening generation failed — fall through to empty state
+          } finally {
+            setGeneratingOpening(false)
+            setHistoryLoaded(true)
+          }
+          return
+        }
+
         // Reconcile (not append) so the server's rows replace the optimistic
         // copies of the same turn instead of duplicating them. reconcileHistory
         // dedups by turnId, protects the live turn, and carries over in-session
@@ -685,7 +704,16 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
           </div>
         )}
 
-        {historyLoaded && messages.length === 0 && (
+        {generatingOpening && (
+          <div className="flex-1 flex flex-col items-center justify-center gap-3">
+            <BreathingDots />
+            <span className={`text-[13px] ${isDark ? 'text-[rgba(228,228,231,0.5)]' : 'text-[var(--color-text-muted)]'}`}>
+              {profile.shortName}正在向你走来…
+            </span>
+          </div>
+        )}
+
+        {historyLoaded && messages.length === 0 && !generatingOpening && (
           <div className={`text-center text-[13px] py-8 ${isDark ? 'text-[rgba(228,228,231,0.4)]' : 'text-[var(--color-text-muted)]'}`}>
             和{profile.shortName}说点什么吧
           </div>
