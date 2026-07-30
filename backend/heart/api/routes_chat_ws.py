@@ -1154,7 +1154,7 @@ async def get_chat_history(
                        credits_charged, turn_id, created_at, kind
                 FROM chat_messages
                 WHERE user_id = :uid AND character_id = :cid AND created_at < :cursor
-                ORDER BY created_at DESC
+                ORDER BY created_at DESC, sequence_id DESC
                 LIMIT :limit
             """),
             {"uid": uid, "cid": character_id, "cursor": cursor, "limit": limit + 1},
@@ -1166,7 +1166,7 @@ async def get_chat_history(
                        credits_charged, turn_id, created_at, kind
                 FROM chat_messages
                 WHERE user_id = :uid AND character_id = :cid
-                ORDER BY created_at DESC
+                ORDER BY created_at DESC, sequence_id DESC
                 LIMIT :limit
             """),
             {"uid": uid, "cid": character_id, "limit": limit + 1},

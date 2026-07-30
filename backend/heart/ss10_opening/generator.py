@@ -105,16 +105,17 @@ async def _persist_opening(
     """Write opening bubbles to chat_messages and return API-shaped dicts."""
     results: list[dict[str, Any]] = []
 
-    for bubble in bubbles:
+    for seq, bubble in enumerate(bubbles):
         msg_id = uuid.uuid4()
         await db.execute(
             sql_text("""
                 INSERT INTO chat_messages
                     (id, user_id, character_id, turn_id, role, content,
-                     modality, kind, credits_charged, is_opening)
+                     modality, kind, credits_charged, sequence_id, is_opening,
+                     created_at)
                 VALUES
                     (:id, :uid, :cid, :tid, 'assistant', :content,
-                     'text', :kind, 0, TRUE)
+                     'text', :kind, 0, :seq, TRUE, clock_timestamp())
             """),
             {
                 "id": msg_id,
@@ -123,6 +124,7 @@ async def _persist_opening(
                 "tid": turn_id,
                 "content": bubble.content,
                 "kind": bubble.kind,
+                "seq": seq,
             },
         )
         results.append(
