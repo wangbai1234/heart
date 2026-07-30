@@ -389,9 +389,14 @@ async def set_preset_voice(
         raise HTTPException(status_code=404, detail="预设音色不存在")
     preset_provider = preset_row["provider"] or "mimo"
 
-    # Ownership check — built-in characters (owner_user_id IS NULL) may be
-    # configured by any user who owns a character-level settings row, but for
-    # voice we only allow configuring characters you own.
+    # Ownership check — voice is a per-character GLOBAL setting (character_voices
+    # is keyed UNIQUE(character_id, voice_provider), no per-user scoping), so only
+    # the character's owner may set it. Built-in/imported characters have
+    # owner_user_id IS NULL: they ship WITHOUT a voice on purpose, and no end user
+    # may configure one (their voice, if any, is seeded operationally). Historic
+    # bug: this gate was `is not None and ...`, which SHORT-CIRCUITED for NULL
+    # owners and let any logged-in user write a global voice onto imported cast
+    # characters (2026-07-30). Mirror /clone's `is None or ...` gate exactly.
     char_result = await db.execute(
         text("SELECT owner_user_id FROM characters WHERE id = :cid"),
         {"cid": body.character_id},
@@ -399,7 +404,7 @@ async def set_preset_voice(
     char_row = char_result.fetchone()
     if char_row is None:
         raise HTTPException(status_code=404, detail="角色不存在")
-    if char_row[0] is not None and str(char_row[0]) != str(uid):
+    if char_row[0] is None or str(char_row[0]) != str(uid):
         raise HTTPException(status_code=403, detail="无权配置此角色的音色")
 
     await db.execute(
