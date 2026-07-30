@@ -15,6 +15,7 @@ import {
   uploadVoiceClone,
   getCharacterVoice,
   getPricing,
+  generateOpeningPreview,
   type CharacterDraftDTO,
   type PresetVoiceDTO,
 } from '../services/api'
@@ -61,6 +62,9 @@ const GREETING_STYLES: { value: GreetingStyle; label: string; desc: string }[] =
 
 const MAX_PERSONA = 1500
 const MIN_PERSONA = 20
+const MAX_INTRO = 500
+const MAX_OPENING = 2000
+const MIN_OPENING = 10
 
 // ── Helpers ────────────────────────────────────────────────────────
 
@@ -83,6 +87,8 @@ function buildDraft(fields: FormFields, avatarUrl?: string, coverUrl?: string): 
     catchphrases: catchphrases.length > 0 ? catchphrases : undefined,
     greeting_style: fields.greetingStyle,
     gender: fields.gender,
+    intro: fields.intro.trim() || undefined,
+    opening: fields.opening.trim() || undefined,
     speech_samples: fields.samples.map((s) => s.trim()).filter(Boolean),
     sliders: {
       warmth:        toApiSlider(fields.sliders.warmth),
@@ -105,6 +111,8 @@ interface FormFields {
   sliders: Record<keyof CharacterDraftDTO['sliders'], number> // 0-100 UI scale
   samples: string[]
   tags: string[]
+  intro: string
+  opening: string
   backstory: string
   hardNever: string[]
   catchphrases: string[]
@@ -127,6 +135,8 @@ function defaultForm(): FormFields {
     },
     samples: ['', '', ''],
     tags: [],
+    intro: '',
+    opening: '',
     backstory: '',
     hardNever: [''],
     catchphrases: [''],
@@ -139,6 +149,8 @@ function validateForm(f: FormFields): string | null {
   if (f.tags.length === 0) return '请至少添加一个角色标签'
   if (f.persona.trim().length < MIN_PERSONA) return `人设描述至少需要 ${MIN_PERSONA} 个字`
   if (f.persona.trim().length > MAX_PERSONA) return `人设描述不能超过 ${MAX_PERSONA} 个字`
+  if (f.opening.trim().length < MIN_OPENING) return '请填写初遇开场（可用 AI 生成后修改）'
+  if (f.opening.trim().length > MAX_OPENING) return `开场白不能超过 ${MAX_OPENING} 个字`
   return null
 }
 
@@ -231,7 +243,9 @@ export function CreateCharacterPage() {
 
   const [form, setForm] = useState<FormFields>(defaultForm)
   const [submitting, setSubmitting] = useState(false)
-  const [step, setStep] = useState<1 | 2 | 3>(1) // 1: basic info, 2: personality, 3: voice
+  // 1: basic info, 2: personality, 3: opening, 4: voice
+  const [step, setStep] = useState<1 | 2 | 3 | 4>(1)
+  const [openingGenerating, setOpeningGenerating] = useState(false)
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [advancedOpen, setAdvancedOpen] = useState(false)
   // avatarUrl is retained ONLY to pass an existing UGC avatar back through
@@ -274,13 +288,13 @@ export function CreateCharacterPage() {
 
   useEffect(() => {
     if (isVoiceOnly) {
-      setStep(3)
+      setStep(4)
       setCreatedCharacterId(voiceOnlyId)
     }
   }, [isVoiceOnly, voiceOnlyId])
 
   useEffect(() => {
-    if (step === 3) {
+    if (step === 4) {
       // Filter presets by the character's gender selected in step 1.
       // isVoiceOnly path skips step 1 entirely, so use undefined = no filter
       // and fall back to showing all voices.
@@ -296,7 +310,7 @@ export function CreateCharacterPage() {
         .catch(() => {})
     }
     // Stop preview audio when leaving voice step
-    if (step !== 3 && previewAudioRef.current) {
+    if (step !== 4 && previewAudioRef.current) {
       previewAudioRef.current.pause()
       previewAudioRef.current = null
       if (previewObjectUrlRef.current) {
@@ -324,7 +338,7 @@ export function CreateCharacterPage() {
     try {
       const raw = sessionStorage.getItem(DRAFT_KEY)
       if (!raw) return
-      const saved = JSON.parse(raw) as { form: FormFields; avatarUrl: string; coverUrl?: string; step: 1 | 2 }
+      const saved = JSON.parse(raw) as { form: FormFields; avatarUrl: string; coverUrl?: string; step: 1 | 2 | 3 }
       // Older saved drafts predate the `tags` field — backfill so setForm never
       // yields an undefined tags array downstream.
       if (saved.form) setForm({ ...defaultForm(), ...saved.form, tags: saved.form.tags ?? [] })
@@ -336,7 +350,7 @@ export function CreateCharacterPage() {
   }, [])
 
   useEffect(() => {
-    if (editId || isVoiceOnly || step === 3) return
+    if (editId || isVoiceOnly || step === 4) return
     try {
       sessionStorage.setItem(DRAFT_KEY, JSON.stringify({ form, avatarUrl, coverUrl, step }))
     } catch { /* storage full — ignore */ }
@@ -369,6 +383,8 @@ export function CreateCharacterPage() {
           draft.speech_samples?.[2] || '',
         ],
         tags: draft.tags ?? [],
+        intro: draft.intro || '',
+        opening: draft.opening || '',
         backstory: draft.backstory || '',
         hardNever: draft.hard_never_user?.length ? draft.hard_never_user : [''],
         catchphrases: draft.catchphrases?.length ? draft.catchphrases : [''],
@@ -449,6 +465,31 @@ export function CreateCharacterPage() {
       samples[idx] = value
       return { ...prev, samples }
     })
+  }
+
+  async function handleGenerateOpening() {
+    if (openingGenerating) return
+    if (form.persona.trim().length < MIN_PERSONA) {
+      showToast(`请先填写人设（至少 ${MIN_PERSONA} 字）再生成开场`, 'error')
+      return
+    }
+    setOpeningGenerating(true)
+    try {
+      const { opening } = await generateOpeningPreview({
+        display_name: form.nameZh.trim(),
+        persona: form.persona.trim(),
+        backstory: form.backstory.trim() || undefined,
+        tags: form.tags,
+        greeting_style: form.greetingStyle,
+      })
+      setForm((prev) => ({ ...prev, opening: opening.slice(0, MAX_OPENING) }))
+      showToast('已生成开场，可继续修改', 'success')
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : 'AI 生成失败，请重试或手动填写'
+      showToast(msg, 'error')
+    } finally {
+      setOpeningGenerating(false)
+    }
   }
 
   async function handleVoiceSave() {
@@ -704,18 +745,17 @@ export function CreateCharacterPage() {
     )
   }
 
+  // Edit-mode save (invoked from the step-3 "保存更改" button). The create
+  // flow never calls this — it advances step 1→2→3→4 via the step buttons and
+  // persists only at the voice step (finalizeCreation), so aborting mid-flow
+  // leaves no orphan character on the home list.
   async function handleSubmit() {
+    if (!editId) return
     const err = validateForm(form)
     if (err) {
       showToast(err, 'error')
-      return
-    }
-
-    if (!editId) {
-      // Advance to voice step WITHOUT persisting — character is only created
-      // when the user confirms or skips voice at step 3, so aborting on step 3
-      // leaves no orphan character on the home list.
-      setStep(3)
+      const el = document.getElementById('field-opening')
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
       return
     }
 
@@ -786,7 +826,8 @@ export function CreateCharacterPage() {
       <nav className="relative z-20 flex items-center justify-between px-5 h-[44px] shrink-0">
         <button
           onClick={() => {
-            if (step === 3 && isVoiceOnly) goBack()
+            if (step === 4 && isVoiceOnly) goBack()
+            else if (step === 4) setStep(3)
             else if (step === 3) setStep(2)
             else if (step === 2) setStep(1)
             else goBack()
@@ -799,13 +840,14 @@ export function CreateCharacterPage() {
         </button>
 
         <span className="text-[17px] font-semibold text-[var(--color-ink)]">
-          {step === 3 ? '配置音色' : title}
+          {step === 4 ? '配置音色' : step === 3 ? '初遇开场' : title}
         </span>
 
-        {/* Step indicator — only for creation flow */}
+        {/* Step indicator — create flow has 4 steps (incl. voice); edit flow
+            ends at step 3 (voice is configured separately via ?voice=). */}
         {!isVoiceOnly && (
           <div className="flex items-center gap-1.5 pr-1">
-            {[1, 2, 3].map((s) => (
+            {(isEdit ? [1, 2, 3] : [1, 2, 3, 4]).map((s) => (
               <div
                 key={s}
                 className={`rounded-full transition-all duration-[240ms] ${
@@ -829,7 +871,7 @@ export function CreateCharacterPage() {
             <div className="text-center pt-6 pb-2">
               <p className="text-[13px] text-[var(--color-text-muted)] leading-relaxed">
                 给你的专属伴侣取个名字，
-                <br />描述她的性格与故事。
+                <br />描述 Ta 的性格与故事。
               </p>
             </div>
 
@@ -966,7 +1008,7 @@ export function CreateCharacterPage() {
             <GlassCard>
               <div id="field-persona" className="px-5 pt-4 pb-3">
                 <textarea
-                  placeholder={`描述她的性格、背景、说话方式…\n\n例：小雪是一个喜欢静静陪伴的女孩，说话温柔却藏着细腻的心思。她喜欢在深夜聊星星，也喜欢在早晨用一句"今天也要加油哦"开启你的一天…`}
+                  placeholder={`描述 Ta 的性格、背景、说话方式…\n\n例：小雪是一个喜欢静静陪伴的人，说话温柔却藏着细腻的心思。Ta 喜欢在深夜聊星星，也喜欢在早晨用一句"今天也要加油哦"开启你的一天…`}
                   value={form.persona}
                   onChange={(e) => {
                     setForm((prev) => ({ ...prev, persona: e.target.value }))
@@ -993,6 +1035,25 @@ export function CreateCharacterPage() {
                   }`}>
                     {personaLen}/{MAX_PERSONA}
                   </span>
+                </div>
+              </div>
+            </GlassCard>
+
+            {/* Intro — public profile blurb, display-only (NOT fed to the model).
+                Optional; server falls back to persona/archetype when empty. */}
+            <SectionTitle>角色简介（选填）</SectionTitle>
+            <GlassCard>
+              <div className="px-5 pt-4 pb-3">
+                <textarea
+                  placeholder="一句话介绍，展示在角色资料页（不影响聊天内容）…"
+                  value={form.intro}
+                  onChange={(e) => setForm((prev) => ({ ...prev, intro: e.target.value }))}
+                  maxLength={MAX_INTRO}
+                  rows={3}
+                  className="w-full text-[16px] leading-[1.7] text-[var(--color-ink)] bg-transparent outline-none resize-none placeholder:text-[var(--color-text-placeholder)]"
+                />
+                <div className="text-right text-[12px] mt-1 tabular-nums text-[var(--color-text-muted)]">
+                  {form.intro.length}/{MAX_INTRO}
                 </div>
               </div>
             </GlassCard>
@@ -1202,9 +1263,84 @@ export function CreateCharacterPage() {
 
         {step === 3 && (
           <>
+            <div className="text-center pt-6 pb-2">
+              <p className="text-[13px] text-[var(--color-text-muted)] leading-relaxed">
+                写下与 Ta 的初次相遇。
+                <br />
+                <span className="text-[11px]">聊天时会原样呈现，是留给用户的第一印象。</span>
+              </p>
+            </div>
+
+            <SectionTitle>初遇开场 *</SectionTitle>
+            {/* Format guidance: actions in parentheses, one beat per line —
+                matches how the opening is split into bubbles on playback. */}
+            <div className={`mb-2 px-4 py-3 rounded-[14px] border text-[12px] leading-relaxed ${
+              isDark
+                ? 'bg-[rgba(255,183,197,0.08)] border-[rgba(255,183,197,0.20)] text-[var(--color-text-secondary)]'
+                : 'bg-[rgba(255,183,197,0.12)] border-[rgba(255,183,197,0.30)] text-[#8A6070]'
+            }`}>
+              <p className="font-medium mb-1">✍️ 写法提示</p>
+              <p>· 动作、神态用<span className="font-semibold">（括号）</span>包裹，例：（Ta 偏头看你）</p>
+              <p>· 每句话、每个动作<span className="font-semibold">单独一行</span>，聊天时会逐条呈现</p>
+            </div>
+            <GlassCard>
+              <div id="field-opening" className="px-5 pt-4 pb-3">
+                <textarea
+                  placeholder={`（雨还没停，Ta 把伞往你这边倾了倾）\n这么巧？\n（Ta 偏头看你，唇角慢慢弯起来）\n还是说……你一直在等我？`}
+                  value={form.opening}
+                  onChange={(e) => setForm((prev) => ({ ...prev, opening: e.target.value }))}
+                  maxLength={MAX_OPENING}
+                  rows={10}
+                  className="w-full text-[16px] leading-[1.7] text-[var(--color-ink)] bg-transparent outline-none resize-none placeholder:text-[var(--color-text-placeholder)]"
+                />
+                <div className="flex items-center justify-between mt-1">
+                  {form.opening.trim().length > 0 && form.opening.trim().length < MIN_OPENING ? (
+                    <span className="text-[12px] text-[var(--color-warning)]">至少 {MIN_OPENING} 字</span>
+                  ) : (
+                    <span className="text-[12px] text-[var(--color-text-muted)]">聊天时原样呈现，不会二次生成</span>
+                  )}
+                  <span className={`text-[12px] tabular-nums ${
+                    form.opening.trim().length > MAX_OPENING ? 'text-[var(--color-error)]' : 'text-[var(--color-text-muted)]'
+                  }`}>
+                    {form.opening.trim().length}/{MAX_OPENING}
+                  </span>
+                </div>
+              </div>
+            </GlassCard>
+
+            <button
+              type="button"
+              onClick={handleGenerateOpening}
+              disabled={openingGenerating}
+              className={`mt-3 w-full h-[48px] rounded-[14px] border text-[15px] font-semibold flex items-center justify-center gap-2 transition-all active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none ${
+                isDark
+                  ? 'bg-[rgba(199,182,255,0.10)] border-[rgba(199,182,255,0.35)] text-[#C8B6FF]'
+                  : 'bg-[rgba(199,182,255,0.14)] border-[rgba(199,182,255,0.45)] text-[#8B6FD6]'
+              }`}
+            >
+              {openingGenerating ? (
+                <>
+                  <svg className="animate-spin w-[18px] h-[18px]" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  生成中…
+                </>
+              ) : (
+                <>用 AI 生成开场</>
+              )}
+            </button>
+            <p className="text-[11px] text-[var(--color-text-muted)] mt-2 text-center px-2">
+              AI 会根据人设写一版开场，生成后可自由修改
+            </p>
+          </>
+        )}
+
+        {step === 4 && (
+          <>
             <div className="text-center pt-6 pb-4">
               <p className="text-[13px] text-[var(--color-text-muted)] leading-relaxed">
-                选择一个预设音色，让她开口说话。
+                选择一个预设音色，让 Ta 开口说话。
                 <br />
                 <span className="text-[11px]">也可以跳过，稍后在后台配置。</span>
               </p>
@@ -1328,7 +1464,7 @@ export function CreateCharacterPage() {
           <>
             <div className="text-center pt-6 pb-2">
               <p className="text-[13px] text-[var(--color-text-muted)] leading-relaxed">
-                调整滑块，塑造她的性格比例。
+                调整滑块，塑造 Ta 的性格比例。
               </p>
             </div>
 
@@ -1355,7 +1491,7 @@ export function CreateCharacterPage() {
         style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 34px), 20px)' }}
       >
         <div className={`backdrop-blur-[20px] rounded-[20px] px-4 py-3 ${isDark ? 'bg-[var(--color-surface-card)] border border-[var(--color-border-subtle)] shadow-[0_-4px_20px_rgba(0,0,0,0.15)]' : 'bg-[rgba(255,255,255,0.82)] border border-[rgba(255,255,255,0.70)] shadow-[0_-4px_20px_rgba(255,183,197,0.12)]'}`}>
-          {step === 3 ? (
+          {step === 4 ? (
             <div className="flex gap-3">
               <button
                 onClick={() => {
@@ -1423,9 +1559,28 @@ export function CreateCharacterPage() {
             >
               下一步 →
             </button>
-          ) : (
+          ) : step === 2 ? (
             <button
-              onClick={handleSubmit}
+              onClick={() => setStep(3)}
+              className="w-full h-[52px] rounded-[14px] bg-gradient-to-r from-[#FFB7C5] to-[#FF8FAB] text-white text-[17px] font-semibold shadow-[0_8px_24px_-4px_rgba(255,143,171,0.40)] active:scale-[0.98] transition-transform"
+            >
+              下一步 →
+            </button>
+          ) : (
+            /* step === 3 (opening). Create: validate opening, advance to voice.
+               Edit: save changes (no voice step in edit mode). */
+            <button
+              onClick={() => {
+                if (isEdit) { void handleSubmit(); return }
+                const err = validateForm(form)
+                if (err) {
+                  showToast(err, 'error')
+                  const el = document.getElementById('field-opening')
+                  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                  return
+                }
+                setStep(4)
+              }}
               disabled={submitting}
               className="w-full h-[52px] rounded-[14px] bg-gradient-to-r from-[#FFB7C5] to-[#FF8FAB] text-white text-[17px] font-semibold shadow-[0_8px_24px_-4px_rgba(255,143,171,0.40)] active:scale-[0.98] transition-transform disabled:opacity-40 disabled:pointer-events-none flex items-center justify-center gap-2"
             >

@@ -695,6 +695,10 @@ export interface CharacterDraftDTO {
   gender?: 'male' | 'female'
   /** Age bracket the creator picked (e.g. "18-24"); one of AGE_RANGES. */
   age_range?: string
+  /** Authored first-encounter opening, played back verbatim (no runtime LLM). */
+  opening?: string
+  /** Public profile blurb shown to users (display-only, not fed to the model). */
+  intro?: string
   sliders: {
     warmth: number
     talkativeness: number
@@ -759,6 +763,24 @@ export async function updateCharacter(
 
 export async function getCharacterDraft(characterId: string): Promise<CharacterDraftDTO> {
   return request(`/characters/${characterId}/draft`)
+}
+
+/**
+ * Generate a first-encounter opening draft with the main model for the creator
+ * to accept or edit. Not persisted; creates no character. The saved opening is
+ * later played back verbatim (see ss10_opening.generator) with no runtime LLM.
+ */
+export async function generateOpeningPreview(input: {
+  display_name?: string
+  persona: string
+  backstory?: string
+  tags?: string[]
+  greeting_style?: string
+}): Promise<{ opening: string }> {
+  return request('/characters/opening-preview', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
 }
 
 export async function setCharacterVisibility(
