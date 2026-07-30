@@ -34,8 +34,9 @@ async def generate_opening(
     Returns a list of message dicts (same shape as getChatHistory items)
     or empty list on failure.
     """
-    spec = soul_registry.get(character_id)
-    if spec is None:
+    try:
+        spec = soul_registry.get_soul(character_id)
+    except Exception:
         logger.warning("opening_no_spec", character_id=character_id)
         return []
 
