@@ -140,14 +140,17 @@ async def _persist_opening(
         )
 
     # Record in opening_history for idempotency (survives chat clear)
-    await db.execute(
-        sql_text("""
-            INSERT INTO opening_history (user_id, character_id)
-            VALUES (:uid, :cid)
-            ON CONFLICT DO NOTHING
-        """),
-        {"uid": user_id, "cid": character_id},
-    )
+    try:
+        await db.execute(
+            sql_text("""
+                INSERT INTO opening_history (user_id, character_id)
+                VALUES (:uid, :cid)
+                ON CONFLICT DO NOTHING
+            """),
+            {"uid": user_id, "cid": character_id},
+        )
+    except Exception:
+        pass  # Table may not exist yet pre-migration; messages still persisted
 
     await db.commit()
 

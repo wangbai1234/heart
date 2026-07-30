@@ -1217,17 +1217,20 @@ async def generate_chat_opening(
     uid = uuid.UUID(current_user.user_id)
 
     # Idempotency: check opening_history first
-    oh = await db.execute(
-        sql_text("""
-            SELECT EXISTS(
-                SELECT 1 FROM opening_history
-                WHERE user_id = :uid AND character_id = :cid
-            )
-        """),
-        {"uid": uid, "cid": character_id},
-    )
-    if oh.scalar():
-        return {"already_exists": True, "messages": []}
+    try:
+        oh = await db.execute(
+            sql_text("""
+                SELECT EXISTS(
+                    SELECT 1 FROM opening_history
+                    WHERE user_id = :uid AND character_id = :cid
+                )
+            """),
+            {"uid": uid, "cid": character_id},
+        )
+        if oh.scalar():
+            return {"already_exists": True, "messages": []}
+    except Exception:
+        await db.rollback()
 
     # Fallback: existing messages (covers users who chatted before this feature)
     cm = await db.execute(
@@ -1240,15 +1243,18 @@ async def generate_chat_opening(
         {"uid": uid, "cid": character_id},
     )
     if cm.scalar():
-        await db.execute(
-            sql_text("""
-                INSERT INTO opening_history (user_id, character_id)
-                VALUES (:uid, :cid)
-                ON CONFLICT DO NOTHING
-            """),
-            {"uid": uid, "cid": character_id},
-        )
-        await db.commit()
+        try:
+            await db.execute(
+                sql_text("""
+                    INSERT INTO opening_history (user_id, character_id)
+                    VALUES (:uid, :cid)
+                    ON CONFLICT DO NOTHING
+                """),
+                {"uid": uid, "cid": character_id},
+            )
+            await db.commit()
+        except Exception:
+            await db.rollback()
         return {"already_exists": True, "messages": []}
 
     # Ensure character is loaded
