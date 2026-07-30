@@ -40,6 +40,27 @@ async def generate_opening(
         logger.warning("opening_no_spec", character_id=character_id)
         return []
 
+    # Authored opening (human-reviewed, stored on the draft) is played back
+    # verbatim — no LLM call. Keeps the first impression on-brand and instant.
+    authored = _resolve_authored_opening(spec)
+    if authored:
+        bubbles = split_opening(authored)
+        if bubbles:
+            turn_id = uuid.uuid4()
+            persisted = await _persist_opening(
+                db=db,
+                user_id=user_id,
+                character_id=character_id,
+                turn_id=turn_id,
+                bubbles=bubbles,
+            )
+            logger.info(
+                "opening_authored",
+                character_id=character_id,
+                bubble_count=len(persisted),
+            )
+            return persisted
+
     display_name = _resolve_display_name(spec)
     persona = _resolve_persona(spec)
     backstory = _resolve_backstory(spec)
@@ -181,6 +202,16 @@ def _resolve_display_name(spec: Any) -> str:
     if dn:
         return getattr(dn, "zh", None) or getattr(dn, "en", None) or str(dn)
     return getattr(spec, "character_id", "角色")
+
+
+def _resolve_authored_opening(spec: Any) -> Optional[str]:
+    """Return the human-authored opening text from the draft, if any."""
+    draft = getattr(spec, "_draft", None)
+    if draft is not None:
+        opening = getattr(draft, "opening", None)
+        if opening and str(opening).strip():
+            return str(opening)
+    return None
 
 
 def _resolve_persona(spec: Any) -> str:

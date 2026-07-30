@@ -62,7 +62,7 @@ from sqlalchemy import text
 logger = structlog.get_logger(__name__)
 
 _CID_RE = re.compile(r"^[a-z][a-z0-9_]*$")
-_PRESENTATION_KEYS = ("tagline", "archetype_label", "one_liner", "intro")
+_PRESENTATION_KEYS = ("tagline", "archetype_label", "one_liner", "intro", "opening")
 
 
 def _to_webp(raw: bytes, *, quality: int, max_width: int) -> bytes:
@@ -147,6 +147,12 @@ async def main() -> None:
     parser.add_argument("--covers", default=".", help="封面图片目录（默认当前目录）")
     parser.add_argument("--dry-run", action="store_true", help="只校验与打印，不上传不落库")
     parser.add_argument("--force", action="store_true", help="覆盖已存在角色（supersede 旧 spec）")
+    parser.add_argument(
+        "--skip-covers",
+        action="store_true",
+        help="完全不处理封面：不校验/不上传，cover_url 置 NULL 走 COALESCE 保留库中现值"
+        "（生产刷新开场白等 draft 时用，避免用本地旧封面覆盖线上封面）",
+    )
     parser.add_argument("--webp-quality", type=int, default=80, help="WebP 质量（默认 80）")
     parser.add_argument("--webp-max-width", type=int, default=800, help="封面最大宽度（默认 800）")
     parser.add_argument(
@@ -188,7 +194,7 @@ async def main() -> None:
         except Exception as exc:  # noqa: BLE001 — 校验期把任何构造错误收集起来
             errors.append(f"[{cid}] draft 构造失败: {exc}")
             continue
-        cover_path = _resolve_cover_path(entry, cover_dir)
+        cover_path = None if args.skip_covers else _resolve_cover_path(entry, cover_dir)
         if cover_path is not None and not cover_path.exists():
             errors.append(f"[{cid}] 封面文件不存在: {cover_path}")
             continue
@@ -227,7 +233,7 @@ async def main() -> None:
     from heart.infra.storage import ensure_bucket, is_s3_configured, upload_file
     from heart.ss01_soul.content_store import upsert_content
     from heart.ss01_soul.spec_builder import build_soul_spec_from_draft
-    from heart.ss01_soul.spec_store import insert_spec, supersede_active
+    from heart.ss01_soul.spec_store import supersede_active
 
     have_s3 = is_s3_configured()
     if have_s3:
@@ -314,14 +320,28 @@ async def main() -> None:
                 if row is not None:
                     await supersede_active(db, cid)
                 # 运营导入的目录角色 = 第一方 builtin（owner NULL / public）。
-                # soul_specs.source CHECK 只允许 'builtin' | 'ugc'，不可用 'seed'。
-                await insert_spec(
-                    db,
-                    character_id=cid,
-                    spec_version=spec.spec_version,
-                    source="builtin",
-                    spec=spec.model_dump(mode="json"),
-                    draft=draft_dict,
+                # Re-running --force for the same built-in version must refresh
+                # cover_url / tags / presentation copy, not fail on the
+                # (character_id, spec_version) primary key.
+                await db.execute(
+                    text(
+                        """
+                        INSERT INTO soul_specs
+                          (character_id, spec_version, source, status, spec, draft)
+                        VALUES (:cid, :ver, 'builtin', 'active', CAST(:spec AS jsonb), CAST(:draft AS jsonb))
+                        ON CONFLICT (character_id, spec_version) DO UPDATE SET
+                          source = 'builtin',
+                          status = 'active',
+                          spec = EXCLUDED.spec,
+                          draft = EXCLUDED.draft
+                        """
+                    ),
+                    {
+                        "cid": cid,
+                        "ver": spec.spec_version,
+                        "spec": json.dumps(spec.model_dump(mode="json")),
+                        "draft": json.dumps(draft_dict),
+                    },
                 )
                 await upsert_content(db, character_id=cid, **_derive_content(draft, cid))
                 await db.commit()

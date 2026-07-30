@@ -335,6 +335,20 @@ class SoulRegistry:
 
                     spec_data = json.loads(spec_data)
                 spec = SoulSpec.model_validate(spec_data)
+                # Attach the raw draft (persona/backstory/tags/greeting_style +
+                # presentation fields like `opening`) so downstream consumers
+                # (e.g. ss10_opening) can read authored content. Stored as a
+                # SimpleNamespace for attribute access; bypasses pydantic's
+                # extra="forbid" via object.__setattr__.
+                draft_data: Any = row.get("draft")
+                if isinstance(draft_data, str):
+                    import json
+
+                    draft_data = json.loads(draft_data)
+                if isinstance(draft_data, dict):
+                    from types import SimpleNamespace
+
+                    object.__setattr__(spec, "_draft", SimpleNamespace(**draft_data))
                 if cid not in self._registry:
                     self._registry[cid] = {}
                 self._registry[cid][spec.spec_version] = spec
