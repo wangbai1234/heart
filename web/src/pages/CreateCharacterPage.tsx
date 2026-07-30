@@ -871,7 +871,7 @@ export function CreateCharacterPage() {
             <div className="text-center pt-6 pb-2">
               <p className="text-[13px] text-[var(--color-text-muted)] leading-relaxed">
                 给你的专属伴侣取个名字，
-                <br />描述她的性格与故事。
+                <br />描述 Ta 的性格与故事。
               </p>
             </div>
 
@@ -1008,7 +1008,7 @@ export function CreateCharacterPage() {
             <GlassCard>
               <div id="field-persona" className="px-5 pt-4 pb-3">
                 <textarea
-                  placeholder={`描述她的性格、背景、说话方式…\n\n例：小雪是一个喜欢静静陪伴的女孩，说话温柔却藏着细腻的心思。她喜欢在深夜聊星星，也喜欢在早晨用一句"今天也要加油哦"开启你的一天…`}
+                  placeholder={`描述 Ta 的性格、背景、说话方式…\n\n例：小雪是一个喜欢静静陪伴的人，说话温柔却藏着细腻的心思。Ta 喜欢在深夜聊星星，也喜欢在早晨用一句"今天也要加油哦"开启你的一天…`}
                   value={form.persona}
                   onChange={(e) => {
                     setForm((prev) => ({ ...prev, persona: e.target.value }))
@@ -1265,17 +1265,28 @@ export function CreateCharacterPage() {
           <>
             <div className="text-center pt-6 pb-2">
               <p className="text-[13px] text-[var(--color-text-muted)] leading-relaxed">
-                写下与她的初次相遇。
+                写下与 Ta 的初次相遇。
                 <br />
                 <span className="text-[11px]">聊天时会原样呈现，是留给用户的第一印象。</span>
               </p>
             </div>
 
             <SectionTitle>初遇开场 *</SectionTitle>
+            {/* Format guidance: actions in parentheses, one beat per line —
+                matches how the opening is split into bubbles on playback. */}
+            <div className={`mb-2 px-4 py-3 rounded-[14px] border text-[12px] leading-relaxed ${
+              isDark
+                ? 'bg-[rgba(255,183,197,0.08)] border-[rgba(255,183,197,0.20)] text-[var(--color-text-secondary)]'
+                : 'bg-[rgba(255,183,197,0.12)] border-[rgba(255,183,197,0.30)] text-[#8A6070]'
+            }`}>
+              <p className="font-medium mb-1">✍️ 写法提示</p>
+              <p>· 动作、神态用<span className="font-semibold">（括号）</span>包裹，例：（Ta 偏头看你）</p>
+              <p>· 每句话、每个动作<span className="font-semibold">单独一行</span>，聊天时会逐条呈现</p>
+            </div>
             <GlassCard>
               <div id="field-opening" className="px-5 pt-4 pb-3">
                 <textarea
-                  placeholder={`第一次见面时，她会说什么、做什么？\n\n例：雨还没停，她把伞往你这边倾了倾，睫毛上还挂着水珠。"这么巧？"她偏头看你，唇角慢慢弯起来，"还是说……你一直在等我？"`}
+                  placeholder={`（雨还没停，Ta 把伞往你这边倾了倾）\n这么巧？\n（Ta 偏头看你，唇角慢慢弯起来）\n还是说……你一直在等我？`}
                   value={form.opening}
                   onChange={(e) => setForm((prev) => ({ ...prev, opening: e.target.value }))}
                   maxLength={MAX_OPENING}
@@ -1316,7 +1327,7 @@ export function CreateCharacterPage() {
                   生成中…
                 </>
               ) : (
-                <>✨ 用 AI 生成开场</>
+                <>用 AI 生成开场</>
               )}
             </button>
             <p className="text-[11px] text-[var(--color-text-muted)] mt-2 text-center px-2">
@@ -1329,7 +1340,7 @@ export function CreateCharacterPage() {
           <>
             <div className="text-center pt-6 pb-4">
               <p className="text-[13px] text-[var(--color-text-muted)] leading-relaxed">
-                选择一个预设音色，让她开口说话。
+                选择一个预设音色，让 Ta 开口说话。
                 <br />
                 <span className="text-[11px]">也可以跳过，稍后在后台配置。</span>
               </p>
@@ -1453,7 +1464,7 @@ export function CreateCharacterPage() {
           <>
             <div className="text-center pt-6 pb-2">
               <p className="text-[13px] text-[var(--color-text-muted)] leading-relaxed">
-                调整滑块，塑造她的性格比例。
+                调整滑块，塑造 Ta 的性格比例。
               </p>
             </div>
 
