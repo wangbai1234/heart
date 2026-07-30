@@ -57,6 +57,8 @@ class CharacterDraft(BaseModel, extra="forbid"):
         hard_never_user:    Up to 10 extra hard-never rules from the creator.
         greeting_style:     One of 5 preset emotional register archetypes.
         speech_samples:     Up to 5 example lines that capture the character's voice.
+        opening:            Authored first-encounter scene, played back verbatim (no LLM).
+        intro:              Public profile blurb (display-only, not fed to the model).
         sliders:            Six float knobs (0-1) mapping onto SoulSpec numeric fields.
         locale:             Primary language for generated content (zh/ja/en).
     """
@@ -85,5 +87,14 @@ class CharacterDraft(BaseModel, extra="forbid"):
     # Age bracket the creator picks in the UGC form (e.g. "18-24"). Free-text
     # short label — a public presentation field, kept out of the internal persona.
     age_range: Optional[Annotated[str, Field(max_length=16)]] = None
+    # Authored first-encounter opening (the "作品" played back verbatim on first
+    # chat entry — NEVER a runtime LLM call). Read by ss10_opening.generator via
+    # spec._draft.opening. Presentation/playback field: build_soul_spec_from_draft
+    # does not consume it.
+    opening: Optional[Annotated[str, Field(max_length=2000)]] = None
+    # Public display blurb for the character profile page (shown to users, NOT
+    # fed to the model). Read by routes_characters._derive_profile_presentation.
+    # Falls back to persona/archetype when omitted.
+    intro: Optional[Annotated[str, Field(max_length=500)]] = None
     sliders: SliderSet = Field(default_factory=SliderSet)
     locale: str = "zh"

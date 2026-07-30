@@ -538,6 +538,22 @@ def _derive_content(
     )
 
 
+def _attach_draft(spec: object, draft_dict: dict) -> None:
+    """Attach the raw draft dict onto a SoulSpec as ``_draft`` (SimpleNamespace).
+
+    Mirrors ``registry.load_db_overlay`` so a hot-loaded UGC spec exposes the
+    same authored fields (opening / persona / backstory / tags / greeting_style)
+    that ss10_opening reads. Uses ``object.__setattr__`` to bypass the SoulSpec
+    pydantic ``extra="forbid"`` guard.
+    """
+    from types import SimpleNamespace
+
+    try:
+        object.__setattr__(spec, "_draft", SimpleNamespace(**draft_dict))
+    except Exception as exc:  # noqa: BLE001 — never block create/update on this
+        logger.warning("attach_draft_failed", error=str(exc))
+
+
 class VisibilityUpdate(BaseModel):
     visibility: str  # public | unlisted | private
 
@@ -698,6 +714,12 @@ async def create_character(
     await upsert_content(db, character_id=character_id, **content)
     await db.commit()
 
+    # Attach the raw draft so the opening generator can read the authored
+    # opening (spec._draft.opening) on the very first chat entry — without this,
+    # reload_character registers a spec with no _draft and the authored opening
+    # would only surface after a restart re-ran load_db_overlay.
+    _attach_draft(spec, draft_dict)
+
     # Hot-load into registry (no restart needed)
     reload_character(character_id, spec=spec)
 
@@ -712,6 +734,74 @@ async def create_character(
         "spec_version": spec.spec_version,
         "visibility": "private",
     }
+
+
+class OpeningPreviewRequest(BaseModel):
+    """Draft fields needed to generate a first-encounter opening preview.
+
+    Deliberately loose — the creator has not saved the character yet, so we
+    accept whatever they've typed so far. Only persona is truly required for a
+    usable scene.
+    """
+
+    display_name: str = ""
+    persona: str
+    backstory: str | None = None
+    tags: list[str] = []
+    greeting_style: str = "warm"
+
+
+@router.post("/opening-preview")
+async def preview_opening(
+    body: OpeningPreviewRequest,
+    current_user: TokenData = Depends(get_current_user),
+) -> dict:
+    """Generate a first-encounter opening draft with the MAIN model (creator-facing).
+
+    Returns the text for the creator to accept or edit — it is NOT persisted and
+    creates no character. The saved opening is later played back verbatim on
+    first chat entry with zero runtime LLM calls (ss10_opening.generator). Using
+    the main (high-quality) model here is intentional: this is authoring UI, run
+    once per creation, not the per-user hot path.
+    """
+    persona = (body.persona or "").strip()
+    if len(persona) < 20:
+        raise HTTPException(status_code=422, detail="请先填写人设（至少 20 字）再生成开场")
+
+    from heart.api.wiring import get_model_router
+    from heart.ss10_opening.prompt_builder import build_opening_prompt
+
+    router = get_model_router()
+    if router is None:
+        raise HTTPException(
+            status_code=503,
+            detail="AI 生成暂不可用，请手动填写开场白",
+        )
+
+    messages = build_opening_prompt(
+        display_name=(body.display_name or "").strip() or "这个角色",
+        persona=persona,
+        backstory=(body.backstory or "").strip() or None,
+        tags=list(body.tags or []),
+        greeting_style=body.greeting_style or "warm",
+    )
+
+    try:
+        text_out = await router.call_main(
+            messages=messages,
+            temperature=0.9,
+            max_tokens=600,
+            agent_name="OpeningPreview.ugc",
+        )
+    except Exception as exc:
+        logger.warning("opening_preview_failed", error=str(exc))
+        raise HTTPException(status_code=502, detail="AI 生成失败，请重试或手动填写") from exc
+
+    text_out = (text_out or "").strip()
+    if not text_out:
+        raise HTTPException(status_code=502, detail="AI 生成为空，请重试或手动填写")
+
+    return {"opening": text_out}
 
 
 @router.get("/{character_id}/draft")
@@ -791,6 +881,10 @@ async def update_character(
     )
     await upsert_content(db, character_id=character_id, **content)
     await db.commit()
+
+    # See create_character: keep _draft on the hot-loaded spec so an edited
+    # opening plays back immediately without a restart.
+    _attach_draft(spec, draft_dict)
 
     reload_character(character_id, spec=spec)
     from heart.ss01_soul.character_content import register_content
