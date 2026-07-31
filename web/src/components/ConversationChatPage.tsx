@@ -74,7 +74,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
   const loadCompanions = useCompanionsStore((s) => s.load)
 
   // Right-swipe from left edge → back to chat list
-  useSwipeNavigation({ onRightSwipe: () => navigate('/home') })
+  useSwipeNavigation({ onRightSwipe: () => navigate('/chat') })
 
   const storedCharacterId = useAppStore((s) => s.currentCharacterId)
   const setCharacter = useAppStore((s) => s.setCharacter)

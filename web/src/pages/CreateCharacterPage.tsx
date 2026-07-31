@@ -230,7 +230,7 @@ function SliderRow({ field, value, onChange }: SliderRowProps) {
 
 export function CreateCharacterPage() {
   const navigate = useNavigate()
-  const goBack = useSafeBack('/home')
+  const goBack = useSafeBack('/character')
   const [searchParams] = useSearchParams()
   const { resolvedTheme } = useThemeStore()
   const isDark = resolvedTheme === 'dark'

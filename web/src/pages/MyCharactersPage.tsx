@@ -192,7 +192,7 @@ function MenuButton({
 
 export function MyCharactersPage() {
   const navigate = useNavigate()
-  const goBack = useSafeBack('/home')
+  const goBack = useSafeBack('/character')
   const { characters, loaded, load, setVisibility, disableCharacter } = useCharactersStore()
   const showToast = useToast()
   const { resolvedTheme } = useThemeStore()

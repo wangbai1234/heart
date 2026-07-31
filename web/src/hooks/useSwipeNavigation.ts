@@ -10,7 +10,7 @@ interface SwipeOptions {
   threshold?: number
   /** Maximum starting X (from left edge) for the swipe zone. Default 40. */
   edgeWidth?: number
-  /** Fallback route when history is empty. Default '/home'. */
+  /** Fallback route when history is empty. Default '/character'. */
   fallback?: string
   /** Disabled when true — hook still mounts, just no-ops. */
   disabled?: boolean
@@ -41,7 +41,7 @@ export function useSwipeNavigation({
   onRightSwipe,
   threshold = 60,
   edgeWidth = 40,
-  fallback = '/home',
+  fallback = '/character',
   disabled = false,
   priority = 1,
 }: SwipeOptions = {}) {

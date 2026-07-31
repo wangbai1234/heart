@@ -93,7 +93,7 @@ export function LoginPage() {
   const [restorationGraceEnd, setRestorationGraceEnd] = useState<string | null>(null)
   // After auth, OTP-only users are invited to set a password before we route on.
   const [showSetPassword, setShowSetPassword] = useState(false)
-  const [pendingDest, setPendingDest] = useState<string>('/home')
+  const [pendingDest, setPendingDest] = useState<string>('/character')
   // cooldown is derived from wall-clock; 0 means "not counting"
   const [cooldownEndAt, setCooldownEndAt] = useState<number>(
     snap && snap.cooldownEndAt > now ? snap.cooldownEndAt : 0
@@ -295,7 +295,7 @@ export function LoginPage() {
                 setLoading(true)
                 try {
                   await restoreAccount()
-                  navigate('/home', { replace: true })
+                  navigate('/character', { replace: true })
                 } catch {
                   setToast({ visible: true, message: '恢复失败，请重试' })
                 } finally {
