@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useThemeStore } from '../stores/themeStore'
 import { useScrollRestore } from '../hooks/useScrollRestore'
 import { TabBar } from '../components/ui/TabBar'
+import { Dialog } from '../components/ui/Dialog'
+import { Button } from '../components/ui/Button'
 import {
   resolveCharacterProfile,
   CHARACTER_STYLE_TAGS,
@@ -109,6 +111,20 @@ export function CharacterPage() {
   const [showSearch, setShowSearch] = useState(false)
   const [query, setQuery] = useState('')
   const scrollRef = useScrollRestore()
+
+  // First-arrival compliance reminder (18+ / community guidelines). Shows once
+  // per device after the user lands on the discovery page (i.e. right after
+  // registration + profile setup auto-redirects here). Independent one-time flag.
+  const [showNotice, setShowNotice] = useState(false)
+  useEffect(() => {
+    try {
+      if (localStorage.getItem('yuoyuo-compliance-notice') !== '1') setShowNotice(true)
+    } catch { /* storage unavailable — skip the reminder rather than block entry */ }
+  }, [])
+  const dismissNotice = () => {
+    setShowNotice(false)
+    try { localStorage.setItem('yuoyuo-compliance-notice', '1') } catch { /* ignore */ }
+  }
 
   useEffect(() => {
     void loadCharacters()
@@ -354,6 +370,30 @@ export function CharacterPage() {
 
         <TabBar />
       </div>
+
+      <Dialog
+        open={showNotice}
+        onClose={dismissNotice}
+        title="温馨提示"
+        actions={
+          <Button variant="primary" size="sm" className="flex-1" onClick={dismissNotice}>
+            我已满18岁，知道了
+          </Button>
+        }
+      >
+        <p className="leading-[1.7] text-left">
+          yuoyuo 是一款面向<span className="font-semibold text-[var(--color-ink)]">成年人</span>的 AI 情感陪伴产品，
+          <span className="font-semibold text-[var(--color-ink)]">仅供年满 18 周岁的用户使用</span>。
+        </p>
+        <p className="leading-[1.7] text-left mt-2">
+          所有角色均为虚构，回复由 AI 生成。聊天时请<span className="font-semibold text-[var(--color-ink)]">遵守社区公约</span>，
+          不得诱导生成违法或不良内容。
+        </p>
+        <p className="leading-[1.7] text-left mt-2 text-[var(--color-text-muted)]">
+          继续使用即表示你已阅读并同意
+          <Link to="/legal/age" className="text-[var(--color-primary)]">《年满18周岁确认》</Link>。
+        </p>
+      </Dialog>
     </div>
   )
 }

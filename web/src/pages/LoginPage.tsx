@@ -7,7 +7,6 @@ import { PasswordInput } from '../components/ui/PasswordInput'
 import { OTPInput } from '../components/ui/OTPInput'
 import { Toast } from '../components/ui/Toast'
 import { SetPasswordModal } from '../components/SetPasswordModal'
-import { Dialog } from '../components/ui/Dialog'
 import {
   requestOtp,
   verifyOtp,
@@ -82,8 +81,6 @@ export function LoginPage() {
     try { return localStorage.getItem('yuoyuo-age-confirmed') === '1' } catch { return false }
   })()
   const [ageConfirmed, setAgeConfirmed] = useState(alreadyConfirmedAge)
-  // First-time (unconfirmed) visitors get an explicit 18+ gate dialog on entry.
-  const [showAgeGate, setShowAgeGate] = useState(!alreadyConfirmedAge)
   const confirmAge = useCallback((checked: boolean) => {
     setAgeConfirmed(checked)
     try {
@@ -454,37 +451,6 @@ export function LoginPage() {
 
       <Toast visible={toast.visible} message={toast.message} onDismiss={() => setToast({ visible: false, message: '' })} />
 
-      {/* First-entry reminder — surfaces the 18+ requirement and the
-          community-guidelines reminder for AI chat. Dismissible (tap backdrop
-          or the button); dismissing records the confirmation. */}
-      <Dialog
-        open={showAgeGate}
-        onClose={() => { confirmAge(true); setShowAgeGate(false) }}
-        title="温馨提示"
-        actions={
-          <Button
-            variant="primary"
-            size="sm"
-            className="flex-1"
-            onClick={() => { confirmAge(true); setShowAgeGate(false) }}
-          >
-            我已满18岁，知道了
-          </Button>
-        }
-      >
-        <p className="leading-[1.7] text-left">
-          yuoyuo 是一款面向<span className="font-semibold text-[var(--color-ink)]">成年人</span>的 AI 情感陪伴产品，
-          <span className="font-semibold text-[var(--color-ink)]">仅供年满 18 周岁的用户使用</span>。
-        </p>
-        <p className="leading-[1.7] text-left mt-2">
-          所有角色均为虚构，回复由 AI 生成。聊天时请<span className="font-semibold text-[var(--color-ink)]">遵守社区公约</span>，
-          不得诱导生成违法或不良内容。
-        </p>
-        <p className="leading-[1.7] text-left mt-2 text-[var(--color-text-muted)]">
-          继续使用即表示你已阅读并同意
-          <Link to="/legal/age" className="text-[var(--color-primary)]">《年满18周岁确认》</Link>。
-        </p>
-      </Dialog>
     </div>
   )
 }
