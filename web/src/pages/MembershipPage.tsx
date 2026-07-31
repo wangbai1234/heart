@@ -33,6 +33,7 @@ export function MembershipPage() {
   const membership = useMembershipStore()
   const [pricing, setPricing] = useState<Pricing | null>(null)
   const [loadError, setLoadError] = useState(false)
+  const [selectedTier, setSelectedTier] = useState<string>('plus')
 
   const bgImage = resolvedTheme === 'dark'
     ? '/assets/backgrounds/暗色聊天背景图.webp'
@@ -48,7 +49,9 @@ export function MembershipPage() {
   const expiryLabel = formatExpiry(membership.expiresAt)
   const tiers = pricing?.membership_tiers ?? []
 
-  const paidBindingTier: MembershipTierInfo | undefined = tiers.find((t) => t.tier === 'plus')
+  const paidBindingTier: MembershipTierInfo | undefined =
+    tiers.find((t) => t.tier === selectedTier && t.tier !== 'free') ??
+    tiers.find((t) => t.tier === 'plus')
 
   return (
     <div className="relative w-full h-full flex flex-col overflow-hidden">
@@ -99,20 +102,28 @@ export function MembershipPage() {
         <div className="space-y-4">
           {tiers.map((t) => {
             const isCurrent = t.tier === currentTier
+            const isPaid = t.tier !== 'free'
+            const isSelected = isPaid && t.tier === selectedTier
             const accent = TIER_ACCENT[t.tier] ?? 'var(--color-ink)'
             return (
               <div
                 key={t.tier}
-                className="bg-[var(--color-glass-card)] backdrop-blur-[20px] rounded-[20px] shadow-[var(--shadow-card)] p-5"
-                style={{ border: isCurrent ? `2px solid ${accent}` : '1px solid var(--color-border-glass)' }}
+                onClick={isPaid ? () => setSelectedTier(t.tier) : undefined}
+                role={isPaid ? 'button' : undefined}
+                className={`bg-[var(--color-glass-card)] backdrop-blur-[20px] rounded-[20px] shadow-[var(--shadow-card)] p-5${isPaid ? ' cursor-pointer active:scale-[0.99] transition-transform' : ''}`}
+                style={{ border: isSelected ? `2px solid ${accent}` : '1px solid var(--color-border-glass)' }}
               >
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-[18px] font-semibold" style={{ color: accent }}>{t.label}</span>
-                  {isCurrent && (
+                  {isCurrent ? (
                     <span className="text-[11px] font-medium px-2 py-[2px] rounded-full text-[var(--color-text-on-primary)]" style={{ backgroundColor: accent }}>
                       当前
                     </span>
-                  )}
+                  ) : isSelected ? (
+                    <span className="text-[11px] font-medium px-2 py-[2px] rounded-full text-[var(--color-text-on-primary)]" style={{ backgroundColor: accent }}>
+                      已选
+                    </span>
+                  ) : null}
                 </div>
                 <div className="flex items-baseline gap-1 mb-3">
                   <span className="text-[26px] font-bold text-[var(--color-ink)]">
@@ -148,6 +159,7 @@ export function MembershipPage() {
             <AfdianBindingCard
               bindingCode={membership.bindingCode}
               afdianUrl={pricing.afdian_url}
+              checkoutUrl={paidBindingTier?.checkout_url}
               skuHint={paidBindingTier?.sku ? SKU_LABELS[paidBindingTier.sku] ?? paidBindingTier.sku : undefined}
             />
             <p className="text-center text-[12px] text-[var(--color-text-muted)] mt-3">

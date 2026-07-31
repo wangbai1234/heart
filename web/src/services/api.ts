@@ -381,6 +381,8 @@ export interface MembershipTierInfo {
   tts: string[]
   clone: string[]
   monthly_grant: number
+  /** 爱发电 order/create 深链（未配置时为 null）；前端会追加 ?custom_order_id=<绑定码>。 */
+  checkout_url?: string | null
 }
 
 export interface ShopItem {
@@ -389,6 +391,8 @@ export interface ShopItem {
   price: number // ¥
   credits: number // 到账总币数（已含 bonus）
   bonus: number
+  /** 爱发电 order/create 深链（未配置时为 null）；前端会追加 ?custom_order_id=<绑定码>。 */
+  checkout_url?: string | null
 }
 
 export interface Pricing {

@@ -53,8 +53,9 @@ async def afdian_webhook(
 ) -> dict:
     """Handle Afdian order webhook: record for audit + auto-fulfill.
 
-    Fulfillment (grant membership/coins) is driven by a binding code the user
-    embeds in the Afdian order remark — see heart.afdian.fulfillment.
+    Fulfillment (grant membership/coins) resolves the user by the binding code
+    carried in the order's ``custom_order_id`` (URL param, preferred) or, failing
+    that, embedded in the ``remark`` — see heart.afdian.fulfillment.
     """
     if not _authenticate(request):
         logger.warning("afdian_webhook_unauthorized")
@@ -84,6 +85,7 @@ async def afdian_webhook(
 
     plan_id = str(order.get("plan_id") or "")
     remark = str(order.get("remark") or "")
+    custom_order_id = str(order.get("custom_order_id") or "")
 
     from heart.afdian.fulfillment import fulfill_order, record_order
 
@@ -99,9 +101,12 @@ async def afdian_webhook(
 
     logger.info("afdian_webhook_received", out_trade_no=out_trade_no, plan_id=plan_id)
 
-    # Auto-fulfill: match remark binding code → grant membership/coins.
+    # Auto-fulfill: match custom_order_id (URL param) or remark binding code
+    # → grant membership/coins.
     try:
-        await fulfill_order(db, out_trade_no, plan_id, remark, order.get("sku_detail"))
+        await fulfill_order(
+            db, out_trade_no, plan_id, remark, order.get("sku_detail"), custom_order_id
+        )
     except Exception:
         logger.exception("afdian_auto_fulfill_error", out_trade_no=out_trade_no)
         # Ack anyway — admin can reconcile unmatched/failed orders manually.

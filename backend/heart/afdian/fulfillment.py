@@ -95,8 +95,8 @@ async def record_order(db: AsyncSession, order: dict, raw_body: object) -> str:
         text(
             """
             INSERT INTO afdian_orders
-                (out_trade_no, plan_id, sku_detail, total_amount, remark, raw_payload)
-            VALUES (:otn, :plan, :sku, :amount, :remark, :raw)
+                (out_trade_no, plan_id, sku_detail, total_amount, remark, custom_order_id, raw_payload)
+            VALUES (:otn, :plan, :sku, :amount, :remark, :custom_id, :raw)
             ON CONFLICT (out_trade_no) DO NOTHING
             """
         ),
@@ -106,6 +106,7 @@ async def record_order(db: AsyncSession, order: dict, raw_body: object) -> str:
             "sku": json.dumps(order.get("sku_detail")),
             "amount": _to_float(order.get("total_amount")),
             "remark": str(order.get("remark") or ""),
+            "custom_id": str(order.get("custom_order_id") or ""),
             "raw": json.dumps(raw_body),
         },
     )
@@ -138,7 +139,38 @@ async def reconcile_order(db: AsyncSession, out_trade_no: str) -> tuple[bool, st
         str(order.get("plan_id") or ""),
         str(order.get("remark") or ""),
         order.get("sku_detail"),
+        str(order.get("custom_order_id") or ""),
     )
+
+
+async def resolve_user_by_custom_order_id(
+    db: AsyncSession, custom_order_id: str
+) -> Optional[uuid.UUID]:
+    """Resolve user by exact match on custom_order_id against binding codes.
+
+    Afdian's order/create URL can carry ?custom_order_id=<code>, which the webhook
+    echoes back. This does an exact case-insensitive match against active binding
+    codes. Returns user_id if found + not expired + unused, else None.
+    """
+    if not custom_order_id:
+        return None
+
+    result = await db.execute(
+        text(
+            """
+            SELECT user_id FROM user_binding_codes
+            WHERE UPPER(code) = UPPER(:custom_id)
+              AND (expires_at IS NULL OR expires_at > NOW())
+              AND used_at IS NULL
+            LIMIT 1
+            """
+        ),
+        {"custom_id": custom_order_id.strip()},
+    )
+    row = result.fetchone()
+    if row is None:
+        return None
+    return uuid.UUID(str(row[0]))
 
 
 async def resolve_user_by_binding_code(db: AsyncSession, remark: str) -> Optional[uuid.UUID]:
@@ -176,12 +208,15 @@ async def fulfill_order(
     plan_id: str,
     remark: str,
     sku_detail: object = None,
+    custom_order_id: str = "",
 ) -> tuple[bool, str]:
     """Fulfill one afdian order idempotently.
 
     ``plan_id`` matches 方案 (memberships); ``sku_detail`` carries the 商品
-    (coin-pack) sku_id(s). Returns (success, message). Already-fulfilled orders
-    are silently skipped (idempotent).
+    (coin-pack) sku_id(s). ``custom_order_id`` is the afdian URL param echoed
+    back — tried first for exact match; ``remark`` is the fallback fuzzy match.
+    Returns (success, message). Already-fulfilled orders are silently skipped
+    (idempotent).
     """
     # Check already fulfilled
     row = await db.execute(
@@ -192,7 +227,11 @@ async def fulfill_order(
     if existing and existing[0] is not None:
         return True, "already_fulfilled"
 
-    user_id = await resolve_user_by_binding_code(db, remark)
+    # Resolve user: try custom_order_id first (exact match), fallback to remark (fuzzy)
+    user_id = await resolve_user_by_custom_order_id(db, custom_order_id)
+    if user_id is None:
+        user_id = await resolve_user_by_binding_code(db, remark)
+
     if user_id is None:
         await db.execute(
             text(
@@ -205,7 +244,12 @@ async def fulfill_order(
             {"otn": out_trade_no},
         )
         await db.commit()
-        logger.warning("afdian_fulfill_no_user", out_trade_no=out_trade_no, remark=remark)
+        logger.warning(
+            "afdian_fulfill_no_user",
+            out_trade_no=out_trade_no,
+            custom_order_id=custom_order_id,
+            remark=remark,
+        )
         return False, "no_binding_code_match"
 
     sku_map = _parse_sku_map()
@@ -246,24 +290,27 @@ async def fulfill_order(
             ),
             {"otn": out_trade_no, "uid": user_id},
         )
-        # Mark binding code as used
-        await db.execute(
-            text(
-                """
-                UPDATE user_binding_codes
-                SET used_at = NOW()
-                WHERE :remark ILIKE '%' || code || '%'
-                  AND used_at IS NULL
-                """
-            ),
-            {"remark": remark},
-        )
+        # Mark binding code as used (works for both exact custom_order_id and fuzzy remark match)
+        code_to_mark = custom_order_id if custom_order_id else remark
+        if code_to_mark:
+            await db.execute(
+                text(
+                    """
+                    UPDATE user_binding_codes
+                    SET used_at = NOW()
+                    WHERE (UPPER(code) = UPPER(:code) OR :code ILIKE '%' || code || '%')
+                      AND used_at IS NULL
+                    """
+                ),
+                {"code": code_to_mark},
+            )
         await db.commit()
         logger.info(
             "afdian_fulfilled",
             out_trade_no=out_trade_no,
             user_id=str(user_id),
             ftype=ftype,
+            via="custom_order_id" if custom_order_id else "remark",
         )
         return True, "ok"
     except Exception:

@@ -112,9 +112,27 @@ async def redeem_code(
         ) from None
 
 
+def _parse_checkout_urls() -> dict:
+    """Parse AFDIAN_CHECKOUT_URLS (sku key → order/create deep link)."""
+    import json
+
+    try:
+        parsed = json.loads(settings.afdian_checkout_urls)
+        return parsed if isinstance(parsed, dict) else {}
+    except Exception:
+        logger.exception("afdian_checkout_urls_parse_failed")
+        return {}
+
+
 @router.get("/pricing")
 async def pricing() -> dict:
-    """Return current pricing per api_contract.md §1.1."""
+    """Return current pricing per api_contract.md §1.1.
+
+    Each membership tier / shop pack carries an optional ``checkout_url`` — the
+    afdian order/create deep link for that sku (from AFDIAN_CHECKOUT_URLS). The
+    frontend appends ?custom_order_id=<binding_code> so orders auto-fulfill
+    without the user manually filling a remark. Null when unconfigured.
+    """
     from heart.billing.pricing import action_cost_fen, llm_cost_fen, tts_cost_fen
     from heart.membership import get_entitlements
 
@@ -122,7 +140,7 @@ async def pricing() -> dict:
     plus_ent = get_entitlements("plus")
     immersive_ent = get_entitlements("immersive")
 
-    return {
+    result: dict = {
         "signup_grant": settings.signup_grant_credits // 100,
         "afdian_url": settings.afdian_sponsor_url,
         # Model pricing (cost in display coins per LLM turn)
@@ -231,3 +249,10 @@ async def pricing() -> dict:
             },
         ],
     }
+
+    # Inject per-sku afdian checkout deep links (null when unconfigured).
+    checkout_urls = _parse_checkout_urls()
+    for item in result["membership_tiers"] + result["shop"]:
+        item["checkout_url"] = checkout_urls.get(item.get("sku") or "") or None
+
+    return result
