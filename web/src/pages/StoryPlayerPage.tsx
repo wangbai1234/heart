@@ -94,6 +94,13 @@ export function StoryPlayerPage() {
         onBack={() => navigate('/explore')}
       />
 
+      {/* AI-generated content disclaimer */}
+      <div className="relative z-20 flex items-center justify-center py-2 px-4 bg-[var(--color-surface)] border-b border-[var(--color-divider)]">
+        <span className="text-[11px] text-[var(--color-text-muted)] text-center">
+          内容由 AI 生成，对话请遵守社区公约
+        </span>
+      </div>
+
       <div
         ref={scrollRef}
         className="relative z-10 flex-1 overflow-y-auto px-4"

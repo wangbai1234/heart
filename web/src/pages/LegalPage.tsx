@@ -9,7 +9,7 @@ export function LegalPage() {
   const [content, setContent] = useState('')
 
   useEffect(() => {
-    const file = type === 'privacy' ? 'privacy.md' : 'terms.md'
+    const file = type === 'privacy' ? 'privacy.md' : type === 'age' ? 'age.md' : 'terms.md'
     fetch(`/legal/${file}`)
       .then((r) => r.text())
       .then((text) => {
@@ -19,7 +19,7 @@ export function LegalPage() {
       .catch(() => setContent('加载失败'))
   }, [type])
 
-  const title = type === 'privacy' ? '隐私政策' : '用户协议'
+  const title = type === 'privacy' ? '隐私政策' : type === 'age' ? '年满18周岁确认' : '用户协议'
 
   return (
     <div className="w-full h-full flex flex-col" style={{ background: 'var(--color-bg)' }}>

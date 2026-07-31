@@ -663,6 +663,13 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
         </button>
       </header>
 
+      {/* AI-generated content disclaimer */}
+      <div className="relative z-20 flex items-center justify-center py-2 px-4 bg-[var(--color-surface)] border-b border-[var(--color-divider)]">
+        <span className="text-[11px] text-[var(--color-text-muted)] text-center">
+          内容由 AI 生成，对话请遵守社区公约
+        </span>
+      </div>
+
       {/* 剧情邀约卡（Wave 3）— DISABLED 2026-07-24：角色↔剧情关联功能已暂停。
           恢复：取消 import、hookDismissed state 与下方注释即可。
       {currentCompanion?.available_story_hook &&

@@ -14,7 +14,6 @@ import {
 } from '../data/uiContent'
 import { useCharactersStore } from '../stores/charactersStore'
 import { useCompanionsStore } from '../stores/companionsStore'
-import { stageWithIntimacy, isColdWar } from '../utils/relationship'
 import type { CompanionDTO } from '../services/api'
 
 /** Visibility badge config for owned UGC character cards. */
@@ -360,9 +359,8 @@ export function CharacterPage() {
 }
 
 function DiscoveryCard({ item, heatMap, onOpen }: { item: GridItem; heatMap: Map<string, number>; onOpen: () => void }) {
-  const { profile, isOwner, companion, visibility } = item
+  const { profile, isOwner, visibility } = item
   const tags = profile.tags ?? []
-  const chatted = !!companion && companion.companion_status !== 'locked'
   const hook = profile.tagline || profile.summary || ''
   const virtualHeat = heatMap.get(item.id)
 
@@ -393,15 +391,14 @@ function DiscoveryCard({ item, heatMap, onOpen }: { item: GridItem; heatMap: Map
           </span>
         )}
 
-        {/* intimacy badge (chatted only) — unread lives on the messages surface,
-            not the browse catalog, so we intentionally don't show it here. */}
-        {chatted && (
+        {/* intimacy badge (chatted only) — hidden per product decision 2026-07-29 */}
+        {/* {chatted && (
           <span className="absolute top-2 right-2 inline-flex h-[22px] items-center rounded-full bg-[var(--color-primary)] px-2 text-[11px] font-medium text-white shadow-[var(--shadow-soft)]">
             {isColdWar(companion!.relationship_stage)
               ? '闹别扭'
               : stageWithIntimacy(companion!.relationship_stage, companion!.intimacy)}
           </span>
-        )}
+        )} */}
 
         {/* name + hook + tags overlay */}
         <div className="absolute inset-x-0 bottom-0 p-2.5">
@@ -410,7 +407,7 @@ function DiscoveryCard({ item, heatMap, onOpen }: { item: GridItem; heatMap: Map
           {/* Heat indicator (editorial overrides + virtual value, preserves real ranking) */}
           {virtualHeat !== undefined && (
             <div className="mt-1 flex items-center gap-1">
-              <span className="text-[11px] text-white/85">🔥</span>
+              <svg className="text-white/85" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>
               <span className="text-[11px] text-white/85">{formatPlays(virtualHeat)}</span>
             </div>
           )}

@@ -316,6 +316,16 @@ CI / lint / type-check 报错时按以下四档判定，不同档位不同处置
 - ❌ **`except Exception:` 不 log 不 re-raise 直接 pass**（欺骗式静默）
 - ❌ **dev server 运行中切分支**（hot-reload + 旧 schema = 撒谎式绿灯）
 - ❌ **未跑 `alembic current` 就 push 涉及 DB 的 PR**
+- ❌ **在 UI 文案 / 界面元素里使用 emoji**（土，见下「UI 文案规范」）
+
+---
+
+## 🎨 UI 文案规范（硬性）
+
+- **禁止在任何面向用户的 UI 文案、界面元素、按钮、提示、声明、banner 中使用 emoji**（如 ⚠️ 🎉 🔞 😔 👋 等）。emoji 显得土、不专业，一律用纯文字表达。
+- 需要强调时用字重 / 颜色 / 排版，不用 emoji。
+- 例外：仅当产品设计稿或用户明确要求时才可用；否则默认不带。
+- 本规则适用于新写代码；发现存量 UI 文案里的 emoji 顺手清理。
 
 ---
 
