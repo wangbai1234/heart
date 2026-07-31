@@ -71,7 +71,7 @@ export function ProfileEditPage() {
       } else {
         setUser({ display_name: trimmedName, gender, birthdate, age_verified: res.age_verified === true })
         setToast({ visible: true, message: '保存成功' })
-        setTimeout(() => navigate('/home', { replace: true }), 800)
+        setTimeout(() => navigate('/character', { replace: true }), 800)
       }
     } catch (err: any) {
       setToast({ visible: true, message: err.message || '保存失败' })

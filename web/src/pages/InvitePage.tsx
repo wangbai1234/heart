@@ -6,7 +6,7 @@ import { Skeleton } from '../components/ui/Skeleton'
 import { useSafeBack } from '../hooks/useSafeBack'
 
 export function InvitePage() {
-  const goBack = useSafeBack('/home')
+  const goBack = useSafeBack('/character')
   const { resolvedTheme } = useThemeStore()
   const showToast = useToastStore((s) => s.show)
   const [status, setStatus] = useState<InviteStatus | null>(null)

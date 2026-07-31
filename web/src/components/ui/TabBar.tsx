@@ -8,33 +8,11 @@ interface TabItem {
   icon: (active: boolean) => React.ReactNode
 }
 
-const tabs: TabItem[] = [
-  {
-    id: 'home',
-    label: '首页',
-    path: '/home',
-    icon: (active) => (
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-        <path
-          d="M3 9.5L12 3l9 6.5V20a1 1 0 0 1-1 1H15v-6H9v6H4a1 1 0 0 1-1-1V9.5Z"
-          fill={active ? '#FFB7C5' : 'none'}
-          stroke={active ? '#FFB7C5' : '#8E8E9A'}
-          strokeWidth="1.7"
-          strokeLinejoin="round"
-        />
-      </svg>
-    ),
-  },
-  {
-    id: 'chat',
-    label: '消息',
-    path: '/chat',
-    icon: (active) => (
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={active ? '#FFB7C5' : '#8E8E9A'} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10Z" />
-      </svg>
-    ),
-  },
+// Regular tabs flank the raised center 创作 button. Order (per product
+// direction 2026-07-31, Nimoo-style): 角色 · 探索 · [创作] · 消息 · 设置.
+// The former 首页 tab was removed — the home page carried no unique function,
+// so the app now lands directly on 角色 after login.
+const leftTabs: TabItem[] = [
   {
     id: 'character',
     label: '角色',
@@ -57,6 +35,19 @@ const tabs: TabItem[] = [
       </svg>
     ),
   },
+]
+
+const rightTabs: TabItem[] = [
+  {
+    id: 'chat',
+    label: '消息',
+    path: '/chat',
+    icon: (active) => (
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={active ? '#FFB7C5' : '#8E8E9A'} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10Z" />
+      </svg>
+    ),
+  },
   {
     id: 'settings',
     label: '设置',
@@ -70,11 +61,29 @@ const tabs: TabItem[] = [
   },
 ]
 
+function TabButton({ tab, active, onClick }: { tab: TabItem; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex-1 flex flex-col items-center gap-[2px] py-[10px] active:scale-90 transition-transform"
+    >
+      {tab.icon(active)}
+      <span className={`text-[10px] ${active ? 'text-[var(--color-tab-active)]' : 'text-[#8E8E9A]'}`}>
+        {tab.label}
+      </span>
+      {active && <div className="w-1 h-1 rounded-full bg-[var(--color-tab-active)]" />}
+    </button>
+  )
+}
+
 export function TabBar() {
   const navigate = useNavigate()
   const location = useLocation()
   const { resolvedTheme } = useThemeStore()
   const isDark = resolvedTheme === 'dark'
+  const isActive = (path: string) =>
+    location.pathname === path || location.pathname.startsWith(path + '/')
+  const createActive = isActive('/create')
 
   return (
     <div
@@ -85,25 +94,34 @@ export function TabBar() {
       }`}
       style={{ marginBottom: 'calc(16px + var(--safe-bottom))' }}
     >
-      <div className="flex px-2">
-        {tabs.map((tab) => {
-          const active = location.pathname === tab.path || location.pathname.startsWith(tab.path + '/')
-          return (
-            <button
-              key={tab.id}
-              onClick={() => navigate(tab.path)}
-              className="flex-1 flex flex-col items-center gap-[2px] py-[10px] active:scale-90 transition-transform"
-            >
-              {tab.icon(active)}
-              <span className={`text-[10px] ${active ? 'text-[var(--color-tab-active)]' : 'text-[#8E8E9A]'}`}>
-                {tab.label}
-              </span>
-              {active && (
-                <div className="w-1 h-1 rounded-full bg-[var(--color-tab-active)]" />
-              )}
-            </button>
-          )
-        })}
+      <div className="flex items-end px-2">
+        {leftTabs.map((tab) => (
+          <TabButton key={tab.id} tab={tab} active={isActive(tab.path)} onClick={() => navigate(tab.path)} />
+        ))}
+
+        {/* Raised center 创作 button — the primary Nimoo-style entry to the
+            creation hub. Floats above the bar so it reads as the focal action. */}
+        <div className="flex-1 flex flex-col items-center">
+          <button
+            onClick={() => navigate('/create')}
+            aria-label="创作"
+            className={`-mt-[22px] w-[56px] h-[56px] rounded-full flex items-center justify-center bg-gradient-to-br from-[#FFB7C5] to-[#FF8FAB] shadow-[0_8px_20px_-4px_rgba(255,143,171,0.55)] ring-[3px] active:scale-90 transition-transform ${
+              isDark ? 'ring-[rgba(26,26,46,0.85)]' : 'ring-[rgba(255,248,243,0.90)]'
+            }`}
+          >
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth="2.4" strokeLinecap="round">
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+          </button>
+          <span className={`mt-[3px] text-[10px] ${createActive ? 'text-[var(--color-tab-active)]' : 'text-[#8E8E9A]'}`}>
+            创作
+          </span>
+        </div>
+
+        {rightTabs.map((tab) => (
+          <TabButton key={tab.id} tab={tab} active={isActive(tab.path)} onClick={() => navigate(tab.path)} />
+        ))}
       </div>
     </div>
   )

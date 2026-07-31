@@ -8,7 +8,6 @@ import { LoginPage } from './pages/LoginPage'
 import { RegisterPage } from './pages/RegisterPage'
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage'
 import { ChangePasswordPage } from './pages/ChangePasswordPage'
-import { HomePage } from './pages/HomePage'
 import { ChatInboxPage } from './pages/ChatInboxPage'
 import { ChatLightPage } from './pages/ChatLightPage'
 import { ChatDarkPage } from './pages/ChatDarkPage'
@@ -27,6 +26,7 @@ import { LegalPage } from './pages/LegalPage'
 import { UIStatePreviewPage } from './pages/UIStatePreviewPage'
 import { CreateCharacterPage } from './pages/CreateCharacterPage'
 import { MyCharactersPage } from './pages/MyCharactersPage'
+import { CreateHubPage } from './pages/CreateHubPage'
 import { ExplorePage } from './pages/ExplorePage'
 import { ScenarioDetailPage } from './pages/ScenarioDetailPage'
 import { StoryPlayerPage } from './pages/StoryPlayerPage'
@@ -48,11 +48,12 @@ function ChatConversationRouter() {
 
 // Catch-all target. Unknown routes previously all bounced to /splash, which
 // re-triggered the splash timer chain. For authenticated sessions we jump
-// directly to /home so a stray unknown path can never fight the SplashPage
-// timer over which route wins (TEST_REPORT_20260712 §7).
+// directly to /character (the new landing page after removing /home) so a
+// stray unknown path can never fight the SplashPage timer over which route
+// wins (TEST_REPORT_20260712 §7).
 function NotFoundRedirect(): ReactElement {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
-  return <Navigate to={isAuthenticated() ? '/home' : '/splash'} replace />
+  return <Navigate to={isAuthenticated() ? '/character' : '/splash'} replace />
 }
 
 const SKIP_SAVE_ROUTES = new Set(['/splash', '/login', '/register', '/forgot-password', '/redeem', '/age-gate', '/'])
@@ -138,7 +139,8 @@ export function App() {
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/redeem" element={<RedeemPage />} />
-        <Route path="/home" element={<HomePage />} />
+        <Route path="/home" element={<Navigate to="/character" replace />} />
+        <Route path="/create" element={<CreateHubPage />} />
         <Route path="/chat" element={<ChatInboxPage />} />
         <Route path="/chat/:characterId" element={<ChatConversationRouter />} />
         <Route path="/explore" element={<ExplorePage />} />

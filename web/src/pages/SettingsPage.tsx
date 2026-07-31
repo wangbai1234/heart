@@ -20,7 +20,7 @@ import { logout as apiLogout, clearConversations, deleteAccount, exportData } fr
 
 export function SettingsPage() {
   const navigate = useNavigate()
-  const goBack = useSafeBack('/home')
+  const goBack = useSafeBack('/character')
   const { theme, setTheme, resolvedTheme } = useThemeStore()
   const { userAvatar, fontScale, setFontScale, muteStart, muteStartMin, muteEnd, muteEndMin, isMuteNever, setMuteTime, setMuteNever, pushEnabled, setPushEnabled } = useAppStore()
   const user = useAuthStore((s) => s.user)

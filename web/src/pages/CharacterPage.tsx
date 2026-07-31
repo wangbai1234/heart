@@ -5,6 +5,7 @@ import { useScrollRestore } from '../hooks/useScrollRestore'
 import { TabBar } from '../components/ui/TabBar'
 import { Dialog } from '../components/ui/Dialog'
 import { Button } from '../components/ui/Button'
+import { AnnouncementSheet } from '../components/AnnouncementSheet'
 import {
   resolveCharacterProfile,
   CHARACTER_STYLE_TAGS,
@@ -109,6 +110,7 @@ export function CharacterPage() {
 
   const [activeTag, setActiveTag] = useState<string>(DISCOVERY_RECOMMENDED)
   const [showSearch, setShowSearch] = useState(false)
+  const [showAnnounce, setShowAnnounce] = useState(false)
   const [query, setQuery] = useState('')
   const scrollRef = useScrollRestore()
 
@@ -279,13 +281,9 @@ export function CharacterPage() {
       <div className="relative z-10 h-full flex flex-col">
         <div style={{ height: 'var(--safe-top)' }} />
 
-        {/* Navigation bar */}
+        {/* Navigation bar — no back button (角色 is a main tab / landing page).
+            Right side: search toggle + announcement bell (Nimoo-style). */}
         <div className="relative z-20 flex items-center justify-between px-5 h-[44px] shrink-0">
-          <button onClick={() => navigate('/home')} className="w-[44px] h-[44px] -ml-3 flex items-center justify-center">
-            <svg width="12" height="20" viewBox="0 0 12 20" fill="none" stroke="var(--color-ink)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="10,2 2,10 10,18" />
-            </svg>
-          </button>
           <div className="flex-1" />
           <div className="flex items-center gap-2">
             <button
@@ -301,19 +299,13 @@ export function CharacterPage() {
               </svg>
             </button>
             <button
-              onClick={() => navigate('/my-characters')}
-              className="h-[34px] px-3 rounded-full bg-[var(--color-glass-55)] backdrop-blur-[12px] border border-[var(--color-border-glass)] text-[13px] text-[var(--color-primary)] font-medium active:scale-[0.96] transition-transform"
-            >
-              我的角色
-            </button>
-            <button
-              onClick={() => navigate('/characters/new')}
-              aria-label="创建角色"
+              onClick={() => setShowAnnounce(true)}
+              aria-label="公告"
               className="w-[34px] h-[34px] rounded-full bg-[var(--color-glass-55)] backdrop-blur-[12px] border border-[var(--color-border-glass)] flex items-center justify-center text-[var(--color-primary)] active:scale-[0.96] transition-transform"
             >
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                <line x1="7" y1="1" x2="7" y2="13" />
-                <line x1="1" y1="7" x2="13" y2="7" />
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M8 2.5a3 3 0 0 0-3 3v.9A5.25 5.25 0 0 1 3.2 10.5L2 11.5v1.25h12v-1.25l-1.2-1a5.25 5.25 0 0 1-1.8-4.1v-.9a3 3 0 0 0-3-3Z" />
+                <path d="M6.5 14a1.5 1.5 0 0 0 3 0" />
               </svg>
             </button>
           </div>
@@ -394,6 +386,8 @@ export function CharacterPage() {
           <Link to="/legal/age" className="text-[var(--color-primary)]">《年满18周岁确认》</Link>。
         </p>
       </Dialog>
+
+      <AnnouncementSheet open={showAnnounce} onClose={() => setShowAnnounce(false)} />
     </div>
   )
 }

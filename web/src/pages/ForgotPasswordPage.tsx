@@ -91,7 +91,7 @@ export function ForgotPasswordPage() {
       showToast('密码已重置', 'success')
       setTimeout(() => {
         if (res.needs_profile) navigate('/settings/profile', { replace: true })
-        else navigate('/home', { replace: true })
+        else navigate('/character', { replace: true })
       }, 600)
     } catch (err: unknown) {
       showToast(err instanceof Error ? err.message : '重置失败，请重试', 'error')
