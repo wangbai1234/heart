@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useThemeStore } from '../stores/themeStore'
 import { useScrollRestore } from '../hooks/useScrollRestore'
 import { TabBar } from '../components/ui/TabBar'
+import { Dialog } from '../components/ui/Dialog'
+import { Button } from '../components/ui/Button'
 import {
   resolveCharacterProfile,
   CHARACTER_STYLE_TAGS,
@@ -14,7 +16,6 @@ import {
 } from '../data/uiContent'
 import { useCharactersStore } from '../stores/charactersStore'
 import { useCompanionsStore } from '../stores/companionsStore'
-import { stageWithIntimacy, isColdWar } from '../utils/relationship'
 import type { CompanionDTO } from '../services/api'
 
 /** Visibility badge config for owned UGC character cards. */
@@ -110,6 +111,20 @@ export function CharacterPage() {
   const [showSearch, setShowSearch] = useState(false)
   const [query, setQuery] = useState('')
   const scrollRef = useScrollRestore()
+
+  // First-arrival compliance reminder (18+ / community guidelines). Shows once
+  // per device after the user lands on the discovery page (i.e. right after
+  // registration + profile setup auto-redirects here). Independent one-time flag.
+  const [showNotice, setShowNotice] = useState(false)
+  useEffect(() => {
+    try {
+      if (localStorage.getItem('yuoyuo-compliance-notice') !== '1') setShowNotice(true)
+    } catch { /* storage unavailable — skip the reminder rather than block entry */ }
+  }, [])
+  const dismissNotice = () => {
+    setShowNotice(false)
+    try { localStorage.setItem('yuoyuo-compliance-notice', '1') } catch { /* ignore */ }
+  }
 
   useEffect(() => {
     void loadCharacters()
@@ -355,14 +370,37 @@ export function CharacterPage() {
 
         <TabBar />
       </div>
+
+      <Dialog
+        open={showNotice}
+        onClose={dismissNotice}
+        title="温馨提示"
+        actions={
+          <Button variant="primary" size="sm" className="flex-1" onClick={dismissNotice}>
+            我已满18岁，知道了
+          </Button>
+        }
+      >
+        <p className="leading-[1.7] text-left">
+          yuoyuo 是一款面向<span className="font-semibold text-[var(--color-ink)]">成年人</span>的 AI 情感陪伴产品，
+          <span className="font-semibold text-[var(--color-ink)]">仅供年满 18 周岁的用户使用</span>。
+        </p>
+        <p className="leading-[1.7] text-left mt-2">
+          所有角色均为虚构，回复由 AI 生成。聊天时请<span className="font-semibold text-[var(--color-ink)]">遵守社区公约</span>，
+          不得诱导生成违法或不良内容。
+        </p>
+        <p className="leading-[1.7] text-left mt-2 text-[var(--color-text-muted)]">
+          继续使用即表示你已阅读并同意
+          <Link to="/legal/age" className="text-[var(--color-primary)]">《年满18周岁确认》</Link>。
+        </p>
+      </Dialog>
     </div>
   )
 }
 
 function DiscoveryCard({ item, heatMap, onOpen }: { item: GridItem; heatMap: Map<string, number>; onOpen: () => void }) {
-  const { profile, isOwner, companion, visibility } = item
+  const { profile, isOwner, visibility } = item
   const tags = profile.tags ?? []
-  const chatted = !!companion && companion.companion_status !== 'locked'
   const hook = profile.tagline || profile.summary || ''
   const virtualHeat = heatMap.get(item.id)
 
@@ -393,15 +431,14 @@ function DiscoveryCard({ item, heatMap, onOpen }: { item: GridItem; heatMap: Map
           </span>
         )}
 
-        {/* intimacy badge (chatted only) — unread lives on the messages surface,
-            not the browse catalog, so we intentionally don't show it here. */}
-        {chatted && (
+        {/* intimacy badge (chatted only) — hidden per product decision 2026-07-29 */}
+        {/* {chatted && (
           <span className="absolute top-2 right-2 inline-flex h-[22px] items-center rounded-full bg-[var(--color-primary)] px-2 text-[11px] font-medium text-white shadow-[var(--shadow-soft)]">
             {isColdWar(companion!.relationship_stage)
               ? '闹别扭'
               : stageWithIntimacy(companion!.relationship_stage, companion!.intimacy)}
           </span>
-        )}
+        )} */}
 
         {/* name + hook + tags overlay */}
         <div className="absolute inset-x-0 bottom-0 p-2.5">
@@ -410,7 +447,7 @@ function DiscoveryCard({ item, heatMap, onOpen }: { item: GridItem; heatMap: Map
           {/* Heat indicator (editorial overrides + virtual value, preserves real ranking) */}
           {virtualHeat !== undefined && (
             <div className="mt-1 flex items-center gap-1">
-              <span className="text-[11px] text-white/85">🔥</span>
+              <svg className="text-white/85" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>
               <span className="text-[11px] text-white/85">{formatPlays(virtualHeat)}</span>
             </div>
           )}

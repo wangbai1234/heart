@@ -47,6 +47,7 @@ export function RegisterPage() {
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [inviteCode, setInviteCode] = useState('')
+  const [ageConfirmed, setAgeConfirmed] = useState(false)
   const [agreed, setAgreed] = useState(false)
   const [loading, setLoading] = useState(false)
   const [sending, setSending] = useState(false)
@@ -94,7 +95,7 @@ export function RegisterPage() {
   }, [email, isValidEmail, cooldown, sending])
 
   const canSubmit =
-    isValidEmail && code.trim().length === 6 && password.length >= 8 && password === confirm && agreed
+    isValidEmail && code.trim().length === 6 && password.length >= 8 && password === confirm && ageConfirmed && agreed
 
   const handleRegister = async () => {
     if (loading) return
@@ -102,6 +103,7 @@ export function RegisterPage() {
     if (code.trim().length !== 6) return showToast('请输入 6 位验证码', 'error')
     if (password.length < 8) return showToast('密码至少 8 位', 'error')
     if (password !== confirm) return showToast('两次输入的密码不一致', 'error')
+    if (!ageConfirmed) return showToast('请先确认你已年满 18 周岁', 'error')
     if (!agreed) return showToast('请先同意用户协议与隐私政策', 'error')
 
     setLoading(true)
@@ -174,8 +176,23 @@ export function RegisterPage() {
             验证码为 6 位数字；密码至少 8 位。推荐使用 QQ 邮箱注册，验证码会以 QQ 通知形式送达，无需另开邮箱。
           </p>
 
+          {/* Age (18+) confirmation — required */}
+          <label className="flex items-start gap-2 mt-4 mb-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={ageConfirmed}
+              onChange={(e) => setAgeConfirmed(e.target.checked)}
+              className="mt-[3px] w-4 h-4 shrink-0 accent-[var(--color-primary)]"
+            />
+            <span className="text-[12px] text-[var(--color-text-secondary)] leading-[1.6]">
+              我确认本人已<span className="font-semibold text-[var(--color-ink)]">年满 18 周岁</span>，并已阅读
+              <Link to="/legal/age" className="text-[var(--color-primary)]">《年满18周岁确认》</Link>
+              。本产品仅供成年人使用。
+            </span>
+          </label>
+
           {/* Legal checkbox */}
-          <label className="flex items-start gap-2 mt-4 mb-4 cursor-pointer">
+          <label className="flex items-start gap-2 mb-4 cursor-pointer">
             <input
               type="checkbox"
               checked={agreed}

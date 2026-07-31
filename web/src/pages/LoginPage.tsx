@@ -75,6 +75,19 @@ export function LoginPage() {
   const [step, setStep] = useState<Step>(snap?.step ?? 'email')
   const [email, setEmail] = useState(snap?.email ?? '')
   const [password, setPassword] = useState('')
+  // 18+ confirmation — required to sign in. Persisted on-device so a returning
+  // user who already confirmed isn't re-prompted every login.
+  const alreadyConfirmedAge = (() => {
+    try { return localStorage.getItem('yuoyuo-age-confirmed') === '1' } catch { return false }
+  })()
+  const [ageConfirmed, setAgeConfirmed] = useState(alreadyConfirmedAge)
+  const confirmAge = useCallback((checked: boolean) => {
+    setAgeConfirmed(checked)
+    try {
+      if (checked) localStorage.setItem('yuoyuo-age-confirmed', '1')
+      else localStorage.removeItem('yuoyuo-age-confirmed')
+    } catch { /* storage unavailable — in-memory state still gates the button */ }
+  }, [])
   const [loading, setLoading] = useState(false)
   const [toast, setToast] = useState({ visible: false, message: '' })
   const [restorationGraceEnd, setRestorationGraceEnd] = useState<string | null>(null)
@@ -160,6 +173,7 @@ export function LoginPage() {
   }, [setSession, acceptLegalVersion, navigate])
 
   const handlePasswordLogin = useCallback(async () => {
+    if (!ageConfirmed) { setToast({ visible: true, message: '请先确认你已年满 18 周岁' }); return }
     if (!isValidEmail || password.length === 0 || loading) return
     setLoading(true)
     try {
@@ -176,9 +190,10 @@ export function LoginPage() {
     } finally {
       setLoading(false)
     }
-  }, [email, password, isValidEmail, loading, finishLogin])
+  }, [email, password, isValidEmail, loading, finishLogin, ageConfirmed])
 
   const handleSendOtp = useCallback(async () => {
+    if (!ageConfirmed) { setToast({ visible: true, message: '请先确认你已年满 18 周岁' }); return }
     if (!isValidEmail || loading) return
     setLoading(true)
     try {
@@ -195,7 +210,7 @@ export function LoginPage() {
     } finally {
       setLoading(false)
     }
-  }, [email, isValidEmail, loading, navigate])
+  }, [email, isValidEmail, loading, navigate, ageConfirmed])
 
   const handleVerify = useCallback(async (code: string) => {
     if (code.length !== 6 || loading) return
@@ -328,7 +343,7 @@ export function LoginPage() {
                     variant="primary"
                     size="lg"
                     loading={loading}
-                    disabled={!isValidEmail || password.length === 0}
+                    disabled={!isValidEmail || password.length === 0 || !ageConfirmed}
                     onClick={handlePasswordLogin}
                   >
                     登录
@@ -344,7 +359,7 @@ export function LoginPage() {
                     variant="primary"
                     size="lg"
                     loading={loading}
-                    disabled={!isValidEmail}
+                    disabled={!isValidEmail || !ageConfirmed}
                     onClick={handleSendOtp}
                   >
                     发送验证码
@@ -397,6 +412,23 @@ export function LoginPage() {
           </p>
         )}
 
+        {/* Age (18+) confirmation — centered, stays visible after checking */}
+        {step !== 'restoration' && (
+          <label className="flex items-center justify-center gap-2 mb-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={ageConfirmed}
+              onChange={(e) => confirmAge(e.target.checked)}
+              className="w-4 h-4 shrink-0 accent-[var(--color-primary)]"
+            />
+            <span className="text-[12px] text-[var(--color-text-secondary)] leading-[1.6]">
+              我确认已<span className="font-semibold text-[var(--color-ink)]">年满 18 周岁</span>（
+              <Link to="/legal/age" className="text-[var(--color-primary)]" onClick={(e) => e.stopPropagation()}>年满18周岁确认</Link>
+              ）
+            </span>
+          </label>
+        )}
+
         {/* Legal text */}
         <p className="text-center text-[12px] text-[var(--color-text-secondary)] mb-3">
           继续即代表同意
@@ -418,6 +450,7 @@ export function LoginPage() {
       />
 
       <Toast visible={toast.visible} message={toast.message} onDismiss={() => setToast({ visible: false, message: '' })} />
+
     </div>
   )
 }
@@ -439,7 +472,6 @@ function RestorationCard({
 
   return (
     <div className="text-center">
-      <div className="text-[40px] mb-3">👋</div>
       <h2 className="text-[18px] font-semibold text-[var(--color-ink)] mb-2">
         欢迎回来
       </h2>

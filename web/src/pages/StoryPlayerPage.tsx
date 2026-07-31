@@ -94,10 +94,20 @@ export function StoryPlayerPage() {
         onBack={() => navigate('/explore')}
       />
 
+      {/* AI-generated content disclaimer — fixed just below the (fixed) nav bar */}
+      <div
+        className="fixed left-0 right-0 z-[29] flex items-center justify-center py-1.5 px-4 bg-[var(--color-glass-55)] backdrop-blur-[var(--blur-glass-md)] border-b border-[var(--color-divider)]"
+        style={{ top: 'calc(44px + var(--safe-top))' }}
+      >
+        <span className="text-[11px] text-[var(--color-text-muted)] text-center">
+          内容由 AI 生成，对话请遵守社区公约
+        </span>
+      </div>
+
       <div
         ref={scrollRef}
         className="relative z-10 flex-1 overflow-y-auto px-4"
-        style={{ paddingTop: 'calc(52px + var(--safe-top))' }}
+        style={{ paddingTop: 'calc(84px + var(--safe-top))' }}
       >
         {showSkeleton ? (
           <PlayerSkeleton />

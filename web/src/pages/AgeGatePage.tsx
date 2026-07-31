@@ -14,7 +14,6 @@ export function AgeGatePage() {
   return (
     <div className="w-full h-full flex flex-col items-center justify-center px-8" style={{ background: 'var(--color-bg)' }}>
       <div className="text-center max-w-[320px]">
-        <div className="text-[48px] mb-4">😔</div>
         <h2 className="text-[22px] font-bold text-[var(--color-ink)] mb-4">
           很抱歉
         </h2>
