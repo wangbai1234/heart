@@ -179,6 +179,14 @@ class Settings(BaseSettings):
     # when the same secret is reused as the webhook URL query token.
     afdian_api_token: str = ""
     afdian_sponsor_url: str = "https://ifdian.net/a/yuoyuo"
+    # Per-SKU afdian order/create deep links (JSON string, overridable via
+    # AFDIAN_CHECKOUT_URLS env var). Maps our internal sku key → the afdian
+    # order/create URL *without* custom_order_id (the frontend appends the user's
+    # binding code as ?custom_order_id=<code> so orders auto-fulfill w/o a remark).
+    #   会员(方案): {"plan_plus": "https://afdian.com/order/create?plan_id=<id>&product_type=0"}
+    #   币包(商品): {"pack_6":   "https://afdian.com/order/create?plan_id=<id>&sku=<sku_id>&product_type=1"}
+    # Empty map → frontend falls back to afdian_sponsor_url + manual remark (legacy).
+    afdian_checkout_urls: str = "{}"
 
     # Per-action pricing (display coins; ×100 = fen internally)
     grok_cost_credits: int = 3  # 300 fen per LLM turn

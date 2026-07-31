@@ -108,7 +108,8 @@ export function WalletPage() {
             <AfdianBindingCard
               bindingCode={membership.bindingCode}
               afdianUrl={pricing.afdian_url}
-              skuHint={selected ? `${selected.label}（${selected.sku}）` : '选择上方挡位后在备注注明'}
+              checkoutUrl={selected?.checkout_url}
+              skuHint={selected ? `${selected.label}（${selected.sku}）` : '请先选择上方挡位'}
             />
             <p className="text-center text-[12px] text-[var(--color-text-muted)] mt-3">
               付款后系统自动到账，通常几分钟内到账。

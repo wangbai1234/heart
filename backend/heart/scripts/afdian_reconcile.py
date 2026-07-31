@@ -59,6 +59,7 @@ async def _list(pages: int) -> int:
                         "plan_id": o.get("plan_id"),
                         "sku_detail": skus,
                         "remark": o.get("remark"),
+                        "custom_order_id": o.get("custom_order_id"),
                         "status": o.get("status"),
                     },
                     ensure_ascii=False,

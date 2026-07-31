@@ -51,6 +51,47 @@ class TestResolveUserByBindingCode:
 
 
 # ---------------------------------------------------------------------------
+# resolve_user_by_custom_order_id
+# ---------------------------------------------------------------------------
+
+
+class TestResolveUserByCustomOrderId:
+    @pytest.mark.asyncio
+    async def test_returns_none_for_empty_custom_order_id(self):
+        from heart.afdian.fulfillment import resolve_user_by_custom_order_id
+
+        db = AsyncMock()
+        result = await resolve_user_by_custom_order_id(db, "")
+        assert result is None
+        db.execute.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_returns_none_when_no_matching_code(self):
+        from heart.afdian.fulfillment import resolve_user_by_custom_order_id
+
+        db = AsyncMock()
+        fetch_result = MagicMock()
+        fetch_result.fetchone.return_value = None
+        db.execute = AsyncMock(return_value=fetch_result)
+
+        result = await resolve_user_by_custom_order_id(db, "ABCD1234")
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_returns_user_id_on_exact_match(self):
+        from heart.afdian.fulfillment import resolve_user_by_custom_order_id
+
+        user_id = uuid.uuid4()
+        db = AsyncMock()
+        fetch_result = MagicMock()
+        fetch_result.fetchone.return_value = (str(user_id),)
+        db.execute = AsyncMock(return_value=fetch_result)
+
+        result = await resolve_user_by_custom_order_id(db, "abcd1234")
+        assert result == user_id
+
+
+# ---------------------------------------------------------------------------
 # fulfill_order
 # ---------------------------------------------------------------------------
 
@@ -242,6 +283,77 @@ class TestFulfillOrder:
 
         assert ok is True
         assert mock_grant.call_args[0][2] == 19800
+
+    @pytest.mark.asyncio
+    async def test_prefers_custom_order_id_over_remark(self):
+        """custom_order_id (URL param) resolves the user without any remark."""
+        from heart.afdian.fulfillment import fulfill_order
+
+        user_id = uuid.uuid4()
+        db = AsyncMock()
+        not_fulfilled = MagicMock()
+        not_fulfilled.fetchone.return_value = (None,)
+        db.execute = AsyncMock(return_value=not_fulfilled)
+        db.commit = AsyncMock()
+
+        sku_map = '{"plan-plus30": {"type": "membership", "tier": "plus", "days": 30}}'
+
+        with (
+            patch(
+                "heart.afdian.fulfillment.resolve_user_by_custom_order_id",
+                new=AsyncMock(return_value=user_id),
+            ) as mock_custom,
+            patch(
+                "heart.afdian.fulfillment.resolve_user_by_binding_code",
+                new=AsyncMock(return_value=None),
+            ) as mock_remark,
+            patch("heart.core.config.settings.afdian_sku_map", sku_map),
+            patch("heart.afdian.fulfillment.activate_or_extend", new=AsyncMock()),
+        ):
+            # empty remark — resolution must come from custom_order_id
+            ok, msg = await fulfill_order(
+                db, "order-custom-1", "plan-plus30", "", None, "ABCD1234"
+            )
+
+        assert ok is True
+        assert msg == "ok"
+        mock_custom.assert_awaited_once()
+        # remark fallback never consulted when custom_order_id resolves
+        mock_remark.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_falls_back_to_remark_when_no_custom_order_id(self):
+        """No custom_order_id → resolution falls back to remark fuzzy match."""
+        from heart.afdian.fulfillment import fulfill_order
+
+        user_id = uuid.uuid4()
+        db = AsyncMock()
+        not_fulfilled = MagicMock()
+        not_fulfilled.fetchone.return_value = (None,)
+        db.execute = AsyncMock(return_value=not_fulfilled)
+        db.commit = AsyncMock()
+
+        sku_map = '{"plan-plus30": {"type": "membership", "tier": "plus", "days": 30}}'
+
+        with (
+            patch(
+                "heart.afdian.fulfillment.resolve_user_by_custom_order_id",
+                new=AsyncMock(return_value=None),
+            ),
+            patch(
+                "heart.afdian.fulfillment.resolve_user_by_binding_code",
+                new=AsyncMock(return_value=user_id),
+            ) as mock_remark,
+            patch("heart.core.config.settings.afdian_sku_map", sku_map),
+            patch("heart.afdian.fulfillment.activate_or_extend", new=AsyncMock()),
+        ):
+            ok, msg = await fulfill_order(
+                db, "order-custom-2", "plan-plus30", "code: ABCD1234", None, ""
+            )
+
+        assert ok is True
+        assert msg == "ok"
+        mock_remark.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_returns_false_for_unknown_plan(self):
