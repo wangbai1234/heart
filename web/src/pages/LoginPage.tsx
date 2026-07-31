@@ -454,31 +454,22 @@ export function LoginPage() {
 
       <Toast visible={toast.visible} message={toast.message} onDismiss={() => setToast({ visible: false, message: '' })} />
 
-      {/* First-entry 18+ gate — new/unconfirmed visitors must confirm before use.
-          Also surfaces the community-guidelines reminder for AI chat. */}
+      {/* First-entry reminder — surfaces the 18+ requirement and the
+          community-guidelines reminder for AI chat. Dismissible (tap backdrop
+          or the button); dismissing records the confirmation. */}
       <Dialog
         open={showAgeGate}
-        onClose={() => { /* modal is non-dismissible — user must choose */ }}
-        title="未成年人禁止使用"
+        onClose={() => { confirmAge(true); setShowAgeGate(false) }}
+        title="温馨提示"
         actions={
-          <>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="flex-1"
-              onClick={() => { window.location.href = 'https://www.baidu.com' }}
-            >
-              未满18岁
-            </Button>
-            <Button
-              variant="primary"
-              size="sm"
-              className="flex-1"
-              onClick={() => { confirmAge(true); setShowAgeGate(false) }}
-            >
-              我已满18岁
-            </Button>
-          </>
+          <Button
+            variant="primary"
+            size="sm"
+            className="flex-1"
+            onClick={() => { confirmAge(true); setShowAgeGate(false) }}
+          >
+            我已满18岁，知道了
+          </Button>
         }
       >
         <p className="leading-[1.7] text-left">
@@ -490,7 +481,7 @@ export function LoginPage() {
           不得诱导生成违法或不良内容。
         </p>
         <p className="leading-[1.7] text-left mt-2 text-[var(--color-text-muted)]">
-          点击「我已满18岁」即表示你已阅读并同意
+          继续使用即表示你已阅读并同意
           <Link to="/legal/age" className="text-[var(--color-primary)]">《年满18周岁确认》</Link>。
         </p>
       </Dialog>
