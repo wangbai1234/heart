@@ -7,6 +7,7 @@ import { PasswordInput } from '../components/ui/PasswordInput'
 import { OTPInput } from '../components/ui/OTPInput'
 import { Toast } from '../components/ui/Toast'
 import { SetPasswordModal } from '../components/SetPasswordModal'
+import { Dialog } from '../components/ui/Dialog'
 import {
   requestOtp,
   verifyOtp,
@@ -77,9 +78,12 @@ export function LoginPage() {
   const [password, setPassword] = useState('')
   // 18+ confirmation — required to sign in. Persisted on-device so a returning
   // user who already confirmed isn't re-prompted every login.
-  const [ageConfirmed, setAgeConfirmed] = useState(() => {
+  const alreadyConfirmedAge = (() => {
     try { return localStorage.getItem('yuoyuo-age-confirmed') === '1' } catch { return false }
-  })
+  })()
+  const [ageConfirmed, setAgeConfirmed] = useState(alreadyConfirmedAge)
+  // First-time (unconfirmed) visitors get an explicit 18+ gate dialog on entry.
+  const [showAgeGate, setShowAgeGate] = useState(!alreadyConfirmedAge)
   const confirmAge = useCallback((checked: boolean) => {
     setAgeConfirmed(checked)
     try {
@@ -411,18 +415,19 @@ export function LoginPage() {
           </p>
         )}
 
-        {/* Age confirmation */}
-        {step !== 'restoration' && !ageConfirmed && (
-          <label className="flex items-start gap-2 px-3 mb-3 cursor-pointer">
+        {/* Age (18+) confirmation — centered, stays visible after checking */}
+        {step !== 'restoration' && (
+          <label className="flex items-center justify-center gap-2 mb-3 cursor-pointer">
             <input
               type="checkbox"
               checked={ageConfirmed}
               onChange={(e) => confirmAge(e.target.checked)}
-              className="mt-[3px] w-4 h-4 shrink-0 accent-[var(--color-primary)]"
+              className="w-4 h-4 shrink-0 accent-[var(--color-primary)]"
             />
             <span className="text-[12px] text-[var(--color-text-secondary)] leading-[1.6]">
-              我确认本人已<span className="font-semibold text-[var(--color-ink)]">年满 18 周岁</span>，并已阅读
-              <Link to="/legal/age" className="text-[var(--color-primary)]">《年满18周岁确认》</Link>
+              我确认已<span className="font-semibold text-[var(--color-ink)]">年满 18 周岁</span>（
+              <Link to="/legal/age" className="text-[var(--color-primary)]" onClick={(e) => e.stopPropagation()}>年满18周岁确认</Link>
+              ）
             </span>
           </label>
         )}
@@ -448,6 +453,47 @@ export function LoginPage() {
       />
 
       <Toast visible={toast.visible} message={toast.message} onDismiss={() => setToast({ visible: false, message: '' })} />
+
+      {/* First-entry 18+ gate — new/unconfirmed visitors must confirm before use.
+          Also surfaces the community-guidelines reminder for AI chat. */}
+      <Dialog
+        open={showAgeGate}
+        onClose={() => { /* modal is non-dismissible — user must choose */ }}
+        title="未成年人禁止使用"
+        actions={
+          <>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="flex-1"
+              onClick={() => { window.location.href = 'https://www.baidu.com' }}
+            >
+              未满18岁
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              className="flex-1"
+              onClick={() => { confirmAge(true); setShowAgeGate(false) }}
+            >
+              我已满18岁
+            </Button>
+          </>
+        }
+      >
+        <p className="leading-[1.7] text-left">
+          yuoyuo 是一款面向<span className="font-semibold text-[var(--color-ink)]">成年人</span>的 AI 情感陪伴产品，
+          <span className="font-semibold text-[var(--color-ink)]">仅供年满 18 周岁的用户使用</span>。
+        </p>
+        <p className="leading-[1.7] text-left mt-2">
+          所有角色均为虚构，回复由 AI 生成。聊天时请<span className="font-semibold text-[var(--color-ink)]">遵守社区公约</span>，
+          不得诱导生成违法或不良内容。
+        </p>
+        <p className="leading-[1.7] text-left mt-2 text-[var(--color-text-muted)]">
+          点击「我已满18岁」即表示你已阅读并同意
+          <Link to="/legal/age" className="text-[var(--color-primary)]">《年满18周岁确认》</Link>。
+        </p>
+      </Dialog>
     </div>
   )
 }
