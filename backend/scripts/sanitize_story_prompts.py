@@ -5,8 +5,12 @@ Removes, per product directive (2026-08-02):
      filter-bypass separators "ᴵ"/"//" / 露骨情欲 / 允许流血情节).
   2. The 纯爱 vs 18禁 maturity mode-selection (the distinction is being dropped
      from the product entirely — no per-story maturity branch, no page toggle).
-     Cleaned in BOTH gm_system_prompt AND blurb (the LLM importer appends a
-     "纯爱模式、18禁模式任选。" clause to the card summary shown in the UI).
+     Cleaned in THREE places the LLM importer wrote it into:
+       - gm_system_prompt (system-prompt mode-select block)
+       - blurb (card summary appends "纯爱模式、18禁模式任选。")
+       - player_template_json (开局表单 radio field 纯爱模式 vs 18禁模式 —
+         this is the on-page selector; removed whole-field, ~20 spelling
+         variants, while keeping gameplay selectors like 1v1/np, 对话/剧情).
 
 Legit content is preserved verbatim: world setup, 人设卡, 剧情骨架, and all
 writing-craft 写作规范 (暗恋/纯爱/亲密戏/防OOC/不替用户说话 等). Non-maturity
@@ -23,6 +27,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 import re
 import sys
 from typing import Any
@@ -167,6 +172,43 @@ def sanitize_blurb(text_in: str) -> str:
     return t.strip()
 
 
+# ── player_template_json (开局表单) sanitizer ────────────────────────────────
+# The LLM importer emitted a maturity selector field (radio 纯爱模式 vs 18禁模式)
+# in the opening form under ~20 spelling variants — keys mode/mode2/content_mode/
+# mature_mode/maturity_mode/adult_mode; labels 模式/模式选择/游戏模式/内容模式/…;
+# options 纯爱/18禁/18🈲/18模式/…. This is the on-page 纯爱 vs 18禁 distinction.
+#
+# Remove the WHOLE field wherever its label OR options carry a maturity token.
+# NON-maturity gameplay selectors sharing the same key (e.g. mode=对话/剧情,
+# relationship_mode=1v1/np, dialog_mode=开启/关闭) carry no maturity token and
+# are preserved untouched — the predicate is per-field, never by key.
+_MATURITY_TOKEN_RE = re.compile(r"(纯爱|18禁|18🈲|🈲|成人|18模式)")
+
+
+def _field_is_maturity(field: dict[str, Any]) -> bool:
+    label = field.get("label") or ""
+    if _MATURITY_TOKEN_RE.search(label):
+        return True
+    opts = field.get("options")
+    if isinstance(opts, list) and _MATURITY_TOKEN_RE.search(" ".join(map(str, opts))):
+        return True
+    return False
+
+
+def sanitize_template(tpl: Any) -> tuple[Any, int]:
+    """Return (cleaned_template, removed_field_count). No-op on unexpected shapes."""
+    if not isinstance(tpl, dict):
+        return tpl, 0
+    fields = tpl.get("fields")
+    if not isinstance(fields, list):
+        return tpl, 0
+    kept = [f for f in fields if not (isinstance(f, dict) and _field_is_maturity(f))]
+    removed = len(fields) - len(kept)
+    if removed == 0:
+        return tpl, 0
+    return {**tpl, "fields": kept}, removed
+
+
 # ── DB apply harness ────────────────────────────────────────────────────────
 
 _BACKUP_DDL = """
@@ -185,6 +227,14 @@ CREATE TABLE IF NOT EXISTS _story_blurb_sanitize_backup (
 )
 """
 
+_TEMPLATE_BACKUP_DDL = """
+CREATE TABLE IF NOT EXISTS _story_template_sanitize_backup (
+    id UUID PRIMARY KEY,
+    prev_template JSONB NOT NULL,
+    sanitized_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+)
+"""
+
 
 async def _run(dry_run: bool) -> int:
     from heart.api.wiring import get_db_session_factory
@@ -196,13 +246,19 @@ async def _run(dry_run: bool) -> int:
     changed = 0
     unchanged = 0
     blurb_changed = 0
+    tpl_fields_removed = 0
+    tpl_rows_changed = 0
     async with factory() as db:  # type: ignore[misc]
         if not dry_run:
             await db.execute(text(_BACKUP_DDL))
             await db.execute(text(_BLURB_BACKUP_DDL))
+            await db.execute(text(_TEMPLATE_BACKUP_DDL))
         rows = (
             await db.execute(
-                text("SELECT id, slug, gm_system_prompt, blurb FROM story_scenarios")
+                text(
+                    "SELECT id, slug, gm_system_prompt, blurb, player_template_json "
+                    "FROM story_scenarios"
+                )
             )
         ).mappings().all()
 
@@ -253,12 +309,42 @@ async def _run(dry_run: bool) -> int:
                         ),
                         {"b": clean_blurb, "id": r["id"]},
                     )
+
+            # player_template_json (开局表单) — remove maturity selector field(s)
+            orig_tpl = r["player_template_json"]
+            if isinstance(orig_tpl, str):  # driver returned raw JSON text
+                try:
+                    orig_tpl = json.loads(orig_tpl)
+                except (ValueError, TypeError):
+                    orig_tpl = None
+            clean_tpl, removed = sanitize_template(orig_tpl)
+            if removed > 0:
+                tpl_rows_changed += 1
+                tpl_fields_removed += removed
+                print(f"{'[dry] ' if dry_run else ''}tpl    {r['slug'][:26]:28} -{removed} field(s)")
+                if not dry_run:
+                    await db.execute(
+                        text(
+                            "INSERT INTO _story_template_sanitize_backup (id, prev_template) "
+                            "VALUES (:id, CAST(:prev AS JSONB)) ON CONFLICT (id) DO NOTHING"
+                        ),
+                        {"id": r["id"], "prev": json.dumps(orig_tpl, ensure_ascii=False)},
+                    )
+                    await db.execute(
+                        text(
+                            "UPDATE story_scenarios SET player_template_json = CAST(:t AS JSONB), "
+                            "updated_at = NOW() WHERE id = :id"
+                        ),
+                        {"t": json.dumps(clean_tpl, ensure_ascii=False), "id": r["id"]},
+                    )
         if not dry_run:
             await db.commit()
 
     print(
         f"\n{'[dry-run] ' if dry_run else ''}prompt_changed={changed} "
-        f"unchanged={unchanged} blurb_changed={blurb_changed} total={changed + unchanged}"
+        f"unchanged={unchanged} blurb_changed={blurb_changed} "
+        f"template_rows_changed={tpl_rows_changed} template_fields_removed={tpl_fields_removed} "
+        f"total={changed + unchanged}"
     )
     return changed
 
