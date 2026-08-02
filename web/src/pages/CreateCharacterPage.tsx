@@ -1461,6 +1461,30 @@ export function CreateCharacterPage() {
                 WAV / MP3，10–30 秒，最大 20MB · 克隆成功才扣费
               </p>
             </>
+          </>
+        )}
+
+        {step === 2 && (
+          <>
+            <div className="text-center pt-6 pb-2">
+              <p className="text-[13px] text-[var(--color-text-muted)] leading-relaxed">
+                调整滑块，塑造 Ta 的性格比例。
+              </p>
+            </div>
+
+            <SectionTitle>性格调节</SectionTitle>
+            <GlassCard>
+              <div className="divide-y divide-[var(--color-divider)]">
+                {SLIDER_FIELDS.map((field) => (
+                  <SliderRow
+                    key={field.key}
+                    field={field}
+                    value={form.sliders[field.key]}
+                    onChange={(v) => setSlider(field.key, v)}
+                  />
+                ))}
+              </div>
+            </GlassCard>
 
             {/* Visibility — 公开 / 仅链接 / 私密 */}
             <SectionTitle>谁可以看到这个角色</SectionTitle>
@@ -1503,30 +1527,6 @@ export function CreateCharacterPage() {
                 该角色审核后会被公开，所有人可见你的角色。审核通过可获得 100 yuoyuo 币；累计通过 5 个角色，额外赠送一个月进阶版会员。
               </p>
             )}
-          </>
-        )}
-
-        {step === 2 && (
-          <>
-            <div className="text-center pt-6 pb-2">
-              <p className="text-[13px] text-[var(--color-text-muted)] leading-relaxed">
-                调整滑块，塑造 Ta 的性格比例。
-              </p>
-            </div>
-
-            <SectionTitle>性格调节</SectionTitle>
-            <GlassCard>
-              <div className="divide-y divide-[var(--color-divider)]">
-                {SLIDER_FIELDS.map((field) => (
-                  <SliderRow
-                    key={field.key}
-                    field={field}
-                    value={form.sliders[field.key]}
-                    onChange={(v) => setSlider(field.key, v)}
-                  />
-                ))}
-              </div>
-            </GlassCard>
           </>
         )}
       </div>
