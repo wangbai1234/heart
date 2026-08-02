@@ -149,17 +149,21 @@ def sanitize(text_in: str) -> str:
 # 18禁 distinction the product is dropping. Remove it while keeping non-maturity
 # gameplay axes (NP模式 = 关系结构, not maturity).
 #
-# Two forms observed:
-#   A) "…。纯爱模式、18禁模式任选。…"           → drop the whole sentence
-#   B) "…。纯爱模式、18禁模式、NP模式任选。…"   → keep "NP模式任选。" (strip只 the
-#                                               纯爱/18禁 prefix)
+# Three forms observed:
+#   A) "…。纯爱模式、18禁模式任选。…"            → drop the whole sentence
+#   B) "…。纯爱模式、18禁模式、NP模式任选。…"    → keep "NP模式任选。" (strip只 the
+#                                                纯爱/18禁 prefix)
+#   C) "…，选择纯爱模式或18禁模式，在…做出抉择。" → strip only "选择…模式，"
+#                                                (the rest of the sentence stays)
 _BLURB_MERGE = re.compile(r"纯爱模式、18禁模式、(?=NP模式)")
 _BLURB_DROP = re.compile(r"纯爱模式、18禁模式任选。")
+_BLURB_MID = re.compile(r"选择纯爱模式或18禁模式[，,]")
 
 
 def sanitize_blurb(text_in: str) -> str:
     t = _BLURB_MERGE.sub("", text_in)   # form B first: keep NP模式任选。
     t = _BLURB_DROP.sub("", t)          # form A: drop whole maturity sentence
+    t = _BLURB_MID.sub("", t)           # form C: strip mid-sentence choice
     return t.strip()
 
 
