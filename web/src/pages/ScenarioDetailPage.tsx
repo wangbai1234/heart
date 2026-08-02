@@ -13,8 +13,7 @@ import { useSafeBack } from '../hooks/useSafeBack'
  * (2026-07-26): full-bleed cover hero with a floating glass back button, glass
  * meta chips, a rounded glass 剧情简介 card, and a gradient primary CTA — while
  * keeping the story-specific gating flow (unlock / upgrade / 继续游玩 +
- * 重新开始 / 开始剧情) and StartRunSheet. `maturity='adult'` shows a 🔞 label
- * only — scenarios are not age-gated.
+ * 重新开始 / 开始剧情) and StartRunSheet.
  */
 export function ScenarioDetailPage() {
   const navigate = useNavigate()
@@ -108,11 +107,6 @@ export function ScenarioDetailPage() {
               <span className="inline-flex h-[26px] items-center rounded-full bg-[var(--color-glass-75)] border border-[var(--color-border-glass)] px-3 text-[12px] font-medium text-[var(--color-text-secondary)]">
                 {scenario.genre}
               </span>
-              {scenario.maturity === 'adult' && (
-                <span className="inline-flex h-[26px] items-center rounded-full bg-[var(--color-glass-75)] border border-[var(--color-border-glass)] px-3 text-[12px] font-medium text-[var(--color-text-secondary)]">
-                  🔞 成人向
-                </span>
-              )}
               <span className="inline-flex h-[26px] items-center rounded-full bg-[var(--color-glass-75)] border border-[var(--color-border-glass)] px-3 text-[12px] font-medium text-[var(--color-text-secondary)] tabular-nums">
                 <svg className="inline-block mr-0.5" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg> {scenario.play_count} 人玩过
               </span>

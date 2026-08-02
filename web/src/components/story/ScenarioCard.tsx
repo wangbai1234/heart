@@ -5,8 +5,7 @@ import type { ScenarioCardDTO } from '../../services/api'
  * A single scenario tile for the Explore grid (SS09 PR2).
  *
  * Cover falls back to a genre-tinted gradient when `cover_url` is null (the
- * bulk importer leaves covers empty initially). Adult scenarios show a 🔞 label
- * (display only — scenarios are not age-gated).
+ * bulk importer leaves covers empty initially).
  */
 
 // Stable per-genre gradient so cover-less cards are still visually distinct.
@@ -31,7 +30,7 @@ interface ScenarioCardProps {
 }
 
 export function ScenarioCard({ scenario, onOpen }: ScenarioCardProps) {
-  const { id, title, genre, cover_url, play_count, maturity } = scenario
+  const { id, title, genre, cover_url, play_count } = scenario
 
   return (
     <button
@@ -50,12 +49,6 @@ export function ScenarioCard({ scenario, onOpen }: ScenarioCardProps) {
         <span className="absolute top-2 left-2 inline-flex h-[22px] items-center rounded-full bg-black/25 px-2 text-[11px] font-medium text-white backdrop-blur-[4px]">
           {genre}
         </span>
-        {/* Adult label (display only) */}
-        {maturity === 'adult' && (
-          <span className="absolute top-2 right-2 inline-flex h-[22px] items-center rounded-full bg-black/35 px-1.5 text-[12px] backdrop-blur-[4px]">
-            🔞
-          </span>
-        )}
       </div>
 
       {/* Meta */}
