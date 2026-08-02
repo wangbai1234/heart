@@ -998,8 +998,9 @@ export async function ackProactive(
 
 // ── Story / 剧情 mode (SS09) ────────────────────────────────────────
 // Read paths for the scenario catalog + run lifecycle + WS.
-// `maturity='adult'` is a display-only label (🔞) shown on the card/intro;
-// scenarios are NOT age-gated (registration already restricts signup to adults).
+// `maturity` is retained in the DTO for back-compat but is NOT rendered anywhere:
+// the 纯爱/18禁 distinction was dropped from the product (2026-08-02). Scenarios
+// are not age-gated (registration already restricts signup to adults).
 
 export interface ScenarioCardDTO {
   id: string

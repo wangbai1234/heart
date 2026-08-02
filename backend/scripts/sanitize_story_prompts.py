@@ -5,6 +5,8 @@ Removes, per product directive (2026-08-02):
      filter-bypass separators "ᴵ"/"//" / 露骨情欲 / 允许流血情节).
   2. The 纯爱 vs 18禁 maturity mode-selection (the distinction is being dropped
      from the product entirely — no per-story maturity branch, no page toggle).
+     Cleaned in BOTH gm_system_prompt AND blurb (the LLM importer appends a
+     "纯爱模式、18禁模式任选。" clause to the card summary shown in the UI).
 
 Legit content is preserved verbatim: world setup, 人设卡, 剧情骨架, and all
 writing-craft 写作规范 (暗恋/纯爱/亲密戏/防OOC/不替用户说话 等). Non-maturity
@@ -141,12 +143,40 @@ def sanitize(text_in: str) -> str:
     return t
 
 
+# ── blurb (card summary) sanitizer ──────────────────────────────────────────
+# The LLM importer appends a maturity-mode選択 clause to每条 blurb (the one-line
+# card/intro summary shown in the UI): "纯爱模式、18禁模式任选。" — the 纯爱 vs
+# 18禁 distinction the product is dropping. Remove it while keeping non-maturity
+# gameplay axes (NP模式 = 关系结构, not maturity).
+#
+# Two forms observed:
+#   A) "…。纯爱模式、18禁模式任选。…"           → drop the whole sentence
+#   B) "…。纯爱模式、18禁模式、NP模式任选。…"   → keep "NP模式任选。" (strip只 the
+#                                               纯爱/18禁 prefix)
+_BLURB_MERGE = re.compile(r"纯爱模式、18禁模式、(?=NP模式)")
+_BLURB_DROP = re.compile(r"纯爱模式、18禁模式任选。")
+
+
+def sanitize_blurb(text_in: str) -> str:
+    t = _BLURB_MERGE.sub("", text_in)   # form B first: keep NP模式任选。
+    t = _BLURB_DROP.sub("", t)          # form A: drop whole maturity sentence
+    return t.strip()
+
+
 # ── DB apply harness ────────────────────────────────────────────────────────
 
 _BACKUP_DDL = """
 CREATE TABLE IF NOT EXISTS _story_prompt_sanitize_backup (
     id UUID PRIMARY KEY,
     prev_prompt TEXT NOT NULL,
+    sanitized_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+)
+"""
+
+_BLURB_BACKUP_DDL = """
+CREATE TABLE IF NOT EXISTS _story_blurb_sanitize_backup (
+    id UUID PRIMARY KEY,
+    prev_blurb TEXT NOT NULL,
     sanitized_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 )
 """
@@ -161,44 +191,71 @@ async def _run(dry_run: bool) -> int:
 
     changed = 0
     unchanged = 0
+    blurb_changed = 0
     async with factory() as db:  # type: ignore[misc]
         if not dry_run:
             await db.execute(text(_BACKUP_DDL))
+            await db.execute(text(_BLURB_BACKUP_DDL))
         rows = (
             await db.execute(
-                text("SELECT id, slug, gm_system_prompt FROM story_scenarios")
+                text("SELECT id, slug, gm_system_prompt, blurb FROM story_scenarios")
             )
         ).mappings().all()
 
         for r in rows:
             original = r["gm_system_prompt"] or ""
             cleaned = sanitize(original)
-            if cleaned == original:
+            if cleaned != original:
+                changed += 1
+                delta = len(original) - len(cleaned)
+                print(f"{'[dry] ' if dry_run else ''}prompt {r['slug'][:26]:28} -{delta} chars")
+                if not dry_run:
+                    # snapshot original once (idempotent), then overwrite
+                    await db.execute(
+                        text(
+                            "INSERT INTO _story_prompt_sanitize_backup (id, prev_prompt) "
+                            "VALUES (:id, :prev) ON CONFLICT (id) DO NOTHING"
+                        ),
+                        {"id": r["id"], "prev": original},
+                    )
+                    await db.execute(
+                        text(
+                            "UPDATE story_scenarios SET gm_system_prompt = :p, "
+                            "updated_at = NOW() WHERE id = :id"
+                        ),
+                        {"p": cleaned, "id": r["id"]},
+                    )
+            else:
                 unchanged += 1
-                continue
-            changed += 1
-            delta = len(original) - len(cleaned)
-            print(f"{'[dry] ' if dry_run else ''}{r['slug'][:30]:32} -{delta} chars")
-            if not dry_run:
-                # snapshot original once (idempotent), then overwrite
-                await db.execute(
-                    text(
-                        "INSERT INTO _story_prompt_sanitize_backup (id, prev_prompt) "
-                        "VALUES (:id, :prev) ON CONFLICT (id) DO NOTHING"
-                    ),
-                    {"id": r["id"], "prev": original},
-                )
-                await db.execute(
-                    text(
-                        "UPDATE story_scenarios SET gm_system_prompt = :p, "
-                        "updated_at = NOW() WHERE id = :id"
-                    ),
-                    {"p": cleaned, "id": r["id"]},
-                )
+
+            # blurb (card summary) — strip maturity-mode選択 clause
+            orig_blurb = r["blurb"] or ""
+            clean_blurb = sanitize_blurb(orig_blurb)
+            if clean_blurb != orig_blurb:
+                blurb_changed += 1
+                print(f"{'[dry] ' if dry_run else ''}blurb  {r['slug'][:26]:28} -{len(orig_blurb) - len(clean_blurb)} chars")
+                if not dry_run:
+                    await db.execute(
+                        text(
+                            "INSERT INTO _story_blurb_sanitize_backup (id, prev_blurb) "
+                            "VALUES (:id, :prev) ON CONFLICT (id) DO NOTHING"
+                        ),
+                        {"id": r["id"], "prev": orig_blurb},
+                    )
+                    await db.execute(
+                        text(
+                            "UPDATE story_scenarios SET blurb = :b, "
+                            "updated_at = NOW() WHERE id = :id"
+                        ),
+                        {"b": clean_blurb, "id": r["id"]},
+                    )
         if not dry_run:
             await db.commit()
 
-    print(f"\n{'[dry-run] ' if dry_run else ''}changed={changed} unchanged={unchanged} total={changed + unchanged}")
+    print(
+        f"\n{'[dry-run] ' if dry_run else ''}prompt_changed={changed} "
+        f"unchanged={unchanged} blurb_changed={blurb_changed} total={changed + unchanged}"
+    )
     return changed
 
 

@@ -69,7 +69,7 @@ export function StartRunSheet({
     } catch (e) {
       const msg =
         e instanceof ApiError && e.status === 403
-          ? '这是成人向剧情，需要先完成年龄验证'
+          ? '暂时无法开始这个剧情，请稍后重试'
           : '开局失败，请稍后重试'
       showToast(msg, 'error')
       setSubmitting(false)
