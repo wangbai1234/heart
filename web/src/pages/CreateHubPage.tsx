@@ -168,7 +168,7 @@ function EmptyState({ onCreateClick }: { onCreateClick: () => void }) {
       </div>
       <h2 className="text-[20px] font-semibold text-[var(--color-ink)] mb-2">还没有自创角色</h2>
       <p className="text-[14px] text-[var(--color-text-secondary)] leading-[1.65] mb-8 max-w-[260px]">
-        创建属于你的专属伴侣，设计她的名字、性格与说话方式。
+        创建属于你的专属角色，设计 Ta 的名字、性格与说话方式。
       </p>
       <button
         onClick={onCreateClick}

@@ -33,6 +33,8 @@ import { StoryPlayerPage } from './pages/StoryPlayerPage'
 import { ToastContainer } from './components/ui/ToastContainer'
 import { UpdatePrompt } from './components/UpdatePrompt'
 import { DailyCheckinDialog } from './components/DailyCheckinDialog'
+import { ReviewResultDialog, PublishIncentiveDialog } from './components/ReviewDialogs'
+import type { ReviewUpdateDTO } from './services/api'
 import { useCreditsStore } from './stores/creditsStore'
 import { useProactivePolling } from './hooks/useProactivePolling'
 import { useThemeStore } from './stores/themeStore'
@@ -79,6 +81,9 @@ export function App() {
   const location = useLocation()
   const [checkinOpen, setCheckinOpen] = useState(false)
   const [checkinCoins, setCheckinCoins] = useState(0)
+  // Character review: queue of unacked terminal results + daily incentive popup.
+  const [reviewQueue, setReviewQueue] = useState<ReviewUpdateDTO[]>([])
+  const [incentiveOpen, setIncentiveOpen] = useState(false)
 
   // Wire module-level navigate so api.ts / useWebSocket.ts can redirect
   // without a hard page reload (preserves React state and bfcache).
@@ -149,6 +154,47 @@ export function App() {
     )
   }, [accessToken])
 
+  // Character review popups: on authenticated load, fetch the caller's review
+  // updates. Any terminal result the user hasn't confirmed becomes a queued
+  // result popup (server-acked on confirm, so it never re-fires). If the user
+  // has no approved characters yet, show a once-per-day publish incentive popup.
+  useEffect(() => {
+    if (!accessToken) return
+    void import('./services/api').then(({ getReviewUpdates }) =>
+      getReviewUpdates()
+        .then((res) => {
+          const pending = res.characters.filter((c) => c.needs_ack)
+          if (pending.length > 0) {
+            setReviewQueue(pending)
+            return
+          }
+          // No result to confirm — consider the daily incentive popup.
+          if (res.approved_count === 0) {
+            const day = new Date().toISOString().slice(0, 10)
+            if (localStorage.getItem('yuoyuo-publish-incentive-day') !== day) {
+              localStorage.setItem('yuoyuo-publish-incentive-day', day)
+              setIncentiveOpen(true)
+            }
+          }
+        })
+        .catch(() => {}),
+    )
+  }, [accessToken])
+
+  // Confirm the front result in the queue: ack it server-side, then advance.
+  const confirmReviewResult = () => {
+    const current = reviewQueue[0]
+    if (current) {
+      void import('./services/api').then(({ ackReviewResult }) =>
+        ackReviewResult(current.id).catch(() => {}),
+      )
+      if (current.review_status === 'approved') {
+        void useCreditsStore.getState().refresh()
+      }
+    }
+    setReviewQueue((q) => q.slice(1))
+  }
+
   useEffect(() => {
     const nextScale = (0.92 + fontScale * 0.0016).toFixed(3)
     document.documentElement.style.setProperty('--app-font-scale', nextScale)
@@ -159,6 +205,11 @@ export function App() {
       <ToastContainer />
       <UpdatePrompt />
       <DailyCheckinDialog open={checkinOpen} coins={checkinCoins} onClose={() => setCheckinOpen(false)} />
+      <ReviewResultDialog item={reviewQueue[0] ?? null} onConfirm={confirmReviewResult} />
+      <PublishIncentiveDialog
+        open={incentiveOpen && reviewQueue.length === 0}
+        onClose={() => setIncentiveOpen(false)}
+      />
       <Routes>
         <Route path="/" element={<Navigate to="/splash" replace />} />
         <Route path="/splash" element={<SplashPage />} />

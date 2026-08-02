@@ -268,3 +268,184 @@ async def admin_grant_membership(
         tier=tier,
         expires_at=new_expires.isoformat(),
     )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Character review (human moderation of UGC public/unlisted characters)
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Reward config for approved characters.
+_REVIEW_APPROVE_COINS = 100  # display credits per approved character
+_MILESTONE_APPROVED_COUNT = 5  # approved characters that unlock the Plus reward
+_MILESTONE_PLUS_DAYS = 30  # length of the milestone Plus membership
+
+
+class RejectRequest(BaseModel):
+    reason: str = Field(..., min_length=1, max_length=500, description="驳回原因（用户可见）")
+
+
+async def _grant_approval_rewards(db: AsyncSession, character_id: str, owner_id: uuid.UUID) -> dict:
+    """Grant the per-approval coin reward and, at the 5-approved milestone, Plus.
+
+    - Coins: idempotent per character (idempotency_key = char_review:{cid}).
+    - Milestone: guarded by user_reward_milestones so Plus is granted at most once.
+    Returns a summary of what was granted (for the admin response / logs).
+    """
+    # 100 coins, idempotent on character id.
+    await grant(
+        db,
+        owner_id,
+        _REVIEW_APPROVE_COINS * 100,  # display → internal fen
+        idempotency_key=f"char_review:{character_id}",
+        type_str="grant",
+        ref_type="character_review",
+        ref_id=character_id,
+    )
+
+    # Count this user's approved characters (this one is already 'approved').
+    cnt_row = await db.execute(
+        text(
+            """
+            SELECT COUNT(*) FROM characters
+            WHERE owner_user_id = :uid AND status = 'active' AND review_status = 'approved'
+            """
+        ),
+        {"uid": owner_id},
+    )
+    approved_count = int(cnt_row.scalar() or 0)
+
+    milestone_granted = False
+    if approved_count >= _MILESTONE_APPROVED_COUNT:
+        # Guard: insert the milestone marker; only the first insert wins.
+        ins = await db.execute(
+            text(
+                """
+                INSERT INTO user_reward_milestones (user_id, milestone)
+                VALUES (:uid, 'approved_5_plus')
+                ON CONFLICT (user_id, milestone) DO NOTHING
+                RETURNING user_id
+                """
+            ),
+            {"uid": owner_id},
+        )
+        if ins.scalar_one_or_none() is not None:
+            await activate_or_extend(
+                db,
+                owner_id,
+                "plus",
+                _MILESTONE_PLUS_DAYS,
+                granted_by=f"milestone:approved_5:{uuid.uuid4()}",
+            )
+            milestone_granted = True
+
+    return {
+        "coins_granted": _REVIEW_APPROVE_COINS,
+        "approved_count": approved_count,
+        "milestone_plus_granted": milestone_granted,
+    }
+
+
+@router.get("/characters/pending")
+async def admin_list_pending_characters(
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """列出所有待审核（pending）的用户角色，含头像、封面、简介，便于命令行审核。"""
+    result = await db.execute(
+        text(
+            """
+            SELECT c.id, c.owner_user_id, c.visibility, c.cover_url, c.submitted_at,
+                   u.email AS owner_email,
+                   s.draft->>'avatar_url' AS avatar_url,
+                   s.draft->>'persona'    AS persona,
+                   s.draft->>'intro'      AS intro
+            FROM characters c
+            LEFT JOIN users u ON u.id = c.owner_user_id
+            LEFT JOIN soul_specs s ON s.character_id = c.id AND s.status = 'active'
+            WHERE c.review_status = 'pending' AND c.status = 'active'
+            ORDER BY c.submitted_at ASC NULLS LAST
+            """
+        )
+    )
+    items = [
+        {
+            "id": row["id"],
+            "owner_user_id": str(row["owner_user_id"]) if row["owner_user_id"] else None,
+            "owner_email": row["owner_email"],
+            "visibility": row["visibility"],
+            "avatar_url": row["avatar_url"],
+            "cover_url": row["cover_url"],
+            "persona": row["persona"],
+            "intro": row["intro"],
+            "submitted_at": row["submitted_at"].isoformat() if row["submitted_at"] else None,
+        }
+        for row in result.mappings()
+    ]
+    return {"pending": items, "count": len(items)}
+
+
+@router.post("/characters/{character_id}/approve")
+async def admin_approve_character(
+    character_id: str,
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """通过审核：角色进入公开目录，并发放奖励（100 币 + 满 5 个送 1 月进阶版）。"""
+    row = await db.execute(
+        text(
+            """
+            UPDATE characters
+               SET review_status = 'approved',
+                   review_reason = NULL,
+                   reviewed_at   = NOW(),
+                   result_ack_at = NULL
+             WHERE id = :cid AND status = 'active'
+               AND review_status IN ('pending','rejected')
+             RETURNING owner_user_id
+            """
+        ),
+        {"cid": character_id},
+    )
+    owner_id = row.scalar_one_or_none()
+    if owner_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="角色不存在或不在可审核状态"
+        )
+
+    rewards = await _grant_approval_rewards(db, character_id, owner_id)
+    await db.commit()
+    logger.info("character_approved", character_id=character_id, owner_id=str(owner_id), **rewards)
+    return {"ok": True, "id": character_id, **rewards}
+
+
+@router.post("/characters/{character_id}/reject")
+async def admin_reject_character(
+    character_id: str,
+    body: RejectRequest,
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """驳回审核：记录原因（用户可见），角色不进入公开目录。"""
+    row = await db.execute(
+        text(
+            """
+            UPDATE characters
+               SET review_status = 'rejected',
+                   review_reason = :reason,
+                   reviewed_at   = NOW(),
+                   result_ack_at = NULL
+             WHERE id = :cid AND status = 'active'
+               AND review_status IN ('pending','approved')
+             RETURNING owner_user_id
+            """
+        ),
+        {"cid": character_id, "reason": body.reason},
+    )
+    owner_id = row.scalar_one_or_none()
+    if owner_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="角色不存在或不在可审核状态"
+        )
+    await db.commit()
+    logger.info("character_rejected", character_id=character_id, owner_id=str(owner_id))
+    return {"ok": True, "id": character_id, "reason": body.reason}

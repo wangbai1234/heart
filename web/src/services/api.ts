@@ -655,10 +655,41 @@ export interface CharacterDTO {
   tags?: string[]
   /** Engagement heat: distinct user count who chatted with this character. */
   chat_user_count?: number
+  /** Moderation state: not_required | pending | approved | rejected. Owner-only meaning. */
+  review_status?: string
+  /** Rejection reason — only populated for the character's owner. */
+  review_reason?: string | null
 }
 
 export async function getCharacters(): Promise<{ characters: CharacterDTO[] }> {
   return request('/characters')
+}
+
+/** One of the caller's own characters with its review progress. */
+export interface ReviewUpdateDTO {
+  id: string
+  display_name: string
+  visibility: string
+  review_status: 'not_required' | 'pending' | 'approved' | 'rejected'
+  review_reason: string | null
+  submitted_at: string | null
+  reviewed_at: string | null
+  /** A terminal result the user hasn't confirmed yet (drives the result popup). */
+  needs_ack: boolean
+}
+
+export async function getReviewUpdates(): Promise<{
+  characters: ReviewUpdateDTO[]
+  approved_count: number
+}> {
+  return request('/characters/review/updates')
+}
+
+export async function ackReviewResult(characterId: string): Promise<{ ok: boolean }> {
+  return request('/characters/review/ack', {
+    method: 'POST',
+    body: JSON.stringify({ character_id: characterId }),
+  })
 }
 
 /**
@@ -724,6 +755,8 @@ export interface CharacterDraftDTO {
     steadiness: number
   }
   locale?: string
+  /** Intended visibility on publish. public/unlisted enter review; private is immediate. */
+  visibility?: 'public' | 'unlisted' | 'private'
 }
 
 export async function uploadCharacterAvatar(file: File): Promise<{ avatar_url: string }> {
