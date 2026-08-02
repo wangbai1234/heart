@@ -15,11 +15,10 @@ interface Props {
   onEdit: () => void
   onVisibility: (v: 'public' | 'unlisted' | 'private') => void
   onDisable: () => void
-  showToast: (msg: string, type: 'info' | 'success' | 'error') => void
 }
 
 /** 自创角色卡片 + 三点菜单(编辑/可见范围/停用) */
-export function CharacterCard({ char, onEdit, onVisibility, onDisable, showToast }: Props) {
+export function CharacterCard({ char, onEdit, onVisibility, onDisable }: Props) {
   const profile = resolveCharacterProfile(char.id, char.display_name, char.avatar_url, {
     isOwner: char.is_owner && !char.is_builtin,
     coverUrl: char.cover_url,
@@ -30,7 +29,6 @@ export function CharacterCard({ char, onEdit, onVisibility, onDisable, showToast
   const [visMenuOpen, setVisMenuOpen] = useState(false)
   const { resolvedTheme } = useThemeStore()
   const isDark = resolvedTheme === 'dark'
-  const LOCKED_VIS = new Set(['unlisted', 'public'])
 
   return (
     <div
@@ -98,7 +96,6 @@ export function CharacterCard({ char, onEdit, onVisibility, onDisable, showToast
                 >
                   {(['private', 'unlisted', 'public'] as const).map((v) => {
                     const info = VIS_LABELS[v]
-                    const locked = LOCKED_VIS.has(v)
                     return (
                       <MenuButton
                         key={v}
@@ -110,16 +107,11 @@ export function CharacterCard({ char, onEdit, onVisibility, onDisable, showToast
                           />
                         }
                         onClick={() => {
-                          if (locked) {
-                            showToast('链接可见 / 公开暂未开放', 'info')
-                            return
-                          }
                           setMenuOpen(false)
                           setVisMenuOpen(false)
                           onVisibility(v)
                         }}
                         active={char.visibility === v}
-                        disabled={locked}
                       />
                     )
                   })}

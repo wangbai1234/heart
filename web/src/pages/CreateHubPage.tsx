@@ -42,8 +42,12 @@ export function CreateHubPage() {
   async function handleVisibility(id: string, vis: 'public' | 'unlisted' | 'private') {
     try {
       await setVisibility(id, vis)
-      const label = { public: '公开', unlisted: '链接可见', private: '私密' }[vis]
-      showToast(`可见范围已更新为「${label}」`, 'success')
+      if (vis === 'public' || vis === 'unlisted') {
+        const label = vis === 'public' ? '公开' : '链接可见'
+        showToast(`已提交审核，通过后将以「${label}」展示`, 'success')
+      } else {
+        showToast('可见范围已更新为「私密」', 'success')
+      }
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : '操作失败，请稍后再试'
       showToast(msg, 'error')
@@ -108,7 +112,6 @@ export function CreateHubPage() {
                   onEdit={() => navigate(`/characters/new?edit=${char.id}`)}
                   onVisibility={(v) => handleVisibility(char.id, v)}
                   onDisable={() => setDisableTarget(char)}
-                  showToast={showToast}
                 />
               ))}
             </div>
