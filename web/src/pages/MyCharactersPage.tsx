@@ -22,6 +22,13 @@ const VIS_LABELS: Record<string, { label: string; color: string; bg: string }> =
   private:  { label: '私密',   color: '#B0A8B4', bg: 'rgba(176,168,180,0.14)' },
 }
 
+// Review-status pill config. `not_required` (private / built-in) shows nothing.
+const REVIEW_LABELS: Record<string, { label: string; color: string; bg: string }> = {
+  pending:  { label: '审核中',  color: '#C99A2E', bg: 'rgba(201,154,46,0.14)' },
+  approved: { label: '已通过',  color: '#4CAF7D', bg: 'rgba(76,175,125,0.14)' },
+  rejected: { label: '未通过',  color: '#D9556B', bg: 'rgba(217,85,107,0.14)' },
+}
+
 // ── CharacterCard ───────────────────────────────────────────────────
 
 interface CharacterCardProps {
@@ -43,8 +50,8 @@ function CharacterCard({ char, onEdit, onVisibility, onDisable }: CharacterCardP
   const { resolvedTheme } = useThemeStore()
   const isDark = resolvedTheme === 'dark'
   const showToast = useToast()
-  // 链接可见 / 公开 暂未开放：仅「私密」可切换（产品方向 2026-07-25）。
-  const LOCKED_VIS = new Set(['unlisted', 'public'])
+  // 发布功能已上线：公开 / 仅链接均可切换，切换后进入审核队列。
+  const LOCKED_VIS = new Set<string>()
 
   return (
     <div className={`relative backdrop-blur-[18px] rounded-[20px] shadow-[0_4px_16px_rgba(255,183,197,0.10)] overflow-visible ${menuOpen ? 'z-50' : ''} ${isDark ? 'bg-[var(--color-surface-card)] border border-[var(--color-border-subtle)]' : 'bg-[rgba(255,255,255,0.78)] border border-[rgba(255,255,255,0.65)]'}`}>
@@ -64,14 +71,30 @@ function CharacterCard({ char, onEdit, onVisibility, onDisable }: CharacterCardP
         {/* Info */}
         <div className="flex-1 min-w-0">
           <p className="text-[16px] font-semibold text-[var(--color-ink)] truncate">{char.display_name}</p>
-          <div className="flex items-center gap-2 mt-1">
+          <div className="flex items-center gap-2 mt-1 flex-wrap">
             <span
               className="text-[11px] font-medium rounded-full px-2.5 py-[3px]"
               style={{ color: vis.color, background: vis.bg }}
             >
               {vis.label}
             </span>
+            {char.review_status && REVIEW_LABELS[char.review_status] && (
+              <span
+                className="text-[11px] font-medium rounded-full px-2.5 py-[3px]"
+                style={{
+                  color: REVIEW_LABELS[char.review_status].color,
+                  background: REVIEW_LABELS[char.review_status].bg,
+                }}
+              >
+                {REVIEW_LABELS[char.review_status].label}
+              </span>
+            )}
           </div>
+          {char.review_status === 'rejected' && char.review_reason && (
+            <p className="text-[12px] text-[var(--color-text-muted)] leading-snug mt-1.5">
+              未通过原因：{char.review_reason}
+            </p>
+          )}
         </div>
 
         {/* Menu trigger */}
@@ -353,7 +376,7 @@ function EmptyState({ onCreateClick }: { onCreateClick: () => void }) {
       </div>
       <h2 className="text-[20px] font-semibold text-[var(--color-ink)] mb-2">还没有自创角色</h2>
       <p className="text-[14px] text-[var(--color-text-secondary)] leading-[1.65] mb-8 max-w-[260px]">
-        创建属于你的专属伴侣，设计她的名字、性格与说话方式。
+        创建属于你的专属角色，设计 Ta 的名字、性格与说话方式。
       </p>
       <button
         onClick={onCreateClick}

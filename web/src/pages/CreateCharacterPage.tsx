@@ -99,6 +99,7 @@ function buildDraft(fields: FormFields, avatarUrl?: string, coverUrl?: string): 
       steadiness:    toApiSlider(fields.sliders.steadiness),
     },
     locale: 'zh',
+    visibility: fields.visibility,
   }
 }
 
@@ -116,6 +117,7 @@ interface FormFields {
   backstory: string
   hardNever: string[]
   catchphrases: string[]
+  visibility: 'public' | 'unlisted' | 'private'
 }
 
 function defaultForm(): FormFields {
@@ -140,6 +142,7 @@ function defaultForm(): FormFields {
     backstory: '',
     hardNever: [''],
     catchphrases: [''],
+    visibility: 'private',
   }
 }
 
@@ -388,6 +391,7 @@ export function CreateCharacterPage() {
         backstory: draft.backstory || '',
         hardNever: draft.hard_never_user?.length ? draft.hard_never_user : [''],
         catchphrases: draft.catchphrases?.length ? draft.catchphrases : [''],
+        visibility: (draft.visibility as FormFields['visibility']) || 'private',
       })
       if (draft.avatar_url) setAvatarUrl(draft.avatar_url)
       if (draft.cover_url) setCoverUrl(draft.cover_url)
@@ -870,7 +874,7 @@ export function CreateCharacterPage() {
             {/* Hero hint */}
             <div className="text-center pt-6 pb-2">
               <p className="text-[13px] text-[var(--color-text-muted)] leading-relaxed">
-                给你的专属伴侣取个名字，
+                给你的专属角色取个名字，
                 <br />描述 Ta 的性格与故事。
               </p>
             </div>
@@ -1481,6 +1485,48 @@ export function CreateCharacterPage() {
                 ))}
               </div>
             </GlassCard>
+
+            {/* Visibility — 公开 / 仅链接 / 私密 */}
+            <SectionTitle>谁可以看到这个角色</SectionTitle>
+            <GlassCard>
+              <div className="divide-y divide-[var(--color-divider)]">
+                {([
+                  { key: 'public', label: '公开', desc: '审核通过后进入发现页，所有人可见' },
+                  { key: 'unlisted', label: '仅链接', desc: '审核通过后仅通过分享链接可见，不进入发现页' },
+                  { key: 'private', label: '私密', desc: '仅自己可见，无需审核，立即可用' },
+                ] as const).map((opt) => (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    onClick={() => setForm((prev) => ({ ...prev, visibility: opt.key }))}
+                    className="w-full flex items-start gap-3 px-5 py-3.5 text-left active:bg-[rgba(255,183,197,0.15)] transition-colors"
+                  >
+                    <span
+                      className={`mt-0.5 w-[18px] h-[18px] rounded-full border-2 flex-shrink-0 flex items-center justify-center ${
+                        form.visibility === opt.key
+                          ? 'border-[var(--color-primary)]'
+                          : 'border-[var(--color-border-subtle)]'
+                      }`}
+                    >
+                      {form.visibility === opt.key && (
+                        <span className="w-[9px] h-[9px] rounded-full bg-[var(--color-primary)]" />
+                      )}
+                    </span>
+                    <span className="flex-1">
+                      <span className="block text-[15px] text-[var(--color-ink)]">{opt.label}</span>
+                      <span className="block text-[12px] text-[var(--color-text-muted)] leading-snug mt-0.5">
+                        {opt.desc}
+                      </span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </GlassCard>
+            {(form.visibility === 'public' || form.visibility === 'unlisted') && (
+              <p className="text-[12px] text-[var(--color-text-secondary)] leading-relaxed px-1 mt-2">
+                该角色审核后会被公开，所有人可见你的角色。审核通过可获得 100 yuoyuo 币；累计通过 5 个角色，额外赠送一个月进阶版会员。
+              </p>
+            )}
           </>
         )}
       </div>

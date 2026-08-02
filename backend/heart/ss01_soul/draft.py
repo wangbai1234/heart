@@ -98,3 +98,7 @@ class CharacterDraft(BaseModel, extra="forbid"):
     intro: Optional[Annotated[str, Field(max_length=500)]] = None
     sliders: SliderSet = Field(default_factory=SliderSet)
     locale: str = "zh"
+    # Intended visibility once the character is published.
+    # public/unlisted → enters review pipeline; private → immediately live,
+    # no review, no reward.
+    visibility: Literal["public", "unlisted", "private"] = "private"

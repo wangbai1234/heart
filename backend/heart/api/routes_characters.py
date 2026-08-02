@@ -28,9 +28,6 @@ logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix="/api/characters", tags=["characters"])
 
-# Max UGC characters per user
-_UGC_MAX_PER_USER = 5
-
 # Valid character_id pattern (same as SoulSpec)
 _CID_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 
@@ -70,10 +67,14 @@ async def list_characters(
     result = await db.execute(
         text(
             """
-            SELECT id, owner_user_id, visibility, status, has_voice, tags, cover_url
+            SELECT id, owner_user_id, visibility, status, has_voice,
+                   tags, cover_url, review_status, review_reason
             FROM characters
             WHERE status = 'active'
-              AND (visibility = 'public' OR owner_user_id = :uid)
+              AND (
+                    owner_user_id = :uid
+                    OR (visibility = 'public' AND review_status = 'approved')
+              )
             """
         ),
         {"uid": uid},
@@ -85,6 +86,8 @@ async def list_characters(
             owner_user_id=row["owner_user_id"],
             visibility=row["visibility"],
             status=row["status"],
+            review_status=row.get("review_status", "not_required"),
+            review_reason=row.get("review_reason"),
             tags=coerce_tags(row.get("tags")),
             cover_url=row.get("cover_url"),
         )
@@ -262,7 +265,10 @@ async def get_character_profile(
             SELECT id, owner_user_id, visibility, status, has_voice, tags, cover_url
             FROM characters
             WHERE id = :cid AND status = 'active'
-              AND (visibility = 'public' OR owner_user_id = :uid)
+              AND (
+                    owner_user_id = :uid
+                    OR (visibility = 'public' AND review_status = 'approved')
+              )
             """
         ),
         {"cid": character_id, "uid": uid},
@@ -660,7 +666,13 @@ async def create_character(
     current_user: TokenData = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
-    """Create a new private UGC character and hot-load it into the registry."""
+    """Create a new UGC character and hot-load it into the registry.
+
+    Visibility is taken from the draft (public/unlisted/private).
+    public/unlisted characters enter the review pipeline immediately;
+    private characters are live immediately with no review and no reward.
+    Character creation is no longer capped per user.
+    """
     from heart.ss01_soul.content_store import upsert_content
     from heart.ss01_soul.reload import reload_character
     from heart.ss01_soul.spec_builder import build_soul_spec_from_draft
@@ -668,21 +680,21 @@ async def create_character(
 
     uid = uuid.UUID(current_user.user_id)
 
-    # Quota guard
-    count_result = await db.execute(
-        text("SELECT COUNT(*) FROM characters WHERE owner_user_id = :uid AND status = 'active'"),
-        {"uid": uid},
-    )
-    active_count = count_result.scalar() or 0
-    if active_count >= _UGC_MAX_PER_USER:
-        raise HTTPException(status_code=422, detail=f"最多创建 {_UGC_MAX_PER_USER} 个自定义角色")
-
     # Mint id
     name_zh = draft.display_name.zh
     character_id = _mint_character_id(name_zh, uid)
 
     # Build spec
     spec = build_soul_spec_from_draft(draft, character_id=character_id)
+
+    # Determine initial review state based on visibility.
+    vis = draft.visibility or "private"
+    if vis in ("public", "unlisted"):
+        initial_review_status = "pending"
+        submitted_at_sql = "NOW()"
+    else:
+        initial_review_status = "not_required"
+        submitted_at_sql = "NULL"
 
     # Persist — single transaction
     spec_dict = spec.model_dump(mode="json")
@@ -692,15 +704,19 @@ async def create_character(
     await db.execute(
         text(
             "INSERT INTO characters"
-            " (id, owner_user_id, visibility, status, soul_spec_version, tags, cover_url)"
-            " VALUES (:id, :uid, 'private', 'active', :ver, CAST(:tags AS jsonb), :cover)"
+            " (id, owner_user_id, visibility, status, soul_spec_version,"
+            "  tags, cover_url, review_status, submitted_at)"
+            " VALUES (:id, :uid, :vis, 'active', :ver,"
+            "  CAST(:tags AS jsonb), :cover, :review_status, " + submitted_at_sql + ")"
         ),
         {
             "id": character_id,
             "uid": uid,
+            "vis": vis,
             "ver": spec.spec_version,
             "tags": json.dumps(draft.tags or []),
             "cover": draft.cover_url,
+            "review_status": initial_review_status,
         },
     )
     await insert_spec(
@@ -902,18 +918,123 @@ async def set_character_visibility(
     current_user: TokenData = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
-    """Update a UGC character's visibility (public|unlisted|private)."""
+    """Update a UGC character's visibility (public|unlisted|private).
+
+    Switching to public/unlisted enters the review pipeline (pending).
+    Switching to private exits the pipeline (not_required) and clears any
+    pending/rejected state so the character becomes live immediately.
+    """
     uid = uuid.UUID(current_user.user_id)
     if body.visibility not in ("public", "unlisted", "private"):
         raise HTTPException(status_code=422, detail="visibility 必须是 public / unlisted / private")
     await _require_owner(character_id, uid, db)
-    await db.execute(
-        text("UPDATE characters SET visibility = :vis WHERE id = :cid"),
-        {"vis": body.visibility, "cid": character_id},
-    )
+
+    if body.visibility in ("public", "unlisted"):
+        await db.execute(
+            text(
+                """
+                UPDATE characters
+                   SET visibility      = :vis,
+                       review_status   = CASE
+                                           WHEN review_status = 'approved' THEN 'approved'
+                                           ELSE 'pending'
+                                         END,
+                       submitted_at    = CASE
+                                           WHEN review_status NOT IN ('approved','pending')
+                                           THEN NOW()
+                                           ELSE submitted_at
+                                         END,
+                       result_ack_at   = NULL
+                 WHERE id = :cid
+                """
+            ),
+            {"vis": body.visibility, "cid": character_id},
+        )
+    else:
+        # Switching to private: exit pipeline, go live immediately.
+        await db.execute(
+            text(
+                "UPDATE characters SET visibility = :vis, review_status = 'not_required' WHERE id = :cid"
+            ),
+            {"vis": body.visibility, "cid": character_id},
+        )
+
     await db.commit()
     logger.info("ugc_visibility_updated", character_id=character_id, visibility=body.visibility)
     return {"id": character_id, "visibility": body.visibility}
+
+
+class ReviewAck(BaseModel):
+    character_id: str
+
+
+@router.get("/review/updates")
+async def get_review_updates(
+    current_user: TokenData = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Review status of the caller's own UGC characters + reward context.
+
+    Drives two client popups:
+      - Result notification: any row with ``needs_ack`` (a terminal
+        approved/rejected result the user hasn't confirmed yet).
+      - Daily incentive: when ``approved_count == 0`` the client shows a
+        once-per-day explainer about the publish reward.
+    """
+    uid = uuid.UUID(current_user.user_id)
+    result = await db.execute(
+        text(
+            """
+            SELECT id, visibility, review_status, review_reason,
+                   submitted_at, reviewed_at,
+                   (review_status IN ('approved','rejected')
+                    AND result_ack_at IS NULL) AS needs_ack
+            FROM characters
+            WHERE owner_user_id = :uid AND status = 'active'
+            ORDER BY reviewed_at DESC NULLS LAST, submitted_at DESC NULLS LAST
+            """
+        ),
+        {"uid": uid},
+    )
+    items = []
+    approved_count = 0
+    for row in result.mappings():
+        if row["review_status"] == "approved":
+            approved_count += 1
+        items.append(
+            {
+                "id": row["id"],
+                "display_name": get_display_name(row["id"]),
+                "visibility": row["visibility"],
+                "review_status": row["review_status"],
+                "review_reason": row["review_reason"],
+                "submitted_at": row["submitted_at"].isoformat() if row["submitted_at"] else None,
+                "reviewed_at": row["reviewed_at"].isoformat() if row["reviewed_at"] else None,
+                "needs_ack": bool(row["needs_ack"]),
+            }
+        )
+    return {"characters": items, "approved_count": approved_count}
+
+
+@router.post("/review/ack")
+async def ack_review_result(
+    body: ReviewAck,
+    current_user: TokenData = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Mark a review result as seen so its notification popup stops firing."""
+    uid = uuid.UUID(current_user.user_id)
+    await db.execute(
+        text(
+            """
+            UPDATE characters SET result_ack_at = NOW()
+            WHERE id = :cid AND owner_user_id = :uid
+            """
+        ),
+        {"cid": body.character_id, "uid": uid},
+    )
+    await db.commit()
+    return {"ok": True}
 
 
 @router.post("/{character_id}/disable")

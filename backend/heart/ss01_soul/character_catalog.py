@@ -36,6 +36,8 @@ class CharacterRow:
     owner_user_id: Optional[UUID]
     visibility: str
     status: str
+    review_status: str = "not_required"
+    review_reason: Optional[str] = None
     tags: list[str] = field(default_factory=list)
     cover_url: Optional[str] = None
 
@@ -49,6 +51,9 @@ class CharacterEntry:
     visibility: str
     is_builtin: bool
     is_owner: bool
+    review_status: str = "not_required"
+    # review_reason is only populated for the owner; never exposed to other users.
+    review_reason: Optional[str] = None
     avatar_url: Optional[str] = None
     tags: list[str] = field(default_factory=list)
     cover_url: Optional[str] = None
@@ -77,15 +82,22 @@ def coerce_tags(raw: object) -> list[str]:
 def visible_to(row: CharacterRow, viewer_id: UUID) -> bool:
     """Whether ``viewer_id`` may see ``row`` in their catalog.
 
+    Rules:
     - Non-active rows are never listed.
-    - ``public`` rows are visible to everyone.
-    - ``unlisted`` / ``private`` rows are visible only to their owner.
+    - Built-in characters (no owner) are always visible.
+    - Owner always sees their own characters regardless of review status.
+    - ``public`` rows with review_status='approved' are visible to everyone.
+    - ``unlisted`` / ``private`` rows (or un-approved public) are owner-only.
     """
     if row.status != "active":
         return False
-    if row.visibility == "public":
+    if row.owner_user_id is None:
+        # Built-in character — always listed.
         return True
-    return row.owner_user_id is not None and row.owner_user_id == viewer_id
+    if row.owner_user_id == viewer_id:
+        return True
+    # Non-owner can only see public+approved characters.
+    return row.visibility == "public" and row.review_status == "approved"
 
 
 def build_catalog_entries(
@@ -107,13 +119,20 @@ def build_catalog_entries(
     """
     avatar_urls = avatar_urls or {}
     popularity = popularity or {}
+
+    def is_owner_fn(row: CharacterRow) -> bool:
+        return row.owner_user_id is not None and row.owner_user_id == viewer_id
+
     entries = [
         CharacterEntry(
             id=row.id,
             display_name=get_display_name(row.id),
             visibility=row.visibility,
             is_builtin=row.owner_user_id is None,
-            is_owner=row.owner_user_id is not None and row.owner_user_id == viewer_id,
+            is_owner=is_owner_fn(row),
+            review_status=row.review_status,
+            # Only expose rejection reason to the character owner.
+            review_reason=row.review_reason if is_owner_fn(row) else None,
             avatar_url=avatar_urls.get(row.id),
             tags=list(row.tags or []),
             cover_url=row.cover_url,
