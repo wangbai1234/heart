@@ -504,7 +504,9 @@ def test_failover_chain_empty_failover():
 
 
 def test_default_failover_order():
-    assert DEFAULT_FAILOVER == ["claude", "grok", "deepseek"]
+    # claude removed from the product's failover chain (2026-08 overhaul);
+    # ClaudeProvider code is retained but no longer wired as a default hop.
+    assert DEFAULT_FAILOVER == ["grok", "deepseek"]
 
 
 # ---------------------------------------------------------------------------

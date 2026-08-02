@@ -109,9 +109,10 @@ async def test_fish_provider_stream_synthesize_yields_one_chunk():
 def test_clone_cost_fen_mimo():
     from heart.api.routes_voice import _clone_cost_fen
 
+    # Default tier "free" is passed through to action_cost_fen (tier-aware pricing).
     with patch("heart.billing.pricing.action_cost_fen", return_value=5000) as mock_fn:
         result = _clone_cost_fen("mimo")
-    mock_fn.assert_called_once_with("clone_mimo")
+    mock_fn.assert_called_once_with("clone_mimo", "free")
     assert result == 5000
 
 
@@ -120,8 +121,18 @@ def test_clone_cost_fen_fish():
 
     with patch("heart.billing.pricing.action_cost_fen", return_value=10000) as mock_fn:
         result = _clone_cost_fen("fish")
-    mock_fn.assert_called_once_with("clone_fish")
+    mock_fn.assert_called_once_with("clone_fish", "free")
     assert result == 10000
+
+
+def test_clone_cost_fen_free_on_immersive():
+    from heart.api.routes_voice import _clone_cost_fen
+
+    # Immersive waives the clone fee — action_cost_fen isn't even consulted.
+    with patch("heart.billing.pricing.action_cost_fen") as mock_fn:
+        result = _clone_cost_fen("fish", "immersive")
+    mock_fn.assert_not_called()
+    assert result == 0
 
 
 def test_clone_cost_fen_fallback_on_import_error():

@@ -166,7 +166,7 @@ class Settings(BaseSettings):
     smtp_password: str = ""
 
     # Credits / Billing (centesimal: 1 display credit = 100 fen internally)
-    signup_grant_credits: int = 10000  # 100 display credits × 100
+    signup_grant_credits: int = 4000  # 40 display credits × 100
     credits_per_text_turn: int = 100  # 1 display credit (legacy turn billing)
     credits_per_voice_turn: int = 500  # 5 display credits (legacy turn billing)
     credits_cost_text_message: int = 50  # 0.5 display credits per text bubble
@@ -189,8 +189,13 @@ class Settings(BaseSettings):
     afdian_checkout_urls: str = "{}"
 
     # Per-action pricing (display coins; ×100 = fen internally)
-    grok_cost_credits: int = 3  # 300 fen per LLM turn
-    claude_cost_credits: int = 12  # 1200 fen per LLM turn
+    deepseek_cost_credits: int = (
+        1  # 100 fen per LLM turn (普通交流; only charged on tiers where deepseek is not free)
+    )
+    grok_cost_credits: int = 3  # 300 fen per LLM turn (私密陪伴)
+    claude_cost_credits: int = (
+        12  # 1200 fen per LLM turn (legacy; claude removed from tiers/failover)
+    )
     mimo_tts_cost_credits: int = 5  # 500 fen per TTS bubble
     fish_tts_cost_credits: int = 8  # 800 fen per TTS bubble
     clone_mimo_cost_credits: int = 50  # 5000 fen per clone
@@ -204,25 +209,32 @@ class Settings(BaseSettings):
 
     # Membership tier definitions (JSON string, overridable via MEMBERSHIP_TIERS_CONFIG env var).
     # Each tier maps to: models (allowed LLM slugs), tts (allowed TTS providers),
-    # clone (allowed clone providers), monthly_grant (coins per 30-day cycle).
+    # clone (allowed clone providers), monthly_grant (coins per 30-day cycle),
+    # free (items complimentary on this tier — everything else is charged per use).
+    # free item slugs: "deepseek" | "grok" | "tts" | "clone" | "asr" | "story_unlock" | "story_chat".
+    # Access is universal (all tiers may use deepseek/grok/tts/clone); tiers differ only
+    # in *which items are free* vs charged. claude removed (情感陪伴 下线).
     membership_tiers_config: str = (
-        '{"free":{"models":["deepseek"],"tts":["mimo"],"clone":[],"monthly_grant":0},'
-        '"plus":{"models":["deepseek","grok"],"tts":["mimo","fish"],"clone":["mimo","fish"],"monthly_grant":400},'
-        '"immersive":{"models":["deepseek","grok","claude"],"tts":["mimo","fish"],"clone":["mimo","fish"],"monthly_grant":800}}'
+        '{"free":{"models":["deepseek","grok"],"tts":["mimo","fish"],"clone":["mimo","fish"],"monthly_grant":0,"free":[]},'
+        '"plus":{"models":["deepseek","grok"],"tts":["mimo","fish"],"clone":["mimo","fish"],"monthly_grant":300,"free":["deepseek","tts","asr","story_unlock"]},'
+        '"immersive":{"models":["deepseek","grok"],"tts":["mimo","fish"],"clone":["mimo","fish"],"monthly_grant":700,"free":["deepseek","grok","tts","clone","asr","story_unlock","story_chat"]}}'
     )
 
     # Membership subscription prices (CNY/month, for pricing endpoint display only)
-    membership_plus_price_monthly: int = 39
-    membership_immersive_price_monthly: int = 79
+    membership_plus_price_monthly: int = 29
+    membership_immersive_price_monthly: int = 69
 
     # Afdian SKU → fulfillment map (JSON string, overridable via AFDIAN_SKU_MAP env var).
     # Each entry: {"type":"membership","tier":"plus","days":30} or {"type":"coins","coins":220}
     afdian_sku_map: str = "{}"
 
     # Invite rewards (display coins; ×100 = fen internally)
-    invite_referral_grant_coins: int = 100  # per inviter + per invitee on first chat
-    invite_milestone_5_coins: int = 300  # bonus after 5 valid invites
-    invite_milestone_10_coins: int = 1000  # bonus after 10 valid invites
+    invite_referral_grant_coins: int = 40  # per inviter + per invitee on first chat
+    invite_milestone_5_coins: int = 50  # bonus after 5 valid invites
+    invite_milestone_10_coins: int = 120  # bonus after 10 valid invites
+
+    # Daily check-in reward (display coins; ×100 = fen internally)
+    daily_checkin_coins: int = 20  # granted once per calendar day (Asia/Shanghai)
 
     # Push Notifications (V1)
     fcm_credentials_path: str = ""

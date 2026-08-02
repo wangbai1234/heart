@@ -22,8 +22,9 @@ from heart.infra.llm_providers.registry import ProviderRegistry
 
 logger = structlog.get_logger()
 
-# Default failover chain: highest quality → cheapest (DeepSeek is free).
-DEFAULT_FAILOVER = ["claude", "grok", "deepseek"]
+# Default failover chain: highest quality → cheapest (DeepSeek is the free base).
+# claude (情感陪伴) removed 2026-08 — no longer a selectable model or failover target.
+DEFAULT_FAILOVER = ["grok", "deepseek"]
 
 # Time-to-first-token deadline for the streaming path. If a candidate model does
 # not produce its first *content* byte within this window, we abort it and fail

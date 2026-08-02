@@ -316,13 +316,14 @@ async def _precheck_billing(
                     logger.info("voice_downgraded_no_usable_voice", tier=tier, turn_id=turn_id)
                     effective_voice = False
                 else:
-                    tts_cost = tts_cost_fen(ev.provider)
+                    tts_cost = tts_cost_fen(ev.provider, tier)
 
-            # Balance floor (C): LLM (per model) + TTS (per provider). There is no
-            # legacy per-message charge — text bubbles are free; a turn costs only
-            # the LLM (by served model) plus TTS (by provider, voice turns only).
+            # Balance floor (C): LLM (per model) + TTS (per provider), tier-aware
+            # (items free on the tier cost 0). There is no legacy per-message
+            # charge — text bubbles are free; a turn costs only the LLM (by served
+            # model) plus TTS (by provider, voice turns only).
             balance = await get_balance(db, user_uuid)
-            llm_cost = llm_cost_fen(model)
+            llm_cost = llm_cost_fen(model, tier)
             min_required = llm_cost + tts_cost
 
             if balance < min_required:
@@ -520,12 +521,13 @@ async def _charge_llm_cost(
     user_uuid: uuid.UUID,
     turn_id: str,
     served_model: str,
+    tier: str = "free",
 ) -> tuple[int, int]:
     """Deduct LLM per-turn cost. Returns (cost_charged, new_balance). 0,0 if free."""
     from heart.billing import deduct_credits
     from heart.billing.pricing import llm_cost_fen
 
-    llm_cost = llm_cost_fen(served_model)
+    llm_cost = llm_cost_fen(served_model, tier)
     if llm_cost == 0:
         return 0, 0
     new_balance = await deduct_credits(
@@ -539,12 +541,13 @@ async def _charge_tts_cost(
     user_uuid: uuid.UUID,
     turn_id: str,
     tts_provider: str,
+    tier: str = "free",
 ) -> tuple[int, int]:
     """Deduct TTS per-turn cost. Returns (cost_charged, new_balance). 0,0 if free provider."""
     from heart.billing import deduct_credits
     from heart.billing.pricing import tts_cost_fen
 
-    tts_cost = tts_cost_fen(tts_provider)
+    tts_cost = tts_cost_fen(tts_provider, tier)
     if tts_cost == 0:
         return 0, 0
     new_balance = await deduct_credits(
@@ -611,6 +614,11 @@ async def _post_turn_billing(
 
             total_charged, new_balance = 0, 0
 
+            # Resolve tier once for tier-aware billing (deepseek/tts free on paid tiers).
+            from heart.membership import get_effective_tier
+
+            tier = await get_effective_tier(db, user_uuid)
+
             if not turn_safety_blocked:
                 total_charged, new_balance = await _charge_and_insert_bubbles(
                     db,
@@ -629,7 +637,9 @@ async def _post_turn_billing(
 
                 # LLM per-turn billing (idempotent key turn:{id}:llm)
                 try:
-                    llm_cost, _bal = await _charge_llm_cost(db, user_uuid, turn_id, served_model)
+                    llm_cost, _bal = await _charge_llm_cost(
+                        db, user_uuid, turn_id, served_model, tier
+                    )
                     if llm_cost > 0:
                         total_charged += llm_cost
                         new_balance = _bal
@@ -646,7 +656,7 @@ async def _post_turn_billing(
                 if actual_modality == "voice" and tts_provider:
                     try:
                         tts_cost, _bal = await _charge_tts_cost(
-                            db, user_uuid, turn_id, tts_provider
+                            db, user_uuid, turn_id, tts_provider, tier
                         )
                         if tts_cost > 0:
                             total_charged += tts_cost

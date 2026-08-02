@@ -127,8 +127,9 @@ async def get_scenario(
         "free_tier": scenario.free_tier,
         "unlocked": unlocked,
         "tier_allowed": _tier_can_unlock(tier, scenario.free_tier),
-        "unlock_cost_coins": settings.story_unlock_cost_coins,
-        "minute_cost_coins": settings.story_minute_cost_coins,
+        # Tier-aware: plus/immersive unlock free, immersive plays free per minute.
+        "unlock_cost_coins": story_unlock_cost_fen(tier) // 100,
+        "minute_cost_coins": story_minute_cost_fen(tier) // 100,
     }
 
 
@@ -178,11 +179,17 @@ async def unlock_scenario(
     if not _tier_can_unlock(tier, scenario.free_tier):
         raise HTTPException(403, "tier_required")
 
+    unlock_cost = story_unlock_cost_fen(tier)
+    if unlock_cost == 0:
+        # Free on this tier (plus/immersive): record the unlock, no charge.
+        await repo.add_scenario_unlock(db, user_id, scenario_id)
+        return {"ok": True, "already": False, "balance": await billing.get_balance(db, user_id)}
+
     try:
         balance = await billing.deduct_credits(
             db,
             user_id,
-            story_unlock_cost_fen(),
+            unlock_cost,
             idempotency_key=f"unlock_story:{user_id}:{scenario_id}",
             type_str="unlock_story",
         )

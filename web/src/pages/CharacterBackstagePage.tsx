@@ -11,11 +11,10 @@ import { Switch } from '../components/ui/Switch'
 import { getCharacterSettings, updateCharacterSettings, getCharacterVoice, clearCharacterConversations, setCharacterVoiceProvider, getPricing } from '../services/api'
 import { useToastStore } from '../stores/toastStore'
 
-// 文字聊天三档 → LLM 模型。私密/情感为会员模型，按 membership 权益门控。
+// 文字聊天两档 → LLM 模型。普通交流=deepseek（会员免费，体验版按币）；私密陪伴=grok。
 const TEXT_TIERS = [
-  { key: 'daily', model: 'deepseek', title: '日常陪伴', sub: '无限畅聊，适合日常交流与轻松陪伴' },
-  { key: 'private', model: 'grok', title: '私密陪伴', sub: '更懂你的私人想法，支持长期记忆交流' },
-  { key: 'emotional', model: 'claude', title: '情感陪伴', sub: '更细腻自然的表达，真人陪伴你，支持长期记忆交流' },
+  { key: 'daily', model: 'deepseek', title: '普通交流', sub: '' },
+  { key: 'private', model: 'grok', title: '私密陪伴', sub: '回复更快，更聪明' },
 ] as const
 
 // 语音聊天两档 → TTS provider（角色配置的 voice_provider）。真人语音=Fish 为会员能力。
@@ -45,8 +44,8 @@ export function CharacterBackstagePage() {
   const [selectedProvider, setSelectedProvider] = useState<string | null>(null)
   const [switchingProvider, setSwitchingProvider] = useState(false)
   const [pricing, setPricing] = useState<{
+    deepseekCost: number
     grokCost: number
-    claudeCost: number
     mimoTtsCost: number
     fishTtsCost: number
   } | null>(null)
@@ -56,6 +55,8 @@ export function CharacterBackstagePage() {
   const setChatModel = useAppStore((s) => s.setChatModel)
   const allowedModels = useMembershipStore((s) => s.entitlements.models)
   const allowedTts = useMembershipStore((s) => s.entitlements.tts)
+  // Items complimentary on the current tier (charged 0). Drives the 免费/X币 labels.
+  const freeItems = useMembershipStore((s) => s.entitlements.free)
   const membershipLoaded = useMembershipStore((s) => s.loaded)
   const refreshMembership = useMembershipStore((s) => s.refresh)
 
@@ -86,11 +87,11 @@ export function CharacterBackstagePage() {
 
     getPricing()
       .then((data) => {
+        const deepseekCost = data.models.find(m => m.id === 'deepseek')?.cost ?? 1
         const grokCost = data.models.find(m => m.id === 'grok')?.cost ?? 3
-        const claudeCost = data.models.find(m => m.id === 'claude')?.cost ?? 12
         const mimoTtsCost = data.actions.find(a => a.id === 'tts_mimo')?.cost ?? 5
         const fishTtsCost = data.actions.find(a => a.id === 'tts_fish')?.cost ?? 8
-        setPricing({ grokCost, claudeCost, mimoTtsCost, fishTtsCost })
+        setPricing({ deepseekCost, grokCost, mimoTtsCost, fishTtsCost })
       })
       .catch(() => { /* keep default values */ })
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -104,15 +105,16 @@ export function CharacterBackstagePage() {
   const currentVoiceKey =
     selectedProvider === 'fish' ? 'real' : selectedProvider === 'mimo' ? 'daily' : null
 
-  // 定价标签：日常陪伴免费，其他显示 X币/条
+  // 定价标签：会员档免费的项目显示「免费」，否则显示 X币/条。
   const getTextTierLabel = (key: string) => {
-    if (key === 'daily') return '免费'
-    if (key === 'private') return `${pricing?.grokCost ?? 3}币/条`
-    if (key === 'emotional') return `${pricing?.claudeCost ?? 12}币/条`
+    if (key === 'daily') return freeItems.includes('deepseek') ? '免费' : `${pricing?.deepseekCost ?? 1}币/条`
+    if (key === 'private') return freeItems.includes('grok') ? '免费' : `${pricing?.grokCost ?? 3}币/条`
     return ''
   }
 
+  // 语音(TTS)在进阶/沉浸档免费；体验版按 provider 币价。
   const getVoiceTierLabel = (key: string) => {
+    if (freeItems.includes('tts')) return '免费'
     if (key === 'daily') return `${pricing?.mimoTtsCost ?? 5}币/条`
     if (key === 'real') return `${pricing?.fishTtsCost ?? 8}币/条`
     return ''

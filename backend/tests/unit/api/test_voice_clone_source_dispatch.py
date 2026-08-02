@@ -414,26 +414,42 @@ async def test_fish_clone_provider_error_returns_reason():
 
 
 # ---------------------------------------------------------------------------
-# Tier gate: assert_clone_allowed must reject free users (P4 — defect E)
+# Tier gate: clone is universally *available* (2026-08 overhaul). Free users may
+# clone with both providers — they're charged per action (action_cost_fen),
+# whereas immersive waives the fee. Access is no longer tier-gated.
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
-async def test_assert_clone_allowed_rejects_free_tier():
-    from heart.membership import CloneForbiddenError, assert_clone_allowed
+async def test_assert_clone_allowed_permits_free_fish():
+    from heart.membership import assert_clone_allowed
 
-    with pytest.raises(CloneForbiddenError) as exc_info:
-        assert_clone_allowed("free", "fish")
-    assert exc_info.value.provider == "fish"
-    assert exc_info.value.tier == "free"
+    assert_clone_allowed("free", "fish")  # must not raise — free can clone (paid)
 
 
 @pytest.mark.asyncio
-async def test_assert_clone_allowed_rejects_free_mimo():
-    from heart.membership import CloneForbiddenError, assert_clone_allowed
+async def test_assert_clone_allowed_permits_free_mimo():
+    from heart.membership import assert_clone_allowed
 
-    with pytest.raises(CloneForbiddenError):
-        assert_clone_allowed("free", "mimo")
+    assert_clone_allowed("free", "mimo")  # must not raise
+
+
+@pytest.mark.asyncio
+async def test_free_tier_clone_is_charged():
+    """Free tier clone is permitted but billed (not complimentary)."""
+    from heart.billing.pricing import action_cost_fen
+
+    assert action_cost_fen("clone_fish", "free") == 10000
+    assert action_cost_fen("clone_mimo", "free") == 5000
+
+
+@pytest.mark.asyncio
+async def test_immersive_tier_clone_is_free():
+    """Immersive waives the clone fee."""
+    from heart.billing.pricing import action_cost_fen
+
+    assert action_cost_fen("clone_fish", "immersive") == 0
+    assert action_cost_fen("clone_mimo", "immersive") == 0
 
 
 @pytest.mark.asyncio

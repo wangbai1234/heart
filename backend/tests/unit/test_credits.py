@@ -68,12 +68,27 @@ class TestCreditsRedeem:
 
 
 class TestCreditsPricing:
-    """Pricing endpoint doesn't need auth or DB."""
+    """Pricing endpoint doesn't need auth or DB (no skip needed here)."""
 
     def test_pricing_returns_tiers(self, client):
         response = client.get("/api/credits/pricing")
         assert response.status_code == 200
         data = response.json()
-        assert data["per_text"] == 1
-        assert data["per_voice"] == 5
-        assert len(data["tiers"]) == 4
+        # models: deepseek + grok (claude removed 2026-08)
+        assert {m["id"] for m in data["models"]} == {"deepseek", "grok"}
+        # 3 membership tiers + 4 shop packs
+        assert {t["tier"] for t in data["membership_tiers"]} == {
+            "free", "plus", "immersive"
+        }
+        assert len(data["shop"]) == 4
+
+
+class TestDailyCheckinAuth:
+    """DB-gated: only the auth boundary lives here. Mocked check-in *logic*
+    tests live in test_pricing_entitlements.py so they run without Postgres.
+    """
+
+    def test_checkin_without_auth(self, client):
+        # No bearer token → 401 before handler runs.
+        response = client.post("/api/credits/checkin")
+        assert response.status_code == 401

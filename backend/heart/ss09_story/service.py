@@ -300,8 +300,16 @@ class StoryService:
             return run, 0, "safety_blocked"
 
         # Credit pre-check parity with chat: refuse before generating when the
-        # user can't afford the LLM turn cost (DeepSeek is 0 fen → always passes).
-        cost = llm_cost_fen(run.model or "deepseek")
+        # user can't afford the LLM turn cost. Story is billed per-minute (see
+        # charge_playtime), so DeepSeek per-turn stays free here regardless of tier
+        # to avoid double-charging on top of the per-minute meter; only paid models
+        # (grok) carry a per-turn cost. Tier still waives grok on immersive.
+        model = run.model or "deepseek"
+        if model in ("deepseek", "deepseek-chat", "deepseek-reasoner"):
+            cost = 0
+        else:
+            tier = await self._resolve_tier(user_id)
+            cost = llm_cost_fen(model, tier)
         if cost > 0 and not await self._can_afford(user_id, cost):
             return run, cost, "insufficient_credits"
 
@@ -332,6 +340,17 @@ class StoryService:
             return False
 
     # ── billing (PR5, parity with chat per-turn LLM charge) ──────────
+
+    async def _resolve_tier(self, user_id: UUID) -> str:
+        """Resolve the user's effective membership tier (fail-open to free)."""
+        from heart.membership import get_effective_tier
+
+        try:
+            async with self._session_factory() as session:
+                return await get_effective_tier(session, user_id)
+        except Exception:
+            logger.exception("story_tier_resolve_failed", user_id=str(user_id))
+            return "free"
 
     async def _can_afford(self, user_id: UUID, cost: int) -> bool:
         """True if the user's balance covers the turn cost (fail-open on error)."""
@@ -386,7 +405,8 @@ class StoryService:
         """
         from heart.billing import InsufficientCreditsError, deduct_credits
 
-        cost = story_minute_cost_fen()
+        tier = await self._resolve_tier(user_id)
+        cost = story_minute_cost_fen(tier)
         if cost <= 0:
             return ("free", 0)
 

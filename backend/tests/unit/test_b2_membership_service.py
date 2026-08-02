@@ -163,12 +163,15 @@ class TestGetMembershipEndpoint:
         assert "grok" in result["entitlements"]["models"]
         assert "claude" not in result["entitlements"]["models"]
         assert "fish" in result["entitlements"]["tts"]
-        assert result["monthly_grant"] == 400
+        # plus free list waives deepseek/tts/asr/story_unlock (2026-08 overhaul)
+        assert "deepseek" in result["entitlements"]["free"]
+        assert "grok" not in result["entitlements"]["free"]
+        assert result["monthly_grant"] == 300
         assert "binding_code" in result
         assert "expires_at" in result
 
     @pytest.mark.asyncio
-    async def test_free_tier_has_no_fish(self):
+    async def test_free_tier_has_universal_access_but_nothing_free(self):
         from unittest.mock import patch
 
         from heart.api.routes_membership import get_membership
@@ -183,12 +186,15 @@ class TestGetMembershipEndpoint:
             result = await get_membership(current_user=current_user, db=db)
 
         assert result["tier"] == "free"
-        assert "grok" not in result["entitlements"]["models"]
-        assert "fish" not in result["entitlements"]["tts"]
+        # Universal access (2026-08 overhaul): free tier CAN use grok+fish, but
+        # pays per use — nothing complimentary and no monthly grant.
+        assert "grok" in result["entitlements"]["models"]
+        assert "fish" in result["entitlements"]["tts"]
+        assert result["entitlements"]["free"] == []
         assert result["monthly_grant"] == 0
 
     @pytest.mark.asyncio
-    async def test_immersive_tier_has_claude(self):
+    async def test_immersive_tier_everything_free(self):
         from unittest.mock import patch
 
         from heart.api.routes_membership import get_membership
@@ -203,8 +209,12 @@ class TestGetMembershipEndpoint:
         ):
             result = await get_membership(current_user=current_user, db=db)
 
-        assert "claude" in result["entitlements"]["models"]
-        assert result["monthly_grant"] == 800
+        # claude fully removed; immersive waives everything and grants 700 coins.
+        assert "claude" not in result["entitlements"]["models"]
+        assert set(result["entitlements"]["free"]) == {
+            "deepseek", "grok", "tts", "clone", "asr", "story_unlock", "story_chat"
+        }
+        assert result["monthly_grant"] == 700
 
     @pytest.mark.asyncio
     async def test_free_user_has_null_expires_at(self):

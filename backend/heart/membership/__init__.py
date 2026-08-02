@@ -33,6 +33,9 @@ class Entitlements:
     tts: list[str]
     clone: list[str]
     monthly_grant_fen: int
+    # Items complimentary on this tier (charged 0). Everything not listed is
+    # charged per use. Slugs: deepseek | grok | tts | clone | asr | story_unlock | story_chat.
+    free: list[str]
 
 
 # ---------------------------------------------------------------------------
@@ -54,6 +57,7 @@ def _parse_tiers() -> dict[str, Entitlements]:
             tts=list(v.get("tts", [])),
             clone=list(v.get("clone", [])),
             monthly_grant_fen=int(v.get("monthly_grant", 0)) * 100,
+            free=list(v.get("free", [])),
         )
     return result
 
@@ -62,6 +66,15 @@ def get_entitlements(tier: str) -> Entitlements:
     """Return Entitlements for *tier*. Unknown tiers fall back to free."""
     tiers = _parse_tiers()
     return tiers.get(tier) or tiers["free"]
+
+
+def is_free_for_tier(tier: str, item: str) -> bool:
+    """Whether *item* is complimentary (charged 0) on *tier*.
+
+    *item* is a pricing slug: "deepseek" | "grok" | "tts" | "clone" | "asr" |
+    "story_unlock" | "story_chat". Unknown tiers fall back to free (nothing free).
+    """
+    return item in get_entitlements(tier).free
 
 
 # ---------------------------------------------------------------------------

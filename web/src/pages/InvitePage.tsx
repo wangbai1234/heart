@@ -72,7 +72,7 @@ export function InvitePage() {
           <>
             {/* Invite code hero */}
             <div className="bg-[var(--color-glass-75)] backdrop-blur-[20px] rounded-[20px] border border-[var(--color-border-glass)] shadow-[var(--shadow-hero)] p-6 mt-4 mb-5 text-center">
-              <p className="text-[14px] text-[var(--color-text-secondary)] mb-1">邀请好友，双方各得 100 yuoyuo币</p>
+              <p className="text-[14px] text-[var(--color-text-secondary)] mb-1">邀请好友，双方各得 40 yuoyuo币</p>
               <p className="text-[13px] text-[var(--color-text-muted)] mb-3">好友完成首次聊天后到账</p>
               <button
                 onClick={() => copy(status.invite_code, '邀请码')}
