@@ -14,11 +14,30 @@ import pytest
 
 class TestChargeLlmCost:
     @pytest.mark.asyncio
-    async def test_deepseek_returns_zero_no_deduction(self):
+    async def test_deepseek_deducts_100_fen_on_free_tier(self):
+        """普通交流 (deepseek) costs 1币/条 on free tier (2026-08 overhaul)."""
         from heart.api.routes_chat_ws import _charge_llm_cost
 
         db = AsyncMock()
-        cost, bal = await _charge_llm_cost(db, uuid.uuid4(), str(uuid.uuid4()), "deepseek")
+        turn_id = str(uuid.uuid4())
+        user_id = uuid.uuid4()
+
+        with patch("heart.billing.deduct_credits", new=AsyncMock(return_value=4900)) as mock_deduct:
+            cost, bal = await _charge_llm_cost(db, user_id, turn_id, "deepseek")
+
+        assert cost == 100  # deepseek_cost_credits=1 → 100 fen
+        assert bal == 4900
+        mock_deduct.assert_called_once_with(db, user_id, 100, f"turn:{turn_id}:llm", "consume_llm")
+
+    @pytest.mark.asyncio
+    async def test_deepseek_free_on_plus_tier(self):
+        """普通交流 is complimentary on plus/immersive — no deduction."""
+        from heart.api.routes_chat_ws import _charge_llm_cost
+
+        db = AsyncMock()
+        cost, bal = await _charge_llm_cost(
+            db, uuid.uuid4(), str(uuid.uuid4()), "deepseek", tier="plus"
+        )
         assert cost == 0
         assert bal == 0
         db.execute.assert_not_called()
@@ -39,19 +58,17 @@ class TestChargeLlmCost:
         mock_deduct.assert_called_once_with(db, user_id, 300, f"turn:{turn_id}:llm", "consume_llm")
 
     @pytest.mark.asyncio
-    async def test_claude_deducts_1200_fen(self):
+    async def test_grok_free_on_immersive_tier(self):
+        """私密陪伴 (grok) is complimentary on immersive — no deduction."""
         from heart.api.routes_chat_ws import _charge_llm_cost
 
         db = AsyncMock()
-        turn_id = str(uuid.uuid4())
-        user_id = uuid.uuid4()
-
-        with patch("heart.billing.deduct_credits", new=AsyncMock(return_value=3000)) as mock_deduct:
-            cost, bal = await _charge_llm_cost(db, user_id, turn_id, "claude")
-
-        assert cost == 1200  # claude_cost_credits=12 → 1200 fen
-        assert bal == 3000
-        mock_deduct.assert_called_once_with(db, user_id, 1200, f"turn:{turn_id}:llm", "consume_llm")
+        cost, bal = await _charge_llm_cost(
+            db, uuid.uuid4(), str(uuid.uuid4()), "grok", tier="immersive"
+        )
+        assert cost == 0
+        assert bal == 0
+        db.execute.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_idempotency_key_format(self):
@@ -79,8 +96,9 @@ class TestChargeLlmCost:
 
 class TestPrecheckBillingModelForbidden:
     @pytest.mark.asyncio
-    async def test_grok_forbidden_for_free_user(self):
-        """Free tier user requesting grok should receive model_forbidden event."""
+    async def test_grok_allowed_for_free_user_with_balance(self):
+        """Universal access (2026-08 overhaul): a free user with enough balance can
+        use grok (私密陪伴) — it's charged per turn, not tier-gated."""
         from heart.api.routes_chat_ws import _precheck_billing
 
         ws = AsyncMock()
@@ -95,7 +113,7 @@ class TestPrecheckBillingModelForbidden:
         # voice_enabled query → False
         voice_result = MagicMock()
         voice_result.scalar_one_or_none.return_value = False
-        # balance query → high balance
+        # balance query → high balance (can afford grok's 300 fen)
         balance_result = MagicMock()
         balance_result.scalar_one_or_none.return_value = 100000
 
@@ -113,13 +131,10 @@ class TestPrecheckBillingModelForbidden:
                 user_id, "char1", turn_id, ws, model="grok"
             )
 
-        assert can_proceed is False
-        ws.send_json.assert_called_once()
-        sent = ws.send_json.call_args[0][0]
-        assert sent["type"] == "model_forbidden"
-        assert sent["model"] == "grok"
-        assert sent["tier"] == "free"
-        assert sent["turn_id"] == turn_id
+        assert can_proceed is True
+        # No model_forbidden — grok is available to every tier now.
+        for call in ws.send_json.call_args_list:
+            assert call[0][0].get("type") != "model_forbidden"
 
     @pytest.mark.asyncio
     async def test_deepseek_allowed_for_free_user(self):
@@ -531,7 +546,9 @@ class TestFramesCarryCharacterId:
             patch("heart.api.routes_chat_ws._get_engine"),
             patch("sqlalchemy.ext.asyncio.AsyncSession", return_value=mock_db),
         ):
-            await _precheck_billing(user_id, "dorothy", turn_id, ws, model="grok")
+            # claude is not in any tier's model list (removed 2026-08) → still a
+            # genuinely forbidden model, so the model_forbidden frame path fires.
+            await _precheck_billing(user_id, "dorothy", turn_id, ws, model="claude")
 
         sent = ws.send_json.call_args[0][0]
         assert sent["type"] == "model_forbidden"

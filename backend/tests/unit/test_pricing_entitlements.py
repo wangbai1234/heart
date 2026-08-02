@@ -1,53 +1,76 @@
-"""Unit tests for billing/pricing.py and membership/__init__.py (B1)."""
+"""Unit tests for billing/pricing.py and membership/__init__.py.
+
+Pricing model (2026-08 overhaul): access is universal — every tier can use
+deepseek+grok, mimo+fish TTS/clone. Tiers differ only in which items are
+*complimentary* (charged 0), driven by each tier's ``free`` list:
+  - free:      nothing free (pay-per-use for everything)
+  - plus:      deepseek, tts, asr, story_unlock
+  - immersive: deepseek, grok, tts, clone, asr, story_unlock, story_chat
+Claude is fully removed from all tiers.
+"""
 
 from __future__ import annotations
 
-import json
-from unittest.mock import AsyncMock, MagicMock, patch
-
 import pytest
+from unittest.mock import AsyncMock, MagicMock
 
 
 # ---------------------------------------------------------------------------
-# billing/pricing.py
+# billing/pricing.py — llm_cost_fen (tier-aware)
 # ---------------------------------------------------------------------------
 
 class TestLlmCostFen:
-    def test_deepseek_is_free(self):
+    def test_deepseek_costs_100_fen_on_free(self):
         from heart.billing.pricing import llm_cost_fen
-        assert llm_cost_fen("deepseek") == 0
+        # deepseek_cost_credits=1 → 100 fen; free tier has empty free list.
+        assert llm_cost_fen("deepseek") == 100
+        assert llm_cost_fen("deepseek-chat") == 100
+        assert llm_cost_fen("deepseek-reasoner") == 100
 
-    def test_deepseek_chat_is_free(self):
+    def test_deepseek_free_on_plus(self):
         from heart.billing.pricing import llm_cost_fen
-        assert llm_cost_fen("deepseek-chat") == 0
+        assert llm_cost_fen("deepseek", "plus") == 0
 
-    def test_deepseek_reasoner_is_free(self):
+    def test_deepseek_free_on_immersive(self):
         from heart.billing.pricing import llm_cost_fen
-        assert llm_cost_fen("deepseek-reasoner") == 0
+        assert llm_cost_fen("deepseek", "immersive") == 0
 
-    def test_grok_costs_300_fen(self):
+    def test_grok_costs_300_fen_on_free(self):
         from heart.billing.pricing import llm_cost_fen
-        # Default config: grok_cost_credits=3 → 300 fen
         assert llm_cost_fen("grok") == 300
 
-    def test_claude_costs_1200_fen(self):
+    def test_grok_still_charged_on_plus(self):
         from heart.billing.pricing import llm_cost_fen
-        # Default config: claude_cost_credits=12 → 1200 fen
-        assert llm_cost_fen("claude") == 1200
+        # plus free list has no "grok" → private chat still billed.
+        assert llm_cost_fen("grok", "plus") == 300
+
+    def test_grok_free_on_immersive(self):
+        from heart.billing.pricing import llm_cost_fen
+        assert llm_cost_fen("grok", "immersive") == 0
 
     def test_unknown_model_returns_zero(self):
         from heart.billing.pricing import llm_cost_fen
         assert llm_cost_fen("unknown-future-model") == 0
+        assert llm_cost_fen("unknown-future-model", "immersive") == 0
 
 
 class TestTtsCostFen:
-    def test_mimo_costs_500_fen(self):
+    def test_mimo_costs_500_fen_on_free(self):
         from heart.billing.pricing import tts_cost_fen
         assert tts_cost_fen("mimo") == 500
 
-    def test_fish_costs_800_fen(self):
+    def test_fish_costs_800_fen_on_free(self):
         from heart.billing.pricing import tts_cost_fen
         assert tts_cost_fen("fish") == 800
+
+    def test_tts_free_on_plus(self):
+        from heart.billing.pricing import tts_cost_fen
+        assert tts_cost_fen("mimo", "plus") == 0
+        assert tts_cost_fen("fish", "plus") == 0
+
+    def test_tts_free_on_immersive(self):
+        from heart.billing.pricing import tts_cost_fen
+        assert tts_cost_fen("fish", "immersive") == 0
 
     def test_minimax_is_zero(self):
         from heart.billing.pricing import tts_cost_fen
@@ -59,13 +82,23 @@ class TestTtsCostFen:
 
 
 class TestActionCostFen:
-    def test_clone_mimo_costs_5000_fen(self):
+    def test_clone_mimo_costs_5000_fen_on_free(self):
         from heart.billing.pricing import action_cost_fen
         assert action_cost_fen("clone_mimo") == 5000
 
-    def test_clone_fish_costs_10000_fen(self):
+    def test_clone_fish_costs_10000_fen_on_free(self):
         from heart.billing.pricing import action_cost_fen
         assert action_cost_fen("clone_fish") == 10000
+
+    def test_clone_still_charged_on_plus(self):
+        from heart.billing.pricing import action_cost_fen
+        # plus free list has no "clone" → clone still billed.
+        assert action_cost_fen("clone_mimo", "plus") == 5000
+
+    def test_clone_free_on_immersive(self):
+        from heart.billing.pricing import action_cost_fen
+        assert action_cost_fen("clone_mimo", "immersive") == 0
+        assert action_cost_fen("clone_fish", "immersive") == 0
 
     def test_unknown_action_returns_zero(self):
         from heart.billing.pricing import action_cost_fen
@@ -75,15 +108,32 @@ class TestActionCostFen:
 class TestStoryPricing:
     """Story mode (SS09) unlock + per-minute pricing. 1 coin = 100 fen."""
 
-    def test_unlock_costs_4000_fen(self):
+    def test_unlock_costs_4000_fen_on_free(self):
         from heart.billing.pricing import story_unlock_cost_fen
-        # Default config: story_unlock_cost_coins=40 → 4000 fen (changed to allow new users to unlock 2 scenarios).
+        # story_unlock_cost_coins=40 → 4000 fen.
         assert story_unlock_cost_fen() == 4000
 
-    def test_minute_costs_100_fen(self):
+    def test_unlock_free_on_plus(self):
+        from heart.billing.pricing import story_unlock_cost_fen
+        assert story_unlock_cost_fen("plus") == 0
+
+    def test_unlock_free_on_immersive(self):
+        from heart.billing.pricing import story_unlock_cost_fen
+        assert story_unlock_cost_fen("immersive") == 0
+
+    def test_minute_costs_100_fen_on_free(self):
         from heart.billing.pricing import story_minute_cost_fen
-        # Default config: story_minute_cost_coins=1 → 100 fen.
+        # story_minute_cost_coins=1 → 100 fen.
         assert story_minute_cost_fen() == 100
+
+    def test_minute_still_charged_on_plus(self):
+        from heart.billing.pricing import story_minute_cost_fen
+        # plus free list has no "story_chat" → per-minute still billed.
+        assert story_minute_cost_fen("plus") == 100
+
+    def test_minute_free_on_immersive(self):
+        from heart.billing.pricing import story_minute_cost_fen
+        assert story_minute_cost_fen("immersive") == 0
 
 
 class TestStoryTierGating:
@@ -95,7 +145,6 @@ class TestStoryTierGating:
 
     def test_free_user_can_unlock_non_free(self):
         from heart.api.routes_story import _tier_can_unlock
-        # All tiers now unlock all scenarios (tier gating removed, only unlock fee applies)
         assert _tier_can_unlock("free", free_tier=False) is True
 
     def test_plus_user_can_unlock_non_free(self):
@@ -108,149 +157,137 @@ class TestStoryTierGating:
 
 
 # ---------------------------------------------------------------------------
-# membership/__init__.py — entitlements
+# membership/__init__.py — entitlements (universal access; free lists differ)
 # ---------------------------------------------------------------------------
 
 class TestGetEntitlements:
-    def test_free_tier_models(self):
+    def test_all_tiers_include_deepseek_and_grok(self):
         from heart.membership import get_entitlements
-        ent = get_entitlements("free")
-        assert "deepseek" in ent.models
-        assert "grok" not in ent.models
-        assert "claude" not in ent.models
+        for tier in ("free", "plus", "immersive"):
+            ent = get_entitlements(tier)
+            assert "deepseek" in ent.models
+            assert "grok" in ent.models
+            assert "claude" not in ent.models  # claude fully removed
 
-    def test_free_tier_no_fish_tts(self):
+    def test_all_tiers_include_both_tts(self):
         from heart.membership import get_entitlements
-        ent = get_entitlements("free")
-        assert "mimo" in ent.tts
-        assert "fish" not in ent.tts
+        for tier in ("free", "plus", "immersive"):
+            ent = get_entitlements(tier)
+            assert set(ent.tts) == {"mimo", "fish"}
 
-    def test_free_tier_no_clone(self):
+    def test_all_tiers_include_clone(self):
         from heart.membership import get_entitlements
-        ent = get_entitlements("free")
-        assert ent.clone == []
+        for tier in ("free", "plus", "immersive"):
+            ent = get_entitlements(tier)
+            assert set(ent.clone) == {"mimo", "fish"}
 
-    def test_free_tier_no_monthly_grant(self):
+    def test_free_tier_grants_nothing_free(self):
         from heart.membership import get_entitlements
         ent = get_entitlements("free")
+        assert ent.free == []
         assert ent.monthly_grant_fen == 0
 
-    def test_plus_tier_includes_grok(self):
+    def test_plus_tier_free_list(self):
         from heart.membership import get_entitlements
         ent = get_entitlements("plus")
-        assert "grok" in ent.models
-        assert "claude" not in ent.models
+        assert set(ent.free) == {"deepseek", "tts", "asr", "story_unlock"}
 
-    def test_plus_tier_includes_fish(self):
+    def test_plus_tier_monthly_grant_300_coins(self):
         from heart.membership import get_entitlements
         ent = get_entitlements("plus")
-        assert "fish" in ent.tts
+        assert ent.monthly_grant_fen == 30000  # 300 coins × 100
 
-    def test_plus_tier_monthly_grant_400_coins(self):
-        from heart.membership import get_entitlements
-        ent = get_entitlements("plus")
-        assert ent.monthly_grant_fen == 40000  # 400 coins × 100
-
-    def test_immersive_tier_includes_claude(self):
+    def test_immersive_tier_free_list(self):
         from heart.membership import get_entitlements
         ent = get_entitlements("immersive")
-        assert "claude" in ent.models
-        assert "grok" in ent.models
+        assert set(ent.free) == {
+            "deepseek", "grok", "tts", "clone", "asr", "story_unlock", "story_chat"
+        }
 
-    def test_immersive_tier_monthly_grant_800_coins(self):
+    def test_immersive_tier_monthly_grant_700_coins(self):
         from heart.membership import get_entitlements
         ent = get_entitlements("immersive")
-        assert ent.monthly_grant_fen == 80000  # 800 coins × 100
+        assert ent.monthly_grant_fen == 70000  # 700 coins × 100
 
-    def test_immersive_is_superset_of_plus(self):
+    def test_immersive_free_list_is_superset_of_plus(self):
         from heart.membership import get_entitlements
-        plus = get_entitlements("plus")
-        immersive = get_entitlements("immersive")
-        assert set(plus.models).issubset(set(immersive.models))
-        assert set(plus.tts).issubset(set(immersive.tts))
-        assert set(plus.clone).issubset(set(immersive.clone))
+        plus = set(get_entitlements("plus").free)
+        immersive = set(get_entitlements("immersive").free)
+        assert plus.issubset(immersive)
 
     def test_unknown_tier_falls_back_to_free(self):
         from heart.membership import get_entitlements
         ent = get_entitlements("enterprise_unknown")
         free = get_entitlements("free")
+        assert ent.free == free.free
         assert ent.models == free.models
 
 
+class TestIsFreeForTier:
+    def test_free_tier_pays_for_everything(self):
+        from heart.membership import is_free_for_tier
+        for item in ("deepseek", "grok", "tts", "clone", "asr",
+                     "story_unlock", "story_chat"):
+            assert is_free_for_tier("free", item) is False
+
+    def test_plus_free_items(self):
+        from heart.membership import is_free_for_tier
+        assert is_free_for_tier("plus", "deepseek") is True
+        assert is_free_for_tier("plus", "tts") is True
+        assert is_free_for_tier("plus", "asr") is True
+        assert is_free_for_tier("plus", "story_unlock") is True
+        # not free on plus:
+        assert is_free_for_tier("plus", "grok") is False
+        assert is_free_for_tier("plus", "clone") is False
+        assert is_free_for_tier("plus", "story_chat") is False
+
+    def test_immersive_everything_free(self):
+        from heart.membership import is_free_for_tier
+        for item in ("deepseek", "grok", "tts", "clone", "asr",
+                     "story_unlock", "story_chat"):
+            assert is_free_for_tier("immersive", item) is True
+
+    def test_unknown_tier_nothing_free(self):
+        from heart.membership import is_free_for_tier
+        assert is_free_for_tier("enterprise_unknown", "deepseek") is False
+
+
 # ---------------------------------------------------------------------------
-# membership/__init__.py — assertion helpers
+# membership/__init__.py — assertion helpers (access universal now)
 # ---------------------------------------------------------------------------
 
 class TestAssertModelAllowed:
-    def test_deepseek_allowed_for_free(self):
+    def test_deepseek_allowed_for_all_tiers(self):
         from heart.membership import assert_model_allowed
-        assert_model_allowed("free", "deepseek")  # must not raise
+        for tier in ("free", "plus", "immersive"):
+            assert_model_allowed(tier, "deepseek")  # must not raise
 
-    def test_grok_forbidden_for_free(self):
-        from heart.membership import ModelForbiddenError, assert_model_allowed
-        with pytest.raises(ModelForbiddenError) as exc_info:
-            assert_model_allowed("free", "grok")
-        assert exc_info.value.model == "grok"
-        assert exc_info.value.tier == "free"
-
-    def test_claude_forbidden_for_free(self):
-        from heart.membership import ModelForbiddenError, assert_model_allowed
-        with pytest.raises(ModelForbiddenError):
-            assert_model_allowed("free", "claude")
-
-    def test_grok_allowed_for_plus(self):
+    def test_grok_allowed_for_all_tiers(self):
         from heart.membership import assert_model_allowed
-        assert_model_allowed("plus", "grok")  # must not raise
+        for tier in ("free", "plus", "immersive"):
+            assert_model_allowed(tier, "grok")  # must not raise
 
-    def test_claude_forbidden_for_plus(self):
+    def test_claude_forbidden_everywhere(self):
         from heart.membership import ModelForbiddenError, assert_model_allowed
-        with pytest.raises(ModelForbiddenError):
-            assert_model_allowed("plus", "claude")
-
-    def test_claude_allowed_for_immersive(self):
-        from heart.membership import assert_model_allowed
-        assert_model_allowed("immersive", "claude")  # must not raise
+        for tier in ("free", "plus", "immersive"):
+            with pytest.raises(ModelForbiddenError):
+                assert_model_allowed(tier, "claude")
 
 
 class TestAssertTtsAllowed:
-    def test_mimo_allowed_for_free(self):
+    def test_both_providers_allowed_for_all_tiers(self):
         from heart.membership import assert_tts_allowed
-        assert_tts_allowed("free", "mimo")
-
-    def test_fish_forbidden_for_free(self):
-        from heart.membership import TtsForbiddenError, assert_tts_allowed
-        with pytest.raises(TtsForbiddenError) as exc_info:
-            assert_tts_allowed("free", "fish")
-        assert exc_info.value.provider == "fish"
-
-    def test_fish_allowed_for_plus(self):
-        from heart.membership import assert_tts_allowed
-        assert_tts_allowed("plus", "fish")
-
-    def test_fish_allowed_for_immersive(self):
-        from heart.membership import assert_tts_allowed
-        assert_tts_allowed("immersive", "fish")
+        for tier in ("free", "plus", "immersive"):
+            assert_tts_allowed(tier, "mimo")
+            assert_tts_allowed(tier, "fish")
 
 
 class TestAssertCloneAllowed:
-    def test_clone_forbidden_entirely_for_free(self):
-        from heart.membership import CloneForbiddenError, assert_clone_allowed
-        with pytest.raises(CloneForbiddenError):
-            assert_clone_allowed("free", "mimo")
-        with pytest.raises(CloneForbiddenError):
-            assert_clone_allowed("free", "fish")
-
-    def test_mimo_clone_allowed_for_plus(self):
+    def test_clone_allowed_for_all_tiers(self):
         from heart.membership import assert_clone_allowed
-        assert_clone_allowed("plus", "mimo")
-
-    def test_fish_clone_allowed_for_plus(self):
-        from heart.membership import assert_clone_allowed
-        assert_clone_allowed("plus", "fish")
-
-    def test_fish_clone_allowed_for_immersive(self):
-        from heart.membership import assert_clone_allowed
-        assert_clone_allowed("immersive", "fish")
+        for tier in ("free", "plus", "immersive"):
+            assert_clone_allowed(tier, "mimo")
+            assert_clone_allowed(tier, "fish")
 
 
 # ---------------------------------------------------------------------------
@@ -293,7 +330,7 @@ class TestGetEffectiveTier:
         db = AsyncMock()
         db.execute = AsyncMock(
             side_effect=ProgrammingError(
-                "relation \"user_memberships\" does not exist", None, None
+                'relation "user_memberships" does not exist', None, None
             )
         )
         db.rollback = AsyncMock()
@@ -323,35 +360,48 @@ class TestGetEffectiveTier:
 
 class TestPricingEndpoint:
     @pytest.mark.asyncio
-    async def test_returns_models_field(self):
+    async def test_returns_models_field_without_claude(self):
         from heart.api.routes_credits import pricing
         result = await pricing()
         assert "models" in result
         model_ids = {m["id"] for m in result["models"]}
-        assert "deepseek" in model_ids
-        assert "grok" in model_ids
-        assert "claude" in model_ids
+        assert model_ids == {"deepseek", "grok"}  # claude removed
 
     @pytest.mark.asyncio
-    async def test_deepseek_cost_is_zero(self):
+    async def test_deepseek_cost_is_one_coin(self):
         from heart.api.routes_credits import pricing
         result = await pricing()
         deepseek = next(m for m in result["models"] if m["id"] == "deepseek")
-        assert deepseek["cost"] == 0
+        assert deepseek["cost"] == 1  # deepseek_cost_credits default
 
     @pytest.mark.asyncio
     async def test_membership_tiers_present(self):
         from heart.api.routes_credits import pricing
         result = await pricing()
         assert "membership_tiers" in result
-        # field renamed: id → tier (api_contract.md §1.1)
         tier_ids = {t["tier"] for t in result["membership_tiers"]}
         assert tier_ids == {"free", "plus", "immersive"}
-        # each tier has sku and benefits
         for t in result["membership_tiers"]:
             assert "sku" in t
             assert "benefits" in t
-            assert "price" in t  # renamed from price_monthly
+            assert "price" in t
+
+    @pytest.mark.asyncio
+    async def test_tier_prices_are_29_and_69(self):
+        from heart.api.routes_credits import pricing
+        result = await pricing()
+        by_tier = {t["tier"]: t for t in result["membership_tiers"]}
+        assert by_tier["plus"]["price"] == 29
+        assert by_tier["immersive"]["price"] == 69
+
+    @pytest.mark.asyncio
+    async def test_tier_monthly_grants_reported(self):
+        from heart.api.routes_credits import pricing
+        result = await pricing()
+        by_tier = {t["tier"]: t for t in result["membership_tiers"]}
+        assert by_tier["free"]["monthly_grant"] == 0
+        assert by_tier["plus"]["monthly_grant"] == 300
+        assert by_tier["immersive"]["monthly_grant"] == 700
 
     @pytest.mark.asyncio
     async def test_shop_present(self):
@@ -359,12 +409,11 @@ class TestPricingEndpoint:
         result = await pricing()
         assert "shop" in result
         assert len(result["shop"]) == 4
-        # SKU names aligned to contract
         skus = {s["sku"] for s in result["shop"]}
         assert skus == {"pack_6", "pack_18", "pack_48", "pack_128"}
 
     @pytest.mark.asyncio
-    async def test_actions_include_tts(self):
+    async def test_actions_include_tts_and_clone(self):
         from heart.api.routes_credits import pricing
         result = await pricing()
         action_ids = {a["id"] for a in result["actions"]}
@@ -372,3 +421,77 @@ class TestPricingEndpoint:
         assert "tts_fish" in action_ids
         assert "clone_mimo" in action_ids
         assert "clone_fish" in action_ids
+
+
+# ---------------------------------------------------------------------------
+# POST /api/credits/checkin — daily check-in (20 coins/day, idempotent)
+# ---------------------------------------------------------------------------
+
+class TestDailyCheckin:
+    """Handler exercised directly with a mocked DB + patched grant() — no Postgres."""
+
+    def _token(self):
+        from heart.core.auth import TokenData
+        return TokenData(
+            user_id="550e8400-e29b-41d4-a716-446655440000",
+            email="test@example.com",
+        )
+
+    @pytest.mark.asyncio
+    async def test_first_checkin_grants(self, monkeypatch):
+        from heart.api import routes_credits
+
+        db = AsyncMock()
+        result_mock = MagicMock()
+        result_mock.scalar_one_or_none.return_value = None  # no tx yet today
+        db.execute = AsyncMock(return_value=result_mock)
+
+        granted = AsyncMock(return_value=2000)  # new balance in fen
+        monkeypatch.setattr(routes_credits, "grant", granted)
+
+        res = await routes_credits.daily_checkin(current_user=self._token(), db=db)
+        assert res["granted"] is True
+        assert res["already"] is False
+        assert res["coins"] == 20
+        assert res["balance"] == 20.0  # 2000 fen / 100
+
+        _, kwargs = granted.call_args
+        assert kwargs["idempotency_key"].startswith("checkin:")
+        assert kwargs["ref_type"] == "checkin"
+        assert kwargs["type_str"] == "grant"
+
+    @pytest.mark.asyncio
+    async def test_grants_daily_checkin_coins_amount(self, monkeypatch):
+        from heart.api import routes_credits
+        from heart.core.config import settings
+
+        db = AsyncMock()
+        result_mock = MagicMock()
+        result_mock.scalar_one_or_none.return_value = None
+        db.execute = AsyncMock(return_value=result_mock)
+
+        granted = AsyncMock(return_value=settings.daily_checkin_coins * 100)
+        monkeypatch.setattr(routes_credits, "grant", granted)
+
+        await routes_credits.daily_checkin(current_user=self._token(), db=db)
+        # grant amount (positional arg 3) == coins * 100 fen
+        args, _ = granted.call_args
+        assert args[2] == settings.daily_checkin_coins * 100
+
+    @pytest.mark.asyncio
+    async def test_second_checkin_same_day_is_idempotent(self, monkeypatch):
+        from heart.api import routes_credits
+
+        db = AsyncMock()
+        result_mock = MagicMock()
+        result_mock.scalar_one_or_none.return_value = 1  # tx already exists today
+        db.execute = AsyncMock(return_value=result_mock)
+
+        # grant() still invoked but ON CONFLICT DO NOTHING → balance unchanged.
+        granted = AsyncMock(return_value=2000)
+        monkeypatch.setattr(routes_credits, "grant", granted)
+
+        res = await routes_credits.daily_checkin(current_user=self._token(), db=db)
+        assert res["granted"] is False
+        assert res["already"] is True
+        assert res["coins"] == 20

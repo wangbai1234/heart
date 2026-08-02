@@ -13,7 +13,13 @@ interface MembershipState {
   reset: () => void
 }
 
-const FREE_ENTITLEMENTS: MembershipEntitlements = { models: ['deepseek'], tts: ['mimo'], clone: [] }
+// Free-tier fallback: universal access (deepseek/grok/tts/clone) but nothing complimentary.
+const FREE_ENTITLEMENTS: MembershipEntitlements = {
+  models: ['deepseek', 'grok'],
+  tts: ['mimo', 'fish'],
+  clone: ['mimo', 'fish'],
+  free: [],
+}
 
 export const useMembershipStore = create<MembershipState>()((set) => ({
   tier: 'free',

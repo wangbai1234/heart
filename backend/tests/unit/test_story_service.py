@@ -320,7 +320,7 @@ async def test_turn_stream_insufficient_credits(patched_repo, monkeypatch):
     monkeypatch.setattr(billing, "get_balance", _low_balance)
 
     run = patched_repo["run"]
-    run.model = "claude"  # non-zero llm_cost_fen
+    run.model = "grok"  # paid per-turn model → non-zero llm_cost_fen on free tier
     svc = StoryService(_fake_factory, _FakeRouter())
     events = await _collect(
         svc.process_turn_stream(
@@ -351,7 +351,7 @@ async def test_turn_stream_charges_after_success(patched_repo, monkeypatch):
     monkeypatch.setattr(billing, "deduct_credits", _deduct)
 
     run = patched_repo["run"]
-    run.model = "claude"
+    run.model = "grok"  # paid per-turn model → non-zero llm_cost_fen on free tier
     svc = StoryService(_fake_factory, _FakeRouter())
     events = await _collect(
         svc.process_turn_stream(

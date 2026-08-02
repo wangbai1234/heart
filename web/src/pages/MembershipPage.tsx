@@ -139,9 +139,6 @@ export function MembershipPage() {
                     </li>
                   ))}
                 </ul>
-                {t.monthly_grant > 0 && (
-                  <p className="text-[12px] text-[var(--color-text-muted)]">每月赠 {t.monthly_grant} yuoyuo币</p>
-                )}
                 {t.sku && (
                   <p className="mt-2 text-[12px] text-[var(--color-text-muted)]">
                     爱发电挡位：<span className="text-[var(--color-text-secondary)]">{t.label}（{t.sku}）</span>

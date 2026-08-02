@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
 import type { ReactElement } from 'react'
 import { setNavigate } from './services/navigation'
@@ -32,6 +32,8 @@ import { ScenarioDetailPage } from './pages/ScenarioDetailPage'
 import { StoryPlayerPage } from './pages/StoryPlayerPage'
 import { ToastContainer } from './components/ui/ToastContainer'
 import { UpdatePrompt } from './components/UpdatePrompt'
+import { DailyCheckinDialog } from './components/DailyCheckinDialog'
+import { useCreditsStore } from './stores/creditsStore'
 import { useProactivePolling } from './hooks/useProactivePolling'
 import { useThemeStore } from './stores/themeStore'
 import { useAppStore } from './stores/appStore'
@@ -75,6 +77,8 @@ export function App() {
   const loadCharacters = useCharactersStore((s) => s.load)
   const navigate = useNavigate()
   const location = useLocation()
+  const [checkinOpen, setCheckinOpen] = useState(false)
+  const [checkinCoins, setCheckinCoins] = useState(0)
 
   // Wire module-level navigate so api.ts / useWebSocket.ts can redirect
   // without a hard page reload (preserves React state and bfcache).
@@ -123,6 +127,28 @@ export function App() {
     void import('./services/api').then(({ bindInvite }) => bindInvite(code).catch(() => {}))
   }, [accessToken])
 
+  // Daily check-in: on first authenticated load of the day, claim the reward
+  // (server is idempotent per calendar day) and show the notification dialog
+  // only when a fresh grant landed. A localStorage day-stamp guards against
+  // re-requesting on every route change within the same day.
+  useEffect(() => {
+    if (!accessToken) return
+    const day = new Date().toISOString().slice(0, 10)
+    if (localStorage.getItem('yuoyuo-checkin-day') === day) return
+    void import('./services/api').then(({ dailyCheckin }) =>
+      dailyCheckin()
+        .then((res) => {
+          localStorage.setItem('yuoyuo-checkin-day', day)
+          if (res.granted) {
+            setCheckinCoins(res.coins)
+            setCheckinOpen(true)
+            void useCreditsStore.getState().refresh()
+          }
+        })
+        .catch(() => {}),
+    )
+  }, [accessToken])
+
   useEffect(() => {
     const nextScale = (0.92 + fontScale * 0.0016).toFixed(3)
     document.documentElement.style.setProperty('--app-font-scale', nextScale)
@@ -132,6 +158,7 @@ export function App() {
     <AuthGuard>
       <ToastContainer />
       <UpdatePrompt />
+      <DailyCheckinDialog open={checkinOpen} coins={checkinCoins} onClose={() => setCheckinOpen(false)} />
       <Routes>
         <Route path="/" element={<Navigate to="/splash" replace />} />
         <Route path="/splash" element={<SplashPage />} />

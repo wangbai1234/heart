@@ -337,6 +337,15 @@ export async function getBalance(): Promise<{ balance: number }> {
   return request('/credits/balance')
 }
 
+export async function dailyCheckin(): Promise<{
+  granted: boolean
+  already: boolean
+  coins: number
+  balance: number
+}> {
+  return request('/credits/checkin', { method: 'POST' })
+}
+
 export async function getTransactions(cursor?: string, limit = 20): Promise<{
   items: Array<{ delta: number; type: string; ref_type: string; balance_after: number; created_at: string }>
   next_cursor: string | null
@@ -412,6 +421,9 @@ export interface MembershipEntitlements {
   models: string[]
   tts: string[]
   clone: string[]
+  // Items complimentary on this tier (charged 0). Slugs: deepseek | grok | tts |
+  // clone | asr | story_unlock | story_chat. Everything else is charged per use.
+  free: string[]
 }
 
 export interface Membership {

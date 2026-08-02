@@ -32,15 +32,24 @@ _CLONE_COST_FEN_FALLBACK = 80_000
 _VALID_CLONE_PROVIDERS = frozenset({"mimo", "fish", "minimax"})
 
 
-def _clone_cost_fen(provider: str) -> int:
-    """Return clone cost in fen for the given TTS provider (config-driven)."""
+def _clone_cost_fen(provider: str, tier: str = "free") -> int:
+    """Return clone cost in fen for the given TTS provider on *tier* (config-driven).
+
+    Immersive waives the clone fee (returns 0 — see membership free list). Free/
+    plus are charged per action. The hardcoded fallback only applies when the
+    pricing module can't be imported (startup safety), never when a tier makes
+    the clone legitimately free.
+    """
     try:
         from heart.billing.pricing import action_cost_fen
-
-        cost = action_cost_fen(f"clone_{provider}")
-        return cost if cost > 0 else _CLONE_COST_FEN_FALLBACK
+        from heart.membership import is_free_for_tier
     except Exception:
         return _CLONE_COST_FEN_FALLBACK
+
+    if is_free_for_tier(tier, "clone"):
+        return 0
+    cost = action_cost_fen(f"clone_{provider}", tier)
+    return cost if cost > 0 else _CLONE_COST_FEN_FALLBACK
 
 
 def _check_clone_provider_available(provider: str) -> None:
@@ -500,7 +509,7 @@ async def clone_voice(
     # (they spend credits chatting during the ~30-120 s clone window); in
     # that unlikely race we let the clone finish and log the deficit rather
     # than fail after work is already done.
-    clone_cost = _clone_cost_fen(provider)
+    clone_cost = _clone_cost_fen(provider, tier)
     balance = await get_balance(db, uid)
     if balance < clone_cost:
         raise HTTPException(
@@ -560,6 +569,7 @@ async def clone_voice(
                 _provider_captured,
                 audio_bytes=_bytes_captured,
                 mime=_mime_captured,
+                tier=tier,
             )
         )
     )
@@ -647,27 +657,34 @@ async def _mark_clone_ready(
     provider: str,
     audio_source: str,
     clone_voice_id: str | None,
+    tier: str = "free",
 ) -> None:
-    """Charge clone credits (once, best-effort) and flip the row + character to ready."""
-    try:
-        await deduct_credits(
-            db,
-            uuid.UUID(user_id),
-            _clone_cost_fen(provider),
-            # Idempotency key ties to the specific audio source (unique per
-            # upload) so retries within the same source don't double-charge.
-            f"voice_clone_success:{audio_source}",
-            type_str="consume_voice_clone",
-        )
-    except InsufficientCreditsError:
-        # Rare race: balance dropped after the pre-check.  The clone work is
-        # already done, so log and let it succeed (one free clone) rather than
-        # discard completed work.
-        logger.warning(
-            "voice_clone_deduct_after_success_failed",
-            character_id=character_id,
-            user_id=user_id,
-        )
+    """Charge clone credits (once, best-effort) and flip the row + character to ready.
+
+    ``tier`` decides the fee: immersive waives it (0 fen → no deduction), free/plus
+    are charged ``action_cost_fen``. A 0 cost short-circuits the deduct entirely.
+    """
+    cost = _clone_cost_fen(provider, tier)
+    if cost > 0:
+        try:
+            await deduct_credits(
+                db,
+                uuid.UUID(user_id),
+                cost,
+                # Idempotency key ties to the specific audio source (unique per
+                # upload) so retries within the same source don't double-charge.
+                f"voice_clone_success:{audio_source}",
+                type_str="consume_voice_clone",
+            )
+        except InsufficientCreditsError:
+            # Rare race: balance dropped after the pre-check.  The clone work is
+            # already done, so log and let it succeed (one free clone) rather than
+            # discard completed work.
+            logger.warning(
+                "voice_clone_deduct_after_success_failed",
+                character_id=character_id,
+                user_id=user_id,
+            )
     await db.execute(
         text("""
             UPDATE character_voices
@@ -690,6 +707,7 @@ async def _run_clone_job(
     provider: str = "minimax",
     audio_bytes: bytes | None = None,
     mime: str = "audio/wav",
+    tier: str = "free",
 ) -> None:
     """Background task: turn an uploaded sample into a ready voice, update DB.
 
@@ -721,6 +739,7 @@ async def _run_clone_job(
                     provider=provider,
                     audio_source=audio_source,
                     clone_voice_id=None,
+                    tier=tier,
                 )
                 await db.commit()
                 logger.info("voice_clone_ready", character_id=character_id, provider="mimo")
@@ -739,6 +758,7 @@ async def _run_clone_job(
                     provider=provider,
                     audio_source=audio_source,
                     clone_voice_id=clone_voice_id,
+                    tier=tier,
                 )
                 logger.info("voice_clone_ready", character_id=character_id, voice_id=clone_voice_id)
             else:
@@ -1141,7 +1161,10 @@ async def transcribe_audio(
     if len(data) < 1024:
         raise HTTPException(status_code=400, detail="录音文件过小，请重新录制")
 
-    cost = settings.asr_cost_credits
+    from heart.membership import get_effective_tier, is_free_for_tier
+
+    tier = await get_effective_tier(db, uid)
+    cost = 0 if is_free_for_tier(tier, "asr") else settings.asr_cost_credits
     balance = await get_balance(db, uid)
     if balance < cost:
         raise HTTPException(

@@ -87,6 +87,7 @@ async def get_membership(
             "models": ent.models,
             "tts": ent.tts,
             "clone": ent.clone,
+            "free": ent.free,
         },
         "binding_code": binding_code,
     }
