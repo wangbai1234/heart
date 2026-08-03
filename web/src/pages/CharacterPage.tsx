@@ -46,8 +46,22 @@ interface GridItem {
   isOwner: boolean
   isBuiltin: boolean
   visibility?: string
+  reviewStatus?: string
   companion?: CompanionDTO
   chatUserCount?: number
+}
+
+/**
+ * Whether a grid item may appear in the discovery (广场) list. Rule:
+ * built-ins and public+approved characters are visible to everyone; anything
+ * else (own private / pending / unlisted / rejected UGC) is hidden here and
+ * managed only in「我的角色」. A character the user has actually interacted with
+ * (companioned/encountered) still shows so an existing bond never vanishes.
+ */
+function isDiscoverable(it: GridItem): boolean {
+  if (it.isBuiltin) return true
+  if (it.visibility === 'public' && it.reviewStatus === 'approved') return true
+  return !!it.companion && it.companion.companion_status !== 'locked'
 }
 
 const FEATURED_CHARACTER_ORDER = ['gu_beichen', 'qin_xiao', 'li_jue', 'jiang_yueze', 'gu_xingzhou', 'jiang_ye'] as const
@@ -152,6 +166,7 @@ export function CharacterPage() {
           isOwner,
           isBuiltin: c.is_builtin,
           visibility: c.visibility,
+          reviewStatus: c.review_status,
           companion: companionById.get(c.id),
           chatUserCount: c.chat_user_count,
           profile: resolveCharacterProfile(c.id, c.display_name, c.avatar_url, {
@@ -245,6 +260,8 @@ export function CharacterPage() {
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
     const result = rankedItems.filter((it) => {
+      // Discovery gate: hide own private / pending / unlisted UGC from 广场.
+      if (!isDiscoverable(it)) return false
       const tags = it.profile.tags ?? []
       if (!q) {
         if (activeTag === DISCOVERY_RECOMMENDED) {

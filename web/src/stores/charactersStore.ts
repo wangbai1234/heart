@@ -115,6 +115,13 @@ export const useCharactersStore = create<CharactersState>((set, get) => ({
 
   setVisibility: async (id, visibility) => {
     await apiSetVisibility(id, visibility)
+    // Drop the cached profile so a re-open reflects the new visibility/review
+    // state instead of a stale snapshot.
+    set((s) => {
+      const next = { ...s.profileById }
+      delete next[id]
+      return { profileById: next }
+    })
     await get().load(true)
   },
 

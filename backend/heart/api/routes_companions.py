@@ -111,14 +111,23 @@ async def list_companions(
     """
     uid = uuid.UUID(current_user.user_id)
 
-    # --- 1. Visible catalog rows (built-ins + own UGC), same rule as GET /api/characters
+    # --- 1. Visible catalog rows (built-ins + own UGC + public-approved), same
+    #        rule as GET /api/characters. The review_status gate is REQUIRED:
+    #        a public row still pending/rejected must not leak to non-owners, and
+    #        it must be selected so build_catalog_entries' visible_to() sees the
+    #        real value (else it defaults to 'not_required' and approved public
+    #        UGC never shows here).
     char_result = await db.execute(
         text(
             """
-            SELECT id, owner_user_id, visibility, status, has_voice, tags, cover_url
+            SELECT id, owner_user_id, visibility, status, has_voice,
+                   tags, cover_url, review_status
             FROM characters
             WHERE status = 'active'
-              AND (visibility = 'public' OR owner_user_id = :uid)
+              AND (
+                    owner_user_id = :uid
+                    OR (visibility = 'public' AND review_status = 'approved')
+              )
             """
         ),
         {"uid": uid},
@@ -130,6 +139,7 @@ async def list_companions(
             owner_user_id=r["owner_user_id"],
             visibility=r["visibility"],
             status=r["status"],
+            review_status=r.get("review_status", "not_required"),
             tags=coerce_tags(r.get("tags")),
             cover_url=r.get("cover_url"),
         )
