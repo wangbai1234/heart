@@ -94,8 +94,12 @@ class CharacterDraft(BaseModel, extra="forbid"):
     opening: Optional[Annotated[str, Field(max_length=2000)]] = None
     # Public display blurb for the character profile page (shown to users, NOT
     # fed to the model). Read by routes_characters._derive_profile_presentation.
-    # Falls back to persona/archetype when omitted.
+    # Falls back to persona when omitted.
     intro: Optional[Annotated[str, Field(max_length=500)]] = None
+    # One-line public tagline shown under the name on the profile page (display
+    # -only, not fed to the model). Falls back to persona's first line when
+    # omitted. Read by routes_characters._derive_profile_presentation.
+    tagline: Optional[Annotated[str, Field(max_length=60)]] = None
     sliders: SliderSet = Field(default_factory=SliderSet)
     locale: str = "zh"
     # Intended visibility once the character is published.

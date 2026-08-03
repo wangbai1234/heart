@@ -105,6 +105,13 @@ interface ChatState {
   clearModelForbidden: () => void
   clear: () => void
   clearMessages: (characterId: CharacterId) => void
+  // Hard reset for logout / user switch: wipe every per-user field back to its
+  // initial value so the next account on this browser can never rehydrate the
+  // previous user's messages / threads / openings. The persisted localStorage
+  // key is purged separately (see resetChatUserState below), since clearing
+  // in-memory state alone would be re-serialized back to disk by the persist
+  // middleware on the next write.
+  resetUserState: () => void
 }
 
 function cloneThreads(): Record<CharacterId, ConversationMessage[]> {
@@ -326,6 +333,23 @@ export const useChatStore = create<ChatState>()(
         pendingAssistantTurnId: null,
         insufficientCredits: null,
       }
+    }),
+  resetUserState: () =>
+    set({
+      threads: cloneThreads(),
+      activeCharacterId: 'rin',
+      messages: emptyMessages(),
+      lastFetchedAt: {},
+      isGenerating: {},
+      isStreaming: {},
+      isPlaying: false,
+      currentTurnId: null,
+      pendingAssistantTurnId: null,
+      vad: { energy: 0, mood: 'neutral', intimacy: 0 },
+      characterId: 'rin',
+      insufficientCredits: null,
+      modelForbidden: null,
+      clearedCharacters: new Set<CharacterId>(),
     }),
   }),
   {
