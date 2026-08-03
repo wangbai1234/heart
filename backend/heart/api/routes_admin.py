@@ -350,7 +350,9 @@ async def admin_list_pending_characters(
     _: None = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
-    """列出所有待审核（pending）的用户角色，含头像、封面、简介，便于命令行审核。"""
+    """列出所有待审核（pending）的用户角色，含头像、封面、简介，供审核台展示。"""
+    from heart.ss01_soul.character_content import get_display_name
+
     result = await db.execute(
         text(
             """
@@ -370,6 +372,7 @@ async def admin_list_pending_characters(
     items = [
         {
             "id": row["id"],
+            "display_name": get_display_name(row["id"]),
             "owner_user_id": str(row["owner_user_id"]) if row["owner_user_id"] else None,
             "owner_email": row["owner_email"],
             "visibility": row["visibility"],

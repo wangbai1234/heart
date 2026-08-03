@@ -53,6 +53,25 @@ function CharacterCard({ char, onEdit, onVisibility, onDisable }: CharacterCardP
   // 发布功能已上线：公开 / 仅链接均可切换，切换后进入审核队列。
   const LOCKED_VIS = new Set<string>()
 
+  // Sharing only makes sense for link-reachable visibilities. A private
+  // character 404s for anyone but the owner, so we don't offer a link for it.
+  const shareable = char.visibility === 'public' || char.visibility === 'unlisted'
+  const approved = char.review_status === 'approved'
+
+  async function handleCopyLink() {
+    const url = `${window.location.origin}/character/${char.id}`
+    try {
+      await navigator.clipboard.writeText(url)
+      showToast(
+        approved ? '链接已复制，分享给好友即可访问' : '链接已复制，审核通过后好友即可访问',
+        'success',
+      )
+    } catch {
+      // clipboard API unavailable (non-secure context / older webview)
+      showToast(url, 'info')
+    }
+  }
+
   return (
     <div className={`relative backdrop-blur-[18px] rounded-[20px] shadow-[0_4px_16px_rgba(255,183,197,0.10)] overflow-visible ${menuOpen ? 'z-50' : ''} ${isDark ? 'bg-[var(--color-surface-card)] border border-[var(--color-border-subtle)]' : 'bg-[rgba(255,255,255,0.78)] border border-[rgba(255,255,255,0.65)]'}`}>
       <div className="flex items-center gap-4 px-5 py-4">
@@ -125,6 +144,16 @@ function CharacterCard({ char, onEdit, onVisibility, onDisable }: CharacterCardP
               icon={<EditIcon />}
               onClick={() => { setMenuOpen(false); onEdit() }}
             />
+            {shareable && (
+              <>
+                <div className="h-px bg-[var(--color-divider)]" />
+                <MenuButton
+                  label="复制分享链接"
+                  icon={<LinkIcon />}
+                  onClick={() => { setMenuOpen(false); setVisMenuOpen(false); void handleCopyLink() }}
+                />
+              </>
+            )}
             <div className="h-px bg-[var(--color-divider)]" />
             <MenuButton
               label="可见范围"
@@ -404,6 +433,15 @@ function EyeIcon() {
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
       <circle cx="12" cy="12" r="3" />
+    </svg>
+  )
+}
+
+function LinkIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
     </svg>
   )
 }

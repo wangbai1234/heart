@@ -1196,3 +1196,66 @@ export async function getRun(
 export async function deleteRun(runId: string): Promise<{ ok: boolean }> {
   return request(`/story/runs/${encodeURIComponent(runId)}`, { method: 'DELETE' })
 }
+
+// ── Admin: character review ────────────────────────────────────────
+// These bypass the bearer-token `request()` helper: the admin console is not a
+// logged-in user session, it authenticates with the X-Admin-Key header (value =
+// backend ADMIN_SECRET_KEY). The key is held in component state only, never
+// persisted. A 403 means a wrong/empty key; a 503 means the backend has no
+// ADMIN_SECRET_KEY configured.
+
+export interface PendingCharacterDTO {
+  id: string
+  display_name: string
+  owner_user_id: string | null
+  owner_email: string | null
+  visibility: string
+  avatar_url: string | null
+  cover_url: string | null
+  persona: string | null
+  intro: string | null
+  submitted_at: string | null
+}
+
+async function adminRequest<T>(path: string, adminKey: string, options: RequestInit = {}): Promise<T> {
+  const res = await fetch(`${BASE_URL}${path}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Admin-Key': adminKey,
+      ...(options.headers as Record<string, string>),
+    },
+  })
+  if (!res.ok) {
+    const fallback = statusFallback(res.status)
+    const body = await res.json().catch(() => ({ detail: fallback }))
+    throw new ApiError(res.status, detailToMessage(body?.detail, fallback))
+  }
+  return res.json()
+}
+
+export async function adminListPendingCharacters(
+  adminKey: string,
+): Promise<{ pending: PendingCharacterDTO[]; count: number }> {
+  return adminRequest('/admin/characters/pending', adminKey)
+}
+
+export async function adminApproveCharacter(
+  characterId: string,
+  adminKey: string,
+): Promise<{ ok: boolean; id: string; coins_granted: number; milestone_plus_granted: boolean }> {
+  return adminRequest(`/admin/characters/${encodeURIComponent(characterId)}/approve`, adminKey, {
+    method: 'POST',
+  })
+}
+
+export async function adminRejectCharacter(
+  characterId: string,
+  reason: string,
+  adminKey: string,
+): Promise<{ ok: boolean; id: string; reason: string }> {
+  return adminRequest(`/admin/characters/${encodeURIComponent(characterId)}/reject`, adminKey, {
+    method: 'POST',
+    body: JSON.stringify({ reason }),
+  })
+}

@@ -251,9 +251,15 @@ async def get_character_profile(
 ) -> dict:
     """Public-facing character profile for the discovery / profile page.
 
-    Readable for any character visible to the viewer (``public`` OR the viewer's
-    own UGC) — intentionally NOT owner-only, since the profile page is reached by
-    browsing the public catalog. Returns only public presentation fields derived
+    Readable for:
+    - the viewer's own UGC (any visibility / review state), and
+    - any ``public`` OR ``unlisted`` character that is ``approved``.
+
+    ``unlisted`` is the "link-visible" tier: it never appears in browse lists
+    (``list_characters`` / ``list_companions`` require ``public``), but anyone
+    who holds the direct ``/character/:id`` link can open its profile — and from
+    there start a chat — once it has cleared review. ``private`` and un-approved
+    characters remain owner-only. Returns only public presentation fields derived
     from the Soul Spec / draft; internal persona (core_wound / core_fear / …) is
     never included (see ``_derive_profile_presentation``).
     """
@@ -267,7 +273,7 @@ async def get_character_profile(
             WHERE id = :cid AND status = 'active'
               AND (
                     owner_user_id = :uid
-                    OR (visibility = 'public' AND review_status = 'approved')
+                    OR (visibility IN ('public', 'unlisted') AND review_status = 'approved')
               )
             """
         ),

@@ -6,7 +6,10 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   const user = useAuthStore((s) => s.user)
   const location = useLocation()
 
-  const publicPaths = ['/splash', '/login', '/register', '/forgot-password', '/redeem', '/age-gate']
+  // '/admin' is public to the user-session guard on purpose: the admin console
+  // authenticates with its own X-Admin-Key (backend ADMIN_SECRET_KEY), not a
+  // logged-in user, so it must not be bounced to /login.
+  const publicPaths = ['/splash', '/login', '/register', '/forgot-password', '/redeem', '/age-gate', '/admin']
   const isPublic = publicPaths.some((p) => location.pathname.startsWith(p)) || location.pathname.startsWith('/legal/')
 
   // Public paths are always accessible
