@@ -256,6 +256,49 @@ class TestUGCCharacterVisibility:
         assert resp.status_code == 200, resp.text
         assert resp.json()["visibility"] == "unlisted"
 
+    def test_unlisted_approved_is_link_visible_but_not_browsable(self, client, setup_db):
+        """仅链接可见：审核通过后，非 owner 凭链接可打开 profile，但不出现在浏览列表。"""
+        from sqlalchemy import text as _text
+
+        owner_headers, _ = _auth_headers()
+        other_headers, _ = _auth_headers()
+
+        create_resp = client.post(
+            "/api/characters", json=_make_draft("链接分享角色"), headers=owner_headers
+        )
+        assert create_resp.status_code == 200, create_resp.text
+        char_id = create_resp.json()["id"]
+
+        # Owner switches to unlisted → enters review (pending).
+        vis_resp = client.patch(
+            f"/api/characters/{char_id}/visibility",
+            json={"visibility": "unlisted"},
+            headers=owner_headers,
+        )
+        assert vis_resp.status_code == 200, vis_resp.text
+
+        # Before approval: a non-owner holding the link still gets 404.
+        pre = client.get(f"/api/characters/{char_id}/profile", headers=other_headers)
+        assert pre.status_code == 404
+
+        # Approve directly in the DB (mirrors the admin approve endpoint).
+        with setup_db.begin() as conn:
+            conn.execute(
+                _text("UPDATE characters SET review_status = 'approved' WHERE id = :cid"),
+                {"cid": char_id},
+            )
+
+        # After approval: the link recipient can open the profile.
+        post = client.get(f"/api/characters/{char_id}/profile", headers=other_headers)
+        assert post.status_code == 200, post.text
+        assert post.json()["id"] == char_id
+
+        # …but it must NOT leak into the browse catalog for a non-owner.
+        catalog = client.get("/api/characters", headers=other_headers)
+        assert catalog.status_code == 200
+        ids = [c["id"] for c in catalog.json()["characters"]]
+        assert char_id not in ids
+
     def test_non_owner_visibility_change_returns_403(self, client):
         owner_headers, _ = _auth_headers()
         other_headers, _ = _auth_headers()

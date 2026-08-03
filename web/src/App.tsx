@@ -30,6 +30,7 @@ import { CreateHubPage } from './pages/CreateHubPage'
 import { ExplorePage } from './pages/ExplorePage'
 import { ScenarioDetailPage } from './pages/ScenarioDetailPage'
 import { StoryPlayerPage } from './pages/StoryPlayerPage'
+import { AdminReviewPage } from './pages/AdminReviewPage'
 import { ToastContainer } from './components/ui/ToastContainer'
 import { UpdatePrompt } from './components/UpdatePrompt'
 import { DailyCheckinDialog } from './components/DailyCheckinDialog'
@@ -239,6 +240,7 @@ export function App() {
         <Route path="/qa/states" element={<UIStatePreviewPage />} />
         <Route path="/characters/new" element={<CreateCharacterPage />} />
         <Route path="/my-characters" element={<MyCharactersPage />} />
+        <Route path="/admin/review" element={<AdminReviewPage />} />
         <Route path="*" element={<NotFoundRedirect />} />
       </Routes>
     </AuthGuard>
