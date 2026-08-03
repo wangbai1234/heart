@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import {
   ApiError,
   adminListPendingCharacters,
@@ -14,10 +14,22 @@ import { Dialog } from '../components/ui/Dialog'
  *
  * Not a user route — it is gated by the admin key (backend ADMIN_SECRET_KEY),
  * entered once per visit and kept in component state only (never persisted).
- * Lists pending UGC characters with avatar / cover / persona / intro previews
- * and lets the admin approve or reject (with a required reason) each one.
+ * Lists pending UGC characters and lets the admin approve or reject (with a
+ * required reason) each one. Each card taps open to reveal the full authoring
+ * payload — persona / 设定 / 简介 / 开场 / 说话风格 / 标签 — so review can be
+ * thorough rather than working off a truncated preview.
  */
 const ADMIN_KEY_STORAGE = 'heart_admin_key'
+
+const GREETING_STYLE_TEXT: Record<string, string> = {
+  warm: '温暖',
+  cool: '疏离',
+  playful: '俏皮',
+  reserved: '克制',
+  intense: '浓烈',
+}
+
+const GENDER_TEXT: Record<string, string> = { female: '女性', male: '男性' }
 
 export function AdminReviewPage() {
   const showToast = useToastStore((s) => s.show)
@@ -222,6 +234,30 @@ const VIS_TEXT: Record<string, string> = {
   private: '私密',
 }
 
+function Field({ label, value }: { label: string; value: ReactNode }) {
+  if (value == null || value === '' || (Array.isArray(value) && value.length === 0)) return null
+  return (
+    <div className="mt-3">
+      <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-[var(--color-text-muted)]">{label}</p>
+      <div className="mt-1 text-[13px] text-[var(--color-text-secondary)] leading-relaxed whitespace-pre-wrap break-words">
+        {value}
+      </div>
+    </div>
+  )
+}
+
+function Chips({ items }: { items: string[] }) {
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {items.map((t, i) => (
+        <span key={`${t}-${i}`} className="h-[24px] px-2.5 inline-flex items-center rounded-full bg-[var(--color-glass-55)] border border-[var(--color-border-glass)] text-[12px] text-[var(--color-text-secondary)]">
+          {t}
+        </span>
+      ))}
+    </div>
+  )
+}
+
 function PendingCard({
   c,
   busy,
@@ -233,6 +269,13 @@ function PendingCard({
   onApprove: () => void
   onReject: () => void
 }) {
+  const [expanded, setExpanded] = useState(false)
+  const meta = [
+    c.gender ? GENDER_TEXT[c.gender] ?? c.gender : null,
+    c.age_range ? `${c.age_range} 岁` : null,
+    c.greeting_style ? `开场风格·${GREETING_STYLE_TEXT[c.greeting_style] ?? c.greeting_style}` : null,
+  ].filter(Boolean).join(' · ')
+
   return (
     <div className="rounded-[18px] bg-[var(--color-glass-75)] border border-[var(--color-border-glass)] overflow-hidden">
       {c.cover_url && (
@@ -241,7 +284,12 @@ function PendingCard({
         </div>
       )}
       <div className="p-4">
-        <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          aria-expanded={expanded}
+          className="w-full flex items-center gap-3 text-left"
+        >
           <div className="w-[44px] h-[44px] rounded-full overflow-hidden bg-gradient-to-br from-[#FFB7C5] to-[#C8B6FF] shrink-0">
             {c.avatar_url && (
               <img
@@ -261,17 +309,34 @@ function PendingCard({
               {c.owner_email ? ` · ${c.owner_email}` : ''}
             </p>
           </div>
-        </div>
+          <svg
+            width="14" height="14" viewBox="0 0 24 24" fill="none"
+            stroke="var(--color-text-muted)" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"
+            className={`shrink-0 transition-transform ${expanded ? 'rotate-180' : ''}`}
+          >
+            <polyline points="6,9 12,15 18,9" />
+          </svg>
+        </button>
 
-        {c.persona && (
-          <p className="mt-3 text-[13px] text-[var(--color-text-secondary)] leading-relaxed whitespace-pre-wrap line-clamp-4">
+        {!expanded && c.persona && (
+          <p className="mt-3 text-[13px] text-[var(--color-text-secondary)] leading-relaxed whitespace-pre-wrap line-clamp-3">
             {c.persona}
           </p>
         )}
-        {c.intro && (
-          <p className="mt-2 text-[12px] text-[var(--color-text-muted)] leading-relaxed whitespace-pre-wrap line-clamp-3">
-            {c.intro}
-          </p>
+
+        {expanded && (
+          <div className="mt-1">
+            {meta && <p className="mt-3 text-[12px] text-[var(--color-text-muted)]">{meta}</p>}
+            {c.tags.length > 0 && <div className="mt-3"><Chips items={c.tags} /></div>}
+            <Field label="人设描述" value={c.persona} />
+            <Field label="背景设定" value={c.backstory} />
+            <Field label="角色简介" value={c.intro} />
+            <Field label="一句话标语" value={c.tagline} />
+            <Field label="初遇开场" value={c.opening} />
+            {c.speech_samples.length > 0 && <Field label="说话示例" value={c.speech_samples.map((s, i) => <p key={i} className="mt-0.5">「{s}」</p>)} />}
+            {c.catchphrases.length > 0 && <Field label="口头禅" value={<Chips items={c.catchphrases} />} />}
+            {c.hard_never_user.length > 0 && <Field label="创作者禁则" value={c.hard_never_user.map((s, i) => <p key={i} className="mt-0.5">· {s}</p>)} />}
+          </div>
         )}
 
         <div className="flex gap-3 mt-4">

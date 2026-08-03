@@ -63,6 +63,9 @@ const GREETING_STYLES: { value: GreetingStyle; label: string; desc: string }[] =
 const MAX_PERSONA = 1500
 const MIN_PERSONA = 20
 const MAX_INTRO = 500
+const MIN_INTRO = 10
+const MAX_TAGLINE = 60
+const MIN_TAGLINE = 4
 const MAX_OPENING = 2000
 const MIN_OPENING = 10
 
@@ -88,6 +91,7 @@ function buildDraft(fields: FormFields, avatarUrl?: string, coverUrl?: string): 
     greeting_style: fields.greetingStyle,
     gender: fields.gender,
     intro: fields.intro.trim() || undefined,
+    tagline: fields.tagline.trim() || undefined,
     opening: fields.opening.trim() || undefined,
     speech_samples: fields.samples.map((s) => s.trim()).filter(Boolean),
     sliders: {
@@ -113,6 +117,7 @@ interface FormFields {
   samples: string[]
   tags: string[]
   intro: string
+  tagline: string
   opening: string
   backstory: string
   hardNever: string[]
@@ -138,6 +143,7 @@ function defaultForm(): FormFields {
     samples: ['', '', ''],
     tags: [],
     intro: '',
+    tagline: '',
     opening: '',
     backstory: '',
     hardNever: [''],
@@ -152,6 +158,10 @@ function validateForm(f: FormFields): string | null {
   if (f.tags.length === 0) return '请至少添加一个角色标签'
   if (f.persona.trim().length < MIN_PERSONA) return `人设描述至少需要 ${MIN_PERSONA} 个字`
   if (f.persona.trim().length > MAX_PERSONA) return `人设描述不能超过 ${MAX_PERSONA} 个字`
+  if (f.tagline.trim().length < MIN_TAGLINE) return `请填写一句话标语（至少 ${MIN_TAGLINE} 个字）`
+  if (f.tagline.trim().length > MAX_TAGLINE) return `一句话标语不能超过 ${MAX_TAGLINE} 个字`
+  if (f.intro.trim().length < MIN_INTRO) return `请填写角色简介（至少 ${MIN_INTRO} 个字）`
+  if (f.intro.trim().length > MAX_INTRO) return `角色简介不能超过 ${MAX_INTRO} 个字`
   if (f.opening.trim().length < MIN_OPENING) return '请填写初遇开场（可用 AI 生成后修改）'
   if (f.opening.trim().length > MAX_OPENING) return `开场白不能超过 ${MAX_OPENING} 个字`
   return null
@@ -165,6 +175,12 @@ function validateFormFields(f: FormFields): Record<string, string> {
   const pLen = f.persona.trim().length
   if (pLen < MIN_PERSONA) errors.persona = `人设描述至少需要 ${MIN_PERSONA} 个字（当前 ${pLen} 字）`
   else if (pLen > MAX_PERSONA) errors.persona = `人设描述不能超过 ${MAX_PERSONA} 个字`
+  const tagLen = f.tagline.trim().length
+  if (tagLen < MIN_TAGLINE) errors.tagline = `请填写一句话标语（至少 ${MIN_TAGLINE} 个字）`
+  else if (tagLen > MAX_TAGLINE) errors.tagline = `一句话标语不能超过 ${MAX_TAGLINE} 个字`
+  const iLen = f.intro.trim().length
+  if (iLen < MIN_INTRO) errors.intro = `请填写角色简介（至少 ${MIN_INTRO} 个字）`
+  else if (iLen > MAX_INTRO) errors.intro = `角色简介不能超过 ${MAX_INTRO} 个字`
   return errors
 }
 
@@ -387,6 +403,7 @@ export function CreateCharacterPage() {
         ],
         tags: draft.tags ?? [],
         intro: draft.intro || '',
+        tagline: draft.tagline || '',
         opening: draft.opening || '',
         backstory: draft.backstory || '',
         hardNever: draft.hard_never_user?.length ? draft.hard_never_user : [''],
@@ -812,7 +829,17 @@ export function CreateCharacterPage() {
   const title = isEdit ? '编辑角色' : '创建角色'
   const personaLen = form.persona.trim().length
   const personaOk = personaLen >= MIN_PERSONA && personaLen <= MAX_PERSONA
-  const canProceed = form.nameZh.trim().length > 0 && Boolean(form.ageRange) && form.tags.length > 0 && personaOk
+  const taglineLen = form.tagline.trim().length
+  const taglineOk = taglineLen >= MIN_TAGLINE && taglineLen <= MAX_TAGLINE
+  const introLen = form.intro.trim().length
+  const introOk = introLen >= MIN_INTRO && introLen <= MAX_INTRO
+  const canProceed =
+    form.nameZh.trim().length > 0 &&
+    Boolean(form.ageRange) &&
+    form.tags.length > 0 &&
+    personaOk &&
+    taglineOk &&
+    introOk
 
   return (
     <div
@@ -1043,21 +1070,61 @@ export function CreateCharacterPage() {
               </div>
             </GlassCard>
 
-            {/* Intro — public profile blurb, display-only (NOT fed to the model).
-                Optional; server falls back to persona/archetype when empty. */}
-            <SectionTitle>角色简介（选填）</SectionTitle>
+            {/* Tagline — one-line public hook under the name. Required so UGC
+                profiles show authored copy, never the internal style template. */}
+            <SectionTitle>一句话标语 *</SectionTitle>
             <GlassCard>
-              <div className="px-5 pt-4 pb-3">
+              <div id="field-tagline" className="px-5 pt-4 pb-3">
                 <textarea
-                  placeholder="一句话介绍，展示在角色资料页（不影响聊天内容）…"
-                  value={form.intro}
-                  onChange={(e) => setForm((prev) => ({ ...prev, intro: e.target.value }))}
-                  maxLength={MAX_INTRO}
-                  rows={3}
+                  placeholder="展示在资料页名字下方的一句话钩子，例：这座城市每一条路，我都替你标好了方向。"
+                  value={form.tagline}
+                  onChange={(e) => {
+                    setForm((prev) => ({ ...prev, tagline: e.target.value }))
+                    if (fieldErrors.tagline) setFieldErrors((p) => { const { tagline: _, ...rest } = p; return rest })
+                  }}
+                  maxLength={MAX_TAGLINE}
+                  rows={2}
                   className="w-full text-[16px] leading-[1.7] text-[var(--color-ink)] bg-transparent outline-none resize-none placeholder:text-[var(--color-text-placeholder)]"
                 />
-                <div className="text-right text-[12px] mt-1 tabular-nums text-[var(--color-text-muted)]">
-                  {form.intro.length}/{MAX_INTRO}
+                <div className="flex items-center justify-between mt-1">
+                  {fieldErrors.tagline ? (
+                    <span className="text-[12px] text-[var(--color-error)]">{fieldErrors.tagline}</span>
+                  ) : (
+                    <span className="text-[12px] text-[var(--color-text-muted)]">至少 {MIN_TAGLINE} 字</span>
+                  )}
+                  <span className="text-[12px] tabular-nums text-[var(--color-text-muted)]">
+                    {form.tagline.length}/{MAX_TAGLINE}
+                  </span>
+                </div>
+              </div>
+            </GlassCard>
+
+            {/* Intro — public profile blurb, display-only (NOT fed to the model).
+                Required so the 叙引 card shows authored content, never the
+                internal English style template. */}
+            <SectionTitle>角色简介 *</SectionTitle>
+            <GlassCard>
+              <div id="field-intro" className="px-5 pt-4 pb-3">
+                <textarea
+                  placeholder="展示在角色资料页的详细简介（不影响聊天内容），介绍 Ta 的身份、气质、故事…"
+                  value={form.intro}
+                  onChange={(e) => {
+                    setForm((prev) => ({ ...prev, intro: e.target.value }))
+                    if (fieldErrors.intro) setFieldErrors((p) => { const { intro: _, ...rest } = p; return rest })
+                  }}
+                  maxLength={MAX_INTRO}
+                  rows={4}
+                  className="w-full text-[16px] leading-[1.7] text-[var(--color-ink)] bg-transparent outline-none resize-none placeholder:text-[var(--color-text-placeholder)]"
+                />
+                <div className="flex items-center justify-between mt-1">
+                  {fieldErrors.intro ? (
+                    <span className="text-[12px] text-[var(--color-error)]">{fieldErrors.intro}</span>
+                  ) : (
+                    <span className="text-[12px] text-[var(--color-text-muted)]">至少 {MIN_INTRO} 字</span>
+                  )}
+                  <span className="text-[12px] tabular-nums text-[var(--color-text-muted)]">
+                    {form.intro.length}/{MAX_INTRO}
+                  </span>
                 </div>
               </div>
             </GlassCard>

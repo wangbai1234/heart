@@ -199,14 +199,22 @@ def _derive_personality(draft: dict) -> list[dict]:
     return personality
 
 
-def _derive_profile_presentation(spec: dict, draft: dict) -> dict:
+def _derive_profile_presentation(spec: dict, draft: dict, is_builtin: bool = False) -> dict:
     """Best-effort public presentation fields (tagline / one_liner / intro / …).
 
     Precedence per field: an explicit override in ``draft`` (used by the seed
-    importer and future UGC forms) → derivation from the public
-    ``identity_anchor.archetype`` (built-ins) or ``persona``/``backstory`` (UGC).
-    Every field degrades to '' / [] so a partial or malformed spec never 500s.
+    importer and the UGC form) → derivation from ``persona``/``backstory``.
 
+    The ``identity_anchor.archetype`` is only a meaningful public label for
+    *built-ins* (curated Chinese archetypes seeded from YAML). For UGC it is a
+    deterministic English style template ("Passionate Soul" / "Gentle
+    Companion" …) that ``spec_builder`` stamps from ``greeting_style`` — an
+    internal register hint, NOT authored content. Surfacing it made most UGC
+    profiles read as identical template text, so it is never used as a UGC
+    fallback here (``is_builtin`` gates it). This also retroactively fixes
+    already-created UGC without any migration.
+
+    Every field degrades to '' / [] so a partial or malformed spec never 500s.
     Only ever reads public-facing content. Internal persona layers
     (core_wound / core_fear / core_belief / core_desire) are deliberately NOT
     touched — this endpoint must not leak them.
@@ -217,6 +225,9 @@ def _derive_profile_presentation(spec: dict, draft: dict) -> dict:
         archetype = str((spec.get("identity_anchor") or {}).get("archetype", "") or "")
     except Exception:
         archetype = ""
+    # Only built-ins may surface the archetype as public copy; for UGC treat it
+    # as empty so derivations fall through to authored persona/backstory.
+    public_archetype = archetype if is_builtin else ""
     persona = str(draft.get("persona", "") or "")
     backstory = str(draft.get("backstory", "") or "")
 
@@ -224,14 +235,14 @@ def _derive_profile_presentation(spec: dict, draft: dict) -> dict:
         v = draft.get(key)
         return v.strip() if isinstance(v, str) and v.strip() else fallback
 
-    archetype_first = _first_nonempty_line(archetype)
+    archetype_first = _first_nonempty_line(public_archetype)
     persona_first = _first_nonempty_line(persona)
 
     tagline = override("tagline", archetype_first or persona_first)
     archetype_label = override("archetype_label", "")
     one_liner = override("one_liner", archetype_first or persona_first)
 
-    intro = override("intro", "") or _derive_intro(archetype, persona, backstory)
+    intro = override("intro", "") or _derive_intro(public_archetype, persona, backstory)
     personality = _derive_personality(draft)
 
     return {
@@ -299,7 +310,7 @@ async def get_character_profile(
     draft_json = _coerce_json(spec_row["draft"]) if spec_row else {}
 
     is_builtin = row["owner_user_id"] is None
-    presentation = _derive_profile_presentation(spec_json, draft_json)
+    presentation = _derive_profile_presentation(spec_json, draft_json, is_builtin=is_builtin)
 
     creator_name = None
     if not is_builtin:

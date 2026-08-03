@@ -31,6 +31,12 @@ interface AppState {
   setChatModel: (id: CharacterId, model: string) => void
   setPushEnabled: (v: boolean) => void
   setInboxUnreadTotal: (n: number) => void
+  // Reset per-user fields on logout / account switch so the next account on
+  // this browser never inherits the previous user's avatar, selected character,
+  // per-character prefs or unread badge. Device-scoped prefs (fontScale, mute
+  // window, pushEnabled) are intentionally preserved — they belong to the
+  // device, not the account.
+  resetUserState: () => void
 }
 
 export const useAppStore = create<AppState>()(
@@ -83,6 +89,14 @@ export const useAppStore = create<AppState>()(
         })),
       setPushEnabled: (v) => set({ pushEnabled: v }),
       setInboxUnreadTotal: (n) => set({ inboxUnreadTotal: n }),
+      resetUserState: () =>
+        set({
+          currentCharacterId: 'rin',
+          userAvatar: null,
+          voiceChatEnabled: { rin: false, dorothy: false },
+          chatModel: {},
+          inboxUnreadTotal: 0,
+        }),
     }),
     {
       name: 'yuoyuo-app',

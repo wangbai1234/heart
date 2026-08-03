@@ -6,6 +6,7 @@ Empty ADMIN_SECRET_KEY = all admin endpoints return 503.
 
 from __future__ import annotations
 
+import json
 import uuid
 
 import structlog
@@ -17,12 +18,31 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from heart.billing import grant
 from heart.core.config import settings
 from heart.membership.service import activate_or_extend
+from heart.ss01_soul.character_catalog import coerce_tags
 
 from .wiring import get_db
 
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
+
+
+def _coerce_draft(raw: object) -> dict:
+    """Normalize a JSONB draft column into a dict (driver may return str or dict)."""
+    if isinstance(raw, str):
+        try:
+            parsed = json.loads(raw)
+        except (ValueError, TypeError):
+            return {}
+        return parsed if isinstance(parsed, dict) else {}
+    return raw if isinstance(raw, dict) else {}
+
+
+def _coerce_str_list(raw: object) -> list[str]:
+    """Keep only non-empty string entries from a draft list field."""
+    if not isinstance(raw, list):
+        return []
+    return [s.strip() for s in raw if isinstance(s, str) and s.strip()]
 
 
 async def require_admin(x_admin_key: str = Header(..., alias="X-Admin-Key")) -> None:
@@ -357,10 +377,9 @@ async def admin_list_pending_characters(
         text(
             """
             SELECT c.id, c.owner_user_id, c.visibility, c.cover_url, c.submitted_at,
+                   c.tags,
                    u.email AS owner_email,
-                   s.draft->>'avatar_url' AS avatar_url,
-                   s.draft->>'persona'    AS persona,
-                   s.draft->>'intro'      AS intro
+                   s.draft AS draft
             FROM characters c
             LEFT JOIN users u ON u.id = c.owner_user_id
             LEFT JOIN soul_specs s ON s.character_id = c.id AND s.status = 'active'
@@ -369,21 +388,36 @@ async def admin_list_pending_characters(
             """
         )
     )
-    items = [
-        {
-            "id": row["id"],
-            "display_name": get_display_name(row["id"]),
-            "owner_user_id": str(row["owner_user_id"]) if row["owner_user_id"] else None,
-            "owner_email": row["owner_email"],
-            "visibility": row["visibility"],
-            "avatar_url": row["avatar_url"],
-            "cover_url": row["cover_url"],
-            "persona": row["persona"],
-            "intro": row["intro"],
-            "submitted_at": row["submitted_at"].isoformat() if row["submitted_at"] else None,
-        }
-        for row in result.mappings()
-    ]
+    items = []
+    for row in result.mappings():
+        draft = _coerce_draft(row["draft"])
+        items.append(
+            {
+                "id": row["id"],
+                "display_name": get_display_name(row["id"]),
+                "owner_user_id": str(row["owner_user_id"]) if row["owner_user_id"] else None,
+                "owner_email": row["owner_email"],
+                "visibility": row["visibility"],
+                "avatar_url": draft.get("avatar_url"),
+                "cover_url": row["cover_url"],
+                # Full review payload: everything an admin needs to judge the
+                # character without opening it separately. All display/authoring
+                # fields only — internal persona layers are not stored in draft.
+                "persona": draft.get("persona"),
+                "intro": draft.get("intro"),
+                "tagline": draft.get("tagline"),
+                "backstory": draft.get("backstory"),
+                "opening": draft.get("opening"),
+                "greeting_style": draft.get("greeting_style"),
+                "gender": draft.get("gender"),
+                "age_range": draft.get("age_range"),
+                "tags": coerce_tags(row["tags"]),
+                "catchphrases": _coerce_str_list(draft.get("catchphrases")),
+                "speech_samples": _coerce_str_list(draft.get("speech_samples")),
+                "hard_never_user": _coerce_str_list(draft.get("hard_never_user")),
+                "submitted_at": row["submitted_at"].isoformat() if row["submitted_at"] else None,
+            }
+        )
     return {"pending": items, "count": len(items)}
 
 

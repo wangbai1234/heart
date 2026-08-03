@@ -746,6 +746,8 @@ export interface CharacterDraftDTO {
   opening?: string
   /** Public profile blurb shown to users (display-only, not fed to the model). */
   intro?: string
+  /** One-line public tagline under the name (display-only, ≤60 chars). */
+  tagline?: string
   sliders: {
     warmth: number
     talkativeness: number
@@ -1214,6 +1216,16 @@ export interface PendingCharacterDTO {
   cover_url: string | null
   persona: string | null
   intro: string | null
+  tagline: string | null
+  backstory: string | null
+  opening: string | null
+  greeting_style: string | null
+  gender: string | null
+  age_range: string | null
+  tags: string[]
+  catchphrases: string[]
+  speech_samples: string[]
+  hard_never_user: string[]
   submitted_at: string | null
 }
 
