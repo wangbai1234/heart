@@ -61,9 +61,13 @@ class FishProvider:
         if req.speed and req.speed != 1.0:
             payload["speed"] = req.speed
 
+        # X-Request-Id lets us correlate a failed turn with the Fish dashboard's
+        # request log (the gateway echoes it back in error.requestId).
+        req_id = str(uuid.uuid4())
         headers = {
             "Authorization": f"Bearer {self._api_key}",
             "Content-Type": "application/json",
+            "X-Request-Id": req_id,
         }
         try:
             async with httpx.AsyncClient(timeout=self._timeout) as client:
@@ -74,7 +78,8 @@ class FishProvider:
                 )
                 if resp.status_code != 200:
                     raise TTSProviderError(
-                        f"Fish Audio TTS error {resp.status_code}: {resp.text[:200]}"
+                        f"Fish Audio TTS error {resp.status_code} "
+                        f"(req_id={req_id}): {resp.text[:200]}"
                     )
                 audio_bytes = resp.content
                 _headers = getattr(resp, "headers", None) or {}
@@ -121,7 +126,7 @@ class FishProvider:
             audio=audio_bytes,
             format=detected_format,
             duration_ms=duration_ms,
-            request_id=str(uuid.uuid4()),
+            request_id=req_id,
         )
 
     async def stream_synthesize(self, req: TTSRequest) -> AsyncIterator[AudioChunk]:
