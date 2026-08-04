@@ -1551,12 +1551,14 @@ export function CreateCharacterPage() {
               <input
                 ref={cloneInputRef}
                 type="file"
-                // Explicit extensions alongside the MIME wildcards: some OS file
-                // dialogs grey out audio files when only `audio/*` is given
-                // (the OS-reported MIME doesn't match the wildcard), leaving
-                // just video selectable. Listing extensions keeps mp3/wav/m4a
-                // pickable everywhere.
-                accept="audio/*,video/*,.mp3,.wav,.m4a,.aac,.ogg,.oga,.flac,.mp4,.mov,.m4v,.webm"
+                // No `accept` on purpose. On mobile, listing `video/*` makes
+                // iOS/Android open the photo/media picker, which only shows
+                // photos+videos and hides all audio files (mp3/wav in Files) —
+                // that's why audio "disappeared" once video support was added.
+                // With no accept, iOS shows the Photo Library / Files chooser
+                // and Android opens the document picker, so both audio and
+                // video are reachable. Non-media files are rejected in code
+                // (handleCloneUpload) by MIME + extension.
                 className="hidden"
                 onChange={(e) => {
                   const file = e.target.files?.[0]
