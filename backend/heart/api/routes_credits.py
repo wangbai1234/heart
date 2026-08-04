@@ -209,13 +209,8 @@ async def pricing() -> dict:
                 "cost": tts_cost_fen("fish") // 100,
             },
             {
-                "id": "clone_mimo",
-                "label": "MiMo 声音克隆",
-                "cost": action_cost_fen("clone_mimo") // 100,
-            },
-            {
                 "id": "clone_fish",
-                "label": "Fish 声音克隆",
+                "label": "真人声音克隆",
                 "cost": action_cost_fen("clone_fish") // 100,
             },
         ],

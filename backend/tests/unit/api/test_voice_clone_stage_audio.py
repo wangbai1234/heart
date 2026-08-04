@@ -86,42 +86,7 @@ async def test_stage_audio_fish_returns_upload_marker_without_touching_storage()
     mock_mm.assert_not_called()
 
 
-@pytest.mark.asyncio
-async def test_stage_audio_mimo_returns_s3_key_handle():
-    """MiMo reference must stay backend-readable → stored as ``s3://<key>`` (auth read,
-    private bucket OK), never a public URL and never MiniMax."""
-    captured: dict = {}
-
-    async def _fake_upload(key, data, mime):
-        captured["key"] = key
-
-    with (
-        patch("heart.infra.storage.is_s3_configured", return_value=True),
-        patch("heart.infra.storage._upload_to_s3", new=_fake_upload),
-    ):
-        got = await routes_voice._stage_audio_for_clone(
-            data=b"\x00" * 4096,
-            filename="sample.wav",
-            mime="audio/wav",
-            character_id="char_xyz",
-            provider="mimo",
-        )
-    assert got.startswith("s3://voice-samples/char_xyz/")
-    assert got == f"s3://{captured['key']}"
-
-
-@pytest.mark.asyncio
-async def test_stage_audio_mimo_requires_object_storage():
-    """No object storage configured → MiMo clone can't persist a re-readable ref → 503."""
-    from fastapi import HTTPException
-
-    with patch("heart.infra.storage.is_s3_configured", return_value=False):
-        with pytest.raises(HTTPException) as exc:
-            await routes_voice._stage_audio_for_clone(
-                data=b"\x00" * 4096,
-                filename="sample.wav",
-                mime="audio/wav",
-                character_id="char_xyz",
-                provider="mimo",
-            )
-    assert exc.value.status_code == 503
+# NOTE: MiMo clone was retired (zero-shot quality too poor). Its staging path
+# (s3:// reference handle) is gone — cloning is Fish-only now, so the former
+# test_stage_audio_mimo_* cases were removed with it. Fish staging is covered by
+# test_stage_audio_fish_returns_upload_marker_without_touching_storage above.

@@ -975,7 +975,7 @@ export async function setPresetVoice(
 export async function uploadVoiceClone(
   characterId: string,
   file: File,
-  provider: string = 'mimo',
+  provider: string = 'fish',
 ): Promise<{ ok: boolean; clone_status: string; balance: number }> {
   const { accessToken } = (await import('../stores/authStore')).useAuthStore.getState()
   if (!accessToken) throw new Error('未登录')

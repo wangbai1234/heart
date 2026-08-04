@@ -428,10 +428,13 @@ async def test_assert_clone_allowed_permits_free_fish():
 
 
 @pytest.mark.asyncio
-async def test_assert_clone_allowed_permits_free_mimo():
-    from heart.membership import assert_clone_allowed
+async def test_assert_clone_allowed_rejects_mimo():
+    """MiMo clone retired — no tier may clone via MiMo anymore."""
+    from heart.membership import CloneForbiddenError, assert_clone_allowed
 
-    assert_clone_allowed("free", "mimo")  # must not raise
+    for tier in ("free", "plus", "immersive"):
+        with pytest.raises(CloneForbiddenError):
+            assert_clone_allowed(tier, "mimo")
 
 
 @pytest.mark.asyncio
@@ -467,31 +470,26 @@ async def test_assert_clone_allowed_permits_immersive_fish():
 
 
 # ---------------------------------------------------------------------------
-# Clone provider availability gate — MiMo is zero-shot, gated by MIMO_API_KEY
-# (NOT MINIMAX_API_KEY): that mis-gate was the "音色克隆服务未配置" seen by
-# plus/immersive users uploading a MiMo clone.
+# Clone provider availability gate — cloning is Fish-only (MiMo clone retired).
+# Fish is gated by FISH_API_KEY; missing key raises 503 with a clear hint.
 # ---------------------------------------------------------------------------
 
 
-def test_mimo_gate_uses_mimo_api_key_not_minimax():
-    """MiMo clone available when MIMO_API_KEY is set, even with no MiniMax key."""
-    with (
-        patch.object(routes_voice.settings, "mimo_api_key", "tp-xxx"),
-        patch.object(routes_voice.settings, "minimax_api_key", ""),
-    ):
-        routes_voice._check_clone_provider_available("mimo")  # must not raise
+def test_fish_gate_requires_fish_api_key():
+    """Fish clone available when FISH_API_KEY is set."""
+    with patch.object(routes_voice.settings, "fish_api_key", "fk-xxx"):
+        routes_voice._check_clone_provider_available("fish")  # must not raise
 
 
-def test_mimo_gate_blocks_when_mimo_key_missing():
+def test_fish_gate_raises_without_fish_api_key():
+    """Missing FISH_API_KEY → 503, not a silent pass."""
+    import pytest as _pytest
     from fastapi import HTTPException
 
-    with (
-        patch.object(routes_voice.settings, "mimo_api_key", ""),
-        patch.object(routes_voice.settings, "minimax_api_key", "mm-key"),
-    ):
-        with pytest.raises(HTTPException) as exc:
-            routes_voice._check_clone_provider_available("mimo")
-    assert exc.value.status_code == 503
+    with patch.object(routes_voice.settings, "fish_api_key", ""):
+        with _pytest.raises(HTTPException) as ei:
+            routes_voice._check_clone_provider_available("fish")
+        assert ei.value.status_code == 503
 
 
 def test_fish_gate_uses_fish_api_key():
