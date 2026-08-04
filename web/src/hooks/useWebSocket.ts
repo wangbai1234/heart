@@ -3,6 +3,7 @@ import { useChatStore } from '../stores/chatStore'
 import { useAppStore } from '../stores/appStore'
 import { useAuthStore } from '../stores/authStore'
 import { wrapPCM16AsWAV } from '../services/audioPlayer'
+import { storedAudioFormat } from '../services/audioConcat'
 import { FEEDBACK_COPY, type CharacterId } from '../data/uiContent'
 import { useToastStore } from '../stores/toastStore'
 import { authNavigate } from '../services/navigation'
@@ -245,7 +246,9 @@ export function useWebSocket() {
             seenChunks.current.add(key)
             const rawBuffer = b64ToArrayBuffer(msg.data_b64)
             const durationMs = estimateChunkDurationMs(rawBuffer, msg.format)
-            const audioFormat = msg.format === 'pcm16' ? 'wav' : 'mp3'
+            // Preserve the real server format — see storedAudioFormat's docstring
+            // for why collapsing wav→mp3 broke iOS Safari playback.
+            const audioFormat = storedAudioFormat(msg.format)
             let storedB64 = msg.data_b64
             if (msg.format === 'pcm16') {
               storedB64 = arrayBufferToBase64(wrapPCM16AsWAV(rawBuffer))
