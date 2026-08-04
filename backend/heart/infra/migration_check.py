@@ -19,12 +19,17 @@ import structlog
 logger = structlog.get_logger(__name__)
 
 _REV_RE = re.compile(r'^\s*revision\s*=\s*["\']([^"\']+)["\']', re.MULTILINE)
-_DOWN_RE = re.compile(r'^\s*down_revision\s*=\s*["\']([^"\']+)["\']', re.MULTILINE)
+# Capture the whole RHS of `down_revision = ...` so we handle BOTH a single
+# string (`= "abc"`) AND a merge migration's tuple (`= ("a", "b")`). Extracting
+# every quoted token from the RHS is what keeps merge parents from being
+# mis-detected as heads (which surfaced as a false migration_drift_detected).
+_DOWN_RE = re.compile(r"^\s*down_revision\s*=\s*(.+)$", re.MULTILINE)
+_QUOTED_RE = re.compile(r'["\']([^"\']+)["\']')
 
 
 def _discover_migration_heads(versions_dir: Path) -> set[str]:
     """Return the set of head revisions (those with no children) on disk."""
-    revisions: dict[str, str | None] = {}
+    revisions: dict[str, list[str]] = {}
     for py in versions_dir.glob("*.py"):
         try:
             src = py.read_text(encoding="utf-8")
@@ -35,11 +40,12 @@ def _discover_migration_heads(versions_dir: Path) -> set[str]:
             continue
         rev = rev_m.group(1)
         down_m = _DOWN_RE.search(src)
-        revisions[rev] = down_m.group(1) if down_m else None
+        # A down_revision may name 0 (base), 1 (normal), or N (merge) parents.
+        parents = _QUOTED_RE.findall(down_m.group(1)) if down_m else []
+        revisions[rev] = parents
     children: set[str] = set()
-    for _rev, down in revisions.items():
-        if down:
-            children.add(down)
+    for _rev, parents in revisions.items():
+        children.update(parents)
     return set(revisions.keys()) - children
 
 

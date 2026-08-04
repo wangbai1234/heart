@@ -42,6 +42,21 @@ def test_discover_heads_multi_head(tmp_path):
     assert heads == {"b", "c"}
 
 
+def test_discover_heads_merge_migration_tuple(tmp_path):
+    """A merge migration (down_revision = tuple) collapses two heads into one.
+
+    Regression: a tuple down_revision must register BOTH parents as children,
+    else B and C are mis-reported as heads and startup logs a false
+    migration_drift_detected even though the DB is on the single real head D.
+    """
+    (tmp_path / "a.py").write_text('revision = "a"\ndown_revision = None\n')
+    (tmp_path / "b.py").write_text('revision = "b"\ndown_revision = "a"\n')
+    (tmp_path / "c.py").write_text('revision = "c"\ndown_revision = "a"\n')
+    (tmp_path / "d.py").write_text('revision = "d"\ndown_revision = ("b", "c")\n')
+    heads = _discover_migration_heads(tmp_path)
+    assert heads == {"d"}
+
+
 def test_discover_heads_ignores_non_python_files(tmp_path):
     """Files without .py extension are skipped."""
     (tmp_path / "a.py").write_text('revision = "a"\ndown_revision = None\n')
