@@ -669,10 +669,13 @@ class _FakeSession:
         self.audio_format = audio_format
 
 
-class TestUploadTurnAudio:
+class TestUploadTurnAudioFormat:
     """Regression for replayed voice failing with '语音没能播放': MiMo emits
     headerless PCM16, which must be WAV-wrapped before upload; mp3 must stay
-    mp3 (not relabelled audio/wav)."""
+    mp3 (not relabelled audio/wav).
+
+    Named distinctly from TestUploadTurnAudio (above) — an identical class name
+    here previously shadowed that one, silently disabling its 3 tests."""
 
     @pytest.mark.asyncio
     async def test_pcm16_is_wrapped_as_wav(self):
@@ -754,3 +757,49 @@ class TestUploadTurnAudio:
         session = _FakeSession(b"", "pcm16")
         url, dur = await routes_chat_ws._upload_turn_audio(session, uuid.uuid4(), "t")
         assert url is None and dur is None
+
+class TestTurnEndHasAudio:
+    """turn_end must carry has_audio reflecting whether TTS audio persisted, so
+    the client only stamps a by-turn pointer when the object actually exists."""
+
+    async def _run(self, *, uploaded_url):
+        from heart.api import routes_chat_ws
+
+        ws = AsyncMock()
+        ws.send_json = AsyncMock()
+        db = AsyncMock()
+        db.commit = AsyncMock()
+        db.execute = AsyncMock()
+
+        with (
+            patch.object(
+                routes_chat_ws,
+                "_upload_turn_audio",
+                new=AsyncMock(return_value=(uploaded_url, 1200 if uploaded_url else None)),
+            ),
+            patch.object(routes_chat_ws, "_derive_segments_and_cost", return_value=([], 0)),
+            patch.object(routes_chat_ws, "_get_engine"),
+            patch("sqlalchemy.ext.asyncio.AsyncSession", return_value=db),
+            patch("heart.membership.get_effective_tier", new=AsyncMock(return_value="plus")),
+            patch("heart.billing.get_balance", new=AsyncMock(return_value=0)),
+            patch("heart.invite.service.handle_first_chat", new=AsyncMock()),
+        ):
+            db.__aenter__ = AsyncMock(return_value=db)
+            db.__aexit__ = AsyncMock(return_value=False)
+            await routes_chat_ws._post_turn_billing(
+                ws, uuid.uuid4(), str(uuid.uuid4()), "char1", "hi", ["reply"],
+                "voice", False, stream_session=None, tts_provider="",
+            )
+        ends = [c[0][0] for c in ws.send_json.call_args_list if c[0][0].get("type") == "turn_end"]
+        assert ends, "no turn_end emitted"
+        return ends[-1]
+
+    @pytest.mark.asyncio
+    async def test_has_audio_true_when_uploaded(self):
+        end = await self._run(uploaded_url="http://minio/x.mp3")
+        assert end["has_audio"] is True
+
+    @pytest.mark.asyncio
+    async def test_has_audio_false_when_not_uploaded(self):
+        end = await self._run(uploaded_url=None)
+        assert end["has_audio"] is False

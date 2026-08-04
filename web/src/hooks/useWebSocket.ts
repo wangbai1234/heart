@@ -27,6 +27,7 @@ interface WsMessage {
   msg?: string
   code?: string
   modality?: string
+  has_audio?: boolean
   credits_charged?: number
   balance?: number
   needed?: number
@@ -295,7 +296,11 @@ export function useWebSocket() {
             // Stamp a durable server pointer so the voice message survives a
             // page refresh (audioData/audioChunks are dropped from persistence).
             // The store message id === turn_id, so the by-turn endpoint resolves it.
-            if (msg.modality === 'voice') {
+            // Gate on has_audio: stamping a pointer for a turn that stored nothing
+            // guarantees a permanent 404 ("已过期" on tap). Older backends omit the
+            // field (undefined) — fall back to modality so they keep working.
+            const audioStored = msg.has_audio ?? msg.modality === 'voice'
+            if (msg.modality === 'voice' && audioStored) {
               setMessageAudioUrl(cid, msg.turn_id, `/api/chat/audio/by-turn/${msg.turn_id}`)
             }
             if (msg.modality) {

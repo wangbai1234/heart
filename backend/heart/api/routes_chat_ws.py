@@ -710,6 +710,11 @@ async def _post_turn_billing(
                 "turn_id": turn_id,
                 "character_id": character_id,
                 "modality": actual_modality,
+                # True only when this turn's TTS audio actually persisted to
+                # storage. The client uses it to decide whether to stamp a durable
+                # /api/chat/audio/by-turn pointer — stamping one for a turn that
+                # stored nothing guarantees a permanent 404 ("已过期" on tap).
+                "has_audio": bool(audio_url),
                 "credits_charged": total_charged / 100,
                 "balance": new_balance / 100,
                 "served_model": served_model,

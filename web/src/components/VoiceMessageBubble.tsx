@@ -92,10 +92,25 @@ export default function VoiceMessageBubble({
   const fetchApiAudio = useCallback(async (): Promise<string | null> => {
     const { accessToken } = useAuthStore.getState()
     try {
-      const res = await fetch(audioData, {
-        headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
-      })
-      if (!res.ok) throw new Error(`Audio fetch failed: ${res.status}`)
+      // A by-turn pointer can briefly 404 right after a turn ends: the reply row
+      // is committed just as the client stamps the pointer, so an eager tap may
+      // beat visibility. That's "not ready yet", not "expired" — retry a few
+      // times with backoff before surfacing an error. By-id URLs never race, so
+      // they get a single attempt.
+      const isByTurn = audioData.includes('/by-turn/')
+      const maxAttempts = isByTurn ? 3 : 1
+      let res: Response | null = null
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        res = await fetch(audioData, {
+          headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+        })
+        if (res.ok) break
+        if (res.status !== 404 || attempt === maxAttempts - 1) {
+          throw new Error(`Audio fetch failed: ${res.status}`)
+        }
+        await new Promise((r) => setTimeout(r, 400 * (attempt + 1)))
+      }
+      if (!res || !res.ok) throw new Error(`Audio fetch failed: ${res?.status ?? 'unknown'}`)
       const blob = await res.blob()
       const blobUrl = URL.createObjectURL(blob)
       if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current)
