@@ -221,9 +221,17 @@ export default function VoiceMessageBubble({
       const audio = new Audio(url)
       audioRef.current = audio
       audio.onended = () => stopPlayback()
+      // A single failed playback fires BOTH audio.onerror and play()'s rejection.
+      // Handle only the first: without this guard the second call sees the
+      // fallback already in flight (triedFallbackRef set), returns "nothing to
+      // try", and flashes "语音没能播放" a beat before the recovered audio starts —
+      // exactly the "报错然后开始播放" the user saw.
+      let handledFailure = false
       // A decode/playback failure on the live blob isn't final while a durable
       // server object exists — recover to it silently before showing an error.
       const onFail = () => {
+        if (handledFailure) return
+        handledFailure = true
         stopPlayback()
         if (allowFallback) {
           void tryFallback().then((recovered) => {
