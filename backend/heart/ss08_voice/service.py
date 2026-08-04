@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Optional
 
 import structlog
 
+from heart.core.config import settings
 from heart.ss08_voice.provider import TTSProvider
 from heart.ss08_voice.types import TTSRequest, TTSResult
 from heart.ss08_voice.voice_catalog import get_voice_id
@@ -30,7 +31,9 @@ class VoiceService:
     ):
         self._provider = provider
         self._fallback = fallback
-        self._director = director or VoiceDirector()
+        self._director = director or VoiceDirector(
+            s1_tags_enabled=getattr(settings, "fish_s1_tags_enabled", False)
+        )
         # Registry of all configured TTS providers keyed by name (mimo/fish/
         # minimax). Enables per-character provider selection in
         # synthesize_with_fallback. Defaults to primary (+fallback) so callers

@@ -12,6 +12,12 @@ from heart.ss08_voice.voice_catalog import VoiceProfile, get_voice_profile
 class VoiceDirector:
     """Maps emotion/relationship state to TTSRequest parameters."""
 
+    def __init__(self, s1_tags_enabled: bool = False) -> None:
+        # S1 fine-grained emotion tags are only interpreted by modelId
+        # "fishaudio-s1"; on every other backbone they are read aloud as literal
+        # text. Keep them OFF unless the deployment runs fishaudio-s1.
+        self._s1_tags_enabled = s1_tags_enabled
+
     EMOTION_MAP_RULES = [
         # (predicate, emotion, speed_delta, pitch_delta)
         # Order matters: first match wins
@@ -23,11 +29,13 @@ class VoiceDirector:
         (lambda v, a, d: True, "neutral", 0.0, 0),  # default
     ]
 
+    # Valid S1 fixed labels only (docs: fine-grained-emotion/s1). Older code used
+    # (chuckle)/(sighs)/(breath)/(gasps), none of which are S1 tags.
     _TAG_BY_EMOTION = {
-        "happy": "(chuckle)",
-        "sad": "(sighs)",
-        "fearful": "(breath)",
-        "surprised": "(gasps)",
+        "happy": "(chuckling)",
+        "sad": "(sighing)",
+        "fearful": "(gasping)",
+        "surprised": "(gasping)",
     }
 
     _EMOTION_ALIASES = {
@@ -60,33 +68,36 @@ class VoiceDirector:
     }
 
     _ACTIVE_EMOTION_CUES = {
-        "longing": ["(breath)"],
-        "aggrieved": ["(sighs)"],
-        "weariness": ["(sighs)"],
-        "worry": ["(breath)"],
-        "fear": ["(breath)"],
-        "surprise": ["(gasps)"],
-        "joy": ["(chuckle)"],
-        "excitement": ["(chuckle)"],
+        "longing": ["(break)"],
+        "aggrieved": ["(sighing)"],
+        "weariness": ["(sighing)"],
+        "worry": ["(break)"],
+        "fear": ["(gasping)"],
+        "surprise": ["(gasping)"],
+        "joy": ["(chuckling)"],
+        "excitement": ["(chuckling)"],
     }
 
     _STAGE_CUE_RULES = [
-        (re.compile(r"笑|轻笑|chuckle|laugh", re.IGNORECASE), "(chuckle)", +0.02, 0),
-        (re.compile(r"叹|叹息|无奈|疲惫|累|倦|sigh", re.IGNORECASE), "(sighs)", -0.06, -1),
-        (re.compile(r"停顿|片刻|沉默|顿了|迟疑|犹豫|pause", re.IGNORECASE), "(breath)", -0.04, 0),
-        (re.compile(r"惊|怔|愣|错愕|gasps|surprise", re.IGNORECASE), "(gasps)", +0.05, +1),
-        (re.compile(r"哭|哽咽|泪|cry", re.IGNORECASE), "(crying)", -0.08, -1),
+        (re.compile(r"笑|轻笑|chuckle|laugh", re.IGNORECASE), "(chuckling)", +0.02, 0),
+        (re.compile(r"叹|叹息|无奈|疲惫|累|倦|sigh", re.IGNORECASE), "(sighing)", -0.06, -1),
+        (re.compile(r"停顿|片刻|沉默|顿了|迟疑|犹豫|pause", re.IGNORECASE), "(break)", -0.04, 0),
+        (re.compile(r"惊|怔|愣|错愕|gasps|surprise", re.IGNORECASE), "(gasping)", +0.05, +1),
+        (re.compile(r"哭|哽咽|泪|cry", re.IGNORECASE), "(sobbing)", -0.08, -1),
         (
             re.compile(r"低声|压低|轻声|克制|凉意|雨后|冷|淡淡", re.IGNORECASE),
-            "(breath)",
+            "(break)",
             -0.05,
             -1,
         ),
-        (re.compile(r"急|快|慌|兴奋|激动", re.IGNORECASE), "(breath)", +0.06, +1),
+        (re.compile(r"急|快|慌|兴奋|激动", re.IGNORECASE), "(break)", +0.06, +1),
     ]
 
+    # Valid S1 tone/sound/pause labels (docs: fine-grained-emotion/s1). If the
+    # text already carries one, skip auto-decoration.
     _TAG_PATTERN = re.compile(
-        r"\((laughs|chuckle|coughs|clear-throat|groans|breath|pant|inhale|exhale|gasps|sniffs|sighs|snorts|burps|lip-smacking|humming|hissing|emm|whistles|sneezes|crying|applause)\)",
+        r"\((laughing|chuckling|sobbing|crying loudly|sighing|groaning|panting|"
+        r"gasping|yawning|snoring|break|long-break)\)",
         re.IGNORECASE,
     )
 
@@ -163,6 +174,11 @@ class VoiceDirector:
         if not cleaned:
             return cleaned
 
+        # S1 tags are only honoured by modelId "fishaudio-s1"; on any other
+        # backbone they are spoken aloud. When disabled, send clean prose only.
+        if not self._s1_tags_enabled:
+            return cleaned
+
         if self._TAG_PATTERN.search(cleaned):
             return cleaned
 
@@ -172,10 +188,10 @@ class VoiceDirector:
         if prefix:
             cleaned = f"{prefix}{cleaned}"
         elif intimacy >= 0.72:
-            cleaned = f"(breath){cleaned}"
+            cleaned = f"(break){cleaned}"
 
         if len(cleaned) > 18:
-            cleaned = re.sub(r"([。！？!?])(?=[^。！？!?])", r"\1(breath)", cleaned, count=1)
+            cleaned = re.sub(r"([。！？!?])(?=[^。！？!?])", r"\1(break)", cleaned, count=1)
             cleaned = re.sub(r"([，、；：,;:])(?=[^，、；：,;:])", r"\1 ", cleaned)
 
         return cleaned
@@ -201,7 +217,7 @@ class VoiceDirector:
         if profile.clone_stability:
             # Cloned voices keep identity better when strong emotions are carried
             # by light pause/breath cues instead of large model-level shifts.
-            cues = [cue for cue in cues if cue in {"(breath)", "(sighs)", "(chuckle)"}]
+            cues = [cue for cue in cues if cue in {"(break)", "(sighing)", "(chuckling)"}]
         return emotion, speed, pitch, cues[: max(0, profile.max_cues)]
 
     def derive(

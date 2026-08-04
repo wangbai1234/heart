@@ -19,6 +19,13 @@ def director():
     return VoiceDirector()
 
 
+@pytest.fixture
+def s1_director():
+    # S1 tags are only interpreted by modelId "fishaudio-s1"; this director has
+    # them explicitly enabled to exercise the (corrected-spelling) injection path.
+    return VoiceDirector(s1_tags_enabled=True)
+
+
 def test_happy_emotion(director):
     """Test happy emotion mapping (high valence, high arousal)."""
     req = director.derive(
@@ -137,47 +144,60 @@ def test_dorothy_voice_id(director):
     assert req.voice_id == "female-yujie"
 
 
-def test_sad_text_gets_pause_tag(director):
+def test_no_tags_injected_by_default(director):
+    # Default backbone (s21pro-flash etc.) does NOT interpret S1 tags — they'd be
+    # read aloud. So the director must ship clean prose with zero injected tags.
     req = director.derive(
         text="今天真的有一点累。想先安静一下。",
         character_id="rin",
         vad={"valence": -0.4, "arousal": 0.2, "dominance": 0.4},
         intimacy=0.6,
     )
-    assert req.text.startswith("(sighs)")
-    assert "(breath)" in req.text
+    assert "(" not in req.text
+    assert req.text == "今天真的有一点累。想先安静一下。"
 
 
-def test_existing_expression_tags_are_preserved(director):
-    req = director.derive(
-        text="(breath)别担心，我会陪着你。",
+def test_sad_text_gets_pause_tag_when_s1_enabled(s1_director):
+    req = s1_director.derive(
+        text="今天真的有一点累。想先安静一下。",
+        character_id="rin",
+        vad={"valence": -0.4, "arousal": 0.2, "dominance": 0.4},
+        intimacy=0.6,
+    )
+    assert req.text.startswith("(sighing)")
+    assert "(break)" in req.text
+
+
+def test_existing_expression_tags_are_preserved(s1_director):
+    req = s1_director.derive(
+        text="(break)别担心，我会陪着你。",
         character_id="rin",
         vad={"valence": 0.0, "arousal": 0.2, "dominance": 0.5},
     )
-    assert req.text == "(breath)别担心，我会陪着你。"
+    assert req.text == "(break)别担心，我会陪着你。"
 
 
-def test_active_emotions_drive_director_cues(director):
-    req = director.derive(
+def test_active_emotions_drive_director_cues(s1_director):
+    req = s1_director.derive(
         text="我在。",
         character_id="rin",
         vad={"valence": 0.0, "arousal": 0.2, "dominance": 0.5},
         active_emotions=[{"emotion": "aggrieved", "intensity": 0.8}],
     )
     assert req.emotion == "sad"
-    assert req.text.startswith("(sighs)")
+    assert req.text.startswith("(sighing)")
     assert req.speed < 1.0
 
 
-def test_stage_directions_become_nonspoken_cues(director):
-    req = director.derive(
+def test_stage_directions_become_nonspoken_cues(s1_director):
+    req = s1_director.derive(
         text="kaito。他们提过一次。",
         character_id="rin",
         vad={"valence": 0.0, "arousal": 0.2, "dominance": 0.5},
         stage_directions=["目光停顿片刻，嗓音带着雨后的凉意"],
     )
     assert "目光停顿" not in req.text
-    assert req.text.startswith("(breath)")
+    assert req.text.startswith("(break)")
     assert req.pitch < 0
 
 
