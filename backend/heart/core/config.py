@@ -282,12 +282,14 @@ class Settings(BaseSettings):
     # live Fish key to validate, and any realtime error falls back to REST.
     fish_realtime_enabled: bool = False
     fish_realtime_url: str = "wss://realtime.fishaudio.org/v1/tts/live"
-    # Inject S1 fine-grained emotion tags — (sighing)/(chuckling)/(break) etc. —
-    # into the TTS text. These are ONLY interpreted by modelId "fishaudio-s1";
-    # every other backbone (s21pro-flash, speech-1.6, …) reads them ALOUD as
-    # literal text ("breathe" noise). Default OFF; flip ON only when fish_model
-    # is fishaudio-s1.
-    fish_s1_tags_enabled: bool = False
+    # Emotion-control syntax injected into TTS text. Fish backbones each parse a
+    # DIFFERENT scheme, and using the wrong one makes the marker get read ALOUD:
+    #   "s2"  → [中文自然语言指令], e.g. [低声说] — for the S2.1 family
+    #           (s21pro / s21pro-flash / s2pro). Instruction words are NOT spoken.
+    #   "s1"  → (english-fixed-label), e.g. (sighing) — ONLY for fishaudio-s1.
+    #   "off" → send clean prose, no markers (rely on speed only).
+    # Default "s2" matches the production model fishaudio-s21pro-flash.
+    fish_emotion_mode: str = "s2"
 
     # MiMo TTS (voiceclone v2.5)
     mimo_api_key: str | None = None

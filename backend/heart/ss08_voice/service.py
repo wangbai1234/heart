@@ -32,7 +32,7 @@ class VoiceService:
         self._provider = provider
         self._fallback = fallback
         self._director = director or VoiceDirector(
-            s1_tags_enabled=getattr(settings, "fish_s1_tags_enabled", False)
+            emotion_mode=getattr(settings, "fish_emotion_mode", "s2")
         )
         # Registry of all configured TTS providers keyed by name (mimo/fish/
         # minimax). Enables per-character provider selection in

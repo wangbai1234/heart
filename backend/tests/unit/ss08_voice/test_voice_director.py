@@ -16,14 +16,19 @@ def reset_voice_settings(monkeypatch):
 
 @pytest.fixture
 def director():
-    return VoiceDirector()
+    # Default production mode: S2 [中文指令] for the s21pro-flash family.
+    return VoiceDirector(emotion_mode="s2")
+
+
+@pytest.fixture
+def off_director():
+    return VoiceDirector(emotion_mode="off")
 
 
 @pytest.fixture
 def s1_director():
-    # S1 tags are only interpreted by modelId "fishaudio-s1"; this director has
-    # them explicitly enabled to exercise the (corrected-spelling) injection path.
-    return VoiceDirector(s1_tags_enabled=True)
+    # S1 (english-label) tags — only interpreted by modelId "fishaudio-s1".
+    return VoiceDirector(emotion_mode="s1")
 
 
 def test_happy_emotion(director):
@@ -144,9 +149,20 @@ def test_dorothy_voice_id(director):
     assert req.voice_id == "female-yujie"
 
 
-def test_no_tags_injected_by_default(director):
-    # Default backbone (s21pro-flash etc.) does NOT interpret S1 tags — they'd be
-    # read aloud. So the director must ship clean prose with zero injected tags.
+def test_off_mode_injects_nothing(off_director):
+    # "off" mode ships clean prose (no markers of any kind).
+    req = off_director.derive(
+        text="今天真的有一点累。想先安静一下。",
+        character_id="rin",
+        vad={"valence": -0.4, "arousal": 0.2, "dominance": 0.4},
+        intimacy=0.6,
+    )
+    assert "(" not in req.text and "[" not in req.text
+    assert req.text == "今天真的有一点累。想先安静一下。"
+
+
+def test_s2_never_uses_s1_parens(director):
+    # S2 mode must NEVER emit S1 () tags — those get read aloud on s21pro-flash.
     req = director.derive(
         text="今天真的有一点累。想先安静一下。",
         character_id="rin",
@@ -154,7 +170,39 @@ def test_no_tags_injected_by_default(director):
         intimacy=0.6,
     )
     assert "(" not in req.text
-    assert req.text == "今天真的有一点累。想先安静一下。"
+
+
+def test_s2_sad_gets_chinese_instruction(director):
+    # Sad VAD → a leading [中文指令] the S2.1 model interprets (not spoken).
+    req = director.derive(
+        text="今天真的有一点累。想先安静一下。",
+        character_id="rin",
+        vad={"valence": -0.4, "arousal": 0.2, "dominance": 0.4},
+        active_emotions=[{"emotion": "aggrieved", "intensity": 0.8}],
+    )
+    assert req.emotion == "sad"
+    assert req.text.startswith("[")
+    assert req.text.endswith("想先安静一下。")
+
+
+def test_s2_stage_direction_becomes_bracket_cue(director):
+    req = director.derive(
+        text="kaito。他们提过一次。",
+        character_id="rin",
+        vad={"valence": 0.0, "arousal": 0.2, "dominance": 0.5},
+        stage_directions=["目光停顿片刻，嗓音带着雨后的凉意"],
+    )
+    assert "目光停顿" not in req.text
+    assert req.text.startswith("[") and "(" not in req.text
+
+
+def test_s2_preserves_existing_bracket_instruction(director):
+    req = director.derive(
+        text="[压低声音]别出声。",
+        character_id="rin",
+        vad={"valence": 0.0, "arousal": 0.2, "dominance": 0.5},
+    )
+    assert req.text == "[压低声音]别出声。"
 
 
 def test_sad_text_gets_pause_tag_when_s1_enabled(s1_director):

@@ -12,11 +12,11 @@ from heart.ss08_voice.voice_catalog import VoiceProfile, get_voice_profile
 class VoiceDirector:
     """Maps emotion/relationship state to TTSRequest parameters."""
 
-    def __init__(self, s1_tags_enabled: bool = False) -> None:
-        # S1 fine-grained emotion tags are only interpreted by modelId
-        # "fishaudio-s1"; on every other backbone they are read aloud as literal
-        # text. Keep them OFF unless the deployment runs fishaudio-s1.
-        self._s1_tags_enabled = s1_tags_enabled
+    def __init__(self, emotion_mode: str = "s2") -> None:
+        # Emotion-control syntax to inject: "s2" ([中文指令], S2.1 family), "s1"
+        # ((english-label), fishaudio-s1 only), or "off" (clean prose). The wrong
+        # scheme for the backbone gets read aloud, so this must match fish_model.
+        self._emotion_mode = emotion_mode if emotion_mode in ("s2", "s1", "off") else "s2"
 
     EMOTION_MAP_RULES = [
         # (predicate, emotion, speed_delta, pitch_delta)
@@ -36,6 +36,28 @@ class VoiceDirector:
         "sad": "(sighing)",
         "fearful": "(gasping)",
         "surprised": "(gasping)",
+    }
+
+    # S2 leading instruction per emotion — Chinese natural language in [] for the
+    # S2.1 family (docs: fine-grained-emotion/s2). The bracket text is a control
+    # marker and is NOT spoken. One instruction at sentence head reads naturally.
+    _S2_BY_EMOTION = {
+        "happy": "[轻快愉悦地说]",
+        "sad": "[低沉难过地说]",
+        "angry": "[压着怒气地说]",
+        "fearful": "[紧张不安地说]",
+        "surprised": "[惊讶地说]",
+        "disgusted": "[语气冷淡地说]",
+        "neutral": "",
+    }
+
+    # S2 rendering of an internal canonical cue token → Chinese instruction.
+    _S2_CUE_TRANSLATION = {
+        "(break)": "[停顿片刻]",
+        "(sighing)": "[叹了口气]",
+        "(chuckling)": "[轻笑着说]",
+        "(gasping)": "[倒吸一口气]",
+        "(sobbing)": "[带着哭腔]",
     }
 
     _EMOTION_ALIASES = {
@@ -173,27 +195,49 @@ class VoiceDirector:
         cleaned = " ".join(text.split())
         if not cleaned:
             return cleaned
-
-        # S1 tags are only honoured by modelId "fishaudio-s1"; on any other
-        # backbone they are spoken aloud. When disabled, send clean prose only.
-        if not self._s1_tags_enabled:
+        if self._emotion_mode == "off":
             return cleaned
+        if self._emotion_mode == "s2":
+            return self._decorate_s2(cleaned, emotion, intimacy, cues, emotion_prefix_enabled)
+        return self._decorate_s1(cleaned, emotion, intimacy, cues, emotion_prefix_enabled)
 
+    def _decorate_s2(
+        self, cleaned: str, emotion: str, intimacy: float, cues: list[str], prefix_enabled: bool
+    ) -> str:
+        # S2.1 family: one leading [中文指令] carries the emotion; a single cue
+        # instruction may follow. Instruction words are control markers, not
+        # spoken. Skip if the text already opens with a bracket instruction.
+        if cleaned.startswith("["):
+            return cleaned
+        parts: list[str] = []
+        for cue in cues:
+            translated = self._S2_CUE_TRANSLATION.get(cue)
+            if translated:
+                parts.append(translated)
+        emo_instr = self._S2_BY_EMOTION.get(emotion, "") if prefix_enabled else ""
+        if not parts and emo_instr:
+            parts.append(emo_instr)
+        elif not parts and not emo_instr and intimacy >= 0.72:
+            parts.append("[温柔地说]")
+        prefix = "".join(dict.fromkeys(parts))[:24]  # dedupe, cap length
+        return f"{prefix}{cleaned}" if prefix else cleaned
+
+    def _decorate_s1(
+        self, cleaned: str, emotion: str, intimacy: float, cues: list[str], prefix_enabled: bool
+    ) -> str:
+        # fishaudio-s1 only: english fixed labels in ().
         if self._TAG_PATTERN.search(cleaned):
             return cleaned
-
         prefix = "".join(cues)
-        if not prefix and emotion_prefix_enabled:
+        if not prefix and prefix_enabled:
             prefix = self._TAG_BY_EMOTION.get(emotion)
         if prefix:
             cleaned = f"{prefix}{cleaned}"
         elif intimacy >= 0.72:
             cleaned = f"(break){cleaned}"
-
         if len(cleaned) > 18:
             cleaned = re.sub(r"([。！？!?])(?=[^。！？!?])", r"\1(break)", cleaned, count=1)
             cleaned = re.sub(r"([，、；：,;:])(?=[^，、；：,;:])", r"\1 ", cleaned)
-
         return cleaned
 
     def _stabilize_for_profile(
