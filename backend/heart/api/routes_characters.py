@@ -433,10 +433,11 @@ async def set_voice_provider(
             detail={"code": "tier_forbidden", "provider": e.provider, "tier": e.tier},
         ) from e
 
-    # The target engine must have a ready voice for this character.
+    # The target engine must have a ready voice for this character — scoped to
+    # this user so their personal override counts (and others' never do).
     from heart.ss08_voice.voice_resolver import list_ready_voice_providers
 
-    ready = await list_ready_voice_providers(character_id, db)
+    ready = await list_ready_voice_providers(character_id, db, uid)
     if provider not in ready:
         raise HTTPException(status_code=409, detail="该角色暂未配置该语音，请先配置音色")
 

@@ -523,10 +523,17 @@ export function CreateCharacterPage() {
     }
     setVoiceSaving(true)
     try {
-      await setPresetVoice(createdCharacterId, selectedPreset)
-      showToast('音色配置成功', 'success')
-    } catch {
-      showToast('音色配置失败，可稍后在设置中重试', 'error')
+      const res = await setPresetVoice(createdCharacterId, selectedPreset)
+      // A personal override on someone else's public character isn't published;
+      // tell the user their pick is private to them so it's not mistaken for a
+      // global change.
+      showToast(
+        res.is_personal ? '已为你设置专属音色（仅自己可听）' : '音色配置成功',
+        'success',
+      )
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : '音色配置失败，可稍后在设置中重试'
+      showToast(msg, 'error')
     } finally {
       setVoiceSaving(false)
     }
@@ -669,7 +676,10 @@ export function CreateCharacterPage() {
           if (voice.clone_status === 'ready') {
             if (pollRef.current) clearInterval(pollRef.current)
             setCloneStatus('ready')
-            showToast('克隆音色已就绪', 'success')
+            showToast(
+              voice.is_personal ? '专属音色已就绪（仅自己可听）' : '克隆音色已就绪',
+              'success',
+            )
           } else if (voice.clone_status === 'failed') {
             if (pollRef.current) clearInterval(pollRef.current)
             setCloneStatus('failed')
@@ -811,8 +821,11 @@ export function CreateCharacterPage() {
         try {
           await setPresetVoice(id, presetVoiceId)
           showToast('音色配置成功', 'success')
-        } catch {
-          showToast('音色配置失败，可稍后在设置中重试', 'error')
+        } catch (err) {
+          // Surface the backend's real reason (403 无权 / 404 / provider error)
+          // instead of a blanket "失败" that hides why.
+          const msg = err instanceof ApiError ? err.message : '音色配置失败，可稍后在设置中重试'
+          showToast(msg, 'error')
         }
       }
       navigate(`/chat/${id}`, { replace: true })

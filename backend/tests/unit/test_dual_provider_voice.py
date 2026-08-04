@@ -113,7 +113,7 @@ class TestResolveEffectiveVoice:
                 vr,
                 "_ready_row",
                 new=AsyncMock(
-                    side_effect=lambda cid, d, prov: _mimo_row() if prov == "mimo" else None
+                    side_effect=lambda cid, d, prov, uid=None: _mimo_row() if prov == "mimo" else None
                 ),
             ),
         ):
@@ -132,7 +132,7 @@ class TestResolveEffectiveVoice:
                 vr,
                 "_ready_row",
                 new=AsyncMock(
-                    side_effect=lambda cid, d, prov: _fish_row() if prov == "fish" else None
+                    side_effect=lambda cid, d, prov, uid=None: _fish_row() if prov == "fish" else None
                 ),
             ),
         ):

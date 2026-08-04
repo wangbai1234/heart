@@ -917,6 +917,10 @@ export interface CharacterVoiceDTO {
   // real reason (missing GroupId / unreachable audio URL / MiniMax quota)
   // so the toast is actionable instead of a generic retry prompt.
   error_msg?: string | null
+  // True when the returned voice is THIS user's personal override on a public
+  // character they don't own (not published to other users). Drives a hint on
+  // the config screen. Absent/false → canonical (owner-set or built-in).
+  is_personal?: boolean
 }
 
 export async function getPresetVoices(
@@ -961,7 +965,7 @@ export async function getCharacterVoice(characterId: string): Promise<CharacterV
 export async function setPresetVoice(
   characterId: string,
   presetVoiceId: string,
-): Promise<{ ok: boolean; voice_type: string; clone_status: string }> {
+): Promise<{ ok: boolean; voice_type: string; clone_status: string; is_personal?: boolean }> {
   return request('/voice/preset', {
     method: 'POST',
     body: JSON.stringify({ character_id: characterId, preset_voice_id: presetVoiceId }),

@@ -105,15 +105,23 @@ async def resolve_voice_provider(character_id: str, db: AsyncSession) -> str | N
     return provider or None
 
 
-async def list_ready_voice_providers(character_id: str, db: AsyncSession) -> list[str]:
-    """All providers with a ready voice row for this character (for the UI toggle)."""
+async def list_ready_voice_providers(
+    character_id: str, db: AsyncSession, user_id: uuid.UUID | None = None
+) -> list[str]:
+    """All providers with a ready voice row for this character (for the UI toggle).
+
+    Scoped to the voices this ``user_id`` may hear: the public/canonical rows plus
+    their own personal overrides (is_public = FALSE, user_id = them). Other users'
+    private overrides never appear. When ``user_id`` is None only public rows match.
+    """
     result = await db.execute(
         text("""
-            SELECT voice_provider FROM character_voices
+            SELECT DISTINCT voice_provider FROM character_voices
             WHERE character_id = :cid AND clone_status = 'ready'
+              AND (is_public OR (user_id = :uid AND NOT is_public))
             ORDER BY voice_provider
         """),
-        {"cid": character_id},
+        {"cid": character_id, "uid": user_id},
     )
     return [r[0] for r in result.fetchall() if r[0]]
 
@@ -138,7 +146,12 @@ def _tts_allowed(tier: str, provider: str) -> bool:
     return provider in get_entitlements(tier).tts
 
 
-async def _ready_row(character_id: str, db: AsyncSession, provider: str) -> dict | None:
+async def _ready_row(
+    character_id: str, db: AsyncSession, provider: str, user_id: uuid.UUID | None = None
+) -> dict | None:
+    # A user hears their own personal override (is_public = FALSE, user_id = them)
+    # in preference to the character's canonical/public voice. Order personal-first
+    # so the LIMIT 1 picks the override when both exist.
     result = await db.execute(
         text("""
             SELECT cv.voice_provider, cv.voice_type, cv.clone_voice_id, cv.clone_audio_url,
@@ -147,27 +160,40 @@ async def _ready_row(character_id: str, db: AsyncSession, provider: str) -> dict
             LEFT JOIN preset_voices pv ON pv.id = cv.preset_voice_id
             WHERE cv.character_id = :cid AND cv.voice_provider = :prov
               AND cv.clone_status = 'ready'
+              AND (cv.is_public OR (cv.user_id = :uid AND NOT cv.is_public))
+            ORDER BY (cv.user_id = :uid AND NOT cv.is_public) DESC
             LIMIT 1
         """),
-        {"cid": character_id, "prov": provider},
+        {"cid": character_id, "prov": provider, "uid": user_id},
     )
     row = result.mappings().fetchone()
     return dict(row) if row else None
 
 
-async def _all_ready_rows(character_id: str, db: AsyncSession) -> list[dict]:
+async def _all_ready_rows(
+    character_id: str, db: AsyncSession, user_id: uuid.UUID | None = None
+) -> list[dict]:
+    # One row per provider: the caller's personal override wins over the public
+    # row. DISTINCT ON collapses to the top-ordered row per provider.
     result = await db.execute(
         text("""
-            SELECT cv.voice_provider, cv.voice_type, cv.clone_voice_id, cv.clone_audio_url,
+            SELECT DISTINCT ON (cv.voice_provider)
+                   cv.voice_provider, cv.voice_type, cv.clone_voice_id, cv.clone_audio_url,
                    cv.clone_status, pv.voice_id AS preset_voice_id
             FROM character_voices cv
             LEFT JOIN preset_voices pv ON pv.id = cv.preset_voice_id
             WHERE cv.character_id = :cid AND cv.clone_status = 'ready'
-            ORDER BY (cv.voice_provider = 'mimo') DESC, cv.voice_provider
+              AND (cv.is_public OR (cv.user_id = :uid AND NOT cv.is_public))
+            ORDER BY cv.voice_provider,
+                     (cv.user_id = :uid AND NOT cv.is_public) DESC
         """),
-        {"cid": character_id},
+        {"cid": character_id, "uid": user_id},
     )
-    return [dict(r) for r in result.mappings().fetchall()]
+    rows = [dict(r) for r in result.mappings().fetchall()]
+    # Preserve the previous ordering contract (mimo first) for callers that pick
+    # the first tier-allowed row.
+    rows.sort(key=lambda r: (r["voice_provider"] != "mimo", r["voice_provider"]))
+    return rows
 
 
 def _row_to_effective(row: dict) -> EffectiveVoice:
@@ -201,12 +227,12 @@ async def resolve_effective_voice(
 
     provider = selected if _tts_allowed(tier, selected) else "mimo"
 
-    row = await _ready_row(character_id, db, provider)
+    row = await _ready_row(character_id, db, provider, user_id)
     if row is None:
         # Selected provider has no ready voice — fall back to any ready row the
         # tier is allowed to use (prefer mimo). Keeps voice working when only one
         # engine is configured, or the selection points at a missing clone.
-        for candidate in await _all_ready_rows(character_id, db):
+        for candidate in await _all_ready_rows(character_id, db, user_id):
             if _tts_allowed(tier, candidate["voice_provider"]):
                 row = candidate
                 break
@@ -217,15 +243,27 @@ async def resolve_effective_voice(
 
 
 async def get_voice_config(
-    character_id: str, db: AsyncSession, provider: str | None = None
+    character_id: str,
+    db: AsyncSession,
+    provider: str | None = None,
+    user_id: uuid.UUID | None = None,
 ) -> dict | None:
     """Return full voice config dict for a character, or None if unconfigured.
 
     When ``provider`` is given, returns that provider's row; otherwise prefers a
     ready row (deterministic single row even with multiple provider rows).
+
+    Scoped by ``user_id``: the caller's own personal override (is_public = FALSE)
+    wins over the public/canonical row, so the config screen reflects the voice
+    THIS user actually hears. When ``user_id`` is None only public rows are
+    considered. ``is_public`` is included so callers can tell canonical from
+    personal.
     """
-    where = "WHERE cv.character_id = :cid"
-    params: dict = {"cid": character_id}
+    where = (
+        "WHERE cv.character_id = :cid "
+        "AND (cv.is_public OR (cv.user_id = :uid AND NOT cv.is_public))"
+    )
+    params: dict = {"cid": character_id, "uid": user_id}
     if provider is not None:
         where += " AND cv.voice_provider = :prov"
         params["prov"] = provider
@@ -234,13 +272,14 @@ async def get_voice_config(
         text(f"""
             SELECT cv.id, cv.voice_type, cv.preset_voice_id,
                    cv.clone_audio_url, cv.clone_voice_id, cv.clone_status,
-                   cv.error_msg, cv.created_at, cv.voice_provider,
+                   cv.error_msg, cv.created_at, cv.voice_provider, cv.is_public,
                    pv.name AS preset_name, pv.voice_id AS preset_voice_id_value,
                    pv.description AS preset_description
             FROM character_voices cv
             LEFT JOIN preset_voices pv ON pv.id = cv.preset_voice_id
             {where}
-            ORDER BY (cv.clone_status = 'ready') DESC, cv.voice_provider
+            ORDER BY (cv.user_id = :uid AND NOT cv.is_public) DESC,
+                     (cv.clone_status = 'ready') DESC, cv.voice_provider
             LIMIT 1
         """),
         params,

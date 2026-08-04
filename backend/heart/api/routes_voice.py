@@ -26,6 +26,42 @@ logger = structlog.get_logger()
 
 router = APIRouter(prefix="/api/voice", tags=["voice"])
 
+
+async def _resolve_voice_write_scope(db: AsyncSession, character_id: str, uid: uuid.UUID) -> bool:
+    """Authorize a voice write and decide whether it is canonical or personal.
+
+    Returns ``is_public``:
+      - ``True``  — the caller owns the character, so the voice they set is the
+        character's canonical voice (private char: only they see it anyway;
+        public char: it becomes the published voice everyone hears).
+      - ``False`` — the caller does NOT own the character but it is publicly
+        reachable (public/unlisted), so they may configure a PERSONAL override
+        that only they hear; it is never published to other users.
+
+    Raises 404 if the character is missing, 403 if the caller may not configure
+    a voice at all (someone else's private/pending character).
+    """
+    row = (
+        await db.execute(
+            text("SELECT owner_user_id, visibility FROM characters WHERE id = :cid"),
+            {"cid": character_id},
+        )
+    ).fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail="角色不存在")
+
+    owner_id, visibility = row[0], row[1]
+    is_owner = owner_id is not None and str(owner_id) == str(uid)
+    if is_owner:
+        return True
+    # Non-owner: only public/unlisted (link-visible) characters accept a personal
+    # override. Built-in/imported cast (owner NULL) is public and falls here too —
+    # a user may give it a voice for themselves without touching the global one.
+    if visibility in ("public", "unlisted"):
+        return False
+    raise HTTPException(status_code=403, detail="无权配置此角色的音色")
+
+
 # Hardcoded fallback clone cost — superseded by config-driven action_cost_fen()
 # when billing/pricing.py is available.  Kept for safety during startup.
 _CLONE_COST_FEN_FALLBACK = 80_000
@@ -332,11 +368,12 @@ async def get_character_voice(
 
     uid = uuid.UUID(current_user.user_id)
     # Providers with a ready voice (drives the backstage 日常/真人 toggle) + the
-    # user's current selection (which button is highlighted "使用中").
-    available_providers = await list_ready_voice_providers(character_id, db)
+    # user's current selection (which button is highlighted "使用中"). Scoped to
+    # uid so a personal override lights the toggle only for its owner.
+    available_providers = await list_ready_voice_providers(character_id, db, uid)
     selected_provider = await get_selected_voice_provider(character_id, uid, db)
 
-    config = await get_voice_config(character_id, db)
+    config = await get_voice_config(character_id, db, user_id=uid)
     if config is not None:
         return {
             "configured": True,
@@ -349,6 +386,9 @@ async def get_character_voice(
             # All providers the user can switch between + their current choice.
             "available_providers": available_providers,
             "selected_provider": selected_provider,
+            # True when this row is the caller's personal override rather than the
+            # character's published voice — the config screen shows a hint.
+            "is_personal": not config.get("is_public", True),
             "has_voice": config["clone_status"] == "ready",
             # Surface the DB error_msg only for failed clones. The frontend
             # shows this in a toast so the user can act on it (missing
@@ -398,46 +438,62 @@ async def set_preset_voice(
         raise HTTPException(status_code=404, detail="预设音色不存在")
     preset_provider = preset_row["provider"] or "mimo"
 
-    # Ownership check — voice is a per-character GLOBAL setting (character_voices
-    # is keyed UNIQUE(character_id, voice_provider), no per-user scoping), so only
-    # the character's owner may set it. Built-in/imported characters have
-    # owner_user_id IS NULL: they ship WITHOUT a voice on purpose, and no end user
-    # may configure one (their voice, if any, is seeded operationally). Historic
-    # bug: this gate was `is not None and ...`, which SHORT-CIRCUITED for NULL
-    # owners and let any logged-in user write a global voice onto imported cast
-    # characters (2026-07-30). Mirror /clone's `is None or ...` gate exactly.
-    char_result = await db.execute(
-        text("SELECT owner_user_id FROM characters WHERE id = :cid"),
-        {"cid": body.character_id},
-    )
-    char_row = char_result.fetchone()
-    if char_row is None:
-        raise HTTPException(status_code=404, detail="角色不存在")
-    if char_row[0] is None or str(char_row[0]) != str(uid):
-        raise HTTPException(status_code=403, detail="无权配置此角色的音色")
+    # Authorize + classify the write. Owner → canonical (is_public=TRUE); a
+    # non-owner on a public/unlisted character → personal override
+    # (is_public=FALSE, only they hear it). Others' private chars → 403.
+    is_public = await _resolve_voice_write_scope(db, body.character_id, uid)
 
-    await db.execute(
-        text("""
-            INSERT INTO character_voices
-                (character_id, user_id, voice_type, preset_voice_id, clone_status, voice_provider)
-            VALUES (:cid, :uid, 'preset', :pid, 'ready', :prov)
-            ON CONFLICT (character_id, voice_provider) DO UPDATE
-                SET voice_type      = 'preset',
-                    preset_voice_id = :pid,
-                    clone_status    = 'ready',
-                    updated_at      = NOW()
-        """),
-        {
-            "cid": body.character_id,
-            "uid": uid,
-            "pid": body.preset_voice_id,
-            "prov": preset_provider,
-        },
-    )
-    await db.execute(
-        text("UPDATE characters SET has_voice = TRUE WHERE id = :cid"),
-        {"cid": body.character_id},
-    )
+    # Two partial unique indexes (migration 057) enforce "one canonical row" vs
+    # "one personal row per user" separately, so the conflict target differs by
+    # scope. user_id is NULL only for operational seeds, never for these writes.
+    if is_public:
+        await db.execute(
+            text("""
+                INSERT INTO character_voices
+                    (character_id, user_id, voice_type, preset_voice_id,
+                     clone_status, voice_provider, is_public)
+                VALUES (:cid, :uid, 'preset', :pid, 'ready', :prov, TRUE)
+                ON CONFLICT (character_id, voice_provider) WHERE is_public
+                DO UPDATE SET voice_type      = 'preset',
+                              preset_voice_id = :pid,
+                              clone_status    = 'ready',
+                              user_id         = :uid,
+                              updated_at      = NOW()
+            """),
+            {
+                "cid": body.character_id,
+                "uid": uid,
+                "pid": body.preset_voice_id,
+                "prov": preset_provider,
+            },
+        )
+        # has_voice is a global denormalized flag; only canonical voices set it.
+        await db.execute(
+            text("UPDATE characters SET has_voice = TRUE WHERE id = :cid"),
+            {"cid": body.character_id},
+        )
+    else:
+        await db.execute(
+            text("""
+                INSERT INTO character_voices
+                    (character_id, user_id, voice_type, preset_voice_id,
+                     clone_status, voice_provider, is_public)
+                VALUES (:cid, :uid, 'preset', :pid, 'ready', :prov, FALSE)
+                ON CONFLICT (character_id, voice_provider, user_id)
+                    WHERE NOT is_public AND user_id IS NOT NULL
+                DO UPDATE SET voice_type      = 'preset',
+                              preset_voice_id = :pid,
+                              clone_status    = 'ready',
+                              updated_at      = NOW()
+            """),
+            {
+                "cid": body.character_id,
+                "uid": uid,
+                "pid": body.preset_voice_id,
+                "prov": preset_provider,
+            },
+        )
+
     await db.commit()
 
     logger.info(
@@ -445,8 +501,14 @@ async def set_preset_voice(
         character_id=body.character_id,
         preset_voice_id=body.preset_voice_id,
         user_id=str(uid),
+        is_public=is_public,
     )
-    return {"ok": True, "voice_type": "preset", "clone_status": "ready"}
+    return {
+        "ok": True,
+        "voice_type": "preset",
+        "clone_status": "ready",
+        "is_personal": not is_public,
+    }
 
 
 @router.post("/clone")
@@ -471,16 +533,10 @@ async def clone_voice(
     if provider not in _VALID_CLONE_PROVIDERS:
         raise HTTPException(status_code=400, detail=f"不支持的克隆 provider: {provider}")
 
-    # Ownership check — only UGC characters (owner_user_id = uid) allowed
-    char_result = await db.execute(
-        text("SELECT owner_user_id FROM characters WHERE id = :cid"),
-        {"cid": character_id},
-    )
-    char_row = char_result.fetchone()
-    if char_row is None:
-        raise HTTPException(status_code=404, detail="角色不存在")
-    if char_row[0] is None or str(char_row[0]) != str(uid):
-        raise HTTPException(status_code=403, detail="只能为自己创建的角色克隆音色")
+    # Authorize + classify. Owner → canonical clone (published if the char is
+    # public); non-owner on a public/unlisted char → personal clone only they
+    # hear; someone else's private char → 403.
+    is_public = await _resolve_voice_write_scope(db, character_id, uid)
 
     # Tier gate — Fish/MiMo clone requires paid membership
     tier = await get_effective_tier(db, uid)
@@ -528,23 +584,45 @@ async def clone_voice(
         provider=provider,
     )
 
-    # Upsert the character_voices row for THIS provider (compound key since 039,
-    # so a mimo clone and a fish clone coexist for the same character).
-    await db.execute(
-        text("""
-            INSERT INTO character_voices
-                (character_id, user_id, voice_type, clone_audio_url, clone_status, voice_provider)
-            VALUES (:cid, :uid, 'clone', :url, 'processing', :prov)
-            ON CONFLICT (character_id, voice_provider) DO UPDATE
-                SET voice_type      = 'clone',
-                    clone_audio_url = :url,
-                    clone_voice_id  = NULL,
-                    clone_status    = 'processing',
-                    error_msg       = NULL,
-                    updated_at      = NOW()
-        """),
-        {"cid": character_id, "uid": uid, "url": audio_source, "prov": provider},
-    )
+    # Upsert the character_voices row for THIS provider + scope. Conflict target
+    # differs by is_public (migration 057's two partial indexes): a canonical
+    # clone and each user's personal clone are independent rows.
+    if is_public:
+        await db.execute(
+            text("""
+                INSERT INTO character_voices
+                    (character_id, user_id, voice_type, clone_audio_url,
+                     clone_status, voice_provider, is_public)
+                VALUES (:cid, :uid, 'clone', :url, 'processing', :prov, TRUE)
+                ON CONFLICT (character_id, voice_provider) WHERE is_public
+                DO UPDATE SET voice_type      = 'clone',
+                              clone_audio_url = :url,
+                              clone_voice_id  = NULL,
+                              clone_status    = 'processing',
+                              error_msg       = NULL,
+                              user_id         = :uid,
+                              updated_at      = NOW()
+            """),
+            {"cid": character_id, "uid": uid, "url": audio_source, "prov": provider},
+        )
+    else:
+        await db.execute(
+            text("""
+                INSERT INTO character_voices
+                    (character_id, user_id, voice_type, clone_audio_url,
+                     clone_status, voice_provider, is_public)
+                VALUES (:cid, :uid, 'clone', :url, 'processing', :prov, FALSE)
+                ON CONFLICT (character_id, voice_provider, user_id)
+                    WHERE NOT is_public AND user_id IS NOT NULL
+                DO UPDATE SET voice_type      = 'clone',
+                              clone_audio_url = :url,
+                              clone_voice_id  = NULL,
+                              clone_status    = 'processing',
+                              error_msg       = NULL,
+                              updated_at      = NOW()
+            """),
+            {"cid": character_id, "uid": uid, "url": audio_source, "prov": provider},
+        )
     await db.commit()
 
     logger.info(
@@ -560,6 +638,7 @@ async def clone_voice(
     _provider_captured = provider
     _bytes_captured = data
     _mime_captured = mime
+    _is_public_captured = is_public
     asyncio.get_event_loop().call_soon_threadsafe(
         lambda: asyncio.ensure_future(
             _run_clone_job(
@@ -570,6 +649,7 @@ async def clone_voice(
                 audio_bytes=_bytes_captured,
                 mime=_mime_captured,
                 tier=tier,
+                is_public=_is_public_captured,
             )
         )
     )
@@ -658,11 +738,16 @@ async def _mark_clone_ready(
     audio_source: str,
     clone_voice_id: str | None,
     tier: str = "free",
+    is_public: bool = True,
 ) -> None:
     """Charge clone credits (once, best-effort) and flip the row + character to ready.
 
     ``tier`` decides the fee: immersive waives it (0 fen → no deduction), free/plus
     are charged ``action_cost_fen``. A 0 cost short-circuits the deduct entirely.
+
+    ``is_public`` selects WHICH row to flip: the canonical row (is_public) or this
+    user's personal override. It also gates the global ``has_voice`` flag — a
+    personal-only override must not advertise the character as voiced to everyone.
     """
     cost = _clone_cost_fen(provider, tier)
     if cost > 0:
@@ -691,13 +776,22 @@ async def _mark_clone_ready(
             SET clone_voice_id = :vid, clone_status = 'ready',
                 error_msg = NULL, updated_at = NOW()
             WHERE character_id = :cid AND voice_provider = :prov
+              AND is_public = :pub
+              AND (:pub OR user_id = :uid)
         """),
-        {"vid": clone_voice_id, "cid": character_id, "prov": provider},
+        {
+            "vid": clone_voice_id,
+            "cid": character_id,
+            "prov": provider,
+            "pub": is_public,
+            "uid": uuid.UUID(user_id),
+        },
     )
-    await db.execute(
-        text("UPDATE characters SET has_voice = TRUE WHERE id = :cid"),
-        {"cid": character_id},
-    )
+    if is_public:
+        await db.execute(
+            text("UPDATE characters SET has_voice = TRUE WHERE id = :cid"),
+            {"cid": character_id},
+        )
 
 
 async def _run_clone_job(
@@ -708,6 +802,7 @@ async def _run_clone_job(
     audio_bytes: bytes | None = None,
     mime: str = "audio/wav",
     tier: str = "free",
+    is_public: bool = True,
 ) -> None:
     """Background task: turn an uploaded sample into a ready voice, update DB.
 
@@ -740,6 +835,7 @@ async def _run_clone_job(
                     audio_source=audio_source,
                     clone_voice_id=None,
                     tier=tier,
+                    is_public=is_public,
                 )
                 await db.commit()
                 logger.info("voice_clone_ready", character_id=character_id, provider="mimo")
@@ -759,6 +855,7 @@ async def _run_clone_job(
                     audio_source=audio_source,
                     clone_voice_id=clone_voice_id,
                     tier=tier,
+                    is_public=is_public,
                 )
                 logger.info("voice_clone_ready", character_id=character_id, voice_id=clone_voice_id)
             else:
@@ -768,8 +865,15 @@ async def _run_clone_job(
                         UPDATE character_voices
                         SET clone_status = 'failed', error_msg = :err, updated_at = NOW()
                         WHERE character_id = :cid AND voice_provider = :prov
+                          AND is_public = :pub AND (:pub OR user_id = :uid)
                     """),
-                    {"cid": character_id, "err": reason, "prov": provider},
+                    {
+                        "cid": character_id,
+                        "err": reason,
+                        "prov": provider,
+                        "pub": is_public,
+                        "uid": uuid.UUID(user_id),
+                    },
                 )
                 logger.warning(
                     "voice_clone_failed",
@@ -786,8 +890,15 @@ async def _run_clone_job(
                         UPDATE character_voices
                         SET clone_status = 'failed', error_msg = :err, updated_at = NOW()
                         WHERE character_id = :cid AND voice_provider = :prov
+                          AND is_public = :pub AND (:pub OR user_id = :uid)
                     """),
-                    {"cid": character_id, "err": str(exc)[:200], "prov": provider},
+                    {
+                        "cid": character_id,
+                        "err": str(exc)[:200],
+                        "prov": provider,
+                        "pub": is_public,
+                        "uid": uuid.UUID(user_id),
+                    },
                 )
                 await db.commit()
             except Exception:
@@ -1085,7 +1196,13 @@ async def remove_character_voice(
     current_user: TokenData = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
-    """Remove a character's voice configuration (owner only)."""
+    """Remove a character's voice configuration.
+
+    Owner: removes the canonical voice (and, defensively, any personal override
+    they also hold). Non-owner: removes only their own personal override, never
+    the character's published voice. ``has_voice`` is recomputed from whatever
+    canonical rows remain so the global flag stays truthful.
+    """
     uid = uuid.UUID(current_user.user_id)
 
     char_result = await db.execute(
@@ -1095,20 +1212,48 @@ async def remove_character_voice(
     char_row = char_result.fetchone()
     if char_row is None:
         raise HTTPException(status_code=404, detail="角色不存在")
-    if char_row[0] is not None and str(char_row[0]) != str(uid):
-        raise HTTPException(status_code=403, detail="无权删除此角色的音色配置")
+    is_owner = char_row[0] is not None and str(char_row[0]) == str(uid)
 
-    await db.execute(
-        text("DELETE FROM character_voices WHERE character_id = :cid"),
+    if is_owner:
+        # Owner clears the canonical voice + their own personal row (if any).
+        await db.execute(
+            text(
+                "DELETE FROM character_voices "
+                "WHERE character_id = :cid AND (is_public OR user_id = :uid)"
+            ),
+            {"cid": character_id, "uid": uid},
+        )
+    else:
+        # Non-owner may only drop their personal override.
+        await db.execute(
+            text(
+                "DELETE FROM character_voices "
+                "WHERE character_id = :cid AND user_id = :uid AND NOT is_public"
+            ),
+            {"cid": character_id, "uid": uid},
+        )
+
+    # Recompute the denormalized flag from surviving canonical ready rows.
+    remaining = await db.execute(
+        text(
+            "SELECT 1 FROM character_voices "
+            "WHERE character_id = :cid AND is_public AND clone_status = 'ready' LIMIT 1"
+        ),
         {"cid": character_id},
     )
+    has_voice = remaining.fetchone() is not None
     await db.execute(
-        text("UPDATE characters SET has_voice = FALSE WHERE id = :cid"),
-        {"cid": character_id},
+        text("UPDATE characters SET has_voice = :hv WHERE id = :cid"),
+        {"cid": character_id, "hv": has_voice},
     )
     await db.commit()
 
-    logger.info("voice_config_removed", character_id=character_id, user_id=str(uid))
+    logger.info(
+        "voice_config_removed",
+        character_id=character_id,
+        user_id=str(uid),
+        is_owner=is_owner,
+    )
     return {"ok": True}
 
 
