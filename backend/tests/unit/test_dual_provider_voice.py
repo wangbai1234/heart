@@ -217,7 +217,10 @@ class TestFishSynthContract:
 
         class _FakeResp:
             status_code = 200
-            content = b"\x00\x01audio"
+            # mp3 frame sync header (0xFFFB...) so it passes the provider's
+            # non-audio guard; this test only asserts the request payload.
+            content = b"\xff\xfb\x90\x00audio"
+            headers = {"content-type": "audio/mpeg"}
 
         class _FakeClient:
             def __init__(self, *a, **k):

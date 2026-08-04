@@ -77,16 +77,49 @@ class FishProvider:
                         f"Fish Audio TTS error {resp.status_code}: {resp.text[:200]}"
                     )
                 audio_bytes = resp.content
+                _headers = getattr(resp, "headers", None) or {}
+                resp_ct = _headers.get("content-type", "").lower()
+                # The fishaudio.org gateway returns 200 + a JSON/HTML body (not
+                # audio) on some soft errors — e.g. an unknown voiceId or quota
+                # message. Shipping those bytes downstream labelled as mp3 makes
+                # the browser fail to decode with "语音没能播放" while Fish's
+                # dashboard still shows a successful 200 call. Detect a non-audio
+                # 200 and surface it instead of silently passing garbage.
+                _resp_text = resp.text if not audio_bytes else ""
         except httpx.TimeoutException as e:
             raise TTSProviderError(f"Fish Audio TTS timeout: {e}") from e
         except httpx.HTTPError as e:
             raise TTSProviderError(f"Fish Audio TTS HTTP error: {e}") from e
 
+        if not audio_bytes:
+            raise TTSProviderError(f"Fish Audio TTS returned empty body: {_resp_text[:200]}")
+
+        head = audio_bytes[:4]
+        is_wav = head[:4] == b"RIFF"
+        is_mp3 = head[:3] == b"ID3" or (
+            len(audio_bytes) >= 2 and audio_bytes[0] == 0xFF and (audio_bytes[1] & 0xE0) == 0xE0
+        )
+        if not (resp_ct.startswith("audio/") or is_wav or is_mp3):
+            # 200 but the body is not audio — decode a short preview for the log.
+            try:
+                preview = audio_bytes[:200].decode("utf-8", "replace")
+            except Exception:
+                preview = repr(audio_bytes[:64])
+            logger.warning("fish_tts_non_audio_response", content_type=resp_ct, preview=preview)
+            raise TTSProviderError(
+                f"Fish Audio TTS returned non-audio (content-type={resp_ct!r}): {preview}"
+            )
+
+        # Trust the actual bytes over what we requested: a wav payload mislabelled
+        # mp3 (or vice versa) fails to decode on iOS Safari. Relabel from the
+        # magic bytes / content-type so the frontend blob gets the right MIME.
+        detected_format = "wav" if (is_wav or resp_ct in ("audio/wav", "audio/x-wav")) else "mp3"
+
         # mp3 @ ~128 kbps estimate; wav is PCM so this is a loose upper bound.
         duration_ms = max(1, int(len(audio_bytes) / (128 * 1000 / 8) * 1000))
         return TTSResult(
             audio=audio_bytes,
-            format=audio_format,
+            format=detected_format,
             duration_ms=duration_ms,
             request_id=str(uuid.uuid4()),
         )

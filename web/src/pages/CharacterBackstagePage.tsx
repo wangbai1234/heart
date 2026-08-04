@@ -8,19 +8,13 @@ import { resolveCharacterProfile } from '../data/uiContent'
 import { useCharactersStore } from '../stores/charactersStore'
 import { Dialog } from '../components/ui/Dialog'
 import { Switch } from '../components/ui/Switch'
-import { getCharacterSettings, updateCharacterSettings, getCharacterVoice, clearCharacterConversations, setCharacterVoiceProvider, getPricing } from '../services/api'
+import { getCharacterSettings, updateCharacterSettings, getCharacterVoice, clearCharacterConversations, getPricing } from '../services/api'
 import { useToastStore } from '../stores/toastStore'
 
 // 文字聊天两档 → LLM 模型。普通交流=deepseek（会员免费，体验版按币）；私密陪伴=grok。
 const TEXT_TIERS = [
   { key: 'daily', model: 'deepseek', title: '普通交流', sub: '' },
   { key: 'private', model: 'grok', title: '私密陪伴', sub: '回复更快，更聪明' },
-] as const
-
-// 语音聊天两档 → TTS provider（角色配置的 voice_provider）。真人语音=Fish 为会员能力。
-const VOICE_TIERS = [
-  { key: 'daily', provider: 'mimo', title: '日常语音', sub: '清晰自然，满足日常聊天需求' },
-  { key: 'real', provider: 'fish', title: '真人语音', sub: '更有情绪和温度，带来真人般交流体验' },
 ] as const
 
 export function CharacterBackstagePage() {
@@ -38,23 +32,15 @@ export function CharacterBackstagePage() {
   const [hasVoice, setHasVoice] = useState(
     currentCharacter?.has_voice ?? false
   )
-  const [voiceConfigured, setVoiceConfigured] = useState(false)
-  // Providers this character has a ready voice for + the user's current pick.
-  const [availableProviders, setAvailableProviders] = useState<string[]>([])
-  const [selectedProvider, setSelectedProvider] = useState<string | null>(null)
-  const [switchingProvider, setSwitchingProvider] = useState(false)
   const [pricing, setPricing] = useState<{
     deepseekCost: number
     grokCost: number
-    mimoTtsCost: number
-    fishTtsCost: number
   } | null>(null)
 
   // 文字模型（后台设定，聊天页据此发送）+ 会员权益
   const chatModel = useAppStore((s) => s.chatModel[currentCharacterId] ?? 'deepseek')
   const setChatModel = useAppStore((s) => s.setChatModel)
   const allowedModels = useMembershipStore((s) => s.entitlements.models)
-  const allowedTts = useMembershipStore((s) => s.entitlements.tts)
   // Items complimentary on the current tier (charged 0). Drives the 免费/X币 labels.
   const freeItems = useMembershipStore((s) => s.entitlements.free)
   const membershipLoaded = useMembershipStore((s) => s.loaded)
@@ -77,11 +63,6 @@ export function CharacterBackstagePage() {
     getCharacterVoice(currentCharacterId)
       .then((res) => {
         setHasVoice(res.has_voice ?? res.clone_status === 'ready')
-        setVoiceConfigured(res.configured ?? false)
-        setAvailableProviders(res.available_providers ?? [])
-        // Fall back to voice_provider (primary row) when the per-user selection
-        // isn't set yet, then default to mimo.
-        setSelectedProvider(res.selected_provider ?? res.voice_provider ?? 'mimo')
       })
       .catch(() => { /* keep local value */ })
 
@@ -89,9 +70,7 @@ export function CharacterBackstagePage() {
       .then((data) => {
         const deepseekCost = data.models.find(m => m.id === 'deepseek')?.cost ?? 1
         const grokCost = data.models.find(m => m.id === 'grok')?.cost ?? 3
-        const mimoTtsCost = data.actions.find(a => a.id === 'tts_mimo')?.cost ?? 5
-        const fishTtsCost = data.actions.find(a => a.id === 'tts_fish')?.cost ?? 8
-        setPricing({ deepseekCost, grokCost, mimoTtsCost, fishTtsCost })
+        setPricing({ deepseekCost, grokCost })
       })
       .catch(() => { /* keep default values */ })
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -99,24 +78,11 @@ export function CharacterBackstagePage() {
 
   // 文字档位门控：DeepSeek 永久免费；其余看会员权益。
   const isModelAllowed = (model: string) => model === 'deepseek' || allowedModels.includes(model)
-  // 语音档位门控：MiMo 通用；Fish 看会员权益。
-  const isVoiceAllowed = (provider: string) => provider === 'mimo' || allowedTts.includes(provider)
-  // 当前使用中的语音档位（mimo→日常 / fish→真人；其它 provider 不高亮）。
-  const currentVoiceKey =
-    selectedProvider === 'fish' ? 'real' : selectedProvider === 'mimo' ? 'daily' : null
 
   // 定价标签：会员档免费的项目显示「免费」，否则显示 X币/条。
   const getTextTierLabel = (key: string) => {
     if (key === 'daily') return freeItems.includes('deepseek') ? '免费' : `${pricing?.deepseekCost ?? 1}币/条`
     if (key === 'private') return freeItems.includes('grok') ? '免费' : `${pricing?.grokCost ?? 3}币/条`
-    return ''
-  }
-
-  // 语音(TTS)在进阶/沉浸档免费；体验版按 provider 币价。
-  const getVoiceTierLabel = (key: string) => {
-    if (freeItems.includes('tts')) return '免费'
-    if (key === 'daily') return `${pricing?.mimoTtsCost ?? 5}币/条`
-    if (key === 'real') return `${pricing?.fishTtsCost ?? 8}币/条`
     return ''
   }
 
@@ -126,35 +92,6 @@ export function CharacterBackstagePage() {
       return
     }
     setChatModel(currentCharacterId, model)
-  }
-
-  const handleVoiceTier = async (tier: (typeof VOICE_TIERS)[number]) => {
-    if (!voiceChatEnabled || switchingProvider) return // greyed until voice is on
-    if (!isVoiceAllowed(tier.provider)) {
-      navigate('/membership') // 真人语音需会员
-      return
-    }
-    if (currentVoiceKey === tier.key) return // already using this engine
-    if (!availableProviders.includes(tier.provider)) {
-      // This engine has no ready voice for the character — send them to config.
-      useToastStore.getState().show('该语音尚未配置，请先配置音色', 'info')
-      navigate(`/characters/new?voice=${currentCharacterId}&provider=${tier.provider}`)
-      return
-    }
-    // Both clones pre-exist → instant per-user switch, no re-configuration.
-    setSwitchingProvider(true)
-    const prev = selectedProvider
-    setSelectedProvider(tier.provider) // optimistic
-    try {
-      await setCharacterVoiceProvider(currentCharacterId, tier.provider as 'mimo' | 'fish')
-      useToastStore.getState().show(`已切换到${tier.title}`, 'success')
-    } catch (err: any) {
-      setSelectedProvider(prev) // rollback
-      if (err?.status === 403) navigate('/membership')
-      else useToastStore.getState().show('切换失败，请稍后重试', 'error')
-    } finally {
-      setSwitchingProvider(false)
-    }
   }
 
   const handleVoiceToggle = async (value: boolean) => {
@@ -359,63 +296,8 @@ export function CharacterBackstagePage() {
             </div>
           </section>
 
-          {/* 语音聊天两档：日常语音(MiMo)/真人语音(Fish)。未配置音色则整段隐藏；
-              未开启语音则置灰；真人语音对免费用户锁定。 */}
-          {voiceConfigured && (
-            <section className={`rounded-[34px] border px-6 py-7 backdrop-blur-[24px] ${cardClassName}`}>
-              <h2 className={`mb-1 text-[18px] font-semibold tracking-[-0.02em] ${resolvedTheme === 'dark' ? 'text-[#F3EFF8]' : 'text-[#2D3248]'}`}>
-                语音聊天
-              </h2>
-              <p className={`mb-4 text-[13px] leading-[1.5] ${subtleTextClassName}`}>
-                {voiceChatEnabled ? '选择语音音质，真人语音需会员' : '先开启上方语音聊天开关'}
-              </p>
-              <div className="space-y-2.5">
-                {VOICE_TIERS.map((t) => {
-                  const allowed = isVoiceAllowed(t.provider)
-                  const active = currentVoiceKey === t.key
-                  const disabled = !voiceChatEnabled || switchingProvider
-                  return (
-                    <button
-                      key={t.key}
-                      onClick={() => handleVoiceTier(t)}
-                      disabled={disabled}
-                      className={`w-full rounded-[18px] border px-4 py-3.5 text-left transition-transform active:scale-[0.99] ${
-                        disabled ? 'opacity-45' : ''
-                      } ${resolvedTheme === 'dark' ? 'bg-[rgba(255,255,255,0.05)]' : 'bg-[rgba(255,255,255,0.5)]'}`}
-                      style={{ borderColor: active && !disabled ? '#FF8FAB' : (resolvedTheme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.4)') }}
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="flex items-center gap-2">
-                          {!allowed && (
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={resolvedTheme === 'dark' ? 'rgba(236,233,244,0.5)' : 'rgba(47,54,74,0.42)'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                              <rect x="3" y="11" width="18" height="11" rx="2" />
-                              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                            </svg>
-                          )}
-                          <span className={`text-[15px] font-medium ${resolvedTheme === 'dark' ? 'text-[#F3EFF8]' : 'text-[#2D3248]'}`}>{t.title}</span>
-                          <span
-                            className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                              resolvedTheme === 'dark'
-                                ? 'bg-[rgba(255,255,255,0.1)] text-[rgba(236,233,244,0.5)]'
-                                : 'bg-[rgba(0,0,0,0.06)] text-[rgba(47,54,74,0.45)]'
-                            }`}
-                          >
-                            {getVoiceTierLabel(t.key)}
-                          </span>
-                        </div>
-                        {active && !disabled ? (
-                          <span className="text-[12px] font-semibold text-[#FF7DA1]">使用中</span>
-                        ) : !allowed ? (
-                          <span className="text-[12px] font-medium text-[#FF7DA1]">升级会员解锁</span>
-                        ) : null}
-                      </div>
-                      <p className={`mt-1 text-[12.5px] leading-[1.5] ${subtleTextClassName}`}>{t.sub}</p>
-                    </button>
-                  )
-                })}
-              </div>
-            </section>
-          )}
+          {/* 语音音质分档（日常/真人）已下线：用户要么用预设音色、要么克隆音色，
+              后台只保留上方「是否开启语音聊天」开关即可。 */}
 
           <section
             className={`rounded-[34px] border px-6 py-8 backdrop-blur-[24px] ${cardClassName}`}
