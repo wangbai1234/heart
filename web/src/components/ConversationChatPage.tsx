@@ -558,6 +558,12 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
                   duration={msg.audioDuration ?? 3000}
                   format={msg.audioFormat ?? 'wav'}
                   isDark={isDark}
+                  // When live base64 is the primary source, hand the durable
+                  // server pointer as a fallback: the WS-assembled blob can fail
+                  // to decode (missing frame bytes), while the stored file — the
+                  // exact object a page refresh replays — always plays. On decode
+                  // failure the bubble self-heals to it instead of erroring.
+                  fallbackUrl={msg.audioData ? msg.audioUrl : undefined}
                 />
               </div>
               {msg.content && (

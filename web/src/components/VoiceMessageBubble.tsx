@@ -9,6 +9,10 @@ interface VoiceMessageBubbleProps {
   duration: number
   format: string
   isDark?: boolean
+  // Durable server pointer to fall back to when the primary (live base64) blob
+  // fails to decode/play. Undefined for rehydrated bubbles where audioData is
+  // already the durable pointer (no second source to try).
+  fallbackUrl?: string | null
 }
 
 const PLAYING_LEVELS = [
@@ -23,6 +27,7 @@ export default function VoiceMessageBubble({
   duration,
   format,
   isDark = false,
+  fallbackUrl,
 }: VoiceMessageBubbleProps) {
   const [isPlaying, setIsPlaying] = useState(false)
   const [audioUrl, setAudioUrl] = useState<string | null>(null)
@@ -33,6 +38,12 @@ export default function VoiceMessageBubble({
   // Object URL we created and must revoke; kept in a ref so the lazy fetch (which
   // runs outside the mount effect) can register its blob for cleanup on unmount.
   const objectUrlRef = useRef<string | null>(null)
+  // Guards the one-shot fallback to fallbackUrl so a genuinely-broken pair of
+  // sources can't loop. Reset whenever the primary source changes.
+  const triedFallbackRef = useRef(false)
+  // Holds the latest startPlayback so tryFallback (declared earlier) can invoke
+  // it without a circular useCallback dependency.
+  const startPlaybackRef = useRef<((url: string, allowFallback?: boolean) => void) | null>(null)
   const setGlobalPlaying = useChatStore((s) => s.setPlaying)
 
   // Resolve only the *free* sources on mount — an in-session blob/base64 recording
@@ -44,6 +55,7 @@ export default function VoiceMessageBubble({
     if (!audioData) return
     setLoadFailed(false)
     setLoadExpired(false)
+    triedFallbackRef.current = false
 
     if (audioData.startsWith('http') || audioData.startsWith('blob:')) {
       setAudioUrl(audioData)
@@ -89,7 +101,8 @@ export default function VoiceMessageBubble({
   // play, so a 404 (object aged out past the 20-day lifecycle, or never uploaded)
   // surfaces "音频已过期" on tap — never on page entry. Returns the playable object
   // URL, or null when it could not be resolved (state/toast already set).
-  const fetchApiAudio = useCallback(async (): Promise<string | null> => {
+  const fetchApiAudio = useCallback(async (src?: string): Promise<string | null> => {
+    const url = src ?? audioData
     const { accessToken } = useAuthStore.getState()
     try {
       // A by-turn pointer can briefly 404 right after a turn ends: the reply row
@@ -97,11 +110,11 @@ export default function VoiceMessageBubble({
       // beat visibility. That's "not ready yet", not "expired" — retry a few
       // times with backoff before surfacing an error. By-id URLs never race, so
       // they get a single attempt.
-      const isByTurn = audioData.includes('/by-turn/')
+      const isByTurn = url.includes('/by-turn/')
       const maxAttempts = isByTurn ? 3 : 1
       let res: Response | null = null
       for (let attempt = 0; attempt < maxAttempts; attempt++) {
-        res = await fetch(audioData, {
+        res = await fetch(url, {
           headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
         })
         if (res.ok) break
@@ -135,6 +148,20 @@ export default function VoiceMessageBubble({
       return null
     }
   }, [audioData])
+
+  // Recover from a failed live-blob playback by fetching the durable server
+  // object (the same file a refresh replays) and playing that instead. One-shot.
+  // Returns false ONLY when there's nothing to try (no fallback / already tried),
+  // so the caller shows its own error. Once we commit to a fallback we own the
+  // messaging — fetchApiAudio already sets the right toast on its own failure, so
+  // we return true to suppress the caller's generic "语音没能播放".
+  const tryFallback = useCallback(async (): Promise<boolean> => {
+    if (triedFallbackRef.current || !fallbackUrl) return false
+    triedFallbackRef.current = true
+    const url = await fetchApiAudio(fallbackUrl)
+    if (url) startPlaybackRef.current?.(url, false)
+    return true
+  }, [fallbackUrl, fetchApiAudio])
 
   useEffect(() => {
     setGlobalPlaying(isPlaying)
@@ -190,24 +217,33 @@ export default function VoiceMessageBubble({
   }, [stopPlayback])
 
   const startPlayback = useCallback(
-    (url: string) => {
+    (url: string, allowFallback = true) => {
       const audio = new Audio(url)
       audioRef.current = audio
       audio.onended = () => stopPlayback()
-      audio.onerror = () => {
+      // A decode/playback failure on the live blob isn't final while a durable
+      // server object exists — recover to it silently before showing an error.
+      const onFail = () => {
         stopPlayback()
-        useToastStore.getState().show(FEEDBACK_COPY.voiceRetry, 'error')
+        if (allowFallback) {
+          void tryFallback().then((recovered) => {
+            if (!recovered) useToastStore.getState().show(FEEDBACK_COPY.voiceRetry, 'error')
+          })
+        } else {
+          useToastStore.getState().show(FEEDBACK_COPY.voiceRetry, 'error')
+        }
       }
+      audio.onerror = onFail
       audio
         .play()
         .then(() => setIsPlaying(true))
-        .catch(() => {
-          stopPlayback()
-          useToastStore.getState().show(FEEDBACK_COPY.voiceRetry, 'error')
-        })
+        .catch(onFail)
     },
-    [stopPlayback],
+    [stopPlayback, tryFallback],
   )
+  // startPlayback and tryFallback reference each other; the ref lets tryFallback
+  // call the latest startPlayback without a declaration-order/cyclic-dep issue.
+  startPlaybackRef.current = startPlayback
 
   const handlePlayPause = useCallback(async () => {
     if (isPlaying) {

@@ -121,3 +121,20 @@ export function concatAudioBase64(
 } {
   return format === 'wav' ? concatWavBase64(chunks) : concatBinaryBase64(chunks)
 }
+
+/**
+ * Map the server's audio_chunk `format` to the format we store/play as.
+ *
+ * The server sends three: `pcm16` (headerless PCM — the caller wraps it into
+ * WAV before storing), `wav` (already RIFF bytes), and `mp3`. Only genuine mp3
+ * stays mp3; everything else is WAV once stored.
+ *
+ * Getting this wrong is not cosmetic: a WAV payload labelled 'mp3' produces a
+ * base64 blob tagged `audio/mpeg`, which iOS Safari refuses to decode (a ~2s
+ * stall then "语音没能播放"), even though a page refresh — replaying the server
+ * file with its correct `audio/wav` Content-Type — plays fine. Fish's REST
+ * provider relabels mislabelled wav→wav, so `wav` really does arrive here.
+ */
+export function storedAudioFormat(serverFormat: string | undefined): 'wav' | 'mp3' {
+  return serverFormat === 'mp3' ? 'mp3' : 'wav'
+}
