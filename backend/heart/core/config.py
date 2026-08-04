@@ -215,9 +215,9 @@ class Settings(BaseSettings):
     # Access is universal (all tiers may use deepseek/grok/tts/clone); tiers differ only
     # in *which items are free* vs charged. claude removed (情感陪伴 下线).
     membership_tiers_config: str = (
-        '{"free":{"models":["deepseek","grok"],"tts":["mimo","fish"],"clone":["mimo","fish"],"monthly_grant":0,"free":[]},'
-        '"plus":{"models":["deepseek","grok"],"tts":["mimo","fish"],"clone":["mimo","fish"],"monthly_grant":300,"free":["deepseek","tts","asr","story_unlock"]},'
-        '"immersive":{"models":["deepseek","grok"],"tts":["mimo","fish"],"clone":["mimo","fish"],"monthly_grant":700,"free":["deepseek","grok","tts","clone","asr","story_unlock","story_chat"]}}'
+        '{"free":{"models":["deepseek","grok"],"tts":["mimo","fish"],"clone":["fish"],"monthly_grant":0,"free":[]},'
+        '"plus":{"models":["deepseek","grok"],"tts":["mimo","fish"],"clone":["fish"],"monthly_grant":300,"free":["deepseek","tts","asr","story_unlock"]},'
+        '"immersive":{"models":["deepseek","grok"],"tts":["mimo","fish"],"clone":["fish"],"monthly_grant":700,"free":["deepseek","grok","tts","clone","asr","story_unlock","story_chat"]}}'
     )
 
     # Membership subscription prices (CNY/month, for pricing endpoint display only)

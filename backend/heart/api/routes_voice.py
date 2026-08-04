@@ -65,7 +65,10 @@ async def _resolve_voice_write_scope(db: AsyncSession, character_id: str, uid: u
 # Hardcoded fallback clone cost — superseded by config-driven action_cost_fen()
 # when billing/pricing.py is available.  Kept for safety during startup.
 _CLONE_COST_FEN_FALLBACK = 80_000
-_VALID_CLONE_PROVIDERS = frozenset({"mimo", "fish", "minimax"})
+# MiMo clone was removed (zero-shot quality too poor). Cloning is Fish-only now;
+# `minimax` stays for the legacy backfill path but is not user-selectable. MiMo
+# remains a TTS synthesis + preset + ASR engine — only its *clone* path is gone.
+_VALID_CLONE_PROVIDERS = frozenset({"fish", "minimax"})
 
 
 def _clone_cost_fen(provider: str, tier: str = "free") -> int:
@@ -95,15 +98,6 @@ def _check_clone_provider_available(provider: str) -> None:
             raise HTTPException(
                 status_code=503,
                 detail="Fish 音色克隆服务未配置，请联系管理员或改用预设音色。",
-            )
-    elif provider == "mimo":
-        # MiMo clone is zero-shot: no external clone API and no voiceId — the
-        # uploaded reference audio IS the timbre and rides along on every synth
-        # call. So it only needs the MiMo *synthesis* key, not MiniMax.
-        if not settings.mimo_api_key:
-            raise HTTPException(
-                status_code=503,
-                detail="音色克隆服务未配置，请联系管理员或改用预设音色。",
             )
     else:
         # Legacy minimax clone path.
@@ -516,15 +510,16 @@ async def set_preset_voice(
 async def clone_voice(
     request: Request,
     character_id: str,
-    provider: str = "mimo",
+    provider: str = "fish",
     file: UploadFile = File(...),
     current_user: TokenData = Depends(require_age_verified),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """Upload an audio sample to clone a voice for a UGC character.
 
-    Query param `provider` selects the clone backend (default: mimo).
-    Supported values: mimo, fish, minimax.
+    Cloning is Fish-only (真人克隆). MiMo clone was retired — its zero-shot
+    quality was too poor — so `provider` defaults to `fish`; `minimax` remains
+    for the legacy backfill path but is not offered in the UI.
     Clone cost is config-driven via AFDIAN_SKU_MAP pricing.
     """
     uid = uuid.UUID(current_user.user_id)
@@ -538,7 +533,7 @@ async def clone_voice(
     # hear; someone else's private char → 403.
     is_public = await _resolve_voice_write_scope(db, character_id, uid)
 
-    # Tier gate — Fish/MiMo clone requires paid membership
+    # Tier gate — Fish 真人克隆 requires paid membership
     tier = await get_effective_tier(db, uid)
     try:
         assert_clone_allowed(tier, provider)
@@ -680,10 +675,6 @@ async def _stage_audio_for_clone(
         so no fetchable URL is needed. We DON'T re-download it (that anonymous GET
         was the source of the "音频下载失败 HTTP 403"). Returns ``upload://<filename>``
         purely as a record marker.
-      - **mimo**: zero-shot — the reference audio must stay readable by *our* backend
-        on every synth turn. Store it in S3/MinIO and return ``s3://<key>``; the MiMo
-        provider fetches it with credentials (``storage.get_s3_object``), so it works
-        even on a private bucket. Requires object storage to be configured.
       - **minimax** (legacy): MiniMax's servers fetch the audio, so hand back a
         publicly reachable URL, else forward to MiniMax ``/files/upload`` and return
         ``minimax_file://<id>`` (dev fallback when the endpoint is localhost/private).
@@ -694,23 +685,7 @@ async def _stage_audio_for_clone(
     ext = mime.split("/")[-1].replace("x-wav", "wav").replace("mpeg", "mp3")
     key = f"voice-samples/{character_id}/{uuid.uuid4().hex}.{ext}"
 
-    if provider == "mimo":
-        from heart.infra.storage import _upload_to_s3, is_s3_configured
-
-        if not is_s3_configured():
-            raise HTTPException(
-                status_code=503,
-                detail="音色克隆需要对象存储支持，请联系管理员。",
-            )
-        try:
-            await _upload_to_s3(key, data, mime)
-        except Exception as exc:
-            logger.warning("voice_clone_s3_failed", error=str(exc))
-            raise HTTPException(status_code=502, detail="音频上传失败，请稍后重试") from exc
-        # s3:// handle → backend reads with credentials, no public bucket needed.
-        return f"s3://{key}"
-
-    # Legacy minimax path.
+    # Legacy minimax path (MiMo clone removed).
     from heart.infra.storage import is_s3_endpoint_public
     from heart.infra.storage import upload_file as s3_upload
 
@@ -823,24 +798,6 @@ async def _run_clone_job(
 
     async with session_factory() as db:
         try:
-            if provider == "mimo":
-                # Zero-shot: there is no external clone step and no voiceId. The
-                # staged reference (clone_audio_url, already persisted by
-                # clone_voice) IS the timbre — mark ready and charge.
-                await _mark_clone_ready(
-                    db,
-                    character_id=character_id,
-                    user_id=user_id,
-                    provider=provider,
-                    audio_source=audio_source,
-                    clone_voice_id=None,
-                    tier=tier,
-                    is_public=is_public,
-                )
-                await db.commit()
-                logger.info("voice_clone_ready", character_id=character_id, provider="mimo")
-                return
-
             clone_voice_id, err_msg = await _call_tts_clone_api(
                 audio_source, character_id, provider, audio_bytes=audio_bytes, mime=mime
             )

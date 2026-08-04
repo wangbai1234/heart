@@ -20,6 +20,7 @@ import {
   type PresetVoiceDTO,
 } from '../services/api'
 import { compressImageToTarget } from '../utils/imageCompress'
+import { canPreprocess, isVideoFile, preprocessForClone } from '../services/audioPreprocess'
 import { CHARACTER_ROLE_TAGS, AGE_RANGES } from '../data/uiContent'
 import { Dialog } from '../components/ui/Dialog'
 
@@ -288,17 +289,17 @@ export function CreateCharacterPage() {
   // Kept alongside previewAudioRef so both are torn down together.
   const previewObjectUrlRef = useRef<string | null>(null)
 
-  // Clone voice upload state
+  // Clone voice upload state. Cloning is Fish-only (真人克隆) — MiMo clone retired.
   const cloneInputRef = useRef<HTMLInputElement>(null)
   const [cloneStatus, setCloneStatus] = useState<'idle' | 'uploading' | 'processing' | 'ready' | 'failed'>('idle')
-  const [cloneProvider, setCloneProvider] = useState<'mimo' | 'fish'>('mimo')
-  const pendingCloneProviderRef = useRef<'mimo' | 'fish'>('mimo')
+  // Set when a video is picked — triggers the "转为音频克隆" confirm dialog.
+  const [pendingCloneFile, setPendingCloneFile] = useState<File | null>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   // Clone entitlement + pricing (F6): Fish clone is gated by membership tier.
   const cloneEntitlements = useMembershipStore((s) => s.entitlements.clone)
   const refreshMembership = useMembershipStore((s) => s.refresh)
-  const [cloneCosts, setCloneCosts] = useState<{ mimo: number; fish: number }>({ mimo: 50, fish: 100 })
+  const [cloneCost, setCloneCost] = useState<number>(100)
   const canCloneFish = cloneEntitlements.includes('fish')
 
   // ?voice=<cid> mode: configure voice for an already-created character
@@ -322,9 +323,8 @@ export function CreateCharacterPage() {
       refreshMembership()
       getPricing()
         .then((p) => {
-          const mimo = p.actions.find((a) => a.id === 'clone_mimo')?.cost
           const fish = p.actions.find((a) => a.id === 'clone_fish')?.cost
-          setCloneCosts({ mimo: mimo ?? 50, fish: fish ?? 100 })
+          setCloneCost(fish ?? 100)
         })
         .catch(() => {})
     }
@@ -628,39 +628,60 @@ export function CreateCharacterPage() {
     }
   }
 
-  async function handleCloneUpload(file: File, provider: 'mimo' | 'fish' = 'mimo') {
-    setCloneProvider(provider)
+  // Entry point from the file picker. Video → confirm first (we extract its
+  // audio track), audio → straight to upload. Cloning is Fish-only (真人克隆).
+  function handleCloneFileSelected(file: File) {
+    if (isVideoFile(file)) {
+      setPendingCloneFile(file)
+      return
+    }
+    void handleCloneUpload(file)
+  }
+
+  async function handleCloneUpload(file: File) {
     // Ensure the character exists before uploading; in the create flow this
     // finalizes creation so the clone binds to a real row (E1-1 side effect).
     const cid = await ensureCharacterCreated()
     if (!cid) return
-    // Match exact browser-reported MIME types.  Chrome tags .wav as audio/wav
-    // but Firefox/Safari sometimes report audio/x-wav; iOS Voice Memos exports
-    // as audio/mp4.  Empty type (some Android browsers) → fall back to the
-    // extension check the backend also does.
-    const allowed = new Set([
-      'audio/wav',
-      'audio/x-wav',
-      'audio/wave',
-      'audio/mpeg',
-      'audio/mp3',
-      'audio/ogg',
-      'audio/webm',
-      'audio/mp4',
-      'audio/aac',
-      'audio/flac',
+
+    // Accept audio containers directly; video is allowed because we extract its
+    // audio track in preprocessForClone. Empty type (some Android browsers) →
+    // fall back to the extension check the backend also does.
+    const allowedAudio = new Set([
+      'audio/wav', 'audio/x-wav', 'audio/wave', 'audio/mpeg', 'audio/mp3',
+      'audio/ogg', 'audio/webm', 'audio/mp4', 'audio/aac', 'audio/flac',
     ])
-    if (file.type && !allowed.has(file.type)) {
-      showToast('请上传 WAV / MP3 / M4A / AAC 音频文件', 'error')
+    if (file.type && !allowedAudio.has(file.type) && !isVideoFile(file)) {
+      showToast('请上传 WAV / MP3 / M4A / AAC 音频，或视频文件', 'error')
       return
     }
-    if (file.size > 20 * 1024 * 1024) {
-      showToast('文件不能超过 20MB', 'error')
-      return
-    }
+
     setCloneStatus('uploading')
+
+    // Client-side normalize: decode → 16kHz mono → trim 30s → small WAV. This
+    // shrinks large mp3 / video so the upload can't fail on size. Falls back to
+    // the raw file if the browser can't preprocess (and it's within 20MB).
+    let toUpload = file
     try {
-      await uploadVoiceClone(cid, file, provider)
+      if (canPreprocess()) {
+        const processed = await preprocessForClone(file)
+        toUpload = processed.file
+      } else if (file.size > 20 * 1024 * 1024) {
+        showToast('文件过大（超过 20MB），请上传更短的录音', 'error')
+        setCloneStatus('failed')
+        return
+      }
+    } catch {
+      // decode failed (unsupported codec / corrupt) — try raw upload if small.
+      if (file.size > 20 * 1024 * 1024) {
+        showToast('无法处理该文件，请上传 10–30 秒的清晰录音', 'error')
+        setCloneStatus('failed')
+        return
+      }
+    }
+
+    try {
+      await uploadVoiceClone(cid, toUpload, 'fish')
       setCloneStatus('processing')
       // Poll until ready or failed (max 2 min)
       let attempts = 0
@@ -698,19 +719,16 @@ export function CreateCharacterPage() {
     }
   }
 
-  function renderCloneCard(provider: 'mimo' | 'fish', label: string, cost: number, locked: boolean) {
-    const active = cloneProvider === provider
-    const status = active ? cloneStatus : 'idle'
+  function renderCloneCard(label: string, cost: number, locked: boolean) {
+    const status = cloneStatus
     const busy = status === 'uploading' || status === 'processing'
     const onClick = () => {
       if (locked) { navigate('/membership'); return }
       if (busy) return
-      pendingCloneProviderRef.current = provider
       cloneInputRef.current?.click()
     }
     return (
       <button
-        key={provider}
         onClick={onClick}
         disabled={busy}
         className={`w-full flex items-center gap-4 px-5 py-4 rounded-[16px] border transition-all duration-[180ms] active:scale-[0.98] backdrop-blur-[12px] ${locked ? 'opacity-60 ' : ''}${
@@ -760,13 +778,13 @@ export function CreateCharacterPage() {
             'text-[var(--color-ink)]'
           }`}>
             {status === 'idle' && label}
-            {status === 'uploading' && '上传中…'}
+            {status === 'uploading' && '处理并上传中…'}
             {status === 'processing' && '克隆中，请稍候…'}
-            {status === 'ready' && '克隆完成 ✓'}
+            {status === 'ready' && '克隆完成'}
             {status === 'failed' && '克隆失败，点击重试'}
           </p>
           <p className="text-[12px] text-[var(--color-text-muted)] mt-[2px]">
-            {locked ? '升级会员可使用' : `${cost} yuoyuo币 · WAV / MP3，10–30 秒`}
+            {locked ? '升级会员可使用' : `${cost} yuoyuo币 · 音频或视频，取前 30 秒`}
           </p>
         </div>
         {locked && (
@@ -1526,19 +1544,18 @@ export function CreateCharacterPage() {
               <input
                 ref={cloneInputRef}
                 type="file"
-                accept="audio/wav,audio/mpeg,audio/mp3,audio/ogg,audio/webm,audio/mp4"
+                accept="audio/*,video/*"
                 className="hidden"
                 onChange={(e) => {
                   const file = e.target.files?.[0]
-                  if (file) { e.target.value = ''; handleCloneUpload(file, pendingCloneProviderRef.current) }
+                  if (file) { e.target.value = ''; handleCloneFileSelected(file) }
                 }}
               />
               <div className="space-y-2.5">
-              {renderCloneCard('mimo', '普通克隆', cloneCosts.mimo, false)}
-              {renderCloneCard('fish', '真人克隆', cloneCosts.fish, !canCloneFish)}
+              {renderCloneCard('真人克隆', cloneCost, !canCloneFish)}
               </div>
               <p className="text-[11px] text-[var(--color-text-muted)] mt-2 text-center">
-                WAV / MP3，10–30 秒，最大 20MB · 克隆成功才扣费
+                支持音频或视频，自动取前 30 秒 · 克隆成功才扣费
               </p>
             </>
           </>
@@ -1794,6 +1811,35 @@ export function CreateCharacterPage() {
             </button>
           </div>
         </div>
+      </Dialog>
+
+      {/* Video → audio confirm. We extract the audio track and clone from it. */}
+      <Dialog
+        open={pendingCloneFile !== null}
+        onClose={() => setPendingCloneFile(null)}
+        title="转为音频克隆"
+        actions={
+          <>
+            <button
+              onClick={() => setPendingCloneFile(null)}
+              className="flex-1 h-[46px] rounded-[14px] border border-[var(--color-border-subtle)] text-[15px] font-medium text-[var(--color-text-secondary)] active:scale-[0.98] transition-transform"
+            >
+              取消
+            </button>
+            <button
+              onClick={() => {
+                const f = pendingCloneFile
+                setPendingCloneFile(null)
+                if (f) void handleCloneUpload(f)
+              }}
+              className="flex-1 h-[46px] rounded-[14px] bg-gradient-to-r from-[#FFB7C5] to-[#FF8FAB] text-white text-[15px] font-semibold active:scale-[0.98] transition-transform"
+            >
+              确认
+            </button>
+          </>
+        }
+      >
+        <p>接下来会从这段视频里提取声音进行克隆，是否确认？</p>
       </Dialog>
     </div>
   )

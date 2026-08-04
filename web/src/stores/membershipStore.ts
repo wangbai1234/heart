@@ -14,10 +14,11 @@ interface MembershipState {
 }
 
 // Free-tier fallback: universal access (deepseek/grok/tts/clone) but nothing complimentary.
+// Cloning is Fish-only (真人克隆); MiMo clone was retired.
 const FREE_ENTITLEMENTS: MembershipEntitlements = {
   models: ['deepseek', 'grok'],
   tts: ['mimo', 'fish'],
-  clone: ['mimo', 'fish'],
+  clone: ['fish'],
   free: [],
 }
 

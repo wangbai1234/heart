@@ -179,7 +179,8 @@ class TestGetEntitlements:
         from heart.membership import get_entitlements
         for tier in ("free", "plus", "immersive"):
             ent = get_entitlements(tier)
-            assert set(ent.clone) == {"mimo", "fish"}
+            # MiMo clone retired (zero-shot quality too poor) — Fish only now.
+            assert set(ent.clone) == {"fish"}
 
     def test_free_tier_grants_nothing_free(self):
         from heart.membership import get_entitlements
@@ -284,10 +285,13 @@ class TestAssertTtsAllowed:
 
 class TestAssertCloneAllowed:
     def test_clone_allowed_for_all_tiers(self):
-        from heart.membership import assert_clone_allowed
+        from heart.membership import CloneForbiddenError, assert_clone_allowed
+
         for tier in ("free", "plus", "immersive"):
-            assert_clone_allowed(tier, "mimo")
             assert_clone_allowed(tier, "fish")
+            # MiMo clone retired — must now be rejected on every tier.
+            with pytest.raises(CloneForbiddenError):
+                assert_clone_allowed(tier, "mimo")
 
 
 # ---------------------------------------------------------------------------
@@ -419,7 +423,8 @@ class TestPricingEndpoint:
         action_ids = {a["id"] for a in result["actions"]}
         assert "tts_mimo" in action_ids
         assert "tts_fish" in action_ids
-        assert "clone_mimo" in action_ids
+        # MiMo clone retired — only Fish (真人克隆) is offered now.
+        assert "clone_mimo" not in action_ids
         assert "clone_fish" in action_ids
 
 
