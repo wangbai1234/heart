@@ -648,10 +648,17 @@ export function CreateCharacterPage() {
     // audio track in preprocessForClone. Empty type (some Android browsers) →
     // fall back to the extension check the backend also does.
     const allowedAudio = new Set([
-      'audio/wav', 'audio/x-wav', 'audio/wave', 'audio/mpeg', 'audio/mp3',
-      'audio/ogg', 'audio/webm', 'audio/mp4', 'audio/aac', 'audio/flac',
+      'audio/wav', 'audio/x-wav', 'audio/wave', 'audio/vnd.wave',
+      'audio/mpeg', 'audio/mp3', 'audio/mpeg3', 'audio/x-mpeg-3',
+      'audio/ogg', 'audio/vorbis', 'audio/webm', 'audio/mp4',
+      'audio/x-m4a', 'audio/aac', 'audio/aacp', 'audio/flac', 'audio/x-flac',
     ])
-    if (file.type && !allowedAudio.has(file.type) && !isVideoFile(file)) {
+    const audioExt = /\.(mp3|wav|wave|m4a|aac|ogg|oga|flac|opus|amr)$/i.test(file.name)
+    // Accept if: known audio MIME, OR a recognized audio extension (covers empty
+    // / off-spec MIME some browsers report), OR video (audio track extracted
+    // later). Only reject when the MIME is set, unknown, and the extension is
+    // not an audio one either.
+    if (file.type && !allowedAudio.has(file.type) && !audioExt && !isVideoFile(file)) {
       showToast('请上传 WAV / MP3 / M4A / AAC 音频，或视频文件', 'error')
       return
     }
@@ -1544,7 +1551,12 @@ export function CreateCharacterPage() {
               <input
                 ref={cloneInputRef}
                 type="file"
-                accept="audio/*,video/*"
+                // Explicit extensions alongside the MIME wildcards: some OS file
+                // dialogs grey out audio files when only `audio/*` is given
+                // (the OS-reported MIME doesn't match the wildcard), leaving
+                // just video selectable. Listing extensions keeps mp3/wav/m4a
+                // pickable everywhere.
+                accept="audio/*,video/*,.mp3,.wav,.m4a,.aac,.ogg,.oga,.flac,.mp4,.mov,.m4v,.webm"
                 className="hidden"
                 onChange={(e) => {
                   const file = e.target.files?.[0]
