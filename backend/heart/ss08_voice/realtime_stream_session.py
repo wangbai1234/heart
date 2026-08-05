@@ -133,6 +133,9 @@ class RealtimeStreamSession:
         if self._cancelled or self._session is None:
             return
         self._turn_id = turn_id
+        # _strip_tts_stage_directions only removes （）/【】 actions; any leading
+        # [中文指令] the LLM emitted survives and is sent verbatim so Fish S2
+        # varies tone sentence by sentence.
         cleaned = _strip_tts_stage_directions(sentence).strip()
         if not cleaned:
             return

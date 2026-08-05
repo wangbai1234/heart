@@ -13,19 +13,20 @@ from heart.ss08_voice.stream_session import (
 )
 
 
-def test_action_brackets_all_stripped_from_tts_input():
-    """TTS input drops every bracket the bubble splitter treats as an action.
+def test_action_brackets_stripped_but_instruction_kept():
+    """TTS input drops （）/【】 actions but keeps the [中文指令] namespace.
 
-    Keeps stream_session aligned with ``message_splitter._ACTION_RE`` so any
-    span rendered as a grey action pill in the UI is also skipped by TTS
+    Half-width [] is reserved for the Fish S2 instruction the LLM emits at a
+    sentence head; it must survive to the provider. The full-width action
+    brackets are still removed so descriptions aren't read aloud
     (TEST_REPORT_20260712 §5.4).
     """
     text = "（目光停顿片刻）[克制一点]kaito。他们提过一次。"
 
     stripped, directions = _extract_tts_stage_directions(text)
 
-    assert stripped == "kaito。他们提过一次。"
-    assert directions == ["目光停顿片刻", "克制一点"]
+    assert stripped == "[克制一点]kaito。他们提过一次。"
+    assert directions == ["目光停顿片刻"]
     assert _strip_tts_stage_directions(text) == stripped
 
 

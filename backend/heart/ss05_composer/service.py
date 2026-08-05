@@ -172,6 +172,11 @@ class CompositionContext:
     # Populated by compose_stream with served_model / degraded_to after streaming.
     stream_meta: Dict[str, Any] = field(default_factory=dict)
 
+    # Layer-3 voice emotion: when True (user has voice on for this turn), the
+    # system prompt asks for per-sentence {E:情绪} sentinels. Text-only turns
+    # leave the prompt untouched — zero regression on the text path.
+    voice_enabled: bool = False
+
 
 @dataclass
 class CompositionResult:
@@ -481,6 +486,7 @@ class ComposerService:
             inner_state=inner_state_block,
             soul_spec=soul_spec,
             proactive_hint=getattr(ctx, "proactive_hint", None),
+            voice_enabled=getattr(ctx, "voice_enabled", False),
         )
 
         wrapped_user_message = (
@@ -762,6 +768,7 @@ class ComposerService:
         inner_state: InnerStateContextBlock,
         soul_spec: SoulSpec,
         proactive_hint: Optional[str] = None,
+        voice_enabled: bool = False,
     ) -> str:
         """Build the system prompt from all context blocks.
 
@@ -952,16 +959,40 @@ class ComposerService:
         # below gives the model a concrete target format to copy.
         parts.append(
             "\n【表达格式（重要）】\n"
-            "- 所有动作、神态、心理描写、旁白必须用中文全角括号（）包裹。\n"
+            "- 所有动作、神态、心理描写、旁白必须用中文全角括号（）包裹；\n"
+            "  嵌套或特殊场景可用【】兜底，二者都会被识别为动作/旁白。\n"
             "- 括号里只写动作/神态，不写对白；对白直接写在括号外。\n"
             "- 一条消息里动作与对白可以多次穿插，每个动作片段独立用一对（）。\n"
             "- 如果你用了（），就必须确保消息中所有动作/神态都加（），不能遗漏。\n"
             "- 禁止把动作描写和对白混在同一段裸文本里。\n"
+            "- 动作/旁白只用（）或【】，禁止使用半角方括号[]（它另有用途）。\n"
             "- 错误示例：（微微一笑）你来了。目光中带着审视 最近在忙什么？\n"
             "- 正确示例：（微微一笑）你来了。（目光中带着审视）最近在忙什么？\n"
             "- 输出示例（务必照此格式）：（他停下脚步，偏头看你）好久不见。"
             "（唇角微微扬起）最近过得怎么样？"
         )
+
+        # ── Layer 3.6: Per-sentence Fish S2 instruction (voice turns only) ──
+        # When voice is on, let the model write a Fish S2 control instruction
+        # directly at each spoken sentence's head, as [中文指令]文本. This is the
+        # native Fish S2 syntax — no backend palette/translation. The bracket is
+        # a control marker: it is stripped from the bubble/history display path
+        # (emotion_sentinel.InstructionStripper) but kept verbatim on the TTS
+        # path so Fish varies tone sentence by sentence. Text-only turns skip
+        # this block (voice_enabled gate), so the text path is unchanged.
+        if voice_enabled:
+            parts.append(
+                "\n【语气指令（本轮语音开启，重要）】\n"
+                "- 可在对白句首加一个语气指令，格式为半角方括号 [中文指令]，"
+                "紧接对白，例如 [温柔地说]今天累不累？\n"
+                "- 指令用自然中文描述这句话的说法（语气/情绪/节奏），不必套固定词表；"
+                "整体克制自然、贴合当下语境，不要夸张。\n"
+                "- 只用半角[]，一句最多一个，紧贴句首；动作/旁白仍用（）或【】，"
+                "不要混用。\n"
+                "- 语气应随对话内容自然起伏，不要整段一个语气；平淡处可以不加。\n"
+                "- 方括号只用于语气控制，不会被读出，也不要在里面写对白内容。\n"
+                "- 示例：[轻快地说]你来啦。（侧头看你）[关切地问]今天怎么有点没精神？"
+            )
 
         # ── Layer 4: Hard constraints (compiled, never raw strings) ──
         # Raw forbidden strings are NOT pasted in; that would expose the

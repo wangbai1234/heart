@@ -968,6 +968,7 @@ async def _handle_chat_message(
                 history=history,
                 trace_id=uuid.UUID(turn_id),
                 model=model,
+                voice_enabled=bool(effective_voice),
             )
 
             await ws.send_json(

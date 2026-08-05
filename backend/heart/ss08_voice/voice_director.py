@@ -18,6 +18,11 @@ class VoiceDirector:
         # scheme for the backbone gets read aloud, so this must match fish_model.
         self._emotion_mode = emotion_mode if emotion_mode in ("s2", "s1", "off") else "s2"
 
+    @property
+    def emotion_mode(self) -> str:
+        """Active emotion-control scheme ('s2' / 's1' / 'off')."""
+        return self._emotion_mode
+
     EMOTION_MAP_RULES = [
         # (predicate, emotion, speed_delta, pitch_delta)
         # Order matters: first match wins
@@ -326,12 +331,16 @@ class VoiceDirector:
         )
 
         return TTSRequest(
+            # Emotion prefixing is always on now: clone voices (Fish) carry the
+            # per-sentence [中文指令] too. When the LLM already emitted a leading
+            # instruction, _decorate_s2 early-returns and leaves it untouched;
+            # otherwise Layer 2 supplies a turn-level fallback prefix.
             text=self._decorate_text(
                 text,
                 emotion,
                 intimacy,
                 director_cues,
-                emotion_prefix_enabled=not profile.clone_stability,
+                emotion_prefix_enabled=True,
             ),
             voice_id=profile.voice_id,
             emotion=emotion,

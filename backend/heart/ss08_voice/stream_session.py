@@ -13,21 +13,22 @@ from heart.ss08_voice.voice_cache import VoiceCache, should_cache
 logger = structlog.get_logger(__name__)
 
 
-# Action-bracket pattern — kept in sync with
-# ``heart.ss05_composer.message_splitter._ACTION_RE`` so any bracket the bubble
-# splitter treats as an action ("action" kind, grey pill) is also stripped
-# from the TTS input. Historically this pattern only recognised parentheses,
-# which meant characters emitting 【叹气】 or [回到主题] had their action tags
-# read aloud (TEST_REPORT_20260712 §5.4).
-_ACTION_PATTERN = re.compile(r"[（(【\[]([^（()【\[\]）)】\n]*)[）)】\]]")
+# Action-bracket pattern — strips the action/narration namespace
+# （）/()/【】 from the TTS input so 【叹气】-style tags aren't read aloud
+# (TEST_REPORT_20260712 §5.4). Half-width [] is DELIBERATELY excluded: Layer-3
+# reserves [中文指令] as the Fish S2 instruction namespace, which must survive
+# to the provider (voice turns strip [] from the *display* path separately, via
+# emotion_sentinel.InstructionStripper). Actions therefore use （）/【】 only.
+_ACTION_PATTERN = re.compile(r"[（(【]([^（()【【\]）)】\n]*)[）)】]")
 
 
 def _extract_tts_stage_directions(text: str) -> tuple[str, list[str]]:
-    """Remove action brackets from ``text`` before it hits TTS.
+    """Remove the （）/【】 action namespace from ``text`` before it hits TTS.
 
     Keeps the original text intact for transcript/history, but avoids reading
-    bracketed descriptions aloud, whether they come as
-    （目光停顿片刻，嗓音带着雨后的凉意）, 【叹气】, or [回到主题].
+    bracketed descriptions aloud, e.g. （目光停顿片刻，嗓音带着雨后的凉意）or
+    【叹气】. Half-width [中文指令] is left in place on purpose — it is the Fish
+    S2 instruction namespace and must reach the provider.
     """
     if not text:
         return "", []
@@ -97,6 +98,8 @@ class StreamSession:
         self.tts_provider_name: str = ""
         self.audio_format: str = ""
         self._all_audio_chunks: list[bytes] = []
+        # Sentence fragments in arrival order. Any leading [中文指令] rides
+        # inline (the LLM emits it); it is joined verbatim and synthesized once.
         self._text_parts: list[str] = []
         self._last_turn_id: str | None = None
         self._last_character_id: str | None = None
@@ -147,7 +150,13 @@ class StreamSession:
         active_emotions: list[Any] | None,
         character_id: str,
     ) -> None:
-        """Submit a sentence for TTS synthesis."""
+        """Submit a sentence for TTS synthesis.
+
+        Layer-3 emotion now rides inline as a leading ``[中文指令]`` the LLM
+        emits at the sentence head; it is preserved verbatim through the TTS
+        path (only the （）/【】 action namespace is stripped) so Fish S2 varies
+        tone per sentence with no backend decoration.
+        """
         if self._cancelled:
             return
         cleaned = sentence.strip()
