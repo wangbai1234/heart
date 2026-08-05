@@ -18,6 +18,38 @@ class VoiceDirector:
         # scheme for the backbone gets read aloud, so this must match fish_model.
         self._emotion_mode = emotion_mode if emotion_mode in ("s2", "s1", "off") else "s2"
 
+    @property
+    def emotion_mode(self) -> str:
+        """Active emotion-control scheme ('s2' / 's1' / 'off')."""
+        return self._emotion_mode
+
+    @classmethod
+    def s2_palette_labels(cls) -> list[str]:
+        """Emotion words the LLM may emit as {E:词}, excluding the no-op 平静.
+
+        Surfaced to the composer prompt so the allowed vocabulary and the
+        renderer's S2 mapping share one source of truth.
+        """
+        return [label for label, instr in cls.S2_EMOTION_PALETTE.items() if instr]
+
+    @classmethod
+    def resolve_s2_instruction(cls, label: str | None) -> str:
+        """Map a per-sentence emotion label to a Fish S2 [中文指令] prefix.
+
+        Known palette words use their curated instruction. An unknown but
+        plausible short Chinese word degrades to a generic ``[<词>地说]`` rather
+        than being dropped, so the model isn't boxed into the exact vocabulary.
+        Anything empty / non-Chinese / over-long yields "" (no prefix).
+        """
+        if not label:
+            return ""
+        label = label.strip()
+        if label in cls.S2_EMOTION_PALETTE:
+            return cls.S2_EMOTION_PALETTE[label]
+        if 1 <= len(label) <= 4 and all("一" <= ch <= "鿿" for ch in label):
+            return f"[{label}地说]"
+        return ""
+
     EMOTION_MAP_RULES = [
         # (predicate, emotion, speed_delta, pitch_delta)
         # Order matters: first match wins
@@ -49,6 +81,30 @@ class VoiceDirector:
         "surprised": "[惊讶地说]",
         "disgusted": "[语气冷淡地说]",
         "neutral": "",
+    }
+
+    # Layer-3 per-sentence palette: the restrained Chinese emotion words the LLM
+    # is allowed to emit as {E:词} sentinels, each mapped to the S2 [中文指令]
+    # actually sent to Fish. Kept deliberately understated (克制自然) — the goal
+    # is variation across sentences, not theatrics. The label list is surfaced
+    # to the composer prompt via ``s2_palette_labels()`` so prompt and renderer
+    # never drift. Unknown labels fall back through ``resolve_s2_instruction``.
+    S2_EMOTION_PALETTE = {
+        "平静": "",
+        "温柔": "[温柔地说]",
+        "轻快": "[轻快地说]",
+        "愉悦": "[带着笑意说]",
+        "认真": "[认真地说]",
+        "关切": "[关切地说]",
+        "低落": "[声音低下来说]",
+        "难过": "[低沉难过地说]",
+        "委屈": "[带着委屈说]",
+        "无奈": "[无奈地说]",
+        "紧张": "[有些紧张地说]",
+        "迟疑": "[迟疑了一下说]",
+        "亲昵": "[亲昵地说]",
+        "调侃": "[半开玩笑地说]",
+        "郑重": "[郑重地说]",
     }
 
     # S2 rendering of an internal canonical cue token → Chinese instruction.

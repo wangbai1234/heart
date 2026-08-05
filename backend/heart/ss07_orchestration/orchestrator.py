@@ -372,6 +372,7 @@ class Orchestrator:
             active_emotions,
             cancel_token,
             stream_meta=stream_meta,
+            voice_enabled=getattr(req, "voice_enabled", False),
         ):
             if event["type"] == "text_delta":
                 full_text += event["delta"]
@@ -411,9 +412,18 @@ class Orchestrator:
         active_emotions: list[dict[str, Any]] | None = None,
         cancel_token: Optional[asyncio.Event] = None,
         stream_meta: Optional[dict] = None,
+        voice_enabled: bool = False,
     ) -> AsyncGenerator[dict, None]:
-        """Stream compose and yield events."""
+        """Stream compose and yield events.
+
+        Voice turns carry per-sentence ``{E:情绪}`` sentinels emitted by the
+        LLM. The display path (text_delta) strips them statefully (a sentinel
+        can straddle two chunks); the TTS path (sentence events) parses the
+        sentence-head label out and ships it alongside the cleaned text so the
+        voice director can decorate each sentence individually.
+        """
         from heart.ss05_composer.service import CompositionContext
+        from heart.ss08_voice.emotion_sentinel import SentinelStripper
 
         _meta: dict = stream_meta if stream_meta is not None else {}
         ctx = CompositionContext(
@@ -425,9 +435,19 @@ class Orchestrator:
             max_tokens=2000,
             model=getattr(req, "model", "deepseek"),
             stream_meta=_meta,
+            voice_enabled=voice_enabled,
         )
 
         splitter = SentenceSplitter()
+        # Only strip/parse when voice is on — text turns never carry sentinels,
+        # so the stripper stays out of the text path entirely (no regression).
+        stripper = SentinelStripper() if voice_enabled else None
+        emit = {
+            "voice_enabled": voice_enabled,
+            "vad": vad,
+            "intimacy": intimacy,
+            "active_emotions": active_emotions,
+        }
 
         try:
             async for chunk in composer.compose_stream(
@@ -436,22 +456,11 @@ class Orchestrator:
                 conversation_history=req.history,
                 temperature=0.7,
             ):
-                # Check cancel token
                 if cancel_token and cancel_token.is_set():
                     logger.info("turn_stream_cancelled", turn_id=str(req.trace_id))
                     break
-
-                yield {"type": "text_delta", "delta": chunk}
-
-                # Split sentences
-                for sentence in splitter.feed(chunk):
-                    yield {
-                        "type": "sentence",
-                        "text": sentence,
-                        "vad": vad,
-                        "intimacy": intimacy,
-                        "active_emotions": active_emotions or [],
-                    }
+                for ev in self._chunk_events(chunk, stripper, splitter, emit):
+                    yield ev
         except Exception as exc:
             # Swallow so the turn still ends cleanly (routes turns an empty
             # full_text into a user-facing EMPTY_RESPONSE rather than leaking a
@@ -459,16 +468,62 @@ class Orchestrator:
             # cause of a blank reply ("空气泡") is invisible in prod logs.
             logger.error("compose_stream_failed", error=str(exc), exc_info=True)
 
-        # Flush remaining
+        for ev in self._flush_events(stripper, splitter, emit):
+            yield ev
+
+    def _chunk_events(self, chunk: str, stripper: Any, splitter: Any, emit: dict) -> list[dict]:
+        """Events for one raw chunk: display delta then per-sentence TTS events.
+
+        Display path strips sentinels (voice) or passes through (text). The TTS
+        path splits on the RAW chunk so a sentence-head sentinel stays attached
+        to its sentence, then parses the label out per sentence.
+        """
+        events: list[dict] = []
+        display = stripper.feed(chunk) if stripper else chunk
+        if display:
+            events.append({"type": "text_delta", "delta": display})
+        for sentence in splitter.feed(chunk):
+            ev = self._sentence_event(sentence, emit)
+            if ev:
+                events.append(ev)
+        return events
+
+    def _flush_events(self, stripper: Any, splitter: Any, emit: dict) -> list[dict]:
+        """Flush the trailing display hold and the final buffered sentence."""
+        events: list[dict] = []
+        if stripper:
+            tail_display = stripper.flush()
+            if tail_display:
+                events.append({"type": "text_delta", "delta": tail_display})
         tail = splitter.flush()
         if tail:
-            yield {
-                "type": "sentence",
-                "text": tail,
-                "vad": vad,
-                "intimacy": intimacy,
-                "active_emotions": active_emotions or [],
-            }
+            ev = self._sentence_event(tail, emit)
+            if ev:
+                events.append(ev)
+        return events
+
+    @staticmethod
+    def _sentence_event(raw: str, emit: dict) -> dict | None:
+        """Parse the sentence-head emotion label (voice only) and build an event.
+
+        Returns None when the cleaned text is empty.
+        """
+        from heart.ss08_voice.emotion_sentinel import parse_sentence_emotion
+
+        if emit["voice_enabled"]:
+            label, text = parse_sentence_emotion(raw)
+        else:
+            label, text = None, raw
+        if not text.strip():
+            return None
+        return {
+            "type": "sentence",
+            "text": text,
+            "vad": emit["vad"],
+            "intimacy": emit["intimacy"],
+            "active_emotions": emit["active_emotions"] or [],
+            "emotion_label": label,
+        }
 
     # ── Private: Safety ─────────────────────────────────────────────
 

@@ -172,6 +172,11 @@ class CompositionContext:
     # Populated by compose_stream with served_model / degraded_to after streaming.
     stream_meta: Dict[str, Any] = field(default_factory=dict)
 
+    # Layer-3 voice emotion: when True (user has voice on for this turn), the
+    # system prompt asks for per-sentence {E:情绪} sentinels. Text-only turns
+    # leave the prompt untouched — zero regression on the text path.
+    voice_enabled: bool = False
+
 
 @dataclass
 class CompositionResult:
@@ -481,6 +486,7 @@ class ComposerService:
             inner_state=inner_state_block,
             soul_spec=soul_spec,
             proactive_hint=getattr(ctx, "proactive_hint", None),
+            voice_enabled=getattr(ctx, "voice_enabled", False),
         )
 
         wrapped_user_message = (
@@ -762,6 +768,7 @@ class ComposerService:
         inner_state: InnerStateContextBlock,
         soul_spec: SoulSpec,
         proactive_hint: Optional[str] = None,
+        voice_enabled: bool = False,
     ) -> str:
         """Build the system prompt from all context blocks.
 
@@ -962,6 +969,27 @@ class ComposerService:
             "- 输出示例（务必照此格式）：（他停下脚步，偏头看你）好久不见。"
             "（唇角微微扬起）最近过得怎么样？"
         )
+
+        # ── Layer 3.6: Per-sentence emotion sentinels (voice turns only) ──
+        # When the user has voice on, ask the model to tag each spoken sentence
+        # with a restrained {E:情绪} marker at its head. The marker is stripped
+        # before it reaches the bubble/history and is translated to a Fish S2
+        # [中文指令] for TTS — giving per-sentence emotional variation instead
+        # of one flat tone for the whole turn. Text-only turns skip this block
+        # entirely (see voice_enabled gate), so the text path is unchanged.
+        if voice_enabled:
+            from heart.ss08_voice.voice_director import VoiceDirector
+
+            _labels = "、".join(VoiceDirector.s2_palette_labels())
+            parts.append(
+                "\n【语气标记（本轮语音开启，重要）】\n"
+                "- 在每一句对白的句首加一个情绪标记，格式为 {E:情绪词}，例如 {E:温柔}今天累不累？\n"
+                f"- 情绪词从这些里选，克制自然、贴合当下语境，不要夸张：{_labels}。\n"
+                "- 只在对白句首加，一句一个；（）动作括号照旧，不要放进 {E:}。\n"
+                "- 情绪应随对话内容自然起伏，不要整段一个情绪；平淡处可用 {E:平静}。\n"
+                "- 标记只用于语气控制，不会被读出，也不要在标记里写对白内容。\n"
+                "- 示例：{E:轻快}你来啦。（侧头看你）{E:关切}今天怎么有点没精神？"
+            )
 
         # ── Layer 4: Hard constraints (compiled, never raw strings) ──
         # Raw forbidden strings are NOT pasted in; that would expose the

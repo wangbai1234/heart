@@ -25,6 +25,9 @@ class TurnRequest:
     # Requested LLM model; orchestrator/composer will use stream_for with failover.
     # Defaults to "deepseek" (free tier default).
     model: str = "deepseek"
+    # True when the user has voice on for this turn (resolved after tier gating).
+    # Drives the composer's per-sentence {E:情绪} sentinel prompt.
+    voice_enabled: bool = False
 
 
 @dataclass
