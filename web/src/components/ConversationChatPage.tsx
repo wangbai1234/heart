@@ -543,6 +543,27 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
     // server URL (rehydrated after refresh / loaded from history).
     if (msg.kind === 'voice' && (msg.audioData || msg.audioUrl)) {
       const transcriptExpanded = expandedVoiceTextIds.has(msg.id)
+      // Pick the audio source. A user's own recording is a browser blob: URL —
+      // always instantly playable, so use it directly. For an AI TTS reply we
+      // prefer the DURABLE server pointer (msg.audioUrl) over the live base64
+      // blob (msg.audioData): the WS-assembled blob (single Fish mp3 chunk) can
+      // fail to decode/plays silently in some browsers (iOS Safari), which is
+      // the reported "click does nothing, only a refresh plays it" bug — a
+      // refresh drops audioData and replays via exactly this server pointer. We
+      // keep the base64 as the fallback so playback still works if the pointer
+      // hasn't persisted yet (by-turn 404 race right after turn_end).
+      // A user's own recording is a browser blob: URL — instantly playable, so
+      // use it directly with the durable pointer as fallback. For an AI reply we
+      // use the durable pointer as the primary and DON'T pass base64 as fallback:
+      // fetchApiAudio (the fallback path) does fetch(url) and can't consume a
+      // base64 string, and the base64 blob is the very source that fails silently
+      // — the by-turn endpoint already retries 3x on the post-turn_end 404 race,
+      // so it stands on its own and matches the (working) refresh path exactly.
+      const isBrowserBlob = msg.audioData?.startsWith('blob:')
+      const primarySource = isBrowserBlob
+        ? (msg.audioData as string)
+        : (msg.audioUrl || msg.audioData || '')
+      const fallbackSource = isBrowserBlob ? msg.audioUrl : undefined
       return (
         <div className={`flex items-start gap-2 ${isAI ? 'self-start' : 'self-end flex-row-reverse'}`}>
           {showAvatar ? (
@@ -554,20 +575,15 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
             <div className="flex items-end gap-2">
               <div className="flex-1">
                 <VoiceMessageBubble
-                  // Match the render gate above (|| — treats '' as absent). With
-                  // ?? an empty-string audioData would be handed through instead
-                  // of falling back to the durable audioUrl, stranding the bubble
-                  // on a source it can't play.
-                  audioData={msg.audioData || msg.audioUrl || ''}
+                  audioData={primarySource}
                   duration={msg.audioDuration ?? 3000}
                   format={msg.audioFormat ?? 'wav'}
                   isDark={isDark}
-                  // When live base64 is the primary source, hand the durable
-                  // server pointer as a fallback: the WS-assembled blob can fail
-                  // to decode (missing frame bytes), while the stored file — the
-                  // exact object a page refresh replays — always plays. On decode
-                  // failure the bubble self-heals to it instead of erroring.
-                  fallbackUrl={msg.audioData ? msg.audioUrl : undefined}
+                  // Second source tried if the primary fails. For an AI reply
+                  // this is the live base64 blob (primary = durable pointer);
+                  // for a user recording it's the durable pointer (primary =
+                  // instant blob).
+                  fallbackUrl={fallbackSource}
                 />
               </div>
               {msg.content && (
