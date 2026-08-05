@@ -416,14 +416,14 @@ class Orchestrator:
     ) -> AsyncGenerator[dict, None]:
         """Stream compose and yield events.
 
-        Voice turns carry per-sentence ``{E:情绪}`` sentinels emitted by the
-        LLM. The display path (text_delta) strips them statefully (a sentinel
-        can straddle two chunks); the TTS path (sentence events) parses the
-        sentence-head label out and ships it alongside the cleaned text so the
-        voice director can decorate each sentence individually.
+        Voice turns carry per-sentence ``[中文指令]`` Fish S2 instructions the
+        LLM emits inline. The two paths handle them oppositely: the display
+        path (text_delta → bubble/history) strips ``[...]`` statefully (a span
+        can straddle two chunks); the TTS path (sentence events) keeps the raw
+        sentence so the instruction reaches Fish untouched.
         """
         from heart.ss05_composer.service import CompositionContext
-        from heart.ss08_voice.emotion_sentinel import SentinelStripper
+        from heart.ss08_voice.emotion_sentinel import InstructionStripper
 
         _meta: dict = stream_meta if stream_meta is not None else {}
         ctx = CompositionContext(
@@ -439,11 +439,10 @@ class Orchestrator:
         )
 
         splitter = SentenceSplitter()
-        # Only strip/parse when voice is on — text turns never carry sentinels,
-        # so the stripper stays out of the text path entirely (no regression).
-        stripper = SentinelStripper() if voice_enabled else None
+        # Only strip when voice is on — text turns never carry [中文指令]
+        # instructions, so the stripper stays out of the text path (no regression).
+        stripper = InstructionStripper() if voice_enabled else None
         emit = {
-            "voice_enabled": voice_enabled,
             "vad": vad,
             "intimacy": intimacy,
             "active_emotions": active_emotions,
@@ -474,9 +473,9 @@ class Orchestrator:
     def _chunk_events(self, chunk: str, stripper: Any, splitter: Any, emit: dict) -> list[dict]:
         """Events for one raw chunk: display delta then per-sentence TTS events.
 
-        Display path strips sentinels (voice) or passes through (text). The TTS
-        path splits on the RAW chunk so a sentence-head sentinel stays attached
-        to its sentence, then parses the label out per sentence.
+        Display path strips ``[中文指令]`` (voice) or passes through (text). The
+        TTS path splits on the RAW chunk so a sentence-head instruction stays
+        attached to its sentence and reaches Fish untouched.
         """
         events: list[dict] = []
         display = stripper.feed(chunk) if stripper else chunk
@@ -504,25 +503,18 @@ class Orchestrator:
 
     @staticmethod
     def _sentence_event(raw: str, emit: dict) -> dict | None:
-        """Parse the sentence-head emotion label (voice only) and build an event.
+        """Build a ``sentence`` TTS event, keeping any inline ``[中文指令]`` raw.
 
-        Returns None when the cleaned text is empty.
+        Returns None when the sentence has no spoken text.
         """
-        from heart.ss08_voice.emotion_sentinel import parse_sentence_emotion
-
-        if emit["voice_enabled"]:
-            label, text = parse_sentence_emotion(raw)
-        else:
-            label, text = None, raw
-        if not text.strip():
+        if not raw.strip():
             return None
         return {
             "type": "sentence",
-            "text": text,
+            "text": raw,
             "vad": emit["vad"],
             "intimacy": emit["intimacy"],
             "active_emotions": emit["active_emotions"] or [],
-            "emotion_label": label,
         }
 
     # ── Private: Safety ─────────────────────────────────────────────

@@ -198,7 +198,6 @@ async def _handle_event(
                 intimacy=event.get("intimacy", 0.0),
                 active_emotions=event.get("active_emotions", []),
                 character_id=character_id,
-                emotion_label=event.get("emotion_label"),
             )
     elif event_type == "turn_end":
         if stream_session:

@@ -1,55 +1,36 @@
-"""Layer-3 per-sentence emotion sentinels.
+"""Layer-3 voice instruction markup — display-path stripping.
 
-The composer (voice mode only) asks the LLM to prefix each dialog sentence with
-a ``{E:情绪词}`` sentinel. Curly braces are chosen so the sentinel never
-collides with the action-bracket families (（）/【】/[]/()) that
-``stream_session._ACTION_PATTERN`` strips before TTS.
+In voice turns the composer asks the LLM to prefix spoken sentences with a
+natural-language Fish S2 instruction in half-width square brackets, e.g.
+``[温柔地说]今天累不累？``. Those ``[...]`` spans are the *instruction*
+namespace: they must reach Fish (TTS path keeps them raw) but must never show
+up in the chat bubble or history (display path strips them). Actions/narration
+use the full-width ``（）`` / ``【】`` namespace instead and are handled by
+``stream_session._ACTION_PATTERN``.
 
-Two consumers:
-  - display path (text_delta → bubble/history): sentinels must be stripped,
-    tolerating a sentinel split across streaming chunk boundaries.
-  - TTS path (per sentence): the sentence-head sentinel is parsed into an
-    emotion label and stripped from the spoken text; the label is later mapped
-    to a Fish S2 ``[中文指令]`` by the voice director.
+This module only owns the display side: strip complete ``[...]`` spans from the
+streamed text_delta, tolerating a span split across chunk boundaries.
 """
 
 from __future__ import annotations
 
 import re
 
-# A complete sentinel: {E:<label>}, label = 1..8 non-brace chars.
-_SENTINEL_RE = re.compile(r"\{E:([^\}]{1,8})\}")
-# A prefix that could still grow into a valid sentinel (spans chunk boundary).
-_PARTIAL_RE = re.compile(r"^\{E?:?[^\}]{0,8}$")
-_MAX_HOLD = 12  # '{E:' + 8 label chars + '}' = 11; small slack.
+# A complete instruction span: [ ... ] with no nested bracket or newline.
+_INSTR_RE = re.compile(r"\[[^\[\]\n]*\]")
+# Longest partial '[...' we'll hold waiting for the closing ']'. Fish
+# instructions are short natural-language phrases; 40 chars is ample slack.
+_MAX_HOLD = 40
 
 
-def parse_sentence_emotion(sentence: str) -> tuple[str | None, str]:
-    """Extract the sentence-head emotion label and strip ALL sentinels.
-
-    Only the first sentinel counts, and only when it sits at the head (nothing
-    but whitespace before it) — enforcing the "≤1 label per sentence, head
-    only" rule. Stray mid-sentence sentinels are removed without effect.
-
-    Returns ``(label_or_None, clean_text)``.
-    """
-    if not sentence:
-        return None, sentence
-    label: str | None = None
-    m = _SENTINEL_RE.search(sentence)
-    if m and sentence[: m.start()].strip() == "":
-        label = m.group(1).strip() or None
-    clean = _SENTINEL_RE.sub("", sentence)
-    return label, clean
-
-
-class SentinelStripper:
+class InstructionStripper:
     """Stateful stripper for the streaming display path.
 
-    Feed raw chunks; get back display-safe text with ``{E:...}`` removed. Holds
-    a trailing partial sentinel (e.g. ``{E:轻`` before ``快}`` arrives) so a
-    sentinel split across chunk boundaries never leaks a half-marker into the
-    bubble. Call :meth:`flush` once the stream ends to release any final hold.
+    Feed raw chunks; get back display-safe text with ``[...]`` instruction
+    spans removed. Holds a trailing partial span (e.g. ``[温柔`` before ``地说]``
+    arrives) so a span split across chunk boundaries never leaks a half-marker
+    into the bubble. Call :meth:`flush` once the stream ends to release any
+    final hold (a ``[`` that never closed is surfaced, not swallowed).
     """
 
     def __init__(self) -> None:
@@ -58,12 +39,12 @@ class SentinelStripper:
     def feed(self, chunk: str) -> str:
         buf = self._hold + (chunk or "")
         self._hold = ""
-        buf = _SENTINEL_RE.sub("", buf)
-        # If a '{' tail could still grow into a sentinel, hold it back.
-        idx = buf.rfind("{")
-        if idx != -1:
+        buf = _INSTR_RE.sub("", buf)
+        # If an unclosed '[' tail could still grow into a span, hold it back.
+        idx = buf.rfind("[")
+        if idx != -1 and "]" not in buf[idx:]:
             tail = buf[idx:]
-            if len(tail) <= _MAX_HOLD and _PARTIAL_RE.match(tail):
+            if len(tail) <= _MAX_HOLD and "\n" not in tail:
                 self._hold = tail
                 buf = buf[:idx]
         return buf
@@ -71,7 +52,4 @@ class SentinelStripper:
     def flush(self) -> str:
         out = self._hold
         self._hold = ""
-        # A dangling partial that never completed is not a real sentinel — but
-        # only emit it if it doesn't look like one mid-completion. It never
-        # completed, so surface it rather than swallow user-visible text.
         return out

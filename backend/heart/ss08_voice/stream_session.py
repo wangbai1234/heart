@@ -13,21 +13,22 @@ from heart.ss08_voice.voice_cache import VoiceCache, should_cache
 logger = structlog.get_logger(__name__)
 
 
-# Action-bracket pattern — kept in sync with
-# ``heart.ss05_composer.message_splitter._ACTION_RE`` so any bracket the bubble
-# splitter treats as an action ("action" kind, grey pill) is also stripped
-# from the TTS input. Historically this pattern only recognised parentheses,
-# which meant characters emitting 【叹气】 or [回到主题] had their action tags
-# read aloud (TEST_REPORT_20260712 §5.4).
-_ACTION_PATTERN = re.compile(r"[（(【\[]([^（()【\[\]）)】\n]*)[）)】\]]")
+# Action-bracket pattern — strips the action/narration namespace
+# （）/()/【】 from the TTS input so 【叹气】-style tags aren't read aloud
+# (TEST_REPORT_20260712 §5.4). Half-width [] is DELIBERATELY excluded: Layer-3
+# reserves [中文指令] as the Fish S2 instruction namespace, which must survive
+# to the provider (voice turns strip [] from the *display* path separately, via
+# emotion_sentinel.InstructionStripper). Actions therefore use （）/【】 only.
+_ACTION_PATTERN = re.compile(r"[（(【]([^（()【【\]）)】\n]*)[）)】]")
 
 
 def _extract_tts_stage_directions(text: str) -> tuple[str, list[str]]:
-    """Remove action brackets from ``text`` before it hits TTS.
+    """Remove the （）/【】 action namespace from ``text`` before it hits TTS.
 
     Keeps the original text intact for transcript/history, but avoids reading
-    bracketed descriptions aloud, whether they come as
-    （目光停顿片刻，嗓音带着雨后的凉意）, 【叹气】, or [回到主题].
+    bracketed descriptions aloud, e.g. （目光停顿片刻，嗓音带着雨后的凉意）or
+    【叹气】. Half-width [中文指令] is left in place on purpose — it is the Fish
+    S2 instruction namespace and must reach the provider.
     """
     if not text:
         return "", []
@@ -97,9 +98,9 @@ class StreamSession:
         self.tts_provider_name: str = ""
         self.audio_format: str = ""
         self._all_audio_chunks: list[bytes] = []
-        # (sentence_text, emotion_label|None) in arrival order. The label is the
-        # Layer-3 per-sentence {E:情绪} word parsed upstream; None on text turns.
-        self._segments: list[tuple[str, str | None]] = []
+        # Sentence fragments in arrival order. Any leading [中文指令] rides
+        # inline (the LLM emits it); it is joined verbatim and synthesized once.
+        self._text_parts: list[str] = []
         self._last_turn_id: str | None = None
         self._last_character_id: str | None = None
         self._last_vad: dict | None = None
@@ -148,19 +149,20 @@ class StreamSession:
         intimacy: float,
         active_emotions: list[Any] | None,
         character_id: str,
-        emotion_label: str | None = None,
     ) -> None:
         """Submit a sentence for TTS synthesis.
 
-        ``emotion_label`` is the Layer-3 per-sentence {E:情绪} word (voice turns
-        only); it decorates this sentence individually in :meth:`finish`.
+        Layer-3 emotion now rides inline as a leading ``[中文指令]`` the LLM
+        emits at the sentence head; it is preserved verbatim through the TTS
+        path (only the （）/【】 action namespace is stripped) so Fish S2 varies
+        tone per sentence with no backend decoration.
         """
         if self._cancelled:
             return
         cleaned = sentence.strip()
         if not cleaned:
             return
-        self._segments.append((cleaned, emotion_label))
+        self._text_parts.append(cleaned)
         self._last_turn_id = turn_id
         self._last_character_id = character_id
         self._last_vad = vad
@@ -175,20 +177,11 @@ class StreamSession:
         """Synthesize the whole turn once and send a single audio chunk."""
         if self._cancelled:
             return
-        full_text = "".join(seg for seg, _ in self._segments).strip()
+        full_text = "".join(self._text_parts).strip()
         if not full_text or not self._last_turn_id or not self._last_character_id:
             return
         tts_text, stage_directions = _extract_tts_stage_directions(full_text)
         tts_text = tts_text or full_text
-
-        # Layer-3: if any sentence carried an {E:情绪} label, bake a per-sentence
-        # [中文指令] into the text so Fish S2 varies tone across the turn instead
-        # of one flat instruction. derive() then passes the pre-decorated text
-        # through (it early-returns when text already opens with '['), while
-        # still choosing the turn-level voice_id / speed / pitch.
-        baked = self._build_per_sentence_text(full_text)
-        if baked is not None:
-            tts_text = baked
 
         req = self._voice.director.derive(
             text=tts_text,
@@ -248,40 +241,6 @@ class StreamSession:
         )
         self._global_seq += 1
         await self._cache_audio(req, req.text, [result.audio])
-
-    def _build_per_sentence_text(self, fallback: str) -> Optional[str]:
-        """Inline a Fish S2 [中文指令] before each labelled sentence.
-
-        Returns the decorated whole-turn text, or None to signal "no per-sentence
-        labels apply — use the existing whole-turn derive() path". None is
-        returned when: no segment carried a label, the director isn't in S2
-        mode, or the voice is a clone (clone_stability voices suppress
-        model-level emotion prefixes to protect timbre — Layer 2 handles them).
-        """
-        if not any(label for _, label in self._segments):
-            return None
-        director = self._voice.director
-        if getattr(director, "emotion_mode", "s2") != "s2":
-            return None
-        try:
-            from heart.ss08_voice.voice_catalog import get_voice_profile
-
-            profile = get_voice_profile(self._last_character_id or "")
-            if profile.clone_stability:
-                return None
-        except Exception:
-            # No profile / lookup failure → fall back to whole-turn path.
-            return None
-
-        pieces: list[str] = []
-        for sentence, label in self._segments:
-            spoken = _strip_tts_stage_directions(sentence).strip()
-            if not spoken:
-                continue
-            instr = director.resolve_s2_instruction(label) if label else ""
-            pieces.append(f"{instr}{spoken}" if instr else spoken)
-        baked = "".join(pieces).strip()
-        return baked or fallback
 
     async def _check_cache(self, req: Any, text: str) -> Optional[bytes]:
         """Check cache for audio."""

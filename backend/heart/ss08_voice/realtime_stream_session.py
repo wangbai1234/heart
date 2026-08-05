@@ -129,22 +129,16 @@ class RealtimeStreamSession:
         intimacy: float,
         active_emotions: list[Any] | None,
         character_id: str,
-        emotion_label: str | None = None,
     ) -> None:
         if self._cancelled or self._session is None:
             return
         self._turn_id = turn_id
+        # _strip_tts_stage_directions only removes （）/【】 actions; any leading
+        # [中文指令] the LLM emitted survives and is sent verbatim so Fish S2
+        # varies tone sentence by sentence.
         cleaned = _strip_tts_stage_directions(sentence).strip()
         if not cleaned:
             return
-        # Layer-3: prepend the per-sentence Fish S2 [中文指令] for this label so
-        # the realtime path varies tone sentence by sentence, same as REST.
-        if emotion_label:
-            from heart.ss08_voice.voice_director import VoiceDirector
-
-            instr = VoiceDirector.resolve_s2_instruction(emotion_label)
-            if instr and not cleaned.startswith("["):
-                cleaned = f"{instr}{cleaned}"
         try:
             await self._session.send_text(cleaned)
         except Exception as e:

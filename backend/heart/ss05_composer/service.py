@@ -959,36 +959,39 @@ class ComposerService:
         # below gives the model a concrete target format to copy.
         parts.append(
             "\n【表达格式（重要）】\n"
-            "- 所有动作、神态、心理描写、旁白必须用中文全角括号（）包裹。\n"
+            "- 所有动作、神态、心理描写、旁白必须用中文全角括号（）包裹；\n"
+            "  嵌套或特殊场景可用【】兜底，二者都会被识别为动作/旁白。\n"
             "- 括号里只写动作/神态，不写对白；对白直接写在括号外。\n"
             "- 一条消息里动作与对白可以多次穿插，每个动作片段独立用一对（）。\n"
             "- 如果你用了（），就必须确保消息中所有动作/神态都加（），不能遗漏。\n"
             "- 禁止把动作描写和对白混在同一段裸文本里。\n"
+            "- 动作/旁白只用（）或【】，禁止使用半角方括号[]（它另有用途）。\n"
             "- 错误示例：（微微一笑）你来了。目光中带着审视 最近在忙什么？\n"
             "- 正确示例：（微微一笑）你来了。（目光中带着审视）最近在忙什么？\n"
             "- 输出示例（务必照此格式）：（他停下脚步，偏头看你）好久不见。"
             "（唇角微微扬起）最近过得怎么样？"
         )
 
-        # ── Layer 3.6: Per-sentence emotion sentinels (voice turns only) ──
-        # When the user has voice on, ask the model to tag each spoken sentence
-        # with a restrained {E:情绪} marker at its head. The marker is stripped
-        # before it reaches the bubble/history and is translated to a Fish S2
-        # [中文指令] for TTS — giving per-sentence emotional variation instead
-        # of one flat tone for the whole turn. Text-only turns skip this block
-        # entirely (see voice_enabled gate), so the text path is unchanged.
+        # ── Layer 3.6: Per-sentence Fish S2 instruction (voice turns only) ──
+        # When voice is on, let the model write a Fish S2 control instruction
+        # directly at each spoken sentence's head, as [中文指令]文本. This is the
+        # native Fish S2 syntax — no backend palette/translation. The bracket is
+        # a control marker: it is stripped from the bubble/history display path
+        # (emotion_sentinel.InstructionStripper) but kept verbatim on the TTS
+        # path so Fish varies tone sentence by sentence. Text-only turns skip
+        # this block (voice_enabled gate), so the text path is unchanged.
         if voice_enabled:
-            from heart.ss08_voice.voice_director import VoiceDirector
-
-            _labels = "、".join(VoiceDirector.s2_palette_labels())
             parts.append(
-                "\n【语气标记（本轮语音开启，重要）】\n"
-                "- 在每一句对白的句首加一个情绪标记，格式为 {E:情绪词}，例如 {E:温柔}今天累不累？\n"
-                f"- 情绪词从这些里选，克制自然、贴合当下语境，不要夸张：{_labels}。\n"
-                "- 只在对白句首加，一句一个；（）动作括号照旧，不要放进 {E:}。\n"
-                "- 情绪应随对话内容自然起伏，不要整段一个情绪；平淡处可用 {E:平静}。\n"
-                "- 标记只用于语气控制，不会被读出，也不要在标记里写对白内容。\n"
-                "- 示例：{E:轻快}你来啦。（侧头看你）{E:关切}今天怎么有点没精神？"
+                "\n【语气指令（本轮语音开启，重要）】\n"
+                "- 可在对白句首加一个语气指令，格式为半角方括号 [中文指令]，"
+                "紧接对白，例如 [温柔地说]今天累不累？\n"
+                "- 指令用自然中文描述这句话的说法（语气/情绪/节奏），不必套固定词表；"
+                "整体克制自然、贴合当下语境，不要夸张。\n"
+                "- 只用半角[]，一句最多一个，紧贴句首；动作/旁白仍用（）或【】，"
+                "不要混用。\n"
+                "- 语气应随对话内容自然起伏，不要整段一个语气；平淡处可以不加。\n"
+                "- 方括号只用于语气控制，不会被读出，也不要在里面写对白内容。\n"
+                "- 示例：[轻快地说]你来啦。（侧头看你）[关切地问]今天怎么有点没精神？"
             )
 
         # ── Layer 4: Hard constraints (compiled, never raw strings) ──
