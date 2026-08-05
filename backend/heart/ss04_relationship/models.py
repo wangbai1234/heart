@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from typing import Optional
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from sqlalchemy import (
     UUID as SQLUUID,
@@ -215,7 +215,8 @@ class RelationshipEvent(Base):
     event_id: Mapped[UUID] = mapped_column(
         SQLUUID(as_uuid=True),
         primary_key=True,
-        default=lambda: None,  # Will be set by DB
+        default=uuid4,  # Client-side gen; DB default is bypassed when the ORM
+        # sends the column (default=lambda:None sent an explicit NULL → violation)
     )
     user_id: Mapped[UUID] = mapped_column(SQLUUID(as_uuid=True), nullable=False)
     character_id: Mapped[str] = mapped_column(VARCHAR(50), nullable=False)
