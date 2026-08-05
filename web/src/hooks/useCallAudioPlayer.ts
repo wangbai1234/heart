@@ -45,12 +45,38 @@ export function useCallAudioPlayer(characterId: CharacterId) {
     setIsSpeaking(false)
   }, [cleanupUrl])
 
-  // Resolve a playable object URL for a message's audio. blob:/http play直接；
-  // /api 需带 token fetch（by-turn 端点刚落库可能短暂 404，重试几次）。
+  // Resolve a playable object URL for a message's audio. Priority:
+  //   1. live audioData — blob:/http play直接；raw base64 (the finalized live
+  //      stream) is decoded into a blob URL here. This was the "fish 通话没声音"
+  //      bug: Fish streams a single mp3 chunk, so at turn_end audioData holds
+  //      raw base64 while audioUrl (the by-turn pointer) isn't stamped yet; the
+  //      old code set el.src to that raw base64 string, which the browser can't
+  //      load, so it failed silently and playedIds永久标记不再重试. MiMo only
+  //      "worked" because it's slow enough that audioUrl was usually ready first.
+  //   2. /api pointer — token fetch (by-turn 刚落库可能短暂 404，重试几次)。
   const resolveSrc = useCallback(async (msg: Message): Promise<string | null> => {
-    const src = msg.audioData?.startsWith('blob:')
-      ? msg.audioData
-      : (msg.audioUrl || msg.audioData || '')
+    const live = msg.audioData
+    if (live) {
+      if (live.startsWith('blob:') || live.startsWith('http')) return live
+      if (!live.startsWith('/api/') && !live.startsWith('/')) {
+        // Raw base64 from the finalized live stream → decode to a typed blob so
+        // the <audio> element actually loads it (mirrors VoiceMessageBubble).
+        try {
+          const mime = msg.audioFormat === 'mp3' ? 'audio/mpeg' : 'audio/wav'
+          const bin = atob(live)
+          const bytes = new Uint8Array(bin.length)
+          for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+          cleanupUrl()
+          const url = URL.createObjectURL(new Blob([bytes], { type: mime }))
+          objectUrlRef.current = url
+          return url
+        } catch {
+          // Malformed base64 — fall through to the durable server pointer.
+        }
+      }
+    }
+
+    const src = msg.audioUrl || msg.audioData || ''
     if (!src) return null
     if (src.startsWith('blob:') || src.startsWith('http')) return src
     if (!src.startsWith('/api/')) return src

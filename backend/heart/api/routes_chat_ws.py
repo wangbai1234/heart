@@ -58,13 +58,22 @@ async def _load_recent_conversation_history(
     character_id: str,
     limit: int = RECENT_HISTORY_LIMIT,
 ) -> list[dict[str, str]]:
-    """Load the most recent persisted turns for prompt conversation history."""
+    """Load the most recent persisted turns for prompt conversation history.
+
+    Call dialog (channel='call') IS included — a voice call is real conversation
+    the character must remember. But the WeChat-style call-summary pills
+    (kind='call_summary', content='00:17') are UI-only markers, never speech; if
+    they reach the LLM it copies the mm:ss strings verbatim into the next reply
+    (observed: "……你呢？ 00:17 00:31 00:24"). Exclude them here — IS DISTINCT FROM
+    keeps NULL-kind rows (which are the normal text turns).
+    """
     result = await db.execute(
         sql_text(
             """
             SELECT role, content
             FROM chat_messages
             WHERE user_id = :uid AND character_id = :cid
+              AND kind IS DISTINCT FROM 'call_summary'
             ORDER BY created_at DESC
             LIMIT :limit
             """
