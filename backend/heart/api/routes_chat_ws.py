@@ -259,10 +259,17 @@ async def _precheck_billing(
     turn_id: str,
     ws: WebSocket,
     model: str = "deepseek",
+    force_voice: bool = False,
 ) -> tuple[bool, bool]:
     """Pre-check voice setting, membership entitlement, and balance.
 
     Returns (effective_voice, can_proceed).
+
+    ``force_voice`` (voice-call mode) requests a spoken reply regardless of the
+    per-character DB toggle — the call page always wants voice. It's OR'd with
+    the stored setting, so text chat (which sends its real toggle state) is
+    unaffected. A ready voice must still exist: resolve_effective_voice returns
+    None otherwise and the turn degrades to text.
     """
     try:
         from sqlalchemy.ext.asyncio import AsyncSession
@@ -286,7 +293,7 @@ async def _precheck_billing(
                 {"uid": user_uuid, "cid": character_id},
             )
             row = result.scalar_one_or_none()
-            effective_voice = row if row is not None else False
+            effective_voice = bool(row) or force_voice
 
             # Membership tier → model entitlement
             tier = await get_effective_tier(db, user_uuid)
@@ -841,6 +848,11 @@ async def _handle_chat_message(
     # memory all need the row) but hidden from chat history — replaced by a
     # single call-summary bubble on hang-up. Whitelist to keep the column clean.
     channel = "call" if msg.get("channel") == "call" else "chat"
+    # Voice-call mode forces a spoken reply even if the user never toggled the
+    # per-character voice switch (the call page verified a ready voice exists
+    # before entering). Text chat sends its real toggle state, so OR'ing this
+    # in _precheck_billing leaves text-chat behaviour unchanged.
+    force_voice = bool(msg.get("voice_enabled"))
 
     if not user_text:
         await ws.send_json(
@@ -878,7 +890,7 @@ async def _handle_chat_message(
 
     # ── 1. Pre-check: voice setting + membership entitlement + balance ──
     effective_voice, can_proceed = await _precheck_billing(
-        user_uuid, character_id, turn_id, ws, model=model
+        user_uuid, character_id, turn_id, ws, model=model, force_voice=force_voice
     )
     if not can_proceed:
         return

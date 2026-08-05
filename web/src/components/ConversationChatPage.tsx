@@ -922,16 +922,18 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
             <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
           </svg>
         </button>
-        {/* + 菜单：语音聊天 / 语音通话（与发送键同尺寸 44x44） */}
+        {/* + 菜单：语音聊天 / 语音通话。可见圆与发送键同尺寸(44x44 实心圆)，
+            用中性表面色区分主次，不与发送键的粉色渐变撞色。 */}
         <button
           onClick={() => setPlusMenuOpen(true)}
           aria-label="更多"
-          className="w-[44px] h-[44px] flex items-center justify-center shrink-0 active:scale-90 transition-transform"
+          className={`w-[44px] h-[44px] rounded-full flex items-center justify-center shrink-0 active:scale-90 transition-transform ${
+            isDark ? 'bg-[rgba(255,255,255,0.08)]' : 'bg-[rgba(47,54,74,0.06)]'
+          }`}
         >
-          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke={isDark ? '#999' : '#888'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="9" />
-            <line x1="12" y1="8" x2="12" y2="16" />
-            <line x1="8" y1="12" x2="16" y2="12" />
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={isDark ? '#B9B9C0' : '#6B7280'} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="12" y1="6" x2="12" y2="18" />
+            <line x1="6" y1="12" x2="18" y2="12" />
           </svg>
         </button>
       </div>

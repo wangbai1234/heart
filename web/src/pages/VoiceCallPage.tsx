@@ -40,12 +40,11 @@ export function VoiceCallPage({ isDark: _isDark }: VoiceCallPageProps) {
   const [showSubtitle, setShowSubtitle] = useState(true)
   const [menuOpen, setMenuOpen] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
+  const [elapsedMs, setElapsedMs] = useState(0)
   const busyRef = useRef(false)
-  // Call bookkeeping: wall-clock start, whether the user ever spoke (skip the
-  // summary for an instant open→close with no exchange), and an ended guard so
-  // hang-up + unmount can't both post the summary.
+  // Call bookkeeping: wall-clock start for the duration summary, and an ended
+  // guard so hang-up + unmount can't both post the summary.
   const startedAtRef = useRef<number>(Date.now())
-  const spokeRef = useRef(false)
   const endedRef = useRef(false)
   // Message ids present before the call. Everything added during the call is a
   // channel='call' turn — hidden from chat history server-side, so we strip the
@@ -66,11 +65,27 @@ export function VoiceCallPage({ isDark: _isDark }: VoiceCallPageProps) {
     setCharacterId(characterId)
   }, [characterId, setCharacter, setActiveCharacter, setCharacterId])
 
+  // Live call timer — ticks every second from call start; shown above the
+  // avatar. Stops when the page unmounts (interval cleared).
+  useEffect(() => {
+    const started = startedAtRef.current
+    const id = setInterval(() => setElapsedMs(Date.now() - started), 1000)
+    return () => clearInterval(id)
+  }, [])
+  const elapsedLabel = (() => {
+    const s = Math.floor(elapsedMs / 1000)
+    return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
+  })()
+
   // Character is "holding the floor" while generating or speaking → mic locked.
   const characterBusy = isStreaming || isGenerating || isSpeaking
 
-  // Latest assistant line for the optional subtitle.
-  const lastAssistant = [...messages].reverse().find((m) => m.role === 'assistant')
+  // Subtitle = the character's reply IN THIS CALL only. Skip anything present
+  // before the call started (preCallIdsRef) so the page never opens showing the
+  // last chat message — the character stays silent until the user speaks first.
+  const lastAssistant = [...messages]
+    .reverse()
+    .find((m) => m.role === 'assistant' && !preCallIdsRef.current.has(m.id))
   const subtitleText = lastAssistant?.content ?? ''
 
   const showToast = useCallback((msg: string) => {
@@ -115,7 +130,6 @@ export function VoiceCallPage({ isDark: _isDark }: VoiceCallPageProps) {
         return
       }
       const blobUrl = URL.createObjectURL(wavBlob)
-      spokeRef.current = true
       sendMessage(transcript, {
         voiceBubble: { audioData: blobUrl, durationMs, format: 'wav', audioUrl: audio_url },
         forceVoice: true,
@@ -126,11 +140,12 @@ export function VoiceCallPage({ isDark: _isDark }: VoiceCallPageProps) {
     }
   }, [isRecording, recorder, sendMessage, showToast])
 
-  // End the call: persist one call-summary bubble (only if the user actually
-  // spoke — an instant open→close leaves no trace), strip the optimistic
-  // channel='call' turns from the store, and force the chat page to refetch so
-  // it shows the single server-owned summary bubble (never the N call turns).
-  // Idempotent via endedRef so hang-up + unmount can't double-run.
+  // End the call: always persist one call-summary bubble showing the duration
+  // (even if the user never spoke — opening then hanging up is still a call),
+  // strip the optimistic channel='call' turns from the store, and force the
+  // chat page to refetch so it shows the single server-owned summary bubble
+  // (never the N call turns). Idempotent via endedRef so hang-up + unmount
+  // can't double-run.
   const endCall = useCallback(async () => {
     if (endedRef.current) return
     endedRef.current = true
@@ -144,12 +159,10 @@ export function VoiceCallPage({ isDark: _isDark }: VoiceCallPageProps) {
         [characterId]: (s.messages[characterId] ?? []).filter((m) => keep.has(m.id)),
       },
     }))
-    if (spokeRef.current) {
-      const durationMs = Date.now() - startedAtRef.current
-      try {
-        await createCallSummary(characterId, durationMs)
-      } catch { /* summary is best-effort; the call turns are already hidden */ }
-    }
+    const durationMs = Date.now() - startedAtRef.current
+    try {
+      await createCallSummary(characterId, durationMs)
+    } catch { /* summary is best-effort; the call turns are already hidden */ }
     // Mark history stale so ConversationChatPage refetches on mount and pulls
     // the summary row (call turns are hidden server-side via channel='call').
     useChatStore.getState().setLastFetchedAt(characterId, 0)
@@ -213,6 +226,7 @@ export function VoiceCallPage({ isDark: _isDark }: VoiceCallPageProps) {
 
       {/* 角色头像 + 名字 + 状态 */}
       <div className="absolute z-10 left-0 right-0 flex flex-col items-center" style={{ top: 'calc(var(--safe-top) + 84px)' }}>
+        <p className="mb-5 text-[15px] font-medium tabular-nums text-white/80 tracking-[0.02em]">{elapsedLabel}</p>
         <img src={profile.avatar} alt={profile.name} className="w-[112px] h-[112px] rounded-full object-cover border-2 border-white/30 shadow-[0_12px_32px_rgba(0,0,0,0.4)]" />
         <p className="mt-4 text-[24px] font-semibold text-white tracking-[-0.01em]">{profile.name}</p>
         <p className="mt-2 text-[15px] text-white/70">{statusText}</p>
