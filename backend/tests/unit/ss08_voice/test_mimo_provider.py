@@ -10,6 +10,7 @@ from heart.ss08_voice.mimo_provider import (
     MiMoProvider,
     _extract_audio_from_chunk,
     _parse_mimo_response,
+    _strip_fish_markup,
 )
 from heart.ss08_voice.types import TTSRequest
 
@@ -363,3 +364,40 @@ async def test_reference_data_uri_s3_failure_returns_none(provider):
     ):
         uri = await provider._reference_data_uri("s3://voice-samples/char_x/abc.mp3")
     assert uri is None
+
+
+# ── Fish S2 markup isolation (MiMo must never speak [中文指令] aloud) ──
+
+
+def test_strip_fish_markup_removes_leading_instruction():
+    assert _strip_fish_markup("[温柔地说]你好呀") == "你好呀"
+
+
+def test_strip_fish_markup_removes_multiple_instructions():
+    assert _strip_fish_markup("[停顿片刻]其实[压着情绪]我想说") == "其实我想说"
+
+
+def test_strip_fish_markup_leaves_clean_text_untouched():
+    assert _strip_fish_markup("你好，今天天气真好！") == "你好，今天天气真好！"
+
+
+def test_build_body_strips_fish_markup_from_spoken_text(provider):
+    """Director-decorated [中文指令] must not reach MiMo's assistant content."""
+    req = TTSRequest(text="[温柔地说]没事，我在呢。", voice_id="rin", emotion="happy")
+    body = provider._build_body(req, "rin", stream=False)
+    assistant_content = body["messages"][1]["content"]
+    assert "[" not in assistant_content
+    assert "温柔地说" not in assistant_content
+    assert "没事，我在呢。" in assistant_content
+
+
+def test_build_body_strips_fish_markup_on_clone_path(provider):
+    """Fish-primary → MiMo-clone-fallback path also gets clean text."""
+    req = TTSRequest(text="[压着情绪]你怎么才来。", voice_id="rin", emotion="neutral")
+    body = provider._build_body(
+        req, "rin", stream=False, reference_data_uri="data:audio/wav;base64,AAAA"
+    )
+    assistant_content = body["messages"][1]["content"]
+    assert "[" not in assistant_content
+    assert "压着情绪" not in assistant_content
+    assert "你怎么才来。" in assistant_content

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import base64
 import json
+import re
 import uuid
 from typing import Any, AsyncGenerator
 
@@ -110,6 +111,28 @@ _EMOTION_TAGS: dict[str, str] = {
     "surprised": "(惊讶)",
     "neutral": "",
 }
+
+# VoiceDirector runs before provider selection and decorates req.text with
+# Fish S2 control markup — leading [中文指令] emotion instructions, e.g.
+# "[温柔地说]你好". Those brackets are Fish-only control tokens; MiMo has NO
+# isolation for them and would read "[温柔地说]" aloud as literal speech. MiMo
+# carries emotion through its own structured channel (req.emotion → _EMOTION_TAGS
+# / _EMOTION_DIRECTIVES), so the bracket markup is redundant here and must be
+# stripped. This also covers the Fish-primary → MiMo-fallback path, where MiMo
+# receives already-decorated text. The main synthesis path pre-strips native
+# brackets via _extract_tts_stage_directions, so any [...] reaching here is
+# director-injected control markup, safe to remove wholesale.
+_FISH_S2_MARKUP = re.compile(r"\[[^\[\]\n]*\]")
+
+
+def _strip_fish_markup(text: str) -> str:
+    """Remove Fish S2 [中文指令] control markup so MiMo never speaks it aloud."""
+    if "[" not in text:
+        return text
+    stripped = _FISH_S2_MARKUP.sub("", text)
+    # Collapse the whitespace a removed leading tag may leave behind.
+    return re.sub(r"\s{2,}", " ", stripped).strip()
+
 
 _CHUNK_SIZE = 48000  # ~1 second @ 24 kHz PCM16 — larger chunks reduce decode frequency
 
@@ -357,7 +380,8 @@ class MiMoProvider:
     ) -> dict:
         emotion = req.emotion if req.emotion in _VALID_EMOTIONS else "neutral"
         emotion_tag = _EMOTION_TAGS.get(emotion, "")
-        assistant_content = f"{emotion_tag}{req.text}" if emotion_tag else req.text
+        spoken_text = _strip_fish_markup(req.text)
+        assistant_content = f"{emotion_tag}{spoken_text}" if emotion_tag else spoken_text
 
         audio_config: dict[str, Any] = {"format": "pcm16"}
         if req.speed != 1.0:
