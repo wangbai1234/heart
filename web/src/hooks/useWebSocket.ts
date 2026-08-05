@@ -497,6 +497,10 @@ export function useWebSocket() {
         // voiceChatEnabled setting. Only the call page passes this; the text
         // chat page leaves it undefined so the user's toggle still governs.
         forceVoice?: boolean
+        // 'call' tags this turn as a voice-call turn — the backend persists it
+        // with channel='call' so it's hidden from chat history (replaced by a
+        // single call-summary bubble on hang-up). Default 'chat'.
+        channel?: 'chat' | 'call'
       },
     ) => {
       if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
@@ -555,6 +559,7 @@ export function useWebSocket() {
           turn_id: turnId,
           voice_enabled: voiceEnabled,
           model,
+          channel: opts?.channel ?? 'chat',
           ...(vb?.audioUrl ? { audio_url: vb.audioUrl } : {}),
         }),
       )

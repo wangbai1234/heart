@@ -9,7 +9,8 @@ import { useCompanionsStore } from '../stores/companionsStore'
 import { stageLabel, stageWithIntimacy, stageOrderIndex } from '../utils/relationship'
 import { useWebSocket } from '../hooks/useWebSocket'
 import { useProactiveStore } from '../stores/proactiveStore'
-import { getChatHistory, generateOpening, ackProactive, markCharacterRead, transcribeAudio } from '../services/api'
+import { getChatHistory, generateOpening, ackProactive, markCharacterRead, transcribeAudio, getCharacterVoice } from '../services/api'
+import { useToastStore } from '../stores/toastStore'
 // DISABLED 2026-07-24: 角色↔剧情关联功能暂停，见下方渲染块注释
 // import { StoryInviteCard, isHookOnCooldown } from './StoryInviteCard'
 import { BreathingDots } from './ui/BreathingDots'
@@ -42,7 +43,11 @@ function historyItemToMessage(item: HistoryItem): Message {
     timestamp: new Date(item.created_at).getTime(),
     // Prefer the server-provided kind (TEST_REPORT_20260712 BUG-5). Falls back
     // to modality when the server response is old (no `kind` field).
-    kind: item.kind === 'action' ? 'action' : isVoice ? 'voice' : 'text',
+    kind: item.kind === 'action'
+      ? 'action'
+      : item.kind === 'call_summary'
+        ? 'call_summary'
+        : isVoice ? 'voice' : 'text',
     audioUrl: isVoice && item.audio_url ? `/api/chat/audio/${item.id}` : undefined,
     audioDuration: item.audio_duration_ms ?? undefined,
     audioFormat: isVoice ? 'wav' : undefined,
@@ -392,6 +397,24 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
     interrupt()
   }, [interrupt])
 
+  // 语音通话入口：先校验角色是否已配置音色。未配置 → 提示并跳配置页，不进通话页
+  // （通话页无文字回退，进去只会一直失败）。校验用与语音聊天弹窗一致的 has_voice。
+  const handleVoiceCall = useCallback(async () => {
+    try {
+      const res = await getCharacterVoice(currentCharacterId)
+      const hasVoice = res.has_voice ?? res.clone_status === 'ready'
+      if (!hasVoice) {
+        useToastStore.getState().show('该角色暂未配置音色，请先选择一个音色', 'info')
+        navigate(`/characters/new?voice=${currentCharacterId}`)
+        return
+      }
+    } catch {
+      useToastStore.getState().show('音色状态获取失败，请稍后重试', 'error')
+      return
+    }
+    navigate(`/call/${currentCharacterId}`)
+  }, [currentCharacterId, navigate])
+
   const showToast = useCallback((msg: string) => {
     setRecordingToast(msg)
     setTimeout(() => setRecordingToast(null), 2500)
@@ -515,6 +538,26 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
               : 'bg-[var(--color-glass-75)] backdrop-blur-[16px] rounded-[20px_20px_20px_6px] border border-[var(--color-border-glass)]'
           }`}>
             <BreathingDots />
+          </div>
+        </div>
+      )
+    }
+
+    // Call-summary bubble — WeChat-style centred pill shown after a voice call
+    // ends. content holds mm:ss. Replaces the N per-turn voice bubbles (those
+    // are hidden server-side via channel='call').
+    if (msg.kind === 'call_summary') {
+      return (
+        <div className="flex justify-center my-1">
+          <div className={`inline-flex items-center gap-2 max-w-[80%] px-3.5 py-2 rounded-full text-[13px] ${
+            isDark
+              ? 'bg-[rgba(255,255,255,0.07)] text-[rgba(228,228,231,0.7)]'
+              : 'bg-[rgba(0,0,0,0.05)] text-[rgba(45,50,72,0.66)]'
+          }`}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.573 2.81.7A2 2 0 0 1 22 16.92Z" />
+            </svg>
+            <span>通话时长 {msg.content}</span>
           </div>
         </div>
       )
@@ -879,13 +922,13 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
             <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
           </svg>
         </button>
-        {/* + 菜单：语音聊天 / 语音通话 */}
+        {/* + 菜单：语音聊天 / 语音通话（与发送键同尺寸 44x44） */}
         <button
           onClick={() => setPlusMenuOpen(true)}
           aria-label="更多"
-          className="w-[40px] h-[40px] flex items-center justify-center shrink-0"
+          className="w-[44px] h-[44px] flex items-center justify-center shrink-0 active:scale-90 transition-transform"
         >
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={isDark ? '#999' : '#888'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke={isDark ? '#999' : '#888'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="12" cy="12" r="9" />
             <line x1="12" y1="8" x2="12" y2="16" />
             <line x1="8" y1="12" x2="16" y2="12" />
@@ -905,7 +948,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
         onClose={() => setPlusMenuOpen(false)}
         isDark={isDark}
         onVoiceChat={() => setVoiceChatOpen(true)}
-        onVoiceCall={() => navigate(`/call/${currentCharacterId}`)}
+        onVoiceCall={handleVoiceCall}
       />
       <VoiceChatSheet
         open={voiceChatOpen}
