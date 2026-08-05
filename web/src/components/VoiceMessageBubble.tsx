@@ -73,17 +73,27 @@ export default function VoiceMessageBubble({
       return
     }
 
-    const mimeType = format === 'mp3' ? 'audio/mpeg' : 'audio/wav'
-    const byteCharacters = atob(audioData)
-    const byteNumbers = new Array(byteCharacters.length)
-    for (let i = 0; i < byteCharacters.length; i++) {
-      byteNumbers[i] = byteCharacters.charCodeAt(i)
+    // Live base64 → object URL. A malformed payload (bad base64, truncated
+    // stream) must NOT throw out of the effect and leave audioUrl null with no
+    // path forward: that's the "click does nothing, only a refresh fixes it"
+    // dead end. On failure we leave audioUrl null so handlePlayPause routes to
+    // the durable server file (fallbackUrl / by-turn) — the same source a
+    // refresh replays.
+    try {
+      const mimeType = format === 'mp3' ? 'audio/mpeg' : 'audio/wav'
+      const byteCharacters = atob(audioData)
+      const byteNumbers = new Array(byteCharacters.length)
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i)
+      }
+      const byteArray = new Uint8Array(byteNumbers)
+      const blob = new Blob([byteArray], { type: mimeType })
+      const url = URL.createObjectURL(blob)
+      objectUrlRef.current = url
+      setAudioUrl(url)
+    } catch {
+      setAudioUrl(null)
     }
-    const byteArray = new Uint8Array(byteNumbers)
-    const blob = new Blob([byteArray], { type: mimeType })
-    const url = URL.createObjectURL(blob)
-    objectUrlRef.current = url
-    setAudioUrl(url)
   }, [audioData, format])
 
   // Revoke any object URL we created, on unmount only (the effect above manages
@@ -270,8 +280,18 @@ export default function VoiceMessageBubble({
     if (audioData.startsWith('/api/')) {
       const url = await fetchApiAudio()
       if (url) startPlayback(url)
+      return
     }
-  }, [audioData, audioUrl, isPlaying, stopPlayback, startPlayback, fetchApiAudio])
+    // No resolved live URL AND audioData isn't an /api pointer — i.e. the live
+    // base64 blob couldn't be built (bad/truncated stream, or a codec the live
+    // path can't decode). Without this branch the tap is a silent no-op and only
+    // a page refresh (which drops audioData and replays via the server file)
+    // recovers it. Fall back to the durable server object right now instead.
+    if (fallbackUrl) {
+      const url = await fetchApiAudio(fallbackUrl)
+      if (url) startPlayback(url, false)
+    }
+  }, [audioData, audioUrl, isPlaying, stopPlayback, startPlayback, fetchApiAudio, fallbackUrl])
 
   const durationSeconds = Math.max(1, Math.ceil(duration / 1000))
   const durationLabel = `${durationSeconds}''`

@@ -554,7 +554,11 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
             <div className="flex items-end gap-2">
               <div className="flex-1">
                 <VoiceMessageBubble
-                  audioData={msg.audioData ?? msg.audioUrl ?? ''}
+                  // Match the render gate above (|| — treats '' as absent). With
+                  // ?? an empty-string audioData would be handed through instead
+                  // of falling back to the durable audioUrl, stranding the bubble
+                  // on a source it can't play.
+                  audioData={msg.audioData || msg.audioUrl || ''}
                   duration={msg.audioDuration ?? 3000}
                   format={msg.audioFormat ?? 'wav'}
                   isDark={isDark}
