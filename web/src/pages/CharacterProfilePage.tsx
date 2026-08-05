@@ -67,10 +67,9 @@ export function CharacterProfilePage() {
   // direction 2026-07-25) rather than a blurred avatar placeholder.
   const cover = profile?.cover_url || DEFAULT_COVER
 
-  const openChat = () => navigate(`/chat/${id}`)
-  const openBackstage = () => {
+  const openChat = () => {
     setCharacter(id)
-    navigate('/character-backstage')
+    navigate(`/chat/${id}`)
   }
 
   if (error) {
@@ -222,16 +221,6 @@ export function CharacterProfilePage() {
         </div>
       )}
 
-      {/* ── secondary entry ── */}
-      <button
-        onClick={openBackstage}
-        className="mx-4 mb-6 w-[calc(100%-2rem)] h-[52px] rounded-[18px] bg-[var(--color-glass-55)] border border-[var(--color-border-glass)] flex items-center justify-between px-5 text-[15px] text-[var(--color-ink)] active:scale-[0.98] transition-transform"
-      >
-        <span>声音与陪伴设置</span>
-        <svg width="8" height="14" viewBox="0 0 8 14" fill="none" stroke="var(--color-text-muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <polyline points="1,1 7,7 1,13" />
-        </svg>
-      </button>
 
       <div style={{ height: 'var(--safe-bottom)' }} />
     </div>

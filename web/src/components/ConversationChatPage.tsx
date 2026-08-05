@@ -20,6 +20,10 @@ import VoiceMessageBubble from './VoiceMessageBubble'
 import { useSwipeNavigation } from '../hooks/useSwipeNavigation'
 import { useVoiceRecorder } from '../hooks/useVoiceRecorder'
 import { VoiceRecordingOverlay } from './VoiceRecordingOverlay'
+import { TextTierSheet } from './TextTierSheet'
+import { ChatPlusMenu } from './ChatPlusMenu'
+import { VoiceChatSheet } from './VoiceChatSheet'
+import { getCharacterSettings } from '../services/api'
 
 const EMPTY_MESSAGES: Message[] = []
 
@@ -57,6 +61,11 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
   const [generatingOpening, setGeneratingOpening] = useState(false)
   const [expandedVoiceTextIds, setExpandedVoiceTextIds] = useState<Set<string>>(new Set())
   const scrollRef = useRef<HTMLDivElement>(null)
+
+  // Input-area sheets (migrated from the deleted /character-backstage page).
+  const [textTierOpen, setTextTierOpen] = useState(false)
+  const [plusMenuOpen, setPlusMenuOpen] = useState(false)
+  const [voiceChatOpen, setVoiceChatOpen] = useState(false)
 
   // Voice recording state
   const [isRecording, setIsRecording] = useState(false)
@@ -110,6 +119,20 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
   const clearModelForbidden = useChatStore((s) => s.clearModelForbidden)
 
   const { sendMessage, interrupt } = useWebSocket()
+
+  // Current text tier (deepseek/grok) for the input-bar entry label.
+  const chatModel = useAppStore((s) => s.chatModel[currentCharacterId as CharacterId] ?? 'deepseek')
+  const setVoiceChatEnabled = useAppStore((s) => s.setVoiceChatEnabled)
+  const textTierLabel = chatModel === 'grok' ? '私密陪伴' : '普通交流'
+
+  // Sync server-side voice_enabled once on mount (previously done by the
+  // backstage page). Keeps the +菜单/语音聊天 toggle honest without opening it.
+  useEffect(() => {
+    if (!isAuthenticated()) return
+    getCharacterSettings(currentCharacterId)
+      .then((res) => setVoiceChatEnabled(currentCharacterId as CharacterId, res.voice_enabled))
+      .catch(() => { /* keep local value */ })
+  }, [currentCharacterId, isAuthenticated, setVoiceChatEnabled])
 
   const currentCharacter = serverCharacters.find((c) => c.id === currentCharacterId)
   const displayName = currentCharacter?.display_name
@@ -684,9 +707,8 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
             )}
           </div>
         </div>
-        <button onClick={() => navigate('/character-backstage')} className="w-[44px] h-[44px] flex items-center justify-center" aria-label="打开角色后台">
-          <span className={`text-[20px] ${isDark ? 'text-[#E4E4E7]' : 'text-[var(--color-ink)]'}`}>···</span>
-        </button>
+        {/* header 右侧占位：原「角色后台」入口已下线，设置内联到输入区 */}
+        <div className="w-[44px] h-[44px] shrink-0" />
       </header>
 
       {/* AI-generated content disclaimer */}
@@ -781,6 +803,26 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
         {/* Streaming indicator - avatar is already in the bubble via renderMessage */}
       </div>
 
+      {/* 文字聊天档位入口（输入框左上角） */}
+      <div className="relative z-20 mx-4 mb-1.5 flex items-center">
+        <button
+          onClick={() => setTextTierOpen(true)}
+          className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-[12px] font-medium backdrop-blur-[14px] active:scale-[0.97] transition-transform ${
+            isDark
+              ? 'bg-[rgba(255,255,255,0.08)] text-[rgba(248,242,250,0.82)] border border-[rgba(255,255,255,0.08)]'
+              : 'bg-[rgba(255,255,255,0.58)] text-[rgba(91,93,117,0.9)] border border-[rgba(255,255,255,0.74)]'
+          }`}
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+          </svg>
+          <span>{textTierLabel}</span>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="6,9 12,15 18,9" />
+          </svg>
+        </button>
+      </div>
+
       {/* Input bar */}
       <div
         className={`relative z-20 mx-3 mb-3 flex items-center gap-3 px-4 py-3 backdrop-blur-[24px] rounded-[28px] border ${
@@ -837,7 +879,40 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
             <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
           </svg>
         </button>
+        {/* + 菜单：语音聊天 / 语音通话 */}
+        <button
+          onClick={() => setPlusMenuOpen(true)}
+          aria-label="更多"
+          className="w-[40px] h-[40px] flex items-center justify-center shrink-0"
+        >
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={isDark ? '#999' : '#888'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="9" />
+            <line x1="12" y1="8" x2="12" y2="16" />
+            <line x1="8" y1="12" x2="16" y2="12" />
+          </svg>
+        </button>
       </div>
+
+      {/* 输入区弹窗（文字档位 / +菜单 / 语音聊天开关） */}
+      <TextTierSheet
+        open={textTierOpen}
+        onClose={() => setTextTierOpen(false)}
+        characterId={currentCharacterId as CharacterId}
+        isDark={isDark}
+      />
+      <ChatPlusMenu
+        open={plusMenuOpen}
+        onClose={() => setPlusMenuOpen(false)}
+        isDark={isDark}
+        onVoiceChat={() => setVoiceChatOpen(true)}
+        onVoiceCall={() => navigate(`/call/${currentCharacterId}`)}
+      />
+      <VoiceChatSheet
+        open={voiceChatOpen}
+        onClose={() => setVoiceChatOpen(false)}
+        characterId={currentCharacterId as CharacterId}
+        isDark={isDark}
+      />
 
       {/* Insufficient credits dialog */}
       <Dialog open={!!insufficientCredits} onClose={clearInsufficientCredits} title="yuoyuo币不足">

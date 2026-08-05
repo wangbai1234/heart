@@ -491,7 +491,13 @@ export function useWebSocket() {
   const sendMessage = useCallback(
     (
       text: string,
-      opts?: { voiceBubble?: { audioData: string; durationMs: number; format: string; audioUrl?: string | null } },
+      opts?: {
+        voiceBubble?: { audioData: string; durationMs: number; format: string; audioUrl?: string | null }
+        // Voice-call mode forces a spoken reply regardless of the per-character
+        // voiceChatEnabled setting. Only the call page passes this; the text
+        // chat page leaves it undefined so the user's toggle still governs.
+        forceVoice?: boolean
+      },
     ) => {
       if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) return
 
@@ -502,7 +508,7 @@ export function useWebSocket() {
       if (useChatStore.getState().isStreaming[characterId]) return
       activeCharRef.current = characterId
       const { voiceChatEnabled, chatModel } = useAppStore.getState()
-      const voiceEnabled = voiceChatEnabled?.[characterId] ?? false
+      const voiceEnabled = opts?.forceVoice || (voiceChatEnabled?.[characterId] ?? false)
       const model = chatModel?.[characterId] ?? 'deepseek'
       pendingVoiceTurnRef.current = voiceEnabled
       const turnId = crypto.randomUUID()

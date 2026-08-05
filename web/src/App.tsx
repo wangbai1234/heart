@@ -13,7 +13,7 @@ import { ChatLightPage } from './pages/ChatLightPage'
 import { ChatDarkPage } from './pages/ChatDarkPage'
 import { CharacterPage } from './pages/CharacterPage'
 import { CharacterProfilePage } from './pages/CharacterProfilePage'
-import { CharacterBackstagePage } from './pages/CharacterBackstagePage'
+import { VoiceCallPage } from './pages/VoiceCallPage'
 import { SettingsPage } from './pages/SettingsPage'
 import { ProfileEditPage } from './pages/ProfileEditPage'
 import { TransactionsPage } from './pages/TransactionsPage'
@@ -49,6 +49,11 @@ import { useSwipeNavigation } from './hooks/useSwipeNavigation'
 function ChatConversationRouter() {
   const { resolvedTheme } = useThemeStore()
   return resolvedTheme === 'dark' ? <ChatDarkPage /> : <ChatLightPage />
+}
+
+function VoiceCallRouter() {
+  const { resolvedTheme } = useThemeStore()
+  return <VoiceCallPage isDark={resolvedTheme === 'dark'} />
 }
 
 // Catch-all target. Unknown routes previously all bounced to /splash, which
@@ -222,10 +227,10 @@ export function App() {
         <Route path="/create" element={<CreateHubPage />} />
         <Route path="/chat" element={<ChatInboxPage />} />
         <Route path="/chat/:characterId" element={<ChatConversationRouter />} />
+        <Route path="/call/:characterId" element={<VoiceCallRouter />} />
         <Route path="/explore" element={<ExplorePage />} />
         <Route path="/explore/:scenarioId" element={<ScenarioDetailPage />} />
         <Route path="/story/:runId" element={<StoryPlayerPage />} />
-        <Route path="/character-backstage" element={<CharacterBackstagePage />} />
         <Route path="/character" element={<CharacterPage />} />
         <Route path="/character/:id" element={<CharacterProfilePage />} />
         <Route path="/settings" element={<SettingsPage />} />
