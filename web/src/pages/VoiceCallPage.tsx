@@ -8,7 +8,7 @@ import { resolveCharacterProfile, type CharacterId } from '../data/uiContent'
 import { useWebSocket } from '../hooks/useWebSocket'
 import { useVoiceRecorder } from '../hooks/useVoiceRecorder'
 import { useCallAudioPlayer } from '../hooks/useCallAudioPlayer'
-import { transcribeAudio } from '../services/api'
+import { transcribeAudio, createCallSummary } from '../services/api'
 
 interface VoiceCallPageProps {
   isDark: boolean
@@ -41,6 +41,16 @@ export function VoiceCallPage({ isDark: _isDark }: VoiceCallPageProps) {
   const [menuOpen, setMenuOpen] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
   const busyRef = useRef(false)
+  // Call bookkeeping: wall-clock start, whether the user ever spoke (skip the
+  // summary for an instant open→close with no exchange), and an ended guard so
+  // hang-up + unmount can't both post the summary.
+  const startedAtRef = useRef<number>(Date.now())
+  const spokeRef = useRef(false)
+  const endedRef = useRef(false)
+  // Message ids present before the call. Everything added during the call is a
+  // channel='call' turn — hidden from chat history server-side, so we strip the
+  // optimistic copies from the store on end and drop in one summary bubble.
+  const preCallIdsRef = useRef<Set<string>>(new Set(messages.map((m) => m.id)))
 
   const character = serverCharacters.find((c) => c.id === characterId)
   const profile = resolveCharacterProfile(characterId, character?.display_name, character?.avatar_url, {
@@ -105,19 +115,56 @@ export function VoiceCallPage({ isDark: _isDark }: VoiceCallPageProps) {
         return
       }
       const blobUrl = URL.createObjectURL(wavBlob)
+      spokeRef.current = true
       sendMessage(transcript, {
         voiceBubble: { audioData: blobUrl, durationMs, format: 'wav', audioUrl: audio_url },
         forceVoice: true,
+        channel: 'call',
       })
     } catch (err: unknown) {
       showToast(err instanceof Error ? err.message : '语音识别失败')
     }
   }, [isRecording, recorder, sendMessage, showToast])
 
-  const hangUp = useCallback(() => {
+  // End the call: persist one call-summary bubble (only if the user actually
+  // spoke — an instant open→close leaves no trace), strip the optimistic
+  // channel='call' turns from the store, and force the chat page to refetch so
+  // it shows the single server-owned summary bubble (never the N call turns).
+  // Idempotent via endedRef so hang-up + unmount can't double-run.
+  const endCall = useCallback(async () => {
+    if (endedRef.current) return
+    endedRef.current = true
     stopPlayback()
+    // Drop the in-memory call turns immediately so no voice bubble flashes on
+    // the chat page before the refetch lands.
+    const keep = preCallIdsRef.current
+    useChatStore.setState((s) => ({
+      messages: {
+        ...s.messages,
+        [characterId]: (s.messages[characterId] ?? []).filter((m) => keep.has(m.id)),
+      },
+    }))
+    if (spokeRef.current) {
+      const durationMs = Date.now() - startedAtRef.current
+      try {
+        await createCallSummary(characterId, durationMs)
+      } catch { /* summary is best-effort; the call turns are already hidden */ }
+    }
+    // Mark history stale so ConversationChatPage refetches on mount and pulls
+    // the summary row (call turns are hidden server-side via channel='call').
+    useChatStore.getState().setLastFetchedAt(characterId, 0)
+  }, [stopPlayback, characterId])
+
+  const hangUp = useCallback(async () => {
+    await endCall()
     navigate(`/chat/${characterId}`)
-  }, [stopPlayback, navigate, characterId])
+  }, [endCall, navigate, characterId])
+
+  // Leaving the page by ANY route (hang-up, browser back, edge-swipe) ends the
+  // call. endCall is idempotent, so this cleanup is safe alongside hangUp.
+  useEffect(() => {
+    return () => { endCall() }
+  }, [endCall])
 
   if (!isAuthenticated()) {
     navigate('/login', { replace: true })
@@ -137,8 +184,8 @@ export function VoiceCallPage({ isDark: _isDark }: VoiceCallPageProps) {
       <div className="absolute inset-0 z-0 bg-black/55" />
       <div className="absolute inset-0 z-0 bg-gradient-to-b from-black/40 via-transparent to-black/70" />
 
-      {/* 左上角 ··· 字幕开关 */}
-      <div className="absolute z-20 left-4" style={{ top: 'calc(var(--safe-top) + 12px)' }}>
+      {/* 右上角 ··· 字幕开关 */}
+      <div className="absolute z-20 right-4 flex flex-col items-end" style={{ top: 'calc(var(--safe-top) + 12px)' }}>
         <button
           onClick={(e) => { e.stopPropagation(); setMenuOpen((v) => !v) }}
           aria-label="通话设置"

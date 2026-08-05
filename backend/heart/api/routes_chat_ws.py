@@ -17,6 +17,7 @@ from urllib.parse import urlparse
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.responses import Response
+from pydantic import BaseModel
 from sqlalchemy import text as sql_text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -364,6 +365,7 @@ async def _charge_and_insert_bubbles(
     per_message_cost: int,
     audio_url: Optional[str],
     audio_duration_ms: Optional[int],
+    channel: str = "chat",
 ) -> tuple[int, int]:
     """Deduct credits and INSERT assistant rows.
 
@@ -407,10 +409,10 @@ async def _charge_and_insert_bubbles(
                     "INSERT INTO chat_messages "
                     "(id, user_id, character_id, turn_id, role, content, modality, "
                     " audio_url, audio_duration_ms, credits_charged, sequence_id, kind, "
-                    " created_at) "
+                    " channel, created_at) "
                     "VALUES (:id, :uid, :cid, :tid, 'assistant', :content, :modality, "
                     "        :audio_url, :audio_dur, :credits, :seq_id, :kind, "
-                    "        clock_timestamp())"
+                    "        :channel, clock_timestamp())"
                 ),
                 {
                     "id": uuid.uuid4(),
@@ -424,6 +426,7 @@ async def _charge_and_insert_bubbles(
                     "credits": credits_this_row,
                     "seq_id": i,
                     "kind": kind,
+                    "channel": channel,
                 },
             )
         except InsufficientCreditsError as ice:
@@ -570,6 +573,7 @@ async def _post_turn_billing(
     degraded_to: Optional[str] = None,
     tts_provider: str = "",
     user_audio_url: str = "",
+    channel: str = "chat",
 ) -> None:
     """Charge credits and persist chat messages after turn completes.
 
@@ -598,8 +602,8 @@ async def _post_turn_billing(
             await db.execute(
                 sql_text(
                     "INSERT INTO chat_messages "
-                    "(id, user_id, character_id, turn_id, role, content, modality, audio_url, created_at) "
-                    "VALUES (:id, :uid, :cid, :tid, 'user', :content, :modality, :audio_url, NOW())"
+                    "(id, user_id, character_id, turn_id, role, content, modality, audio_url, channel, created_at) "
+                    "VALUES (:id, :uid, :cid, :tid, 'user', :content, :modality, :audio_url, :channel, NOW())"
                 ),
                 {
                     "id": uuid.uuid4(),
@@ -609,6 +613,7 @@ async def _post_turn_billing(
                     "content": user_text,
                     "modality": _user_modality,
                     "audio_url": user_audio_url or None,
+                    "channel": channel,
                 },
             )
 
@@ -631,6 +636,7 @@ async def _post_turn_billing(
                     per_message_cost,
                     audio_url,
                     audio_duration_ms,
+                    channel=channel,
                 )
                 if total_charged == -1:
                     return  # InsufficientCreditsError already handled
@@ -831,6 +837,10 @@ async def _handle_chat_message(
     character_id = msg.get("character_id", "rin")
     # Requested LLM model — default to deepseek (free, unlimited).
     model = msg.get("model", "deepseek") or "deepseek"
+    # 'chat' (default) or 'call'. Call turns are persisted (billing / audio /
+    # memory all need the row) but hidden from chat history — replaced by a
+    # single call-summary bubble on hang-up. Whitelist to keep the column clean.
+    channel = "call" if msg.get("channel") == "call" else "chat"
 
     if not user_text:
         await ws.send_json(
@@ -1051,6 +1061,7 @@ async def _handle_chat_message(
                 degraded_to=degraded_to,
                 tts_provider=stream_session.tts_provider_name if stream_session else "",
                 user_audio_url=user_audio_url,
+                channel=channel,
             )
             _terminal_sent = True
     finally:
@@ -1170,6 +1181,7 @@ async def get_chat_history(
                        credits_charged, turn_id, created_at, kind
                 FROM chat_messages
                 WHERE user_id = :uid AND character_id = :cid AND created_at < :cursor
+                  AND channel <> 'call'
                 ORDER BY created_at DESC, sequence_id DESC
                 LIMIT :limit
             """),
@@ -1182,6 +1194,7 @@ async def get_chat_history(
                        credits_charged, turn_id, created_at, kind
                 FROM chat_messages
                 WHERE user_id = :uid AND character_id = :cid
+                  AND channel <> 'call'
                 ORDER BY created_at DESC, sequence_id DESC
                 LIMIT :limit
             """),
@@ -1214,6 +1227,51 @@ async def get_chat_history(
         ],
         "next_cursor": items[-1]["created_at"].isoformat() if has_next and items else None,
     }
+
+
+class CallSummaryBody(BaseModel):
+    character_id: str
+    duration_ms: int
+
+
+@router.post("/api/chat/call-summary")
+async def create_call_summary(
+    body: CallSummaryBody,
+    current_user: TokenData = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Persist a single WeChat-style call-summary bubble after a voice call ends.
+
+    The per-turn call rows are stored with channel='call' and hidden from
+    history; this one visible row (kind='call_summary', channel='chat') carries
+    the total duration so the chat thread shows "通话时长 XX:XX" instead of N
+    voice bubbles. content holds the mm:ss string; the frontend renders it as a
+    centred pill. Not charged (billing already happened per turn).
+    """
+    uid = uuid.UUID(current_user.user_id)
+    await ensure_character_loaded(body.character_id, db)
+
+    secs = max(0, body.duration_ms // 1000)
+    content = f"{secs // 60:02d}:{secs % 60:02d}"
+
+    await db.execute(
+        sql_text(
+            "INSERT INTO chat_messages "
+            "(id, user_id, character_id, turn_id, role, content, modality, "
+            " kind, channel, created_at) "
+            "VALUES (:id, :uid, :cid, :tid, 'assistant', :content, 'text', "
+            "        'call_summary', 'chat', NOW())"
+        ),
+        {
+            "id": uuid.uuid4(),
+            "uid": uid,
+            "cid": body.character_id,
+            "tid": uuid.uuid4(),
+            "content": content,
+        },
+    )
+    await db.commit()
+    return {"ok": True, "duration": content}
 
 
 # ── REST: Opening Scene Generation ────────────────────────────────────

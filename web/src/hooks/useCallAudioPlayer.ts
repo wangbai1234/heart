@@ -16,6 +16,17 @@ export function useCallAudioPlayer(characterId: CharacterId) {
   const audioElRef = useRef<HTMLAudioElement | null>(null)
   const objectUrlRef = useRef<string | null>(null)
   const playedIdsRef = useRef<Set<string>>(new Set())
+  const seededRef = useRef(false)
+
+  // Seed every message already on screen as "played" BEFORE the auto-play effect
+  // can fire. A user-initiated call must open silently — the character speaks
+  // only in reply to the user, never by re-reading the last chat bubble on
+  // entry (the "发起通话角色播放之前的语音" bug). Runs once, synchronously on the
+  // first render, so no historical bubble is ever eligible for auto-play.
+  if (!seededRef.current) {
+    for (const m of messages) playedIdsRef.current.add(m.id)
+    seededRef.current = true
+  }
 
   const cleanupUrl = useCallback(() => {
     if (objectUrlRef.current) {

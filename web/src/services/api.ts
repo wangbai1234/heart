@@ -599,8 +599,8 @@ export async function getChatHistory(
     credits_charged: number | null
     turn_id: string | null
     created_at: string
-    /** 'action' for grey pill bubbles, 'text' for spoken dialog, 'voice' for audio messages. */
-    kind: 'text' | 'action' | 'voice' | null
+    /** 'action' grey pill, 'text' dialog, 'voice' audio, 'call_summary' 通话时长条. */
+    kind: 'text' | 'action' | 'voice' | 'call_summary' | null
   }>
   next_cursor: string | null
 }> {
@@ -1015,6 +1015,19 @@ export async function transcribeAudio(
   const data = await res.json().catch(() => null)
   if (!res.ok) throw new ApiError(res.status, detailToMessage(data?.detail, '语音识别失败'))
   return data
+}
+
+// Persist a single WeChat-style call-summary bubble after a voice call ends.
+// The per-turn call rows are hidden from history (channel='call'); this row
+// (kind='call_summary') shows the total duration. Returns the mm:ss string.
+export async function createCallSummary(
+  characterId: string,
+  durationMs: number,
+): Promise<{ ok: boolean; duration: string }> {
+  return request('/chat/call-summary', {
+    method: 'POST',
+    body: JSON.stringify({ character_id: characterId, duration_ms: durationMs }),
+  })
 }
 
 // --- Proactive messages (SS06 Inner Loop) ---

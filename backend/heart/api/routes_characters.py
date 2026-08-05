@@ -363,18 +363,26 @@ async def update_character_settings(
 ) -> dict:
     """Update per-character voice toggle (upsert).
 
-    Returns 409 when voice_enabled=True is requested but the character has no
-    voice configured yet (has_voice=FALSE).
+    Returns 409 when voice_enabled=True is requested but THIS user has no
+    voice this character can speak in.
     """
     await _require_known_character(character_id, db)
     uid = uuid.UUID(current_user.user_id)
 
     if body.voice_enabled:
-        has_voice_result = await db.execute(
-            text("SELECT has_voice FROM characters WHERE id = :cid"),
-            {"cid": character_id},
+        # Resolve per-user, not the global characters.has_voice flag: a personal
+        # override (non-owner picks a preset for an imported character) makes a
+        # ready character_voices row but never sets the global flag — the old
+        # check 409'd right after the user configured a voice (the "配好音色后
+        # 开语音仍提示未配置并跳回配置页" bug). get_voice_config mirrors exactly
+        # what the config sheet's has_voice reads, so the two can't disagree.
+        from heart.ss08_voice.voice_catalog import VOICE_CATALOG
+        from heart.ss08_voice.voice_resolver import get_voice_config
+
+        config = await get_voice_config(character_id, db, user_id=uid)
+        has_voice = (config is not None and config["clone_status"] == "ready") or (
+            character_id in VOICE_CATALOG
         )
-        has_voice = has_voice_result.scalar_one_or_none()
         if not has_voice:
             raise HTTPException(
                 status_code=409,
