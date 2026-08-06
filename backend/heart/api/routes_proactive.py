@@ -35,6 +35,25 @@ class AckRequest(BaseModel):
     message_ids: List[UUID]
 
 
+def _serialize_message(m) -> dict:
+    """Shape one ProactiveMessage row for the API response.
+
+    ``segments`` splits the single content string into dialog vs action bubbles
+    (via the same ss05_composer splitter regular replies use) so the frontend
+    renders a proactive ``（叹气）在忙吗？`` as an action pill + a text bubble
+    instead of one run-together bubble. ``content`` is kept verbatim for
+    previews and older clients that ignore ``segments``.
+    """
+    return {
+        "id": str(m.id),
+        "character_id": m.character_id,
+        "content": m.content,
+        "segments": split_response(m.content),
+        "trigger_type": m.trigger_type,
+        "created_at": m.created_at.isoformat(),
+    }
+
+
 @router.get("/pending")
 @limiter.limit("60/minute")
 async def get_pending_messages(
@@ -64,17 +83,7 @@ async def get_pending_messages(
         "user_id": str(user_id),
         "character_id": character_id,
         "count": len(messages),
-        "messages": [
-            {
-                "id": str(m.id),
-                "character_id": m.character_id,
-                "content": m.content,
-                "segments": split_response(m.content),
-                "trigger_type": m.trigger_type,
-                "created_at": m.created_at.isoformat(),
-            }
-            for m in messages
-        ],
+        "messages": [_serialize_message(m) for m in messages],
     }
 
 
