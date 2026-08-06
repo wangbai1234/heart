@@ -430,11 +430,13 @@ export function CreateCharacterPage() {
     }
     setCoverUploading(true)
     try {
-      // Portrait cover: adaptively compress to 800px WebP under ~200KB (matches
-      // the seed importer's budget). Users upload multi-MB phone photos and
-      // won't hand-shrink them, so we degrade quality/dimensions until it fits
-      // rather than rejecting — the backend still enforces its 8MB hard cap.
-      const compressed = await compressImageToTarget(file, 200 * 1024)
+      // Portrait cover doubles as the full-screen chat backdrop, so it must stay
+      // sharp on high-DPR phones. Keep the tall side ≥1080px and allow up to
+      // ~900KB WebP — covers go to S3 (never base64/DB), so the old 200KB/800px
+      // budget was needlessly starving quality and blurring the backdrop. Users
+      // upload multi-MB phone photos and won't hand-shrink them; we degrade
+      // quality (not dimensions) until it fits, and the backend still caps at 8MB.
+      const compressed = await compressImageToTarget(file, 900 * 1024)
       const { cover_url } = await uploadCharacterCover(compressed)
       setCoverUrl(cover_url)
     } catch (err) {

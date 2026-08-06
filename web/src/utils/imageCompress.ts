@@ -60,21 +60,36 @@ export function compressImage(file: File, maxSize: number, quality = 0.85): Prom
  * result is under budget. If even the smallest attempt overshoots we return that
  * smallest attempt (best effort) rather than blocking the upload — the backend
  * still enforces its own 8MB hard limit.
+ *
+ * IMPORTANT — pick `minSize` for the *display* size, not the storage budget.
+ * A character cover is shown full-screen as the chat backdrop; on a 3x-DPR phone
+ * that backdrop is ~1100–1300 physical px wide. `compressImage` caps the *larger*
+ * dimension, so for a 9:16 portrait `maxSize` maps to height and the width lands
+ * at ~0.56×. Letting the ladder collapse to 480/320px produced a ~270px-wide
+ * image upscaled ~4x → the "封面模糊" report. Covers live on S3 (no base64/DB
+ * size cap — that only constrains avatars), so we keep the tall side ≥ minSize
+ * and step quality far harder than dimensions.
  */
 export async function compressImageToTarget(
   file: File,
   targetBytes: number,
-  { startSize = 800, minSize = 320 }: { startSize?: number; minSize?: number } = {},
+  {
+    startSize = 1600,
+    minSize = 1080,
+    startQuality = 0.85,
+  }: { startSize?: number; minSize?: number; startQuality?: number } = {},
 ): Promise<File> {
   // (maxSize, quality) ladder from best→smallest. Quality drops first (cheap,
-  // preserves framing), then dimensions.
+  // preserves framing), then dimensions — but never below `minSize`, so a
+  // full-screen backdrop stays crisp even when the byte budget is tight.
+  const midSize = Math.round((startSize + minSize) / 2)
   const ladder: Array<[number, number]> = [
-    [startSize, 0.8],
-    [startSize, 0.65],
-    [startSize, 0.5],
-    [640, 0.6],
-    [480, 0.6],
-    [minSize, 0.55],
+    [startSize, startQuality],
+    [startSize, 0.72],
+    [startSize, 0.6],
+    [midSize, 0.62],
+    [minSize, 0.6],
+    [minSize, 0.5],
   ]
 
   let smallest: File | null = null
