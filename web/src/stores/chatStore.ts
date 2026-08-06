@@ -14,7 +14,7 @@ export interface Message {
   role: 'user' | 'assistant'
   content: string
   timestamp: number
-  kind?: 'text' | 'voice' | 'action' | 'call_summary'
+  kind?: 'text' | 'voice' | 'action' | 'call_summary' | 'transfer' | 'transfer_receipt'
   duration?: string
   // Live audio buffered during the streaming session (base64). NOT persisted —
   // it is large and only needed for instant playback within the same session.
