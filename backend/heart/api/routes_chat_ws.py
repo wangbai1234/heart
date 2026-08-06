@@ -1599,7 +1599,16 @@ async def get_inbox_summary(
     current_user: TokenData = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
-    """Return per-character last-message summary with server-side unread counts."""
+    """Return per-character last-message summary with server-side unread counts.
+
+    The INNER JOIN to ``characters`` mirrors ``list_characters``' entitlement
+    predicate exactly (active + owned-or-public-approved). Without it the badge
+    counted unread for characters the user can no longer SEE in the inbox list
+    (went private / un-approved / disabled / deleted after they last chatted) —
+    an unread total that was impossible to clear because the row never rendered,
+    so it could never be opened to fire mark-read. That produced the "stuck at N
+    unread, no visible conversation has any" bug.
+    """
     uid = uuid.UUID(current_user.user_id)
     result = await db.execute(
         sql_text("""
@@ -1623,6 +1632,13 @@ async def get_inbox_summary(
                 WHERE user_id = :uid
                 ORDER BY character_id, created_at DESC
             ) m
+            JOIN characters c
+                ON c.id = m.character_id
+               AND c.status = 'active'
+               AND (
+                     c.owner_user_id = :uid
+                     OR (c.visibility = 'public' AND c.review_status = 'approved')
+               )
             LEFT JOIN user_character_read_state rs
                 ON rs.user_id = :uid AND rs.character_id = m.character_id
         """),
