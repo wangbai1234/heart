@@ -129,3 +129,32 @@ async def test_tts_provider_name_empty_before_finish():
     session = StreamSession(svc, AsyncMock())
 
     assert session.tts_provider_name == ""
+
+
+@pytest.mark.asyncio
+async def test_each_sentence_streamed_as_its_own_chunk():
+    """Sentence pipeline: N sentences → N audio_chunk sends, seq 0..N-1.
+
+    This is the latency win — sentence 1's audio ships before later sentences
+    finish synthesizing, instead of one whole-turn chunk at finish().
+    """
+    from heart.ss08_voice.stream_session import StreamSession
+
+    sends: list[tuple] = []
+
+    async def _capture(turn_id, seq, audio, is_last, fmt):
+        sends.append((seq, is_last, fmt))
+
+    svc = _make_voice_service("mimo")
+    session = StreamSession(svc, _capture)
+    await session.start()
+    await session.submit("t1", "第一句。", None, 0.0, None, "rin")
+    await session.submit("t1", "第二句。", None, 0.0, None, "rin")
+    await session.submit("t1", "第三句。", None, 0.0, None, "rin")
+    await session.finish()
+
+    assert [s[0] for s in sends] == [0, 1, 2]  # one chunk per sentence, ordered
+    assert all(s[1] is False for s in sends)  # no chunk claims is_last (turn_end does)
+    # full_audio accumulates every sentence for persistence.
+    assert session.audio_produced is True
+    assert len(session.full_audio) > 0

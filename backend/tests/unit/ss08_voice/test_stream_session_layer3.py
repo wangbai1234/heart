@@ -15,11 +15,17 @@ from heart.ss08_voice.stream_session import StreamSession
 
 
 def _voice_service_capturing() -> tuple[MagicMock, dict]:
-    """VoiceService whose director records the text passed to derive()."""
-    captured: dict = {}
+    """VoiceService whose director records the text of every derive() call.
+
+    Sentence-level pipeline: each sentence is synthesized on its own, so derive()
+    fires once per submit(). ``captured["texts"]`` is the per-sentence list;
+    ``captured["text"]`` keeps the last for callers that only need one.
+    """
+    captured: dict = {"texts": []}
 
     def _derive(*, text, character_id, vad, intimacy, active_emotions, stage_directions):
         captured["text"] = text
+        captured["texts"].append(text)
         req = MagicMock()
         req.format = "mp3"
         req.text = text
@@ -50,11 +56,13 @@ async def test_inline_instructions_kept_and_joined_in_order():
     # Leading [中文指令] rides inline; segments join verbatim for derive().
     svc, captured = _voice_service_capturing()
     session = StreamSession(svc, AsyncMock())
+    await session.start()
     await session.submit("t1", "[轻快地说]你来啦。", None, 0.0, None, "rin")
     await session.submit("t1", "[关切地问]今天怎么没精神？", None, 0.0, None, "rin")
     await session.finish()
 
-    assert captured["text"] == "[轻快地说]你来啦。[关切地问]今天怎么没精神？"
+    # Each sentence synthesized on its own, in arrival order — inline [中文指令] kept.
+    assert captured["texts"] == ["[轻快地说]你来啦。", "[关切地问]今天怎么没精神？"]
 
 
 @pytest.mark.asyncio
@@ -62,11 +70,12 @@ async def test_plain_sentences_pass_through():
     # No instruction brackets → text joined as-is, no injection.
     svc, captured = _voice_service_capturing()
     session = StreamSession(svc, AsyncMock())
+    await session.start()
     await session.submit("t1", "你来啦。", None, 0.0, None, "rin")
     await session.submit("t1", "今天怎么样？", None, 0.0, None, "rin")
     await session.finish()
 
-    assert captured["text"] == "你来啦。今天怎么样？"
+    assert captured["texts"] == ["你来啦。", "今天怎么样？"]
 
 
 @pytest.mark.asyncio
@@ -74,6 +83,7 @@ async def test_action_brackets_stripped_but_instruction_kept():
     # （）actions are removed before TTS; the [中文指令] survives.
     svc, captured = _voice_service_capturing()
     session = StreamSession(svc, AsyncMock())
+    await session.start()
     await session.submit("t1", "[温柔地说]你来啦。（侧头看你）今天怎么样？", None, 0.0, None, "rin")
     await session.finish()
 

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import re
 from typing import Any, Callable, Optional
 
@@ -11,6 +13,14 @@ from heart.ss08_voice.service import VoiceService
 from heart.ss08_voice.voice_cache import VoiceCache, should_cache
 
 logger = structlog.get_logger(__name__)
+
+# Sentinel enqueued by finish() to tell the synth worker no more sentences are
+# coming, so it can drain and exit.
+_FINISH = object()
+
+# Ceiling for draining queued sentences after finish() — bounds a stuck provider
+# so finish() can't hang the turn. The turn-level timeout is the outer backstop.
+_DRAIN_TIMEOUT_S = 40.0
 
 
 # Action-bracket pattern — strips the action/narration namespace
@@ -98,18 +108,19 @@ class StreamSession:
         self.tts_provider_name: str = ""
         self.audio_format: str = ""
         self._all_audio_chunks: list[bytes] = []
-        # Sentence fragments in arrival order. Any leading [中文指令] rides
-        # inline (the LLM emits it); it is joined verbatim and synthesized once.
-        self._text_parts: list[str] = []
-        self._last_turn_id: str | None = None
-        self._last_character_id: str | None = None
-        self._last_vad: dict | None = None
-        self._last_intimacy: float = 0.0
-        self._last_active_emotions: list[Any] = []
+        # Sentence-level pipeline: submit() enqueues one job per sentence; a
+        # background worker (started in start()) synthesizes them in arrival
+        # order and streams each sentence's audio to the client the moment it's
+        # ready — so the character starts speaking sentence 1 while the LLM is
+        # still emitting sentence 3. finish() enqueues _FINISH and awaits drain.
+        self._queue: asyncio.Queue[Any] = asyncio.Queue()
+        self._worker: Optional[asyncio.Task] = None
 
     def cancel(self) -> None:
         """Cancel the stream session."""
         self._cancelled = True
+        if self._worker is not None and not self._worker.done():
+            self._worker.cancel()
         if self._current_response is not None:
             try:
                 self._current_response.aclose()
@@ -141,6 +152,11 @@ class StreamSession:
             return b""
         return b"".join(self._all_audio_chunks)
 
+    async def start(self) -> None:
+        """Start the background synth worker so submit() streams per sentence."""
+        if self._worker is None:
+            self._worker = asyncio.create_task(self._run_worker())
+
     async def submit(
         self,
         turn_id: str,
@@ -150,45 +166,84 @@ class StreamSession:
         active_emotions: list[Any] | None,
         character_id: str,
     ) -> None:
-        """Submit a sentence for TTS synthesis.
+        """Enqueue one sentence for TTS synthesis (non-blocking).
 
-        Layer-3 emotion now rides inline as a leading ``[中文指令]`` the LLM
-        emits at the sentence head; it is preserved verbatim through the TTS
-        path (only the （）/【】 action namespace is stripped) so Fish S2 varies
-        tone per sentence with no backend decoration.
+        The worker synthesizes queued sentences in arrival order and streams
+        each sentence's audio the instant it's ready, so playback of sentence 1
+        overlaps synthesis of later sentences. Layer-3 emotion rides inline as a
+        leading ``[中文指令]`` the LLM emits at the sentence head; it is preserved
+        verbatim through the TTS path (only the （）/【】 action namespace is
+        stripped) so Fish S2 varies tone per sentence with no backend decoration.
         """
         if self._cancelled:
             return
         cleaned = sentence.strip()
         if not cleaned:
             return
-        self._text_parts.append(cleaned)
-        self._last_turn_id = turn_id
-        self._last_character_id = character_id
-        self._last_vad = vad
-        self._last_intimacy = intimacy
-        self._last_active_emotions = active_emotions or []
-
-    async def start(self) -> None:
-        """Start the session."""
-        return None
+        # Defensive: production always calls start() first, but a caller that
+        # skips it must still stream (and finish() must have a worker to drain).
+        if self._worker is None:
+            self._worker = asyncio.create_task(self._run_worker())
+        self._queue.put_nowait(
+            {
+                "turn_id": turn_id,
+                "sentence": cleaned,
+                "vad": vad,
+                "intimacy": intimacy,
+                "active_emotions": active_emotions or [],
+                "character_id": character_id,
+            }
+        )
 
     async def finish(self) -> None:
-        """Synthesize the whole turn once and send a single audio chunk."""
+        """Signal end-of-sentences and wait for the worker to drain the queue.
+
+        A lazily-started worker is normal (start() runs before any submit), but
+        guard for the degenerate no-audio turn where finish() is reached without
+        start() ever having run.
+        """
         if self._cancelled:
             return
-        full_text = "".join(self._text_parts).strip()
-        if not full_text or not self._last_turn_id or not self._last_character_id:
+        if self._worker is None:
             return
-        tts_text, stage_directions = _extract_tts_stage_directions(full_text)
-        tts_text = tts_text or full_text
+        self._queue.put_nowait(_FINISH)
+        with contextlib.suppress(asyncio.TimeoutError, asyncio.CancelledError):
+            await asyncio.wait_for(asyncio.shield(self._worker), timeout=_DRAIN_TIMEOUT_S)
+
+    async def _run_worker(self) -> None:
+        """Drain the sentence queue, synthesizing + streaming each in order."""
+        while True:
+            job = await self._queue.get()
+            if job is _FINISH:
+                return
+            if self._cancelled:
+                continue  # drain to _FINISH without synthesizing
+            while self._paused and not self._cancelled:
+                await asyncio.sleep(0.05)
+            try:
+                await self._synthesize_one(job)
+            except Exception:
+                # One sentence failing must not kill the turn — whatever already
+                # streamed still plays; the turn terminates normally upstream.
+                logger.exception(
+                    "tts_sentence_synth_failed",
+                    character_id=job.get("character_id"),
+                    text_preview=str(job.get("sentence"))[:80],
+                )
+
+    async def _synthesize_one(self, job: dict) -> None:
+        """Synthesize a single sentence and stream its audio to the client."""
+        turn_id = job["turn_id"]
+        character_id = job["character_id"]
+        tts_text, stage_directions = _extract_tts_stage_directions(job["sentence"])
+        tts_text = tts_text or job["sentence"]
 
         req = self._voice.director.derive(
             text=tts_text,
-            character_id=self._last_character_id,
-            vad=self._last_vad,
-            intimacy=self._last_intimacy,
-            active_emotions=self._last_active_emotions,
+            character_id=character_id,
+            vad=job["vad"],
+            intimacy=job["intimacy"],
+            active_emotions=job["active_emotions"],
             stage_directions=stage_directions,
         )
         if self._clone_reference:
@@ -197,50 +252,41 @@ class StreamSession:
             import dataclasses
 
             req = dataclasses.replace(req, clone_reference=self._clone_reference)
-        logger.info(
-            "tts_request_prepared",
-            character_id=self._last_character_id,
-            voice_id=req.voice_id,
-            emotion=req.emotion,
-            speed=req.speed,
-            pitch=req.pitch,
-            stage_directions=stage_directions,
-            text_preview=req.text[:120],
-        )
 
         cached_audio = await self._check_cache(req, req.text)
         if cached_audio:
             logger.info(
                 "tts_cache_hit",
-                character_id=self._last_character_id,
+                character_id=character_id,
                 voice_id=req.voice_id,
                 emotion=req.emotion,
             )
-            self._all_audio_chunks = [cached_audio]
-            self.audio_produced = True
-            self.audio_format = req.format
-            await self._send(self._last_turn_id, self._global_seq, cached_audio, True, req.format)
-            self._global_seq += 1
+            await self._emit(turn_id, cached_audio, req.format, "cache")
             return
 
         result = await self._voice.synthesize_with_fallback(
-            req, self._last_character_id, self._preferred_provider_name
+            req, character_id, self._preferred_provider_name
         )
         if self._cancelled or not result.audio:
             return
-        self._all_audio_chunks = [result.audio]
-        self.audio_produced = True
         self.tts_provider_name = result.provider_name
-        self.audio_format = result.format
-        await self._send(
-            self._last_turn_id,
-            self._global_seq,
-            result.audio,
-            True,
-            result.format,
-        )
-        self._global_seq += 1
+        await self._emit(turn_id, result.audio, result.format, result.provider_name)
         await self._cache_audio(req, req.text, [result.audio])
+
+    async def _emit(self, turn_id: str, audio: bytes, fmt: str, source: str) -> None:
+        """Stream one sentence's audio chunk and accumulate it for persistence.
+
+        is_last stays False on every chunk — the turn's terminal signal is the
+        WS ``turn_end`` frame (the client finalizes on that, not on is_last),
+        so mid-turn sentence chunks must not claim to be last.
+        """
+        if self._cancelled:
+            return
+        self._all_audio_chunks.append(audio)
+        self.audio_produced = True
+        self.audio_format = fmt
+        await self._send(turn_id, self._global_seq, audio, False, fmt)
+        self._global_seq += 1
 
     async def _check_cache(self, req: Any, text: str) -> Optional[bytes]:
         """Check cache for audio."""

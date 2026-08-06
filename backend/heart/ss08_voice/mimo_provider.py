@@ -258,29 +258,58 @@ def _extract_text_from_chunk(data: dict) -> str:
     return ""
 
 
+def _asr_delta_and_full(data: dict) -> tuple[str, str]:
+    """Return (incremental delta.content, authoritative message.content) for a chunk.
+
+    OpenAI-compatible streaming puts incremental fragments in ``delta.content``
+    (concatenate) and a full snapshot in ``message.content`` (replace). We track
+    both so we're correct whether MiMo streams deltas or returns one final
+    message — no risk of duplicating or dropping transcript text.
+    """
+    choices = data.get("choices", [])
+    if not choices:
+        return "", ""
+    delta = choices[0].get("delta") or {}
+    message = choices[0].get("message") or {}
+    delta_c = delta.get("content")
+    msg_c = message.get("content")
+    return (
+        delta_c if isinstance(delta_c, str) else "",
+        msg_c if isinstance(msg_c, str) else "",
+    )
+
+
+def _accumulate_asr_transcript(sse_text: str) -> str:
+    """Fold SSE ``data:`` lines into a final transcript (delta-safe)."""
+    accumulated = ""
+    full_snapshot = ""
+    for line in sse_text.split("\n"):
+        if not line.startswith("data:"):
+            continue
+        data_str = line[5:].strip()
+        if not data_str or data_str == "[DONE]":
+            continue
+        try:
+            data = json.loads(data_str)
+        except json.JSONDecodeError:
+            continue
+        delta_c, msg_c = _asr_delta_and_full(data)
+        accumulated += delta_c
+        if msg_c:
+            full_snapshot = msg_c
+    # A full message snapshot (non-streaming or final frame) is authoritative;
+    # otherwise the accumulated deltas are the transcript.
+    return (full_snapshot or accumulated).strip()
+
+
 def _parse_mimo_asr_response(raw: bytes) -> str:
-    """Parse MiMo ASR response and return transcript text."""
+    """Parse MiMo ASR response (streaming SSE or single JSON) → transcript text."""
     text = raw.decode("utf-8", errors="replace").strip()
     if not text:
         return ""
 
-    # SSE-style (data: ... lines)
     if text.startswith("data:"):
-        lines = text.split("\n")
-        for line in lines:
-            if not line.startswith("data:"):
-                continue
-            data_str = line[5:].strip()
-            if data_str == "[DONE]":
-                break
-            try:
-                data = json.loads(data_str)
-                transcript = _extract_text_from_chunk(data)
-                if transcript:
-                    return transcript
-            except json.JSONDecodeError:
-                continue
-        return ""
+        return _accumulate_asr_transcript(text)
 
     # Single JSON body
     try:
@@ -517,26 +546,37 @@ class MiMoProvider:
                 }
             ],
             "asr_options": {"language": language},
+            # Stream the transcript so we parse SSE frames as they arrive instead
+            # of blocking on the full JSON body assembly. MiMo ASR still requires
+            # the whole audio up front (no incremental audio ingest), so this only
+            # trims tail latency — accuracy is unchanged (_parse_mimo_asr_response
+            # handles both SSE deltas and a single JSON body).
+            "stream": True,
         }
         try:
-            response = await self._client.post(
+            chunks: list[bytes] = []
+            async with self._client.stream(
+                "POST",
                 f"{self._base_url}/chat/completions",
                 json=body,
                 headers={
                     "api-key": self._api_key,
                     "Content-Type": "application/json",
                 },
-            )
-            response.raise_for_status()
+            ) as response:
+                response.raise_for_status()
+                async for chunk in response.aiter_bytes():
+                    chunks.append(chunk)
         except httpx.HTTPStatusError as e:
+            body_text = (await e.response.aread()).decode("utf-8", errors="replace")[:500]
             raise TTSProviderError(
-                f"MiMo ASR error: {e.response.status_code} - {e.response.text[:500]}",
+                f"MiMo ASR error: {e.response.status_code} - {body_text}",
                 status_code=e.response.status_code,
             ) from e
         except httpx.RequestError as e:
             raise TTSProviderError(f"MiMo ASR request failed: {str(e)}") from e
 
-        transcript = _parse_mimo_asr_response(response.content)
+        transcript = _parse_mimo_asr_response(b"".join(chunks))
         logger.info(
             "mimo_asr_transcribed",
             length=len(audio),
