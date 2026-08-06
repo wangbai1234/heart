@@ -66,11 +66,19 @@ async def _load_recent_conversation_history(
     they reach the LLM it copies the mm:ss strings verbatim into the next reply
     (observed: "……你呢？ 00:17 00:31 00:24"). Exclude them here — IS DISTINCT FROM
     keeps NULL-kind rows (which are the normal text turns).
+
+    Transfer rows (kind='transfer' / 'transfer_receipt') are also UI markers
+    (JSON payload), but the character MUST remember these gestures — "I gave
+    you 5.20 and you accepted" or "I tried to give you 13.14 and you declined"
+    is relationship-critical. We convert them to natural-language lines in
+    place of the raw JSON so the LLM can reason about them.
     """
+    from heart.api.transfer_service import RECEIPT_KIND, TRANSFER_KIND, transfer_history_line
+
     result = await db.execute(
         sql_text(
             """
-            SELECT role, content
+            SELECT role, content, kind
             FROM chat_messages
             WHERE user_id = :uid AND character_id = :cid
               AND kind IS DISTINCT FROM 'call_summary'
@@ -81,11 +89,25 @@ async def _load_recent_conversation_history(
         {"uid": user_id, "cid": character_id, "limit": limit},
     )
     rows = result.mappings().all()
-    history = [
-        {"role": row["role"], "content": row["content"] or ""}
-        for row in reversed(rows)
-        if row["role"] in ("user", "assistant")
-    ]
+    history: list[dict[str, str]] = []
+    for row in reversed(rows):
+        role = row["role"]
+        if role not in ("user", "assistant"):
+            continue
+        kind = row.get("kind")
+        content = row["content"] or ""
+        # Translate transfer/receipt rows → natural language lines.
+        if kind in (TRANSFER_KIND, RECEIPT_KIND):
+            nl = transfer_history_line(role, content)
+            if nl:
+                # Receipts map to same line as the transfer → duplicate, skip.
+                # Only the user transfer row (resolved to accepted/declined) survives.
+                if kind == RECEIPT_KIND:
+                    continue
+                content = nl
+            # If parse failed, transfer_history_line returns None → keep raw JSON
+            # (shouldn't happen in prod). We fall through below.
+        history.append({"role": role, "content": content})
     return history
 
 
@@ -1293,6 +1315,200 @@ async def create_call_summary(
     )
     await db.commit()
     return {"ok": True, "duration": content}
+
+
+class TransferBody(BaseModel):
+    character_id: str
+    amount: float
+    note: str = ""
+
+
+@router.post("/api/chat/transfer")
+async def create_transfer(
+    body: TransferBody,
+    current_user: TokenData = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """User sends a WeChat-style transfer; the character decides whether to 收下.
+
+    Roleplay play-money (does NOT touch yuoyuo币 billing). Persists a pending
+    transfer bubble (role=user, kind='transfer', JSON content), runs a one-shot
+    LLM decision using persona + recent history + amount/note, then updates the
+    bubble to accepted/declined, inserts the character's reply bubble(s) and —
+    if accepted — a receipt bubble. Returns every persisted row so the client
+    can append them without a history refetch. Modeled on create_call_summary.
+    """
+    from heart.api.transfer_service import (
+        RECEIPT_KIND,
+        TRANSFER_KIND,
+        TransferData,
+        decide_transfer,
+        normalize_amount,
+    )
+    from heart.ss05_composer.message_splitter import split_response
+    from heart.ss10_opening.generator import (
+        _resolve_backstory,
+        _resolve_display_name,
+        _resolve_persona,
+    )
+
+    from .wiring import get_model_router, get_soul_registry
+
+    uid = uuid.UUID(current_user.user_id)
+    if not await ensure_character_loaded(body.character_id, db):
+        raise HTTPException(status_code=404, detail=f"未知角色: {body.character_id}")
+
+    try:
+        amount = normalize_amount(body.amount)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    note = (body.note or "").strip()[:60]
+
+    transfer_id = str(uuid.uuid4())
+    turn_id = uuid.uuid4()
+
+    # 1) Persist the pending outgoing bubble (role=user).
+    pending = TransferData(
+        transfer_id=transfer_id, amount=amount, note=note, status="pending", direction="out"
+    )
+    user_msg_id = uuid.uuid4()
+    await db.execute(
+        sql_text(
+            "INSERT INTO chat_messages "
+            "(id, user_id, character_id, turn_id, role, content, modality, "
+            " kind, channel, credits_charged, sequence_id, created_at) "
+            "VALUES (:id, :uid, :cid, :tid, 'user', :content, 'text', "
+            "        :kind, 'chat', 0, 0, NOW())"
+        ),
+        {
+            "id": user_msg_id,
+            "uid": uid,
+            "cid": body.character_id,
+            "tid": turn_id,
+            "content": pending.to_json(),
+            "kind": TRANSFER_KIND,
+        },
+    )
+    await db.commit()
+
+    # 2) Run the LLM accept/decline decision.
+    soul_registry = get_soul_registry()
+    try:
+        spec = soul_registry.get_soul(body.character_id)
+    except Exception:
+        spec = None
+    name = _resolve_display_name(spec) if spec else body.character_id
+    persona = _resolve_persona(spec) if spec else ""
+    backstory = _resolve_backstory(spec) if spec else None
+    history = await _load_recent_conversation_history(db, uid, body.character_id)
+
+    decision = await decide_transfer(
+        model_router=get_model_router(),
+        name=name,
+        persona=persona,
+        backstory=backstory,
+        amount=amount,
+        note=note,
+        history=history,
+    )
+    status = "accepted" if decision.accept else "declined"
+
+    # 3) Update the transfer bubble status.
+    resolved = TransferData(
+        transfer_id=transfer_id, amount=amount, note=note, status=status, direction="out"
+    )
+    await db.execute(
+        sql_text("UPDATE chat_messages SET content = :content WHERE id = :id"),
+        {"content": resolved.to_json(), "id": user_msg_id},
+    )
+
+    # 4) Insert the character's reply bubble(s), split like a normal turn.
+    reply_turn = uuid.uuid4()
+    reply_rows: list[dict[str, Any]] = []
+    segments = split_response(decision.reply) or [{"kind": "text", "content": decision.reply}]
+    seq = 0
+    # If accepted, the receipt pill leads (WeChat shows 已收款 first), then reply.
+    if decision.accept:
+        receipt = TransferData(
+            transfer_id=transfer_id, amount=amount, note=note, status="accepted", direction="out"
+        )
+        rid = uuid.uuid4()
+        await db.execute(
+            sql_text(
+                "INSERT INTO chat_messages "
+                "(id, user_id, character_id, turn_id, role, content, modality, "
+                " kind, channel, credits_charged, sequence_id, created_at) "
+                "VALUES (:id, :uid, :cid, :tid, 'assistant', :content, 'text', "
+                "        :kind, 'chat', 0, :seq, NOW())"
+            ),
+            {
+                "id": rid,
+                "uid": uid,
+                "cid": body.character_id,
+                "tid": reply_turn,
+                "content": receipt.to_json(),
+                "kind": RECEIPT_KIND,
+                "seq": seq,
+            },
+        )
+        reply_rows.append(
+            {
+                "id": str(rid),
+                "role": "assistant",
+                "content": receipt.to_json(),
+                "kind": RECEIPT_KIND,
+                "turn_id": str(reply_turn),
+            }
+        )
+        seq += 1
+
+    for seg in segments:
+        if not seg["content"].strip():
+            continue
+        rid = uuid.uuid4()
+        await db.execute(
+            sql_text(
+                "INSERT INTO chat_messages "
+                "(id, user_id, character_id, turn_id, role, content, modality, "
+                " kind, channel, credits_charged, sequence_id, created_at) "
+                "VALUES (:id, :uid, :cid, :tid, 'assistant', :content, 'text', "
+                "        :kind, 'chat', 0, :seq, NOW())"
+            ),
+            {
+                "id": rid,
+                "uid": uid,
+                "cid": body.character_id,
+                "tid": reply_turn,
+                "content": seg["content"],
+                "kind": seg["kind"],
+                "seq": seq,
+            },
+        )
+        reply_rows.append(
+            {
+                "id": str(rid),
+                "role": "assistant",
+                "content": seg["content"],
+                "kind": seg["kind"],
+                "turn_id": str(reply_turn),
+            }
+        )
+        seq += 1
+
+    await db.commit()
+
+    return {
+        "ok": True,
+        "transfer": {
+            "id": str(user_msg_id),
+            "role": "user",
+            "content": resolved.to_json(),
+            "kind": TRANSFER_KIND,
+            "turn_id": str(turn_id),
+        },
+        "replies": reply_rows,
+        "accepted": decision.accept,
+    }
 
 
 # ── REST: Opening Scene Generation ────────────────────────────────────

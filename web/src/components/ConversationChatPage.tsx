@@ -9,7 +9,7 @@ import { useCompanionsStore } from '../stores/companionsStore'
 import { stageLabel, stageWithIntimacy, stageOrderIndex } from '../utils/relationship'
 import { useWebSocket } from '../hooks/useWebSocket'
 import { useProactiveStore } from '../stores/proactiveStore'
-import { getChatHistory, generateOpening, ackProactive, markCharacterRead, transcribeAudio, getCharacterVoice } from '../services/api'
+import { getChatHistory, generateOpening, ackProactive, markCharacterRead, transcribeAudio, getCharacterVoice, sendTransfer } from '../services/api'
 import { useToastStore } from '../stores/toastStore'
 // DISABLED 2026-07-24: 角色↔剧情关联功能暂停，见下方渲染块注释
 // import { StoryInviteCard, isHookOnCooldown } from './StoryInviteCard'
@@ -24,6 +24,7 @@ import { VoiceRecordingOverlay } from './VoiceRecordingOverlay'
 import { TextTierSheet } from './TextTierSheet'
 import { ChatPlusMenu } from './ChatPlusMenu'
 import { VoiceChatSheet } from './VoiceChatSheet'
+import { TransferSheet } from './TransferSheet'
 import { getCharacterSettings } from '../services/api'
 
 const EMPTY_MESSAGES: Message[] = []
@@ -47,7 +48,11 @@ function historyItemToMessage(item: HistoryItem): Message {
       ? 'action'
       : item.kind === 'call_summary'
         ? 'call_summary'
-        : isVoice ? 'voice' : 'text',
+        : item.kind === 'transfer'
+          ? 'transfer'
+          : item.kind === 'transfer_receipt'
+            ? 'transfer_receipt'
+            : isVoice ? 'voice' : 'text',
     audioUrl: isVoice && item.audio_url ? `/api/chat/audio/${item.id}` : undefined,
     audioDuration: item.audio_duration_ms ?? undefined,
     audioFormat: isVoice ? 'wav' : undefined,
@@ -71,6 +76,8 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
   const [textTierOpen, setTextTierOpen] = useState(false)
   const [plusMenuOpen, setPlusMenuOpen] = useState(false)
   const [voiceChatOpen, setVoiceChatOpen] = useState(false)
+  const [transferOpen, setTransferOpen] = useState(false)
+  const [transferSending, setTransferSending] = useState(false)
 
   // Voice recording state
   const [isRecording, setIsRecording] = useState(false)
@@ -425,6 +432,56 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
     navigate(`/call/${currentCharacterId}`)
   }, [currentCharacterId, navigate])
 
+  // 转账入口：POST /chat/transfer。后端持久化转账气泡 + 由 LLM 判定角色收/不收，
+  // 返回已定状态的转账气泡 + 角色回应气泡。前端直接 append，无需重刷历史。
+  const handleTransfer = useCallback(async (amount: number, note: string) => {
+    if (transferSending) return
+    const cid = currentCharacterId as CharacterId
+    setTransferSending(true)
+    try {
+      const res = await sendTransfer(cid, amount, note)
+      const { addMessage, appendMessage } = useChatStore.getState()
+      // 转账气泡（用户侧）
+      addMessage(cid, {
+        id: res.transfer.id,
+        turnId: res.transfer.turn_id,
+        role: 'user',
+        content: res.transfer.content,
+        timestamp: Date.now(),
+        kind: 'transfer',
+      })
+      // 角色回应气泡（收据 + 台词/动作）
+      for (const r of res.replies) {
+        const kind = r.kind === 'transfer_receipt'
+          ? 'transfer_receipt'
+          : r.kind === 'action' ? 'action' : 'text'
+        addMessage(cid, {
+          id: r.id,
+          turnId: r.turn_id,
+          role: 'assistant',
+          content: r.content,
+          timestamp: Date.now(),
+          kind,
+        })
+      }
+      // 同步会话列表预览（HomePage）：取最后一条角色文本气泡
+      const lastText = [...res.replies].reverse().find((r) => r.kind === 'text')
+      if (lastText) {
+        appendMessage(cid, {
+          id: lastText.id,
+          role: 'assistant',
+          content: lastText.content,
+          timestamp: Date.now(),
+          kind: 'text',
+        })
+      }
+    } catch {
+      useToastStore.getState().show('转账失败，请稍后重试', 'error')
+    } finally {
+      setTransferSending(false)
+    }
+  }, [currentCharacterId, transferSending])
+
   const showToast = useCallback((msg: string) => {
     setRecordingToast(msg)
     setTimeout(() => setRecordingToast(null), 2500)
@@ -568,6 +625,67 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
               <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.573 2.81.7A2 2 0 0 1 22 16.92Z" />
             </svg>
             <span>通话时长 {msg.content}</span>
+          </div>
+        </div>
+      )
+    }
+
+    // Transfer bubbles (WeChat-style). Outgoing transfer (role=user) sits on the
+    // right; the character's receipt (transfer_receipt) sits on the left. Both
+    // use an orange gradient card with an envelope glyph + amount + status.
+    if (msg.kind === 'transfer' || msg.kind === 'transfer_receipt') {
+      let amount = 0
+      let noteText = ''
+      let status = 'pending'
+      try {
+        const d = JSON.parse(msg.content)
+        amount = Number(d.amount) || 0
+        noteText = String(d.note || '')
+        status = String(d.status || 'pending')
+      } catch { /* keep defaults */ }
+      const isReceipt = msg.kind === 'transfer_receipt'
+      // Accounting/WeChat style: thousands separators + 2 decimals (e.g.
+      // 11,111.01). The 0.001 easter egg keeps a 3rd decimal so it isn't lost.
+      const amtDecimals = amount < 0.01 && amount > 0 ? 3 : 2
+      const amtStr = amount.toLocaleString('en-US', {
+        minimumFractionDigits: amtDecimals,
+        maximumFractionDigits: amtDecimals,
+      })
+      // Status line — sender vs receiver perspective mirrors WeChat.
+      const statusLabel = isReceipt
+        ? '已收款'
+        : status === 'accepted'
+          ? '已被领取'
+          : status === 'declined'
+            ? '已退还'
+            : '待确认收款'
+      const dimmed = status === 'declined' && !isReceipt
+      return (
+        <div className={`flex items-start gap-2 ${isReceipt ? 'self-start' : 'self-end flex-row-reverse'}`}>
+          {showAvatar ? (
+            <Avatar src={avatar} size={40} className="shrink-0 mt-[2px]" />
+          ) : (
+            <div className="w-[40px] shrink-0" />
+          )}
+          <div
+            className={`w-[232px] rounded-[10px] overflow-hidden ${dimmed ? 'opacity-60' : ''}`}
+            style={{ background: dimmed ? 'linear-gradient(135deg,#C9A278,#B98F63)' : 'linear-gradient(135deg,#F5A623,#E8942E)' }}
+          >
+            <div className="flex items-center gap-3 px-3.5 py-3">
+              <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#FFF" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+                <rect x="2" y="5" width="20" height="14" rx="2" />
+                <path d="M12 5v14M2 10h20" />
+              </svg>
+              <div className="min-w-0">
+                <div className="text-white text-[17px] font-medium leading-tight">¥{amtStr}</div>
+                <div className="text-white/85 text-[12px] mt-0.5 truncate">
+                  {noteText || (isReceipt ? '已收款' : '转账')}
+                </div>
+              </div>
+            </div>
+            <div className="px-3.5 py-1.5 bg-black/10 text-white/80 text-[11px]">
+              {statusLabel}
+            </div>
           </div>
         </div>
       )
@@ -961,6 +1079,14 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
         isDark={isDark}
         onVoiceChat={() => setVoiceChatOpen(true)}
         onVoiceCall={handleVoiceCall}
+        onTransfer={() => setTransferOpen(true)}
+      />
+      <TransferSheet
+        open={transferOpen}
+        onClose={() => setTransferOpen(false)}
+        characterName={profile.shortName}
+        isDark={isDark}
+        onConfirm={handleTransfer}
       />
       <VoiceChatSheet
         open={voiceChatOpen}

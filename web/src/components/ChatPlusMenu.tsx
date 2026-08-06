@@ -6,11 +6,12 @@ interface ChatPlusMenuProps {
   isDark: boolean
   onVoiceChat: () => void
   onVoiceCall: () => void
+  onTransfer: () => void
 }
 
 // 发送键右侧 "+" 展开的底部宫格面板（微信样式）：圆角方块图标 + 下方文字。
-// 语音聊天（开关弹窗）/ 语音通话（全屏页）。
-export function ChatPlusMenu({ open, onClose, isDark, onVoiceChat, onVoiceCall }: ChatPlusMenuProps) {
+// 语音聊天（开关弹窗）/ 语音通话（全屏页）/ 转账（转账输入页）。
+export function ChatPlusMenu({ open, onClose, isDark, onVoiceChat, onVoiceCall, onTransfer }: ChatPlusMenuProps) {
   const tile = `flex h-[62px] w-[62px] items-center justify-center rounded-[18px] active:scale-95 transition-transform ${
     isDark ? 'bg-[rgba(255,255,255,0.08)]' : 'bg-[rgba(255,255,255,0.72)] shadow-[0_2px_10px_rgba(0,0,0,0.05)]'
   }`
@@ -38,6 +39,15 @@ export function ChatPlusMenu({ open, onClose, isDark, onVoiceChat, onVoiceCall }
             </svg>
           </span>
           <span className={label}>语音通话</span>
+        </button>
+
+        <button className="flex flex-col items-center" onClick={() => { onClose(); onTransfer() }}>
+          <span className={tile}>
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+            </svg>
+          </span>
+          <span className={label}>转账</span>
         </button>
       </div>
     </BottomSheet>

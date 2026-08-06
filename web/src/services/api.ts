@@ -623,8 +623,9 @@ export async function getChatHistory(
     credits_charged: number | null
     turn_id: string | null
     created_at: string
-    /** 'action' grey pill, 'text' dialog, 'voice' audio, 'call_summary' 通话时长条. */
-    kind: 'text' | 'action' | 'voice' | 'call_summary' | null
+    /** 'action' grey pill, 'text' dialog, 'voice' audio, 'call_summary' 通话时长条,
+     *  'transfer' 转账气泡(用户), 'transfer_receipt' 收款气泡(角色). */
+    kind: 'text' | 'action' | 'voice' | 'call_summary' | 'transfer' | 'transfer_receipt' | null
   }>
   next_cursor: string | null
 }> {
@@ -1051,6 +1052,27 @@ export async function createCallSummary(
   return request('/chat/call-summary', {
     method: 'POST',
     body: JSON.stringify({ character_id: characterId, duration_ms: durationMs }),
+  })
+}
+
+// WeChat-style transfer. The character decides (LLM) whether to 收下 based on
+// personality + recent conversation + amount/note. Returns the (resolved)
+// transfer bubble, the character's reply bubble(s), and whether it was accepted.
+export interface TransferRow {
+  id: string
+  role: 'user' | 'assistant'
+  content: string
+  kind: string
+  turn_id: string
+}
+export async function sendTransfer(
+  characterId: string,
+  amount: number,
+  note: string,
+): Promise<{ ok: boolean; transfer: TransferRow; replies: TransferRow[]; accepted: boolean }> {
+  return request('/chat/transfer', {
+    method: 'POST',
+    body: JSON.stringify({ character_id: characterId, amount, note }),
   })
 }
 
