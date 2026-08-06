@@ -57,24 +57,33 @@ def test_repeated_brackets_all_removed():
     assert directions == ["笑", "歪头"]
 
 
-def test_orphan_open_bracket_stripped_not_voiced():
-    """An unpaired opener (bracket span split across sentences) leaves no（in TTS."""
+def test_leading_close_bracket_eats_orphan_action_head():
+    """Tail half of a split （…）action: 「旁白）真话」→ only 真话 is voiced."""
     text = "目光落向别处）你还好吗？"
 
     stripped, _ = _extract_tts_stage_directions(text)
 
-    assert "）" not in stripped
-    assert "（" not in stripped
-    assert stripped == "目光落向别处你还好吗？"
+    # The orphan action text before ） is dropped, not just the bracket char.
+    assert stripped == "你还好吗？"
 
 
-def test_orphan_close_bracket_stripped_not_voiced():
-    text = "（她停顿了一下"
+def test_trailing_open_bracket_eats_orphan_action_tail():
+    """Head half of a split （…）action: 「真话（旁白」→ only 真话 is voiced."""
+    text = "我在呢（他伸手托住你后脑，唇瓣覆上"
 
     stripped, _ = _extract_tts_stage_directions(text)
 
-    assert "（" not in stripped
-    assert stripped == "她停顿了一下"
+    assert stripped == "我在呢"
+
+
+def test_pure_action_sentence_strips_to_empty():
+    """A sentence that is nothing but a （…）action strips to empty (→ skipped)."""
+    text = "（他伸手托住你后脑，唇瓣轻轻覆上，温热而克制）"
+
+    stripped, directions = _extract_tts_stage_directions(text)
+
+    assert stripped == ""
+    assert directions == ["他伸手托住你后脑，唇瓣轻轻覆上，温热而克制"]
 
 
 # ---------------------------------------------------------------------------

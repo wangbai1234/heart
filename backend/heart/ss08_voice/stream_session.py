@@ -51,13 +51,17 @@ def _extract_tts_stage_directions(text: str) -> tuple[str, list[str]]:
         if next_text == stripped:
             break
         stripped = next_text
+    # Backstop for a bracket span split across sentences (splitter HARD_MAX, or a
+    # streamed chunk boundary): the paired pattern above can't match an unpaired
+    # （【 or ）】, so the ACTION TEXT on the open side would still be voiced. Strip
+    # DIRECTIONALLY — a trailing unclosed opener eats to end-of-string, a leading
+    # unmatched closer eats from start — so half of a （…）action never leaks into
+    # TTS. (This is why prod read "他伸手托住你后脑…" and "呼吸重了起来）…" aloud.)
+    stripped = re.sub(r"[（(【][^）)】]*$", "", stripped)  # 「（…<EOL>」→ drop
+    stripped = re.sub(r"^[^（(【]*[）)】]", "", stripped)  # 「…）」at head → drop
+    stripped = re.sub(r"[（(【）)】]", "", stripped)  # any residual stray bracket
     stripped = re.sub(r"\s{2,}", " ", stripped)
     stripped = re.sub(r"\n{3,}", "\n\n", stripped)
-    # Backstop: a bracket span split across two sentences (splitter HARD_MAX, or
-    # a mid-stream chunk boundary) leaves an unpaired （【 ）】 that the paired
-    # pattern above can't match. Strip the stray bracket CHARACTERS only — never
-    # the surrounding text — so TTS never voices a lone "（" / "）".
-    stripped = re.sub(r"[（(【）)】]", "", stripped)
     return stripped.strip(), [item for item in directions if item]
 
 
@@ -241,7 +245,11 @@ class StreamSession:
         turn_id = job["turn_id"]
         character_id = job["character_id"]
         tts_text, stage_directions = _extract_tts_stage_directions(job["sentence"])
-        tts_text = tts_text or job["sentence"]
+        # A sentence that is PURE action (（…）only) strips to empty. Skip it — do
+        # NOT fall back to the raw sentence, or the brackets we just removed get
+        # voiced anyway AND waste 10-16s of MiMo synth on unspeakable narration.
+        if not tts_text.strip():
+            return
 
         req = self._voice.director.derive(
             text=tts_text,
