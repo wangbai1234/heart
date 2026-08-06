@@ -94,6 +94,14 @@ def test_parse_decision_garbage_safe_declines():
     assert d.reply  # non-empty fallback
 
 
+def test_parse_decision_truncated_json_repair():
+    # LLM hit max_tokens mid-reply → no closing `"}`. Parser tries appending `"}`.
+    raw = '{"accept": true, "reply": "（轻叹'
+    d = parse_decision(raw, name="霍时予")
+    assert d.accept is True
+    assert d.reply == "（轻叹"  # salvaged prefix
+
+
 def test_parse_decision_empty_reply_gets_fallback():
     assert parse_decision('{"accept": true, "reply": ""}', name="小北").reply
     assert parse_decision('{"accept": false, "reply": ""}', name="小北").reply

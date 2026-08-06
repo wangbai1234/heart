@@ -115,16 +115,14 @@ class TransferDecision:
 
 _DECISION_SYS = """你正在扮演角色「{name}」。{persona}{backstory}
 
-现在对方（用户）通过聊天给你转了一笔钱，就像微信转账。金额是 {amount} 元{note_part}。
+对方给你转了 {amount} 元{note_part}。
 
-请你完全以「{name}」的性格、你和对方当前的关系、以及对方此刻的语气和坚持程度，来决定「收」还是「不收」这笔转账，并给出一句自然的回应。判断依据：
-- 性格矜持/高冷/要面子的角色，通常不会立刻收，可能推辞、生气或调侃；
-- 关系亲近、对方态度诚恳或坚持时，更可能收下；
-- 金额过大又没理由、或对方在开玩笑时，可以不收；
-- 收与不收都要符合你的人设，不要出戏。
+根据你的性格、你俩的关系、对方态度，决定收不收，并回应一句话(≤30字，可含动作)。
+- 矜持/高冷角色通常不收或推辞；关系好、对方坚持时更可能收。
+- 金额异常大/小或对方开玩笑时可不收。
+- 保持人设，自然反应。
 
-只输出 JSON，不要多余文字：
-{{"accept": true 或 false, "reply": "你此刻会说的一句话，符合人设，可含（动作）"}}"""
+输出 JSON: {{"accept": true或false, "reply": "一句话"}}"""
 
 
 def build_decision_prompt(
@@ -157,7 +155,7 @@ def build_decision_prompt(
     messages.append(
         {
             "role": "user",
-            "content": f"（我给你转了 {amt} 元{note_part}）你收不收？请按要求只输出 JSON。",
+            "content": f"转账 {amt} 元{note_part}",
         }
     )
     return messages
@@ -177,6 +175,9 @@ def parse_decision(raw: str, *, name: str) -> TransferDecision:
     end = text.rfind("}")
     if start != -1 and end != -1 and end > start:
         text = text[start : end + 1]
+    elif start != -1 and end == -1:
+        # Truncated JSON (max_tokens hit mid-reply) — try closing it.
+        text = text[start:] + '"}'
     try:
         d = json.loads(text)
         accept = bool(d.get("accept"))
@@ -214,7 +215,7 @@ async def decide_transfer(
         raw = await model_router.call_cheap(
             messages=messages,
             temperature=0.8,
-            max_tokens=300,
+            max_tokens=600,
             json_mode=True,
             agent_name=f"Transfer.{name}",
         )
