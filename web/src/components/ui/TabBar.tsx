@@ -1,5 +1,6 @@
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useThemeStore } from '../../stores/themeStore'
+import { useAppStore } from '../../stores/appStore'
 
 interface TabItem {
   id: string
@@ -61,13 +62,33 @@ const rightTabs: TabItem[] = [
   },
 ]
 
-function TabButton({ tab, active, onClick }: { tab: TabItem; active: boolean; onClick: () => void }) {
+function TabButton({
+  tab,
+  active,
+  onClick,
+  badgeCount = 0,
+}: {
+  tab: TabItem
+  active: boolean
+  onClick: () => void
+  badgeCount?: number
+}) {
   return (
     <button
       onClick={onClick}
       className="flex-1 flex flex-col items-center gap-[2px] py-[10px] active:scale-90 transition-transform"
     >
-      {tab.icon(active)}
+      <div className="relative">
+        {tab.icon(active)}
+        {badgeCount > 0 && (
+          <span
+            className="absolute -top-[3px] -right-[6px] min-w-[16px] h-[16px] px-[4px] flex items-center justify-center rounded-full bg-[#FF4D6D] text-white text-[10px] font-medium leading-none shadow-[0_1px_3px_rgba(0,0,0,0.2)]"
+            aria-label={`${badgeCount} 条未读`}
+          >
+            {badgeCount > 99 ? '99+' : badgeCount}
+          </span>
+        )}
+      </div>
       <span className={`text-[10px] ${active ? 'text-[var(--color-tab-active)]' : 'text-[#8E8E9A]'}`}>
         {tab.label}
       </span>
@@ -81,6 +102,7 @@ export function TabBar() {
   const location = useLocation()
   const { resolvedTheme } = useThemeStore()
   const isDark = resolvedTheme === 'dark'
+  const inboxUnreadTotal = useAppStore((s) => s.inboxUnreadTotal)
   const isActive = (path: string) =>
     location.pathname === path || location.pathname.startsWith(path + '/')
   const createActive = isActive('/create')
@@ -120,7 +142,13 @@ export function TabBar() {
         </div>
 
         {rightTabs.map((tab) => (
-          <TabButton key={tab.id} tab={tab} active={isActive(tab.path)} onClick={() => navigate(tab.path)} />
+          <TabButton
+            key={tab.id}
+            tab={tab}
+            active={isActive(tab.path)}
+            onClick={() => navigate(tab.path)}
+            badgeCount={tab.id === 'chat' ? inboxUnreadTotal : 0}
+          />
         ))}
       </div>
     </div>
