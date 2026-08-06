@@ -45,22 +45,24 @@ class VoiceDirector:
 
     # S2 leading instruction per emotion — Chinese natural language in [] for the
     # S2.1 family (docs: fine-grained-emotion/s2). The bracket text is a control
-    # marker and is NOT spoken. One instruction at sentence head reads naturally.
+    # marker and is NOT spoken. Reaction cues + this tone stack at sentence head.
     _S2_BY_EMOTION = {
-        "happy": "[轻快愉悦地说]",
-        "sad": "[低沉难过地说]",
-        "angry": "[压着怒气地说]",
-        "fearful": "[紧张不安地说]",
-        "surprised": "[惊讶地说]",
-        "disgusted": "[语气冷淡地说]",
+        "happy": "[声音轻快雀跃]",
+        "sad": "[声音低下去，带着难过]",
+        "angry": "[压着火气]",
+        "fearful": "[声音发紧，慌乱地]",
+        "surprised": "[惊讶地拔高声音]",
+        "disgusted": "[语气冷淡疏离]",
         "neutral": "",
     }
 
     # S2 rendering of an internal canonical cue token → Chinese instruction.
+    # These are "声音反应"（气息/停顿/笑/哭），排在情绪语气之前，与
+    # composer prompt 的叠加顺序一致。
     _S2_CUE_TRANSLATION = {
-        "(break)": "[停顿片刻]",
+        "(break)": "[顿了顿]",
         "(sighing)": "[叹了口气]",
-        "(chuckling)": "[轻笑着说]",
+        "(chuckling)": "[轻笑一声]",
         "(gasping)": "[倒吸一口气]",
         "(sobbing)": "[带着哭腔]",
     }
@@ -214,17 +216,27 @@ class VoiceDirector:
         # spoken. Skip if the text already opens with a bracket instruction.
         if cleaned.startswith("["):
             return cleaned
+        # Stack "声音反应"（cues：气息/停顿/笑/哭）first, then the emotion tone —
+        # same layering the composer prompt asks the LLM for, e.g.
+        # [叹了口气][声音低下去，带着难过]. This only fires as a Layer-2 net when
+        # the LLM emitted NO bracket; the LLM per-sentence path is richer.
         parts: list[str] = []
         for cue in cues:
             translated = self._S2_CUE_TRANSLATION.get(cue)
             if translated:
                 parts.append(translated)
         emo_instr = self._S2_BY_EMOTION.get(emotion, "") if prefix_enabled else ""
-        if not parts and emo_instr:
+        if emo_instr:
             parts.append(emo_instr)
-        elif not parts and not emo_instr and intimacy >= 0.72:
-            parts.append("[温柔地说]")
-        prefix = "".join(dict.fromkeys(parts))[:24]  # dedupe, cap length
+        if not parts and intimacy >= 0.72:
+            parts.append("[放软声音，温柔地]")
+        # Dedupe, then join only WHOLE [..] tokens that fit — never slice a
+        # bracket in half (a dangling '[' leaks as spoken "括号" on the TTS path).
+        prefix = ""
+        for token in dict.fromkeys(parts):
+            if len(prefix) + len(token) > 32:
+                break
+            prefix += token
         return f"{prefix}{cleaned}" if prefix else cleaned
 
     def _decorate_s1(

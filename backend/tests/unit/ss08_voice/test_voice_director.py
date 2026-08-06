@@ -185,6 +185,34 @@ def test_s2_sad_gets_chinese_instruction(director):
     assert req.text.endswith("想先安静一下。")
 
 
+def test_s2_stacks_reaction_cue_before_emotion_tone(director):
+    # Layer-2 fallback (LLM emitted no bracket): aggrieved → sighing cue +
+    # sad tone should STACK as [叹了口气][声音低下去…], reaction first.
+    req = director.derive(
+        text="我在。",
+        character_id="rin",
+        vad={"valence": 0.0, "arousal": 0.2, "dominance": 0.5},
+        active_emotions=[{"emotion": "aggrieved", "intensity": 0.8}],
+    )
+    assert req.text.startswith("[叹了口气]")
+    assert "难过" in req.text  # emotion tone stacked after the cue
+    # Every bracket is well-formed — no dangling '[' that TTS would speak.
+    assert req.text.count("[") == req.text.count("]")
+
+
+def test_s2_prefix_never_slices_a_bracket(director):
+    # Even if many cues pile up, the length cap only drops WHOLE tokens.
+    req = director.derive(
+        text="嗯。",
+        character_id="rin",
+        vad={"valence": -0.5, "arousal": 0.2, "dominance": 0.4},
+        active_emotions=[{"emotion": "aggrieved", "intensity": 0.9}],
+        stage_directions=["哭", "叹气", "停顿", "惊", "低声"],
+    )
+    assert req.text.count("[") == req.text.count("]")
+    assert "[" in req.text and not req.text.rstrip().endswith("[")
+
+
 def test_s2_stage_direction_becomes_bracket_cue(director):
     req = director.derive(
         text="kaito。他们提过一次。",
