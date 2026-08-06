@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from heart.api.rate_limit import limiter
 from heart.api.wiring import get_db
 from heart.core.auth import TokenData, get_current_user
+from heart.ss05_composer.message_splitter import split_response
 from heart.ss06_inner_state import proactive_repo
 
 logger = structlog.get_logger(__name__)
@@ -68,6 +69,7 @@ async def get_pending_messages(
                 "id": str(m.id),
                 "character_id": m.character_id,
                 "content": m.content,
+                "segments": split_response(m.content),
                 "trigger_type": m.trigger_type,
                 "created_at": m.created_at.isoformat(),
             }

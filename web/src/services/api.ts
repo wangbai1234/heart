@@ -1056,10 +1056,18 @@ export async function createCallSummary(
 
 // --- Proactive messages (SS06 Inner Loop) ---
 
+export interface ProactiveSegment {
+  kind: 'text' | 'action'
+  content: string
+}
+
 export interface ProactiveMessageDTO {
   id: string
   character_id: string
   content: string
+  // Server-split bubbles: dialog vs parenthetical action/narration, in order.
+  // Falls back to a single text bubble from `content` if absent (older server).
+  segments?: ProactiveSegment[]
   trigger_type: string
   created_at: string
 }

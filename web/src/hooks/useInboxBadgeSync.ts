@@ -1,6 +1,7 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { useAuthStore } from '../stores/authStore'
 import { useAppStore } from '../stores/appStore'
+import { useProactiveStore } from '../stores/proactiveStore'
 import { getInboxSummary } from '../services/api'
 
 // Polling cadence for the app-icon badge. Sixty seconds is a compromise
@@ -22,17 +23,35 @@ const POLL_INTERVAL_MS = 60_000
 export function useInboxBadgeSync() {
   const accessToken = useAuthStore((s) => s.accessToken)
   const setInboxUnreadTotal = useAppStore((s) => s.setInboxUnreadTotal)
+  // Cache the last server-side unread so a proactive-store change can recompute
+  // the total without waiting for the next network refresh.
+  const serverUnreadRef = useRef(0)
 
   useEffect(() => {
     if (!accessToken) return
     let cancelled = false
 
+    // Match ChatInboxPage's count: server unread + pending proactive messages
+    // (SS06) not yet opened. Without the proactive term the tab badge
+    // under-counts a character who just reached out until the user opens inbox.
+    const recompute = () => {
+      const pendingByChar = useProactiveStore.getState().pendingByChar
+      const pendingTotal = Object.values(pendingByChar).reduce(
+        (sum, list) => sum + list.length,
+        0,
+      )
+      setInboxUnreadTotal(serverUnreadRef.current + pendingTotal)
+    }
+
     const refresh = () => {
       getInboxSummary()
         .then((res) => {
           if (cancelled) return
-          const total = res.items.reduce((sum, item) => sum + (item.unread_count ?? 0), 0)
-          setInboxUnreadTotal(total)
+          serverUnreadRef.current = res.items.reduce(
+            (sum, item) => sum + (item.unread_count ?? 0),
+            0,
+          )
+          recompute()
         })
         .catch(() => {
           // Best-effort; the badge is not load-bearing, don't spam the user
@@ -48,10 +67,16 @@ export function useInboxBadgeSync() {
     }
     document.addEventListener('visibilitychange', onVisibility)
 
+    // React to proactive polls landing between network refreshes: when a new
+    // proactive message is ingested (or drained on open), recompute the badge
+    // immediately off the cached server count.
+    const unsubscribe = useProactiveStore.subscribe(recompute)
+
     return () => {
       cancelled = true
       window.clearInterval(interval)
       document.removeEventListener('visibilitychange', onVisibility)
+      unsubscribe()
     }
   }, [accessToken, setInboxUnreadTotal])
 }

@@ -342,15 +342,25 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
     const pending = useProactiveStore.getState().drain(currentCharacterId)
     if (pending.length === 0) return
     for (const m of pending) {
-      const proactiveMsg = {
-        id: m.id,
-        role: 'assistant' as const,
-        content: m.content,
-        timestamp: new Date(m.created_at).getTime(),
-        kind: 'text' as const,
-      }
-      addMessage(currentCharacterId, proactiveMsg)
-      appendMessage(currentCharacterId, proactiveMsg)
+      const baseTs = new Date(m.created_at).getTime()
+      // Split dialog / action into separate bubbles just like a normal reply.
+      // Server sends `segments`; fall back to one text bubble on older servers.
+      const segments =
+        m.segments && m.segments.length > 0
+          ? m.segments
+          : [{ kind: 'text' as const, content: m.content }]
+      segments.forEach((seg, i) => {
+        const proactiveMsg = {
+          id: segments.length > 1 ? `${m.id}-${i}` : m.id,
+          role: 'assistant' as const,
+          content: seg.content,
+          // Nudge each bubble's timestamp so ordering is stable within the batch.
+          timestamp: baseTs + i,
+          kind: seg.kind,
+        }
+        addMessage(currentCharacterId, proactiveMsg)
+        appendMessage(currentCharacterId, proactiveMsg)
+      })
     }
     const { user } = useAuthStore.getState()
     if (user?.id) {
