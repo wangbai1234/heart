@@ -44,6 +44,9 @@ export default function VoiceMessageBubble({
   // Holds the latest startPlayback so tryFallback (declared earlier) can invoke
   // it without a circular useCallback dependency.
   const startPlaybackRef = useRef<((url: string, allowFallback?: boolean) => void) | null>(null)
+  // In-flight prefetch (started on pointerdown) so the click handler awaits the
+  // same request instead of firing a second one. Cleared once it settles.
+  const prefetchRef = useRef<Promise<string | null> | null>(null)
   const setGlobalPlaying = useChatStore((s) => s.setPlaying)
 
   // Resolve only the *free* sources on mount — an in-session blob/base64 recording
@@ -56,6 +59,7 @@ export default function VoiceMessageBubble({
     setLoadFailed(false)
     setLoadExpired(false)
     triedFallbackRef.current = false
+    prefetchRef.current = null
 
     if (audioData.startsWith('http') || audioData.startsWith('blob:')) {
       setAudioUrl(audioData)
@@ -263,6 +267,18 @@ export default function VoiceMessageBubble({
   // call the latest startPlayback without a declaration-order/cyclic-dep issue.
   startPlaybackRef.current = startPlayback
 
+  // Warm the durable `/api/...` object as soon as the user presses down on the
+  // bubble — the fetch overlaps the pointerdown→click gap AND the network
+  // round-trip the click would otherwise pay in full, cutting the ~1.5s tap-to-
+  // play delay. Idempotent: reuses the in-flight promise, skips if already
+  // resolved or not an /api pointer. Errors are swallowed here (state/toast are
+  // owned by the click path); expiry is still only surfaced on an actual tap.
+  const prefetchAudio = useCallback(() => {
+    if (audioUrl || prefetchRef.current) return
+    if (!audioData.startsWith('/api/')) return
+    prefetchRef.current = fetchApiAudio().catch(() => null)
+  }, [audioUrl, audioData, fetchApiAudio])
+
   const handlePlayPause = useCallback(async () => {
     if (isPlaying) {
       stopPlayback()
@@ -274,11 +290,13 @@ export default function VoiceMessageBubble({
       startPlayback(audioUrl)
       return
     }
-    // Durable `/api/...` pointer not yet resolved → fetch on this tap. This is the
-    // ONLY place expiry is detected: a 404 here shows "音频已过期" (and lets the user
-    // retry by tapping again), so it never fires just from opening the page.
+    // Durable `/api/...` pointer not yet resolved → play the pointerdown prefetch
+    // if one is in flight, else fetch now. This is the ONLY place expiry is
+    // detected: a 404 shows "音频已过期" (retry by tapping again), so it never fires
+    // just from opening the page.
     if (audioData.startsWith('/api/')) {
-      const url = await fetchApiAudio()
+      const url = prefetchRef.current ? await prefetchRef.current : await fetchApiAudio()
+      prefetchRef.current = null
       if (url) startPlayback(url)
       return
     }
@@ -312,6 +330,7 @@ export default function VoiceMessageBubble({
   return (
     <button
       type="button"
+      onPointerDown={prefetchAudio}
       onClick={handlePlayPause}
       className={`flex h-[56px] items-center gap-3 rounded-[28px] px-4 py-2.5 text-left transition-colors ${
         isDark

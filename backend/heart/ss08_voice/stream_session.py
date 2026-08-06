@@ -53,6 +53,11 @@ def _extract_tts_stage_directions(text: str) -> tuple[str, list[str]]:
         stripped = next_text
     stripped = re.sub(r"\s{2,}", " ", stripped)
     stripped = re.sub(r"\n{3,}", "\n\n", stripped)
+    # Backstop: a bracket span split across two sentences (splitter HARD_MAX, or
+    # a mid-stream chunk boundary) leaves an unpaired （【 ）】 that the paired
+    # pattern above can't match. Strip the stray bracket CHARACTERS only — never
+    # the surrounding text — so TTS never voices a lone "（" / "）".
+    stripped = re.sub(r"[（(【）)】]", "", stripped)
     return stripped.strip(), [item for item in directions if item]
 
 

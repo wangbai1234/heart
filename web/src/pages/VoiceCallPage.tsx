@@ -16,7 +16,7 @@ interface VoiceCallPageProps {
 
 // 全屏语音通话（微信样式）：角色封面做背景，仅保留红色挂断键。
 // 半双工 + 点击打断：角色说话时按住键置灰，点屏幕可打断；说完再按住说话。
-// 左上角 ··· 控制"是否显示 Ta 说的话"字幕。
+// 右上角 ··· 控制"是否显示 Ta 说的话"字幕（默认关闭）。
 export function VoiceCallPage({ isDark: _isDark }: VoiceCallPageProps) {
   const navigate = useNavigate()
   const params = useParams<{ characterId?: string }>()
@@ -37,7 +37,9 @@ export function VoiceCallPage({ isDark: _isDark }: VoiceCallPageProps) {
   const { isSpeaking, stop: stopPlayback } = useCallAudioPlayer(characterId)
 
   const [isRecording, setIsRecording] = useState(false)
-  const [showSubtitle, setShowSubtitle] = useState(true)
+  // Voice call defaults to NOT showing the transcript — only reveal "Ta 说的话"
+  // when the user opts in via the ··· menu.
+  const [showSubtitle, setShowSubtitle] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
   const [elapsedMs, setElapsedMs] = useState(0)

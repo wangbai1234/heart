@@ -57,6 +57,26 @@ def test_repeated_brackets_all_removed():
     assert directions == ["笑", "歪头"]
 
 
+def test_orphan_open_bracket_stripped_not_voiced():
+    """An unpaired opener (bracket span split across sentences) leaves no（in TTS."""
+    text = "目光落向别处）你还好吗？"
+
+    stripped, _ = _extract_tts_stage_directions(text)
+
+    assert "）" not in stripped
+    assert "（" not in stripped
+    assert stripped == "目光落向别处你还好吗？"
+
+
+def test_orphan_close_bracket_stripped_not_voiced():
+    text = "（她停顿了一下"
+
+    stripped, _ = _extract_tts_stage_directions(text)
+
+    assert "（" not in stripped
+    assert stripped == "她停顿了一下"
+
+
 # ---------------------------------------------------------------------------
 # StreamSession.tts_provider_name — populated after finish()
 # ---------------------------------------------------------------------------
