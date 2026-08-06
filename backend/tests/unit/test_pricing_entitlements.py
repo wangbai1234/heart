@@ -136,6 +136,31 @@ class TestStoryPricing:
         assert story_minute_cost_fen("immersive") == 0
 
 
+class TestVoiceCallPricing:
+    """Voice-call per-minute pricing + tier free-minute allowance."""
+
+    def test_minute_cost_is_2000_fen(self):
+        from heart.billing.pricing import voice_call_minute_cost_fen
+        # voice_call_minute_cost_coins=20 → 2000 fen (1min = 20币).
+        assert voice_call_minute_cost_fen() == 2000
+
+    def test_free_tier_has_no_free_minutes(self):
+        from heart.membership import voice_call_free_minutes
+        assert voice_call_free_minutes("free") == 0
+
+    def test_plus_tier_has_10_free_minutes(self):
+        from heart.membership import voice_call_free_minutes
+        assert voice_call_free_minutes("plus") == 10
+
+    def test_immersive_tier_has_60_free_minutes(self):
+        from heart.membership import voice_call_free_minutes
+        assert voice_call_free_minutes("immersive") == 60
+
+    def test_unknown_tier_has_no_free_minutes(self):
+        from heart.membership import voice_call_free_minutes
+        assert voice_call_free_minutes("enterprise_unknown") == 0
+
+
 class TestStoryTierGating:
     """_tier_can_unlock: all tiers can unlock all scenarios (fee-based, not tier-gated)."""
 

@@ -77,6 +77,20 @@ def is_free_for_tier(tier: str, item: str) -> bool:
     return item in get_entitlements(tier).free
 
 
+def voice_call_free_minutes(tier: str) -> int:
+    """Monthly free voice-call minutes granted on *tier*.
+
+    Config-driven via settings.voice_call_free_minutes_config. Unknown tiers
+    (and parse failures) fall back to 0 (no free allowance).
+    """
+    try:
+        raw: dict = json.loads(settings.voice_call_free_minutes_config)
+    except Exception:
+        logger.exception("voice_call_free_minutes_config_parse_failed")
+        return 0
+    return int(raw.get(tier, 0))
+
+
 # ---------------------------------------------------------------------------
 # Effective tier (lazily resolved from DB — no in-process cache)
 # ---------------------------------------------------------------------------

@@ -85,6 +85,41 @@ export function MembershipPage() {
           </div>
         </div>
 
+        {/* Voice-call monthly quota */}
+        <div className="bg-[var(--color-glass-75)] backdrop-blur-[20px] rounded-[20px] border border-[var(--color-border-glass)] shadow-[var(--shadow-card)] p-4 mb-5">
+          <div className="flex items-center justify-between">
+            <p className="text-[13px] text-[var(--color-text-secondary)]">本月语音通话</p>
+            <span className="text-[12px] text-[var(--color-text-muted)]">
+              超出后 {membership.voiceCall.minute_cost_coins} 币/分钟
+            </span>
+          </div>
+          {membership.voiceCall.free_minutes > 0 ? (
+            <>
+              <div className="flex items-baseline gap-2 mt-1.5">
+                <span className="text-[22px] font-bold text-[var(--color-ink)]">
+                  剩余 {membership.voiceCall.remaining_minutes} 分钟
+                </span>
+                <span className="text-[13px] text-[var(--color-text-muted)]">
+                  免费 {membership.voiceCall.free_minutes} 分钟 / 月
+                </span>
+              </div>
+              <div className="mt-3 h-[6px] rounded-full bg-[var(--color-border-glass)] overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-all"
+                  style={{
+                    width: `${Math.min(100, (membership.voiceCall.remaining_minutes / membership.voiceCall.free_minutes) * 100)}%`,
+                    backgroundColor: TIER_ACCENT[currentTier] ?? 'var(--color-primary)',
+                  }}
+                />
+              </div>
+            </>
+          ) : (
+            <p className="text-[14px] text-[var(--color-text-secondary)] mt-1.5">
+              按 {membership.voiceCall.minute_cost_coins} 币/分钟计费，升级会员可获得每月免费时长
+            </p>
+          )}
+        </div>
+
         {loadError && (
           <div className="text-center py-8">
             <p className="text-[var(--color-text-muted)] text-[14px]">定价加载失败</p>

@@ -207,6 +207,16 @@ class Settings(BaseSettings):
     )
     story_minute_cost_coins: int = 1  # 100 fen per full minute of play (PR C2)
 
+    # Voice call (语音通话) pricing + monthly free-minute allowance per tier.
+    # Billed per full minute via a client heartbeat (like story playtime). Each
+    # tier gets a monthly free allowance; minutes beyond it are charged
+    # voice_call_minute_cost_coins per minute. Allowance resets every calendar
+    # month (Asia/Shanghai month_key), tracked in user_voice_call_quotas.
+    voice_call_minute_cost_coins: int = 20  # 2000 fen per full minute (1min = 20币)
+    # Free monthly minutes by tier (JSON, overridable via VOICE_CALL_FREE_MINUTES env var).
+    # free: 0 (pay from minute 1); plus: 10; immersive: 60.
+    voice_call_free_minutes_config: str = '{"free":0,"plus":10,"immersive":60}'
+
     # Membership tier definitions (JSON string, overridable via MEMBERSHIP_TIERS_CONFIG env var).
     # Each tier maps to: models (allowed LLM slugs), tts (allowed TTS providers),
     # clone (allowed clone providers), monthly_grant (coins per 30-day cycle),

@@ -1,11 +1,12 @@
 import { create } from 'zustand'
-import type { MembershipEntitlements } from '../services/api'
+import type { MembershipEntitlements, VoiceCallQuota } from '../services/api'
 
 interface MembershipState {
   tier: string
   expiresAt: string | null
   entitlements: MembershipEntitlements
   monthlyGrant: number
+  voiceCall: VoiceCallQuota
   bindingCode: string
   loading: boolean
   loaded: boolean
@@ -22,11 +23,19 @@ const FREE_ENTITLEMENTS: MembershipEntitlements = {
   free: [],
 }
 
+const FREE_VOICE_CALL: VoiceCallQuota = {
+  free_minutes: 0,
+  used_minutes: 0,
+  remaining_minutes: 0,
+  minute_cost_coins: 20,
+}
+
 export const useMembershipStore = create<MembershipState>()((set) => ({
   tier: 'free',
   expiresAt: null,
   entitlements: FREE_ENTITLEMENTS,
   monthlyGrant: 0,
+  voiceCall: FREE_VOICE_CALL,
   bindingCode: '',
   loading: false,
   loaded: false,
@@ -40,6 +49,7 @@ export const useMembershipStore = create<MembershipState>()((set) => ({
         expiresAt: m.expires_at,
         entitlements: m.entitlements,
         monthlyGrant: m.monthly_grant,
+        voiceCall: m.voice_call ?? FREE_VOICE_CALL,
         bindingCode: m.binding_code,
         loaded: true,
       })
@@ -55,6 +65,7 @@ export const useMembershipStore = create<MembershipState>()((set) => ({
       expiresAt: null,
       entitlements: FREE_ENTITLEMENTS,
       monthlyGrant: 0,
+      voiceCall: FREE_VOICE_CALL,
       bindingCode: '',
       loaded: false,
     }),

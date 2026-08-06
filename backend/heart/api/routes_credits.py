@@ -170,11 +170,14 @@ async def pricing() -> dict:
     without the user manually filling a remark. Null when unconfigured.
     """
     from heart.billing.pricing import action_cost_fen, tts_cost_fen
-    from heart.membership import get_entitlements
+    from heart.membership import get_entitlements, voice_call_free_minutes
 
     free_ent = get_entitlements("free")
     plus_ent = get_entitlements("plus")
     immersive_ent = get_entitlements("immersive")
+
+    plus_call_min = voice_call_free_minutes("plus")
+    immersive_call_min = voice_call_free_minutes("immersive")
 
     result: dict = {
         "signup_grant": settings.signup_grant_credits // 100,
@@ -236,6 +239,7 @@ async def pricing() -> dict:
                     "免费无限次文字聊天",
                     "免费解锁所有剧情",
                     "免费无限次语音聊天",
+                    f"每月{plus_call_min}分钟免费语音通话",
                     "每月额外赠送300yuoyuo币",
                     "解锁长久记忆功能",
                 ],
@@ -255,6 +259,7 @@ async def pricing() -> dict:
                     "免费无限次语音克隆",
                     "免费无限次剧情聊天",
                     "免费无限次语音聊天",
+                    f"每月{immersive_call_min}分钟免费语音通话",
                     "每月额外赠送700yuoyuo币",
                     "解锁长久记忆功能",
                 ],

@@ -8,7 +8,8 @@ import { resolveCharacterProfile, type CharacterId } from '../data/uiContent'
 import { useWebSocket } from '../hooks/useWebSocket'
 import { useVoiceRecorder } from '../hooks/useVoiceRecorder'
 import { useCallAudioPlayer } from '../hooks/useCallAudioPlayer'
-import { transcribeAudio, createCallSummary } from '../services/api'
+import { transcribeAudio, createCallSummary, voiceCallHeartbeat } from '../services/api'
+import { useCreditsStore } from '../stores/creditsStore'
 
 interface VoiceCallPageProps {
   isDark: boolean
@@ -35,6 +36,7 @@ export function VoiceCallPage({ isDark: _isDark }: VoiceCallPageProps) {
   const { sendMessage, interrupt } = useWebSocket()
   const recorder = useVoiceRecorder()
   const { isSpeaking, stop: stopPlayback } = useCallAudioPlayer(characterId)
+  const setBalance = useCreditsStore((s) => s.setBalance)
 
   const [isRecording, setIsRecording] = useState(false)
   // Voice call defaults to NOT showing the transcript — only reveal "Ta 说的话"
@@ -48,6 +50,14 @@ export function VoiceCallPage({ isDark: _isDark }: VoiceCallPageProps) {
   // guard so hang-up + unmount can't both post the summary.
   const startedAtRef = useRef<number>(Date.now())
   const endedRef = useRef(false)
+  // Per-call billing: a client-generated id (unique per call) + a monotonic
+  // minute counter form the idempotency key voice_call:{id}:{minute}, so a
+  // retried heartbeat never bills a minute twice. minuteRef is the NEXT minute
+  // index to bill (starts at 0; the first heartbeat fires at 60s).
+  const callIdRef = useRef<string>(
+    (crypto.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`),
+  )
+  const minuteRef = useRef(0)
   // Message ids present before the call. Everything added during the call is a
   // channel='call' turn — hidden from chat history server-side, so we strip the
   // optimistic copies from the store on end and drop in one summary bubble.
@@ -174,6 +184,31 @@ export function VoiceCallPage({ isDark: _isDark }: VoiceCallPageProps) {
     await endCall()
     navigate(`/chat/${characterId}`)
   }, [endCall, navigate, characterId])
+
+  // Per-minute billing pulse: every 60s of call time, bill the next minute.
+  // The first N minutes are free (tier allowance); beyond that each costs
+  // voice_call_minute_cost_coins. On "insufficient" we end the call and route
+  // the user back to chat with a recharge prompt. Idempotent per (callId,minute).
+  useEffect(() => {
+    const id = setInterval(async () => {
+      if (endedRef.current) return
+      const minute = minuteRef.current
+      try {
+        const { status, balance } = await voiceCallHeartbeat(callIdRef.current, minute)
+        minuteRef.current = minute + 1
+        if (status === 'charged') setBalance(balance)
+        else if (status === 'insufficient') {
+          showToast('余额不足，通话即将结束')
+          setTimeout(() => { hangUp() }, 1200)
+        }
+      } catch {
+        // Network hiccup — don't advance the minute counter; retry next tick
+        // against the same idempotency key so a briefly-charged minute is safe.
+      }
+    }, 60_000)
+    return () => clearInterval(id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Leaving the page by ANY route (hang-up, browser back, edge-swipe) ends the
   // call. endCall is idempotent, so this cleanup is safe alongside hangUp.

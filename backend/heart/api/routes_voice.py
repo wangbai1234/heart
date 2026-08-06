@@ -341,6 +341,46 @@ async def get_preset_voice_sample(
     return Response(content=audio, media_type=media_type)
 
 
+class CallHeartbeatBody(BaseModel):
+    call_id: str
+    minute: int
+
+
+@router.get("/call/quota")
+async def get_voice_call_quota(
+    current_user: TokenData = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """This month's voice-call free-minute allowance and usage for the caller."""
+    from heart.billing.voice_call import get_quota
+
+    uid = uuid.UUID(current_user.user_id)
+    return await get_quota(db, uid)
+
+
+@router.post("/call/heartbeat")
+async def voice_call_heartbeat(
+    body: CallHeartbeatBody,
+    current_user: TokenData = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Bill one minute of an active voice call (client sends one every 60s).
+
+    Returns ``{status, balance}``:
+      - ``free``: minute covered by the monthly allowance (nothing charged).
+      - ``charged``: one paid minute billed; ``balance`` is the new balance.
+      - ``insufficient``: not enough credits; the client must end the call and
+        prompt a recharge.
+    """
+    from heart.billing.voice_call import charge_call_minute
+
+    uid = uuid.UUID(current_user.user_id)
+    if body.minute < 0:
+        raise HTTPException(status_code=422, detail="minute 必须为非负整数")
+    status, balance = await charge_call_minute(db, uid, body.call_id, body.minute)
+    return {"status": status, "balance": balance}
+
+
 @router.get("/{character_id}")
 async def get_character_voice(
     character_id: str,

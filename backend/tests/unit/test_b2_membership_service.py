@@ -154,8 +154,18 @@ class TestGetMembershipEndpoint:
         current_user.user_id = str(uuid.uuid4())
         db = _make_db_for_membership()
 
+        mock_quota = {
+            "tier": "plus",
+            "free_minutes": 10,
+            "used_minutes": 3,
+            "remaining_minutes": 7,
+            "minute_cost_coins": 20,
+            "month_key": "2026-08",
+        }
         with patch(
             "heart.api.routes_membership.get_effective_tier", new=AsyncMock(return_value="plus")
+        ), patch(
+            "heart.billing.voice_call.get_quota", new=AsyncMock(return_value=mock_quota)
         ):
             result = await get_membership(current_user=current_user, db=db)
 
@@ -167,6 +177,9 @@ class TestGetMembershipEndpoint:
         assert "deepseek" in result["entitlements"]["free"]
         assert "grok" not in result["entitlements"]["free"]
         assert result["monthly_grant"] == 300
+        assert result["voice_call"]["free_minutes"] == 10
+        assert result["voice_call"]["remaining_minutes"] == 7
+        assert result["voice_call"]["minute_cost_coins"] == 20
         assert "binding_code" in result
         assert "expires_at" in result
 
@@ -180,8 +193,18 @@ class TestGetMembershipEndpoint:
         current_user.user_id = str(uuid.uuid4())
         db = _make_db_for_membership()
 
+        mock_quota = {
+            "tier": "free",
+            "free_minutes": 0,
+            "used_minutes": 0,
+            "remaining_minutes": 0,
+            "minute_cost_coins": 20,
+            "month_key": "2026-08",
+        }
         with patch(
             "heart.api.routes_membership.get_effective_tier", new=AsyncMock(return_value="free")
+        ), patch(
+            "heart.billing.voice_call.get_quota", new=AsyncMock(return_value=mock_quota)
         ):
             result = await get_membership(current_user=current_user, db=db)
 
@@ -192,6 +215,7 @@ class TestGetMembershipEndpoint:
         assert "fish" in result["entitlements"]["tts"]
         assert result["entitlements"]["free"] == []
         assert result["monthly_grant"] == 0
+        assert result["voice_call"]["free_minutes"] == 0
 
     @pytest.mark.asyncio
     async def test_immersive_tier_everything_free(self):
@@ -203,9 +227,19 @@ class TestGetMembershipEndpoint:
         current_user.user_id = str(uuid.uuid4())
         db = _make_db_for_membership()
 
+        mock_quota = {
+            "tier": "immersive",
+            "free_minutes": 60,
+            "used_minutes": 12,
+            "remaining_minutes": 48,
+            "minute_cost_coins": 20,
+            "month_key": "2026-08",
+        }
         with patch(
             "heart.api.routes_membership.get_effective_tier",
             new=AsyncMock(return_value="immersive"),
+        ), patch(
+            "heart.billing.voice_call.get_quota", new=AsyncMock(return_value=mock_quota)
         ):
             result = await get_membership(current_user=current_user, db=db)
 
@@ -215,6 +249,7 @@ class TestGetMembershipEndpoint:
             "deepseek", "grok", "tts", "clone", "asr", "story_unlock", "story_chat"
         }
         assert result["monthly_grant"] == 700
+        assert result["voice_call"]["free_minutes"] == 60
 
     @pytest.mark.asyncio
     async def test_free_user_has_null_expires_at(self):
@@ -226,8 +261,18 @@ class TestGetMembershipEndpoint:
         current_user.user_id = str(uuid.uuid4())
         db = _make_db_for_membership(expires_at=None)
 
+        mock_quota = {
+            "tier": "free",
+            "free_minutes": 0,
+            "used_minutes": 0,
+            "remaining_minutes": 0,
+            "minute_cost_coins": 20,
+            "month_key": "2026-08",
+        }
         with patch(
             "heart.api.routes_membership.get_effective_tier", new=AsyncMock(return_value="free")
+        ), patch(
+            "heart.billing.voice_call.get_quota", new=AsyncMock(return_value=mock_quota)
         ):
             result = await get_membership(current_user=current_user, db=db)
 

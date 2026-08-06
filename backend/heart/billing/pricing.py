@@ -70,6 +70,17 @@ def story_minute_cost_fen(tier: str = "free") -> int:
     return settings.story_minute_cost_coins * 100
 
 
+def voice_call_minute_cost_fen() -> int:
+    """Fen per full minute of voice call beyond the monthly free allowance.
+
+    Unlike other pricing helpers this is not tier-gated at the fen level —
+    the tier only decides how many free minutes precede paid billing (see
+    ``heart.membership.voice_call_free_minutes``). Once free minutes are spent,
+    every tier pays the same per-minute rate.
+    """
+    return settings.voice_call_minute_cost_coins * 100
+
+
 def action_cost_fen(action: str, tier: str = "free") -> int:
     """Return cost in fen for a one-shot action (voice clone etc.) on *tier*.
 

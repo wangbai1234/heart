@@ -426,16 +426,40 @@ export interface MembershipEntitlements {
   free: string[]
 }
 
+export interface VoiceCallQuota {
+  free_minutes: number
+  used_minutes: number
+  remaining_minutes: number
+  minute_cost_coins: number
+}
+
 export interface Membership {
   tier: string
   expires_at: string | null // null for free
   monthly_grant: number
   entitlements: MembershipEntitlements
+  voice_call: VoiceCallQuota
   binding_code: string
 }
 
 export async function getMembership(): Promise<Membership> {
   return request('/membership')
+}
+
+/** Bill one minute of an active voice call (heartbeat every 60s). */
+export async function voiceCallHeartbeat(
+  callId: string,
+  minute: number,
+): Promise<{ status: 'free' | 'charged' | 'insufficient'; balance: number }> {
+  return request('/voice/call/heartbeat', {
+    method: 'POST',
+    body: JSON.stringify({ call_id: callId, minute }),
+  })
+}
+
+/** This month's voice-call free-minute allowance + usage. */
+export async function getVoiceCallQuota(): Promise<VoiceCallQuota & { tier: string; month_key: string }> {
+  return request('/voice/call/quota')
 }
 
 // ── Invite (yuoyuo 邀请系统) ────────────────────────────────────────
