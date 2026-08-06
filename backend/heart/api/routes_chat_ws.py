@@ -1427,40 +1427,41 @@ async def create_transfer(
     reply_rows: list[dict[str, Any]] = []
     segments = split_response(decision.reply) or [{"kind": "text", "content": decision.reply}]
     seq = 0
-    # If accepted, the receipt pill leads (WeChat shows 已收款 first), then reply.
-    if decision.accept:
-        receipt = TransferData(
-            transfer_id=transfer_id, amount=amount, note=note, status="accepted", direction="out"
-        )
-        rid = uuid.uuid4()
-        await db.execute(
-            sql_text(
-                "INSERT INTO chat_messages "
-                "(id, user_id, character_id, turn_id, role, content, modality, "
-                " kind, channel, credits_charged, sequence_id, created_at) "
-                "VALUES (:id, :uid, :cid, :tid, 'assistant', :content, 'text', "
-                "        :kind, 'chat', 0, :seq, NOW())"
-            ),
-            {
-                "id": rid,
-                "uid": uid,
-                "cid": body.character_id,
-                "tid": reply_turn,
-                "content": receipt.to_json(),
-                "kind": RECEIPT_KIND,
-                "seq": seq,
-            },
-        )
-        reply_rows.append(
-            {
-                "id": str(rid),
-                "role": "assistant",
-                "content": receipt.to_json(),
-                "kind": RECEIPT_KIND,
-                "turn_id": str(reply_turn),
-            }
-        )
-        seq += 1
+    # The character always leads with a receipt pill, WeChat-style: on accept it
+    # reads 已收款, on decline 已退还 (a returned-transfer bubble on the char side).
+    # The reply text/action bubbles follow.
+    receipt = TransferData(
+        transfer_id=transfer_id, amount=amount, note=note, status=status, direction="out"
+    )
+    rid = uuid.uuid4()
+    await db.execute(
+        sql_text(
+            "INSERT INTO chat_messages "
+            "(id, user_id, character_id, turn_id, role, content, modality, "
+            " kind, channel, credits_charged, sequence_id, created_at) "
+            "VALUES (:id, :uid, :cid, :tid, 'assistant', :content, 'text', "
+            "        :kind, 'chat', 0, :seq, NOW())"
+        ),
+        {
+            "id": rid,
+            "uid": uid,
+            "cid": body.character_id,
+            "tid": reply_turn,
+            "content": receipt.to_json(),
+            "kind": RECEIPT_KIND,
+            "seq": seq,
+        },
+    )
+    reply_rows.append(
+        {
+            "id": str(rid),
+            "role": "assistant",
+            "content": receipt.to_json(),
+            "kind": RECEIPT_KIND,
+            "turn_id": str(reply_turn),
+        }
+    )
+    seq += 1
 
     for seg in segments:
         if not seg["content"].strip():

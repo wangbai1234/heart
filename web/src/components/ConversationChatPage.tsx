@@ -438,17 +438,26 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
     if (transferSending) return
     const cid = currentCharacterId as CharacterId
     setTransferSending(true)
+    // Show the transfer bubble immediately in a pending state ("待朋友确认收钱")
+    // — the LLM accept/decline decision runs server-side and can take a few
+    // seconds; the user should see their transfer land at once, WeChat-style.
+    const tempId = `transfer-pending-${Date.now()}`
+    const { addMessage, updateMessage, removeMessage, appendMessage } = useChatStore.getState()
+    const amtDecimals = amount < 0.01 && amount > 0 ? 3 : 2
+    addMessage(cid, {
+      id: tempId,
+      role: 'user',
+      content: JSON.stringify({ amount: Number(amount.toFixed(amtDecimals)), note, status: 'pending', direction: 'out' }),
+      timestamp: Date.now(),
+      kind: 'transfer',
+    })
     try {
       const res = await sendTransfer(cid, amount, note)
-      const { addMessage, appendMessage } = useChatStore.getState()
-      // 转账气泡（用户侧）
-      addMessage(cid, {
+      // Resolve the optimistic pending bubble into its final state in place.
+      updateMessage(cid, tempId, {
         id: res.transfer.id,
         turnId: res.transfer.turn_id,
-        role: 'user',
         content: res.transfer.content,
-        timestamp: Date.now(),
-        kind: 'transfer',
       })
       // 角色回应气泡（收据 + 台词/动作）
       for (const r of res.replies) {
@@ -476,6 +485,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
         })
       }
     } catch {
+      removeMessage(cid, tempId)
       useToastStore.getState().show('转账失败，请稍后重试', 'error')
     } finally {
       setTransferSending(false)
@@ -644,6 +654,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
         status = String(d.status || 'pending')
       } catch { /* keep defaults */ }
       const isReceipt = msg.kind === 'transfer_receipt'
+      const isDeclined = status === 'declined'
       // Accounting/WeChat style: thousands separators + 2 decimals (e.g.
       // 11,111.01). The 0.001 easter egg keeps a 3rd decimal so it isn't lost.
       const amtDecimals = amount < 0.01 && amount > 0 ? 3 : 2
@@ -652,14 +663,17 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
         maximumFractionDigits: amtDecimals,
       })
       // Status line — sender vs receiver perspective mirrors WeChat.
+      //   user side (transfer):  pending→待朋友确认收钱, accepted→已被领取, declined→已被退还
+      //   char side (receipt):   accepted→已收款, declined→已退还
       const statusLabel = isReceipt
-        ? '已收款'
+        ? (isDeclined ? '已退还' : '已收款')
         : status === 'accepted'
           ? '已被领取'
-          : status === 'declined'
-            ? '已退还'
-            : '待确认收款'
-      const dimmed = status === 'declined' && !isReceipt
+          : isDeclined
+            ? '已被退还'
+            : '待朋友确认收钱'
+      // Declined transfers (either side) go muted with a return-arrow glyph.
+      const dimmed = isDeclined
       return (
         <div className={`flex items-start gap-2 ${isReceipt ? 'self-start' : 'self-end flex-row-reverse'}`}>
           {showAvatar ? (
@@ -672,14 +686,21 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
             style={{ background: dimmed ? 'linear-gradient(135deg,#C9A278,#B98F63)' : 'linear-gradient(135deg,#F5A623,#E8942E)' }}
           >
             <div className="flex items-center gap-3 px-3.5 py-3">
-              <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#FFF" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
-                <rect x="2" y="5" width="20" height="14" rx="2" />
-                <path d="M12 5v14M2 10h20" />
-              </svg>
+              {isDeclined ? (
+                <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#FFF" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+                  <path d="M9 14 4 9l5-5" />
+                  <path d="M4 9h11a5 5 0 0 1 0 10h-1" />
+                </svg>
+              ) : (
+                <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#FFF" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+                  <rect x="2" y="5" width="20" height="14" rx="2" />
+                  <path d="M12 5v14M2 10h20" />
+                </svg>
+              )}
               <div className="min-w-0">
                 <div className="text-white text-[17px] font-medium leading-tight">¥{amtStr}</div>
                 <div className="text-white/85 text-[12px] mt-0.5 truncate">
-                  {noteText || (isReceipt ? '已收款' : '转账')}
+                  {noteText || (isDeclined ? '已退还' : isReceipt ? '已收款' : '转账')}
                 </div>
               </div>
             </div>

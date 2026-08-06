@@ -70,6 +70,11 @@ interface ChatState {
 
   // Streaming management (from chatStore)
   addMessage: (characterId: CharacterId, msg: Message) => void
+  // Patch a single message in place by id (used by the transfer flow to resolve
+  // an optimistic pending bubble into its final accepted/declined state).
+  updateMessage: (characterId: CharacterId, id: string, patch: Partial<Message>) => void
+  // Remove a single message by id (used to roll back an optimistic bubble on error).
+  removeMessage: (characterId: CharacterId, id: string) => void
   // Merge server chat history into the store, deduping by turn. Server history is
   // authoritative for any turn it knows about (its rows replace the optimistic
   // copies), the live streaming turn is never clobbered, and in-session live
@@ -182,6 +187,22 @@ export const useChatStore = create<ChatState>()(
         clearedCharacters: cleared,
       }
     }),
+  updateMessage: (characterId, id, patch) =>
+    set((s) => ({
+      messages: {
+        ...s.messages,
+        [characterId]: (s.messages[characterId] ?? []).map((m) =>
+          m.id === id ? { ...m, ...patch } : m,
+        ),
+      },
+    })),
+  removeMessage: (characterId, id) =>
+    set((s) => ({
+      messages: {
+        ...s.messages,
+        [characterId]: (s.messages[characterId] ?? []).filter((m) => m.id !== id),
+      },
+    })),
   reconcileHistory: (characterId, serverMsgs) =>
     set((s) => {
       const existing = s.messages[characterId] ?? []
