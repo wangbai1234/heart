@@ -9,6 +9,7 @@ from heart.ss08_voice.mimo_provider import (
     MiMoCancellableStream,
     MiMoProvider,
     _extract_audio_from_chunk,
+    _parse_mimo_asr_response,
     _parse_mimo_response,
     _strip_fish_markup,
 )
@@ -401,3 +402,38 @@ def test_build_body_strips_fish_markup_on_clone_path(provider):
     assert "[" not in assistant_content
     assert "压着情绪" not in assistant_content
     assert "你怎么才来。" in assistant_content
+
+
+# ── ASR transcript parsing (streaming SSE + single JSON) ──
+
+
+def test_asr_parse_single_json_body():
+    """Non-streaming single JSON body → message.content transcript."""
+    raw = b'{"choices": [{"message": {"content": "\xe4\xbd\xa0\xe5\xa5\xbd"}}]}'
+    assert _parse_mimo_asr_response(raw) == "你好"
+
+
+def test_asr_parse_sse_incremental_deltas_concatenated():
+    """SSE delta.content fragments accumulate in order (no dupes, no drops)."""
+    sse = (
+        'data: {"choices": [{"delta": {"content": "你"}}]}\n'
+        'data: {"choices": [{"delta": {"content": "好"}}]}\n'
+        'data: {"choices": [{"delta": {"content": "呀"}}]}\n'
+        "data: [DONE]\n"
+    )
+    assert _parse_mimo_asr_response(sse.encode()) == "你好呀"
+
+
+def test_asr_parse_sse_full_snapshot_is_authoritative():
+    """A message.content snapshot wins over accumulated deltas (no duplication)."""
+    sse = (
+        'data: {"choices": [{"delta": {"content": "你"}}]}\n'
+        'data: {"choices": [{"message": {"content": "你好呀"}}]}\n'
+        "data: [DONE]\n"
+    )
+    assert _parse_mimo_asr_response(sse.encode()) == "你好呀"
+
+
+def test_asr_parse_empty_and_garbage_safe():
+    assert _parse_mimo_asr_response(b"") == ""
+    assert _parse_mimo_asr_response(b"not json at all") == ""

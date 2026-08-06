@@ -1,30 +1,44 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useChatStore, type Message } from '../stores/chatStore'
-import { useAuthStore } from '../stores/authStore'
+import { useChatStore } from '../stores/chatStore'
 import type { CharacterId } from '../data/uiContent'
 
-// Headless auto-player for the voice-call page. Watches the character's message
-// list and, when a NEW assistant voice message finalises (turn_end stamps a
-// durable audioUrl OR live audioData is present), plays it automatically —
-// no bubble tap. Mirrors VoiceMessageBubble's auth'd fetch path for /api URLs.
+// Headless auto-player for the voice-call page. Plays a character reply
+// PROGRESSIVELY: the backend now streams one audio chunk per sentence (sentence
+// pipeline), so instead of waiting for turn_end to concat the whole reply, we
+// decode + play each sentence the instant it lands and queue the rest. The
+// character starts speaking sentence 1 while sentences 2..N are still being
+// generated — this is the latency win over the old "wait for full audioData".
 //
-// Half-duplex: the call page gates the mic on `isSpeaking`; `stop()` (barge-in)
-// halts playback immediately and is also invoked before recording a new turn.
+// Half-duplex: the call page gates the mic on `isSpeaking`. `stop()` (barge-in,
+// also called before recording a new turn) halts playback and clears the queue.
+type QueueItem = { turnId: string; seq: number; dataB64: string; format: 'wav' | 'mp3' }
+
 export function useCallAudioPlayer(characterId: CharacterId) {
   const messages = useChatStore((s) => s.messages[characterId] ?? [])
+  const streaming = useChatStore((s) => s.isStreaming[characterId] ?? false)
   const [isSpeaking, setIsSpeaking] = useState(false)
+
   const audioElRef = useRef<HTMLAudioElement | null>(null)
   const objectUrlRef = useRef<string | null>(null)
-  const playedIdsRef = useRef<Set<string>>(new Set())
+  const queueRef = useRef<QueueItem[]>([])
+  const enqueuedRef = useRef<Set<string>>(new Set()) // `${turnId}:${seq}` already queued
+  const pumpingRef = useRef(false)
+  const genRef = useRef(0) // bumped on stop() to invalidate in-flight playback
+  const streamingRef = useRef(false)
   const seededRef = useRef(false)
 
-  // Seed every message already on screen as "played" BEFORE the auto-play effect
-  // can fire. A user-initiated call must open silently — the character speaks
-  // only in reply to the user, never by re-reading the last chat bubble on
-  // entry (the "发起通话角色播放之前的语音" bug). Runs once, synchronously on the
-  // first render, so no historical bubble is ever eligible for auto-play.
+  useEffect(() => { streamingRef.current = streaming }, [streaming])
+
+  // Seed every message already on screen as "handled" so a fresh call opens
+  // silently — the character speaks only in reply, never by re-reading history.
   if (!seededRef.current) {
-    for (const m of messages) playedIdsRef.current.add(m.id)
+    for (const m of messages) {
+      const chunks = m.audioChunks ?? []
+      for (const c of chunks) enqueuedRef.current.add(`${m.id}:${c.seq}`)
+      // Historical bubbles carry concatenated audioData (no live chunks); mark a
+      // sentinel so the enqueue effect below never replays them.
+      if (!chunks.length) enqueuedRef.current.add(`${m.id}:full`)
+    }
     seededRef.current = true
   }
 
@@ -36,6 +50,9 @@ export function useCallAudioPlayer(characterId: CharacterId) {
   }, [])
 
   const stop = useCallback(() => {
+    genRef.current += 1 // invalidate any awaiting pump / play
+    queueRef.current = []
+    pumpingRef.current = false
     const el = audioElRef.current
     if (el) {
       el.pause()
@@ -45,102 +62,101 @@ export function useCallAudioPlayer(characterId: CharacterId) {
     setIsSpeaking(false)
   }, [cleanupUrl])
 
-  // Resolve a playable object URL for a message's audio. Priority:
-  //   1. live audioData — blob:/http play直接；raw base64 (the finalized live
-  //      stream) is decoded into a blob URL here. This was the "fish 通话没声音"
-  //      bug: Fish streams a single mp3 chunk, so at turn_end audioData holds
-  //      raw base64 while audioUrl (the by-turn pointer) isn't stamped yet; the
-  //      old code set el.src to that raw base64 string, which the browser can't
-  //      load, so it failed silently and playedIds永久标记不再重试. MiMo only
-  //      "worked" because it's slow enough that audioUrl was usually ready first.
-  //   2. /api pointer — token fetch (by-turn 刚落库可能短暂 404，重试几次)。
-  const resolveSrc = useCallback(async (msg: Message): Promise<string | null> => {
-    const live = msg.audioData
-    if (live) {
-      if (live.startsWith('blob:') || live.startsWith('http')) return live
-      if (!live.startsWith('/api/') && !live.startsWith('/')) {
-        // Raw base64 from the finalized live stream → decode to a typed blob so
-        // the <audio> element actually loads it (mirrors VoiceMessageBubble).
-        try {
-          const mime = msg.audioFormat === 'mp3' ? 'audio/mpeg' : 'audio/wav'
-          const bin = atob(live)
-          const bytes = new Uint8Array(bin.length)
-          for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
-          cleanupUrl()
-          const url = URL.createObjectURL(new Blob([bytes], { type: mime }))
-          objectUrlRef.current = url
-          return url
-        } catch {
-          // Malformed base64 — fall through to the durable server pointer.
-        }
-      }
-    }
-
-    const src = msg.audioUrl || msg.audioData || ''
-    if (!src) return null
-    if (src.startsWith('blob:') || src.startsWith('http')) return src
-    if (!src.startsWith('/api/')) return src
-
-    const { accessToken } = useAuthStore.getState()
-    const isByTurn = src.includes('/by-turn/')
-    const maxAttempts = isByTurn ? 4 : 1
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+  // Decode one self-contained chunk (wav or mp3) to a blob URL and play it,
+  // resolving when it finishes (or fails). Rejects nothing — a bad chunk just
+  // resolves so the pump moves on.
+  const playChunk = useCallback((item: QueueItem, gen: number): Promise<void> => {
+    return new Promise((resolve) => {
+      let buf: ArrayBuffer
       try {
-        const res = await fetch(src, {
-          headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
-        })
-        if (res.ok) {
-          const blob = await res.blob()
-          cleanupUrl()
-          const url = URL.createObjectURL(blob)
-          objectUrlRef.current = url
-          return url
-        }
-        if (res.status !== 404 || attempt === maxAttempts - 1) return null
+        // Decode into a concrete ArrayBuffer and pass THAT as the BlobPart — a
+        // Uint8Array infers Uint8Array<ArrayBufferLike> under tsc -b and fails
+        // the BlobPart assignment (SharedArrayBuffer vs ArrayBuffer). ArrayBuffer
+        // is unambiguously a BlobPart.
+        const bin = atob(item.dataB64)
+        buf = new ArrayBuffer(bin.length)
+        const view = new Uint8Array(buf)
+        for (let i = 0; i < bin.length; i++) view[i] = bin.charCodeAt(i)
       } catch {
-        if (attempt === maxAttempts - 1) return null
+        resolve()
+        return
       }
-      await new Promise((r) => setTimeout(r, 400 * (attempt + 1)))
-    }
-    return null
+      const mime = item.format === 'mp3' ? 'audio/mpeg' : 'audio/wav'
+      cleanupUrl()
+      const url = URL.createObjectURL(new Blob([buf], { type: mime }))
+      objectUrlRef.current = url
+
+      let el = audioElRef.current
+      if (!el) {
+        el = new Audio()
+        audioElRef.current = el
+      }
+      const done = () => {
+        el!.onended = null
+        el!.onerror = null
+        resolve()
+      }
+      el.onended = done
+      el.onerror = done
+      el.src = url
+      if (genRef.current !== gen) { resolve(); return } // stopped mid-setup
+      void el.play().catch(() => resolve())
+    })
   }, [cleanupUrl])
 
-  const play = useCallback(async (msg: Message) => {
-    const url = await resolveSrc(msg)
-    if (!url) return
-    let el = audioElRef.current
-    if (!el) {
-      el = new Audio()
-      el.onended = () => setIsSpeaking(false)
-      el.onerror = () => setIsSpeaking(false)
-      audioElRef.current = el
-    }
-    el.src = url
+  // Drain the queue in seq order. Keeps `isSpeaking` true across the gap between
+  // a played sentence and the next one still being synthesized — only releases
+  // the mic when the queue is empty AND the turn has stopped streaming.
+  const pump = useCallback(async () => {
+    if (pumpingRef.current) return
+    pumpingRef.current = true
+    const gen = genRef.current
     setIsSpeaking(true)
-    try {
-      await el.play()
-    } catch {
-      // Autoplay blocked or decode failure — drop the speaking state so the
-      // mic unlocks rather than hanging on "对方正在说话".
-      setIsSpeaking(false)
+    while (genRef.current === gen) {
+      const item = queueRef.current.shift()
+      if (item) {
+        await playChunk(item, gen)
+        continue
+      }
+      // Queue drained. If the turn is still streaming, wait for more sentences;
+      // otherwise the reply is over.
+      if (!streamingRef.current) break
+      await new Promise((r) => setTimeout(r, 80))
     }
-  }, [resolveSrc])
+    if (genRef.current === gen) {
+      pumpingRef.current = false
+      if (queueRef.current.length === 0) setIsSpeaking(false)
+    }
+  }, [playChunk])
 
-  // When the latest assistant message is a finalised voice bubble we haven't
-  // played yet, auto-play it. A bubble is "ready" when it has live audioData or
-  // a durable audioUrl (stamped at turn_end) — never mid-stream.
+  // Watch the latest assistant voice turn and enqueue any chunk we haven't seen.
+  // Fires on every appendMessageAudio (store returns a fresh array per chunk).
   useEffect(() => {
     const last = messages[messages.length - 1]
-    if (!last || last.role !== 'assistant') return
-    if (last.kind !== 'voice') return
-    if (!last.audioData && !last.audioUrl) return
-    if (playedIdsRef.current.has(last.id)) return
-    playedIdsRef.current.add(last.id)
-    void play(last)
-  }, [messages, play])
+    if (!last || last.role !== 'assistant' || last.kind !== 'voice') return
+    const chunks = last.audioChunks ?? []
+    let added = false
+    for (const c of chunks) {
+      const key = `${last.id}:${c.seq}`
+      if (enqueuedRef.current.has(key)) continue
+      enqueuedRef.current.add(key)
+      queueRef.current.push({
+        turnId: last.id,
+        seq: c.seq,
+        dataB64: c.dataB64,
+        format: c.format === 'mp3' ? 'mp3' : 'wav',
+      })
+      added = true
+    }
+    if (added) {
+      queueRef.current.sort((a, b) => a.seq - b.seq)
+      void pump()
+    }
+  }, [messages, pump])
 
   useEffect(() => {
     return () => {
+      genRef.current += 1
       const el = audioElRef.current
       if (el) { el.pause(); el.src = '' }
       cleanupUrl()
