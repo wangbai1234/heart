@@ -113,7 +113,11 @@ class RealtimeStreamSession:
                 self.audio_produced = True
                 self.tts_provider_name = "fish"
                 if self._turn_id is not None:
-                    await self._send(self._turn_id, self._global_seq, data, False, self._fmt)
+                    # sample_rate is None for mp3 (chat) and only set once Fish
+                    # reports it on pcm/wav (call) — passed through so the client
+                    # builds AudioBuffers at the true rate instead of guessing.
+                    sr = self._session.sample_rate if self._session else None
+                    await self._send(self._turn_id, self._global_seq, data, False, self._fmt, sr)
                     self._global_seq += 1
         except Exception as e:
             # Mid-stream failure: end audio here. Whatever arrived already

@@ -21,7 +21,7 @@ export interface Message {
   audioData?: string
   audioDuration?: number
   audioFormat?: string
-  audioChunks?: { dataB64: string; durationMs: number; seq: number; format: 'wav' | 'mp3' }[]
+  audioChunks?: { dataB64: string; durationMs: number; seq: number; format: 'wav' | 'mp3'; sampleRate?: number }[]
   // Durable server pointer (/api/chat/audio/...). Persisted, so a voice message
   // can still be replayed after a page refresh once audioData is discarded.
   audioUrl?: string
@@ -96,6 +96,7 @@ interface ChatState {
     durationMs: number,
     seq: number,
     format: 'wav' | 'mp3',
+    sampleRate?: number,
   ) => void
   finalizeMessageAudio: (characterId: CharacterId, turnId: string) => void
   setStreaming: (cid: string, v: boolean) => void
@@ -303,14 +304,14 @@ export const useChatStore = create<ChatState>()(
         ),
       },
     })),
-  appendMessageAudio: (characterId, turnId, dataB64, durationMs, seq, format) =>
+  appendMessageAudio: (characterId, turnId, dataB64, durationMs, seq, format, sampleRate) =>
     set((s) => ({
       messages: {
         ...s.messages,
         [characterId]: (s.messages[characterId] ?? []).map(m => {
           if (m.id !== turnId) return m
           const chunks = m.audioChunks ? [...m.audioChunks] : []
-          chunks.push({ dataB64, durationMs, seq, format })
+          chunks.push({ dataB64, durationMs, seq, format, sampleRate })
           chunks.sort((a, b) => a.seq - b.seq)
           return { ...m, audioChunks: chunks, audioFormat: format }
         }),

@@ -119,6 +119,7 @@ def _create_stream_session(
     clone_reference: Optional[str] = None,
     character_id: str = "",
     allow_realtime: bool = True,
+    channel: str = "chat",
 ) -> Any:
     """Create a stream session if voice service is available.
 
@@ -134,21 +135,33 @@ def _create_stream_session(
     from heart.ss08_voice.stream_session import StreamSession
 
     async def send_audio(
-        t_id: str, seq: int, audio_bytes: bytes, is_last: bool, fmt: str = "pcm16"
+        t_id: str,
+        seq: int,
+        audio_bytes: bytes,
+        is_last: bool,
+        fmt: str = "pcm16",
+        sample_rate: int | None = None,
     ) -> None:
-        """Send audio chunk to WebSocket as pcm16 with sentence_seq."""
-        await ws.send_json(
-            {
-                "type": "audio_chunk",
-                "turn_id": t_id,
-                "character_id": character_id,
-                "sentence_seq": 0,
-                "seq": seq,
-                "format": fmt,
-                "data_b64": base64.b64encode(audio_bytes).decode() if audio_bytes else "",
-                "is_last": is_last,
-            }
-        )
+        """Send one audio chunk to the client.
+
+        ``sample_rate`` is only populated for the realtime wav/pcm call path
+        (Fish reports it per frame); the client needs it to build gapless
+        AudioBuffers. It is omitted (None) for mp3, where the container is
+        self-describing.
+        """
+        payload: dict[str, Any] = {
+            "type": "audio_chunk",
+            "turn_id": t_id,
+            "character_id": character_id,
+            "sentence_seq": 0,
+            "seq": seq,
+            "format": fmt,
+            "data_b64": base64.b64encode(audio_bytes).decode() if audio_bytes else "",
+            "is_last": is_last,
+        }
+        if sample_rate:
+            payload["sample_rate"] = sample_rate
+        await ws.send_json(payload)
 
     from heart.core.config import settings
 
@@ -161,12 +174,20 @@ def _create_stream_session(
         try:
             from heart.ss08_voice.realtime_stream_session import RealtimeStreamSession
 
+            # Voice CALL needs gapless per-frame playback the instant audio
+            # lands. mp3 frames are slices of one continuous stream and can't be
+            # decoded standalone in the browser, so calls use wav (linear PCM
+            # payload) which the client schedules chunk-by-chunk via Web Audio.
+            # Chat stays mp3: it concatenates the whole reply and plays once at
+            # turn_end (it must show a duration), so it needs no per-frame decode
+            # and benefits from mp3's ~10x smaller size.
+            realtime_fmt = "wav" if channel == "call" else "mp3"
             return RealtimeStreamSession(
                 send_audio,
                 api_key=settings.fish_api_key,
                 url=settings.fish_realtime_url,
                 character_id=character_id,
-                fmt="mp3",
+                fmt=realtime_fmt,
             )
         except Exception as e:
             logger.warning("fish_realtime_session_init_failed", error=str(e))
@@ -975,6 +996,7 @@ async def _handle_chat_message(
         preferred_provider_name=voice_provider,
         clone_reference=clone_reference,
         character_id=character_id,
+        channel=channel,
     )
     if stream_session:
         try:
@@ -994,6 +1016,7 @@ async def _handle_chat_message(
                 clone_reference=clone_reference,
                 character_id=character_id,
                 allow_realtime=False,
+                channel=channel,
             )
             if stream_session:
                 await stream_session.start()

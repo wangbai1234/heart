@@ -35,7 +35,7 @@ export function VoiceCallPage({ isDark: _isDark }: VoiceCallPageProps) {
 
   const { sendMessage, interrupt } = useWebSocket()
   const recorder = useVoiceRecorder()
-  const { isSpeaking, stop: stopPlayback } = useCallAudioPlayer(characterId)
+  const { isSpeaking, stop: stopPlayback, unlock: unlockAudio } = useCallAudioPlayer(characterId)
   const setBalance = useCreditsStore((s) => s.setBalance)
 
   const [isRecording, setIsRecording] = useState(false)
@@ -115,6 +115,9 @@ export function VoiceCallPage({ isDark: _isDark }: VoiceCallPageProps) {
   const startTalk = useCallback(async () => {
     if (characterBusy || busyRef.current) return
     busyRef.current = true
+    // Unlock audio playback inside this real user gesture — iOS/Android won't
+    // let the WS-driven playback make sound otherwise.
+    unlockAudio()
     setIsRecording(true)
     try {
       await recorder.start()
@@ -123,7 +126,7 @@ export function VoiceCallPage({ isDark: _isDark }: VoiceCallPageProps) {
       busyRef.current = false
       showToast('无法访问麦克风，请检查权限')
     }
-  }, [characterBusy, recorder, showToast])
+  }, [characterBusy, recorder, showToast, unlockAudio])
 
   const endTalk = useCallback(async () => {
     if (!isRecording) return
