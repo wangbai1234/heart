@@ -686,6 +686,8 @@ export interface CharacterDTO {
   review_reason?: string | null
   /** One-line public plot hook shown under the name (display-only, ≤60 chars). */
   tagline?: string | null
+  /** ISO-8601 creation timestamp — drives the「新角色」(newest) discovery sort. */
+  created_at?: string | null
 }
 
 export async function getCharacters(): Promise<{ characters: CharacterDTO[] }> {

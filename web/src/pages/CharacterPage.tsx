@@ -11,8 +11,6 @@ import {
   CHARACTER_STYLE_TAGS,
   CHARACTER_ROLE_TAGS,
   DEFAULT_COVER,
-  DISCOVERY_RECOMMENDED,
-  DISCOVERY_ALL,
   type CharacterProfile,
 } from '../data/uiContent'
 import { useCharactersStore } from '../stores/charactersStore'
@@ -27,7 +25,26 @@ const VIS_BADGE: Record<string, { label: string; color: string; bg: string }> = 
   private:  { label: '私密',   color: '#FFFFFF', bg: 'rgba(255,255,255,0.25)' },
 }
 
-const DISCOVERY_FAVORITES = '收藏'
+/** Primary discovery modes (large tabs). */
+const MODE_RECOMMENDED = '推荐'
+const MODE_NEWEST = '新角色'
+const MODE_FAVORITES = '收藏'
+const MODE_MINE = '我的'
+const DISCOVERY_MODES = [MODE_RECOMMENDED, MODE_NEWEST, MODE_FAVORITES, MODE_MINE] as const
+
+/** Editorial「推荐」tag (for filtering public catalog). */
+const DISCOVERY_RECOMMENDED = '推荐'
+
+/** Secondary tag chips (fixed order) shown under the mode tabs. `全部` = no tag filter. */
+const TAG_ALL = '全部'
+const PINNED_TAGS = ['女性向', '男性向', '校园', '病娇', '反差', '霸总'] as const
+/** Extra fine-grained tags surfaced only through the「筛选」popup. */
+const EXTRA_FILTER_TAGS = [
+  '全性向', '纯爱', '年上', '同人', '骨科', '纯洁',
+  '恋爱', '治愈', '御姐', '元气', '温柔', '清冷',
+  '奇幻', '古风', '职场', '日常', '悬疑', '搞笑',
+  '都市', '仙侠', '末世', '民国', '娱乐圈', '强制爱', '电竞', '群像',
+] as const
 
 /**
  * 角色发现页 (Nimoo-style discovery catalog).
@@ -52,6 +69,7 @@ interface GridItem {
   reviewStatus?: string
   companion?: CompanionDTO
   chatUserCount?: number
+  createdAt?: string | null
 }
 
 /**
@@ -124,11 +142,13 @@ export function CharacterPage() {
   const loadCharacters = useCharactersStore((s) => s.load)
   const companions = useCompanionsStore((s) => s.companions)
   const loadCompanions = useCompanionsStore((s) => s.load)
-  const { toggle: toggleFavorite, has: isFavorite } = useFavoritesStore()
+  const { has: isFavorite } = useFavoritesStore()
 
-  const [activeTag, setActiveTag] = useState<string>(DISCOVERY_RECOMMENDED)
+  const [activeMode, setActiveMode] = useState<string>(MODE_RECOMMENDED)
+  const [activeTag, setActiveTag] = useState<string>(TAG_ALL)
   const [showSearch, setShowSearch] = useState(false)
   const [showAnnounce, setShowAnnounce] = useState(false)
+  const [showFilter, setShowFilter] = useState(false)
   const [query, setQuery] = useState('')
   const scrollRef = useScrollRestore()
 
@@ -173,6 +193,7 @@ export function CharacterPage() {
           reviewStatus: c.review_status,
           companion: companionById.get(c.id),
           chatUserCount: c.chat_user_count,
+          createdAt: c.created_at,
           profile: resolveCharacterProfile(c.id, c.display_name, c.avatar_url, {
             isOwner,
             coverUrl: c.cover_url,
@@ -191,6 +212,7 @@ export function CharacterPage() {
         visibility: c.visibility,
         companion: c,
         chatUserCount: undefined,
+        createdAt: undefined,
         profile: resolveCharacterProfile(c.character_id, c.display_name, c.avatar_url, {
           isOwner,
           coverUrl: c.cover_url,
@@ -213,34 +235,18 @@ export function CharacterPage() {
     })
   }, [items])
 
-  // Filter chips: leading editorial filters (推荐 / 全部 / 收藏) + data-derived role
-  // tags, ordered by the canonical CHARACTER_ROLE_TAGS priority so curated
-  // categories lead, then any remaining tags in first-seen order. `推荐` never
-  // appears as a data tag here — it's the editorial lead filter.
-  const tagChips = useMemo(() => {
+  // Pinned tags row — fixed order (全部 + 女性向/男性向/.../霸总), always shown.
+  const pinnedTagChips = useMemo(() => [TAG_ALL, ...PINNED_TAGS], [])
+
+  // Extra fine-grained tags — only shown in the「筛选」popup if present in data.
+  const extraFilterChips = useMemo(() => {
     const present = new Set<string>()
     for (const it of rankedItems) {
       for (const t of it.profile.tags ?? []) {
-        if (t && t !== DISCOVERY_RECOMMENDED) present.add(t)
+        if (t && EXTRA_FILTER_TAGS.includes(t as any)) present.add(t)
       }
     }
-    const ordered: string[] = []
-    for (const t of DISCOVERY_TAG_PRIORITY) {
-      if (present.has(t)) {
-        ordered.push(t)
-        present.delete(t)
-      }
-    }
-    // leftover non-curated tags, first-seen order
-    for (const it of rankedItems) {
-      for (const t of it.profile.tags ?? []) {
-        if (t && t !== DISCOVERY_RECOMMENDED && present.has(t)) {
-          ordered.push(t)
-          present.delete(t)
-        }
-      }
-    }
-    return [DISCOVERY_RECOMMENDED, DISCOVERY_FAVORITES, DISCOVERY_ALL, ...ordered]
+    return EXTRA_FILTER_TAGS.filter((t) => present.has(t))
   }, [rankedItems])
 
   // Editorial heat mapping: featured characters are fixed at the front, the
@@ -264,35 +270,64 @@ export function CharacterPage() {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
-    const result = rankedItems.filter((it) => {
-      // Discovery gate: hide own private / pending / unlisted UGC from 广场.
-      if (!isDiscoverable(it)) return false
-      const tags = it.profile.tags ?? []
-      if (!q) {
-        if (activeTag === DISCOVERY_FAVORITES) {
-          // Show only favorited characters
-          if (!isFavorite(it.id)) return false
-        } else if (activeTag === DISCOVERY_RECOMMENDED) {
-          if (!(it.isOwner || it.isBuiltin || tags.includes(DISCOVERY_RECOMMENDED))) return false
-        } else if (activeTag !== DISCOVERY_ALL && !tags.includes(activeTag)) {
-          return false
-        }
-      }
-      if (q) {
-        const hay = `${it.profile.name} ${tags.join(' ')} ${it.profile.tagline ?? ''}`.toLowerCase()
-        if (!hay.includes(q)) return false
-      }
-      return true
-    })
-    if (activeTag === DISCOVERY_RECOMMENDED && !q) {
-      result.sort((a, b) => {
+    let base: GridItem[] = []
+
+    // **TIER-1: MODE** — base set per mode
+    if (activeMode === MODE_RECOMMENDED) {
+      // 推荐 = built-ins + own UGC + public+approved with「推荐」tag (editorial curation)
+      base = rankedItems.filter((it) => {
+        if (!isDiscoverable(it)) return false
+        return it.isOwner || it.isBuiltin || (it.profile.tags ?? []).includes(DISCOVERY_RECOMMENDED)
+      })
+    } else if (activeMode === MODE_NEWEST) {
+      // 新角色 = public+approved UGC sorted by created_at DESC, exclude built-ins
+      base = rankedItems.filter((it) => {
+        if (it.isBuiltin) return false // only UGC
+        if (!isDiscoverable(it)) return false
+        return true
+      })
+    } else if (activeMode === MODE_FAVORITES) {
+      // 收藏 = user's favorited characters (can include private/unlisted own UGC)
+      base = rankedItems.filter((it) => isFavorite(it.id))
+    } else if (activeMode === MODE_MINE) {
+      // 我的 = all own characters (public + unlisted + private), bypass discovery gate
+      base = rankedItems.filter((it) => it.isOwner)
+    } else {
+      base = rankedItems.filter(isDiscoverable)
+    }
+
+    // **TIER-2: TAG** — apply tag filter on top of mode set
+    if (activeTag !== TAG_ALL) {
+      base = base.filter((it) => (it.profile.tags ?? []).includes(activeTag))
+    }
+
+    // **SEARCH** — text match on name/tags/tagline
+    if (q) {
+      base = base.filter((it) => {
+        const hay = `${it.profile.name} ${(it.profile.tags ?? []).join(' ')} ${it.profile.tagline ?? ''}`.toLowerCase()
+        return hay.includes(q)
+      })
+    }
+
+    // **SORT** — mode-specific
+    if (activeMode === MODE_NEWEST && !q) {
+      // Sort by created_at DESC for「新角色」
+      base.sort((a, b) => {
+        const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0
+        const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0
+        return bTime - aTime
+      })
+    } else if (activeMode === MODE_RECOMMENDED && !q) {
+      // 推荐: prioritize「女性向」characters
+      base.sort((a, b) => {
         const aFem = (a.profile.tags ?? []).includes('女性向') ? 0 : 1
         const bFem = (b.profile.tags ?? []).includes('女性向') ? 0 : 1
         return aFem - bFem
       })
     }
-    return result
-  }, [rankedItems, activeTag, query, isFavorite])
+
+    return base
+  }, [rankedItems, activeMode, activeTag, query, isFavorite])
 
   const pageBg =
     resolvedTheme === 'dark'
@@ -306,10 +341,11 @@ export function CharacterPage() {
       <div className="relative z-10 h-full flex flex-col">
         <div style={{ height: 'var(--safe-top)' }} />
 
-        {/* Navigation bar — no back button (角色 is a main tab / landing page).
-            Right side: search toggle + announcement bell (Nimoo-style). */}
+        {/* Navigation bar — brand logo (left, login-page style) + search / bell. */}
         <div className="relative z-20 flex items-center justify-between px-5 h-[44px] shrink-0">
-          <div className="flex-1" />
+          <span className="text-[22px] font-bold text-[var(--color-ink)] tracking-[0.02em] font-brand leading-none">
+            yuoyuo
+          </span>
           <div className="flex items-center gap-2">
             <button
               onClick={() => setShowSearch((v) => !v)}
@@ -349,24 +385,105 @@ export function CharacterPage() {
           </div>
         )}
 
-        {/* Style-filter chips */}
-        {tagChips.length > 1 && (
-          <div className="relative z-20 shrink-0 flex gap-2 overflow-x-auto px-4 py-2 no-scrollbar">
-            {tagChips.map((tag) => (
+        {/* Primary mode tabs (推荐 / 新角色 / 收藏 / 我的) — large, underline-active. */}
+        <div className="relative z-20 shrink-0 flex items-center gap-5 px-5 pt-1 pb-0.5 overflow-x-auto no-scrollbar">
+          {DISCOVERY_MODES.map((mode) => (
+            <button
+              key={mode}
+              onClick={() => setActiveMode(mode)}
+              className={`relative shrink-0 pb-1.5 text-[18px] transition-colors ${
+                activeMode === mode
+                  ? 'font-bold text-[var(--color-ink)]'
+                  : 'font-medium text-[var(--color-text-muted)]'
+              }`}
+            >
+              {mode}
+              {activeMode === mode && (
+                <span className="absolute left-1/2 -translate-x-1/2 bottom-0 h-[3px] w-[18px] rounded-full bg-[var(--color-primary)]" />
+              )}
+            </button>
+          ))}
+        </div>
+
+        {/* Secondary tag chips (scrollable) + funnel filter button (right, fixed) */}
+        <div className="relative z-30 shrink-0 flex items-center gap-2.5 px-4 py-2">
+          <div className="flex-1 min-w-0 flex gap-2 overflow-x-auto no-scrollbar">
+            {pinnedTagChips.map((tag) => (
               <button
                 key={tag}
                 onClick={() => setActiveTag(tag)}
-                className={`shrink-0 h-[30px] px-3.5 rounded-full text-[13px] font-medium border transition-colors ${
+                className={`shrink-0 h-[36px] px-4 rounded-full text-[14px] font-normal border transition-colors ${
                   activeTag === tag
-                    ? 'bg-[var(--color-primary)] text-white border-transparent'
-                    : 'bg-[var(--color-glass-55)] text-[var(--color-text-secondary)] border-[var(--color-border-glass)]'
+                    ? 'bg-[var(--color-primary)] text-white border-transparent font-medium'
+                    : 'bg-white/[0.04] text-[var(--color-text-secondary)] border-[var(--color-border-glass)]'
                 }`}
               >
                 {tag}
               </button>
             ))}
           </div>
-        )}
+          {extraFilterChips.length > 0 && (
+            <button
+              onClick={() => setShowFilter((v) => !v)}
+              aria-label="筛选"
+              className={`relative shrink-0 w-[36px] h-[36px] rounded-full flex items-center justify-center border transition-colors ${
+                showFilter || !pinnedTagChips.includes(activeTag)
+                  ? 'bg-[var(--color-primary)] text-white border-transparent'
+                  : 'bg-white/[0.04] text-[var(--color-primary)] border-[var(--color-border-glass)]'
+              }`}
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M2 3.5h12l-4.6 5.2v3.4l-2.8 1.4V8.7L2 3.5Z" />
+              </svg>
+              {/* active-tag dot when a filtered tag is applied */}
+              {!pinnedTagChips.includes(activeTag) && !showFilter && (
+                <span className="absolute -top-0.5 -right-0.5 w-[8px] h-[8px] rounded-full bg-[var(--color-primary)] border border-white" />
+              )}
+            </button>
+          )}
+
+          {/* 更多标签 dropdown panel — anchored below the chips row (reference layout) */}
+          {showFilter && (
+            <>
+              <button
+                aria-label="关闭筛选"
+                onClick={() => setShowFilter(false)}
+                className="fixed inset-0 z-20 cursor-default"
+              />
+              <div className="absolute left-3 right-3 top-full mt-1 z-30 rounded-[20px] bg-[var(--color-glass-90)] backdrop-blur-[20px] border border-[var(--color-border-glass)] shadow-[var(--shadow-soft)] p-4">
+                <div className="flex items-baseline justify-between mb-3">
+                  <div>
+                    <p className="text-[15px] font-bold text-[var(--color-ink)] leading-none">更多标签</p>
+                    <p className="text-[12px] text-[var(--color-text-muted)] mt-1.5 leading-none">点击标签筛选</p>
+                  </div>
+                  {!pinnedTagChips.includes(activeTag) && (
+                    <button
+                      onClick={() => { setActiveTag(TAG_ALL); setShowFilter(false) }}
+                      className="text-[13px] font-medium text-[var(--color-primary)]"
+                    >
+                      重置
+                    </button>
+                  )}
+                </div>
+                <div className="grid grid-cols-4 gap-2.5 max-h-[42vh] overflow-y-auto no-scrollbar">
+                  {extraFilterChips.map((tag) => (
+                    <button
+                      key={tag}
+                      onClick={() => { setActiveTag(tag); setShowFilter(false) }}
+                      className={`h-[40px] rounded-[14px] text-[14px] font-normal border transition-colors ${
+                        activeTag === tag
+                          ? 'bg-[var(--color-primary)] text-white border-transparent font-medium'
+                          : 'bg-white/[0.04] text-[var(--color-text-secondary)] border-[var(--color-border-glass)]'
+                      }`}
+                    >
+                      {tag}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+        </div>
 
         {/* Discovery grid */}
         <div ref={scrollRef} className="relative z-10 flex-1 overflow-y-auto px-4 pt-1 pb-[80px]">
@@ -383,8 +500,6 @@ export function CharacterPage() {
                   key={it.id}
                   item={it}
                   heatMap={heatMap}
-                  isFavorite={isFavorite(it.id)}
-                  onToggleFavorite={() => toggleFavorite(it.id)}
                   onOpen={() => navigate(`/character/${it.id}`)}
                 />
               ))}
@@ -427,14 +542,10 @@ export function CharacterPage() {
 function DiscoveryCard({
   item,
   heatMap,
-  isFavorite,
-  onToggleFavorite,
   onOpen,
 }: {
   item: GridItem
   heatMap: Map<string, number>
-  isFavorite: boolean
-  onToggleFavorite: () => void
   onOpen: () => void
 }) {
   const { profile, isOwner, visibility } = item
@@ -450,10 +561,10 @@ function DiscoveryCard({
   const displayTags = priorityTags.length > 0 ? priorityTags : tags.slice(0, 2)
 
   return (
-    <div className="group relative flex flex-col text-left w-full rounded-[20px] overflow-hidden bg-[var(--color-glass-55)] backdrop-blur-[12px] border border-[var(--color-border-glass)] shadow-[var(--shadow-soft)]">
+    <div className="group relative flex flex-col w-full rounded-[20px] overflow-hidden bg-[var(--color-glass-55)] backdrop-blur-[12px] border border-[var(--color-border-glass)] shadow-[var(--shadow-soft)]">
       <button
         onClick={onOpen}
-        className="relative w-full aspect-[3/4] active:scale-[0.97] transition-transform"
+        className="relative w-full aspect-[3/4] active:scale-[0.97] transition-transform text-left"
         style={{ background: `linear-gradient(135deg, ${profile.tagBg}, transparent)` }}
       >
         <CoverFill cover={profile.cover} alt={profile.name} />
@@ -471,31 +582,11 @@ function DiscoveryCard({
           </span>
         )}
 
-        {/* Heart favorite toggle button — top-right */}
-        <button
-          onClick={(e) => {
-            e.stopPropagation()
-            onToggleFavorite()
-          }}
-          className="absolute top-2 right-2 w-[28px] h-[28px] rounded-full bg-black/30 backdrop-blur-[4px] flex items-center justify-center active:scale-[0.92] transition-transform"
-          aria-label={isFavorite ? '取消收藏' : '收藏'}
-        >
-          {isFavorite ? (
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="#FF6B9D" stroke="#FF6B9D" strokeWidth="1.5">
-              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
-            </svg>
-          ) : (
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#FFF" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
-            </svg>
-          )}
-        </button>
-
         {/* name + hook + interaction data overlay */}
         <div className="absolute inset-x-0 bottom-0 p-2.5 space-y-1">
-          <p className="text-[16px] font-bold leading-tight text-white line-clamp-1">{profile.name}</p>
+          <p className="text-[16px] font-bold leading-tight text-white line-clamp-1 text-left">{profile.name}</p>
           {hook && (
-            <p className="text-[12px] leading-[1.4] text-white/90 italic line-clamp-2">
+            <p className="text-[12px] leading-[1.4] text-white/90 italic line-clamp-2 text-left">
               "{hook}"
             </p>
           )}

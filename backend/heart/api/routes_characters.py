@@ -68,7 +68,7 @@ async def list_characters(
         text(
             """
             SELECT id, owner_user_id, visibility, status, has_voice,
-                   tags, cover_url, review_status, review_reason
+                   tags, cover_url, review_status, review_reason, created_at
             FROM characters
             WHERE status = 'active'
               AND (
@@ -90,6 +90,7 @@ async def list_characters(
             review_reason=row.get("review_reason"),
             tags=coerce_tags(row.get("tags")),
             cover_url=row.get("cover_url"),
+            created_at=(row["created_at"].isoformat() if row.get("created_at") else None),
         )
         for row in raw_rows
     ]

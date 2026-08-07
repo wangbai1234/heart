@@ -40,6 +40,8 @@ class CharacterRow:
     review_reason: Optional[str] = None
     tags: list[str] = field(default_factory=list)
     cover_url: Optional[str] = None
+    # ISO-8601 creation timestamp; drives the "新角色" (newest) discovery sort.
+    created_at: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -62,6 +64,8 @@ class CharacterEntry:
     # (display-only, ≤60 chars). Sourced from the UGC draft; None for built-ins
     # (the client falls back to the bundled summary).
     tagline: Optional[str] = None
+    # ISO-8601 creation timestamp; drives the "新角色" (newest) discovery sort.
+    created_at: Optional[str] = None
 
 
 def coerce_tags(raw: object) -> list[str]:
@@ -146,6 +150,7 @@ def build_catalog_entries(
             cover_url=row.cover_url,
             chat_user_count=popularity.get(row.id, 0),
             tagline=taglines.get(row.id),
+            created_at=row.created_at,
         )
         for row in rows
         if visible_to(row, viewer_id)

@@ -4,6 +4,7 @@ import type { CharacterProfileDTO } from '../services/api'
 import { useCharactersStore } from '../stores/charactersStore'
 import { useCompanionsStore } from '../stores/companionsStore'
 import { useAppStore } from '../stores/appStore'
+import { useFavoritesStore } from '../stores/favoritesStore'
 import { DEFAULT_COVER } from '../data/uiContent'
 import { stageWithIntimacy, isColdWar, intimacyPercent } from '../utils/relationship'
 import { useSafeBack } from '../hooks/useSafeBack'
@@ -27,6 +28,7 @@ export function CharacterProfilePage() {
   const companions = useCompanionsStore((s) => s.companions)
   const loadCompanions = useCompanionsStore((s) => s.load)
   const loadProfile = useCharactersStore((s) => s.loadProfile)
+  const { toggle: toggleFavorite, has: isFavorite } = useFavoritesStore()
 
   // Seed synchronously from the store cache so a re-entry paints instantly with
   // no spinner (system covers/copy never change). A cold entry starts null and
@@ -159,6 +161,22 @@ export function CharacterProfilePage() {
               </div>
             </div>
           )}
+          {/* Favorite button — heart icon, left of 开始聊天 */}
+          <button
+            onClick={() => toggleFavorite(id)}
+            className="shrink-0 w-[48px] h-[48px] rounded-full bg-[var(--color-glass-75)] border border-[var(--color-border-glass)] flex items-center justify-center active:scale-[0.96] transition-transform"
+            aria-label={isFavorite(id) ? '取消收藏' : '收藏'}
+          >
+            {isFavorite(id) ? (
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="#FF6B9D" stroke="#FF6B9D" strokeWidth="1.5">
+                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+              </svg>
+            ) : (
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--color-ink)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+              </svg>
+            )}
+          </button>
           <button
             onClick={openChat}
             className={`h-[48px] rounded-full bg-gradient-to-r from-[#FFB7C5] to-[#FF8FAB] text-white text-[16px] font-semibold shadow-[var(--shadow-btn)] active:scale-[0.97] transition-transform ${
