@@ -333,6 +333,18 @@ export function CharacterPage() {
     resolvedTheme === 'dark'
       ? '/assets/backgrounds/暗色聊天背景图.webp'
       : '/assets/backgrounds/聊天背景图.webp'
+  const isDark = resolvedTheme === 'dark'
+  const activeModeText = isDark ? 'text-[var(--color-ink)]' : 'text-[#3A3A4A]'
+  const inactiveModeText = isDark ? 'text-[var(--color-text-secondary)]' : 'text-[rgba(58,58,74,0.52)]'
+  const inactiveTagText = isDark ? 'text-[var(--color-text-secondary)]' : 'text-[rgba(58,58,74,0.66)]'
+  const filterPanelClass = isDark
+    ? 'bg-[var(--color-glass-90)] border-[var(--color-border-glass)]'
+    : 'bg-[rgba(255,248,243,0.96)] border-[rgba(255,255,255,0.75)]'
+  const filterPanelTitle = isDark ? 'text-[var(--color-ink)]' : 'text-[#3A3A4A]'
+  const filterPanelHint = isDark ? 'text-[var(--color-text-muted)]' : 'text-[rgba(58,58,74,0.45)]'
+  const filterChipIdle = isDark
+    ? 'bg-white/[0.04] text-[var(--color-text-secondary)] border-[var(--color-border-glass)]'
+    : 'bg-white/30 text-[rgba(58,58,74,0.62)] border-[rgba(58,58,74,0.12)]'
 
   return (
     <div className="relative w-full h-full flex flex-col overflow-hidden">
@@ -341,24 +353,44 @@ export function CharacterPage() {
       <div className="relative z-10 h-full flex flex-col">
         <div style={{ height: 'var(--safe-top)' }} />
 
-        {/* Navigation bar — brand logo (left, login-page style) + search / bell. */}
-        <div className="relative z-20 flex items-center justify-between px-5 h-[44px] shrink-0">
-          <span className="text-[22px] font-bold text-[var(--color-ink)] tracking-[0.02em] font-brand leading-none">
+        {/* Navigation bar — brand logo (login-page style) + search / announcement. */}
+        <div className="relative z-20 flex items-center justify-between gap-2.5 px-5 h-[48px] shrink-0">
+          <span className="shrink-0 text-[22px] font-bold text-[var(--color-ink)] tracking-[0.02em] font-brand leading-none">
             yuoyuo
           </span>
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => setShowSearch((v) => !v)}
-              aria-label="搜索"
-              className={`w-[34px] h-[34px] rounded-full backdrop-blur-[12px] border border-[var(--color-border-glass)] flex items-center justify-center active:scale-[0.96] transition-transform ${
-                showSearch ? 'bg-[var(--color-primary)] text-white' : 'bg-[var(--color-glass-55)] text-[var(--color-primary)]'
-              }`}
-            >
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-                <circle cx="7" cy="7" r="5" />
-                <line x1="11" y1="11" x2="15" y2="15" />
-              </svg>
-            </button>
+            {showSearch ? (
+              <div className="flex items-center gap-1.5">
+                <input
+                  autoFocus
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="搜索角色 / 标签"
+                  className="w-[132px] min-[380px]:w-[176px] h-[36px] px-3.5 rounded-full bg-[var(--color-glass-75)] backdrop-blur-[12px] border border-[var(--color-border-glass)] text-[14px] text-[var(--color-ink)] placeholder:text-[var(--color-text-muted)] outline-none focus:border-[var(--color-primary)]"
+                />
+                <button
+                  onClick={() => { setShowSearch(false); setQuery('') }}
+                  aria-label="关闭搜索"
+                  className="w-[32px] h-[32px] rounded-full bg-[var(--color-glass-55)] backdrop-blur-[12px] border border-[var(--color-border-glass)] flex items-center justify-center text-[var(--color-text-secondary)] active:scale-[0.96] transition-transform"
+                >
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                    <line x1="4" y1="4" x2="12" y2="12" />
+                    <line x1="12" y1="4" x2="4" y2="12" />
+                  </svg>
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setShowSearch(true)}
+                aria-label="搜索"
+                className="w-[34px] h-[34px] rounded-full bg-[var(--color-glass-55)] backdrop-blur-[12px] border border-[var(--color-border-glass)] flex items-center justify-center text-[var(--color-primary)] active:scale-[0.96] transition-transform"
+              >
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                  <circle cx="7" cy="7" r="5" />
+                  <line x1="11" y1="11" x2="15" y2="15" />
+                </svg>
+              </button>
+            )}
             <button
               onClick={() => setShowAnnounce(true)}
               aria-label="公告"
@@ -372,75 +404,67 @@ export function CharacterPage() {
           </div>
         </div>
 
-        {/* Search box (toggled) */}
-        {showSearch && (
-          <div className="relative z-20 px-4 pb-1 pt-1 shrink-0">
-            <input
-              autoFocus
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="搜索角色名字或标签"
-              className="w-full h-[38px] px-4 rounded-full bg-[var(--color-glass-75)] backdrop-blur-[12px] border border-[var(--color-border-glass)] text-[14px] text-[var(--color-ink)] placeholder:text-[var(--color-text-muted)] outline-none focus:border-[var(--color-primary)]"
-            />
-          </div>
-        )}
-
         {/* Primary mode tabs (推荐 / 新角色 / 收藏 / 我的) — large, underline-active. */}
-        <div className="relative z-20 shrink-0 flex items-center gap-5 px-5 pt-1 pb-0.5 overflow-x-auto no-scrollbar">
+        <div className="relative z-20 shrink-0 flex items-center gap-7 px-5 pt-1 pb-2 overflow-x-auto no-scrollbar">
           {DISCOVERY_MODES.map((mode) => (
             <button
               key={mode}
               onClick={() => setActiveMode(mode)}
-              className={`relative shrink-0 pb-1.5 text-[18px] transition-colors ${
+              className={`relative shrink-0 pb-2 text-[18px] transition-colors ${
                 activeMode === mode
-                  ? 'font-bold text-[var(--color-ink)]'
-                  : 'font-medium text-[var(--color-text-muted)]'
+                  ? `font-bold ${activeModeText}`
+                  : `font-semibold ${inactiveModeText}`
               }`}
             >
               {mode}
               {activeMode === mode && (
-                <span className="absolute left-1/2 -translate-x-1/2 bottom-0 h-[3px] w-[18px] rounded-full bg-[var(--color-primary)]" />
+                <span className="absolute left-1/2 -translate-x-1/2 bottom-0 h-[4px] w-[28px] rounded-full bg-[var(--color-primary)] shadow-[0_0_12px_rgba(255,183,197,0.48)]" />
               )}
             </button>
           ))}
         </div>
 
         {/* Secondary tag chips (scrollable) + funnel filter button (right, fixed) */}
-        <div className="relative z-30 shrink-0 flex items-center gap-2.5 px-4 py-2">
-          <div className="flex-1 min-w-0 flex gap-2 overflow-x-auto no-scrollbar">
-            {pinnedTagChips.map((tag) => (
+        <div className="relative z-30 shrink-0 px-3 pb-3">
+          <div className="flex min-h-[42px] items-center gap-1.5">
+            <div className="flex-1 min-w-0 flex gap-1.5 overflow-x-auto no-scrollbar">
+              {pinnedTagChips.map((tag) => (
+                <button
+                  key={tag}
+                  onClick={() => setActiveTag(tag)}
+                  className={`relative shrink-0 h-[34px] px-3.5 rounded-full text-[15px] border transition-colors ${
+                    activeTag === tag
+                      ? 'bg-[var(--color-primary)] text-white border-transparent font-bold shadow-[0_8px_18px_rgba(255,143,171,0.22)]'
+                      : `bg-transparent ${inactiveTagText} border-transparent font-semibold`
+                  }`}
+                >
+                  {tag}
+                  {activeTag === tag && (
+                    <span className="absolute left-1/2 -translate-x-1/2 -bottom-[6px] w-0 h-0 border-l-[6px] border-r-[6px] border-t-[6px] border-l-transparent border-r-transparent border-t-[var(--color-primary)]" />
+                  )}
+                </button>
+              ))}
+            </div>
+            {extraFilterChips.length > 0 && (
               <button
-                key={tag}
-                onClick={() => setActiveTag(tag)}
-                className={`shrink-0 h-[36px] px-4 rounded-full text-[14px] font-normal border transition-colors ${
-                  activeTag === tag
-                    ? 'bg-[var(--color-primary)] text-white border-transparent font-medium'
-                    : 'bg-white/[0.04] text-[var(--color-text-secondary)] border-[var(--color-border-glass)]'
+                onClick={() => setShowFilter((v) => !v)}
+                aria-label="筛选"
+                className={`relative shrink-0 w-[42px] h-[42px] rounded-full flex items-center justify-center border transition-colors ${
+                  showFilter || !pinnedTagChips.includes(activeTag)
+                    ? 'bg-[var(--color-primary)] text-white border-transparent shadow-[0_8px_18px_rgba(255,143,171,0.28)]'
+                    : 'bg-[var(--color-glass-55)] text-[var(--color-primary)] border-[var(--color-border-glass)]'
                 }`}
               >
-                {tag}
+                <svg width="19" height="19" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M2 3.5h12l-4.6 5.2v3.4l-2.8 1.4V8.7L2 3.5Z" />
+                </svg>
+                {/* active-tag dot when a filtered tag is applied */}
+                {!pinnedTagChips.includes(activeTag) && !showFilter && (
+                  <span className="absolute -top-0.5 -right-0.5 w-[8px] h-[8px] rounded-full bg-[var(--color-primary)] border border-white" />
+                )}
               </button>
-            ))}
+            )}
           </div>
-          {extraFilterChips.length > 0 && (
-            <button
-              onClick={() => setShowFilter((v) => !v)}
-              aria-label="筛选"
-              className={`relative shrink-0 w-[36px] h-[36px] rounded-full flex items-center justify-center border transition-colors ${
-                showFilter || !pinnedTagChips.includes(activeTag)
-                  ? 'bg-[var(--color-primary)] text-white border-transparent'
-                  : 'bg-white/[0.04] text-[var(--color-primary)] border-[var(--color-border-glass)]'
-              }`}
-            >
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M2 3.5h12l-4.6 5.2v3.4l-2.8 1.4V8.7L2 3.5Z" />
-              </svg>
-              {/* active-tag dot when a filtered tag is applied */}
-              {!pinnedTagChips.includes(activeTag) && !showFilter && (
-                <span className="absolute -top-0.5 -right-0.5 w-[8px] h-[8px] rounded-full bg-[var(--color-primary)] border border-white" />
-              )}
-            </button>
-          )}
 
           {/* 更多标签 dropdown panel — anchored below the chips row (reference layout) */}
           {showFilter && (
@@ -448,32 +472,32 @@ export function CharacterPage() {
               <button
                 aria-label="关闭筛选"
                 onClick={() => setShowFilter(false)}
-                className="fixed inset-0 z-20 cursor-default"
+                className="fixed inset-0 z-20 cursor-default bg-black/20"
               />
-              <div className="absolute left-3 right-3 top-full mt-1 z-30 rounded-[20px] bg-[var(--color-glass-90)] backdrop-blur-[20px] border border-[var(--color-border-glass)] shadow-[var(--shadow-soft)] p-4">
-                <div className="flex items-baseline justify-between mb-3">
-                  <div>
-                    <p className="text-[15px] font-bold text-[var(--color-ink)] leading-none">更多标签</p>
-                    <p className="text-[12px] text-[var(--color-text-muted)] mt-1.5 leading-none">点击标签筛选</p>
+              <div className={`absolute left-[-12px] right-[-12px] top-full z-30 rounded-b-[28px] backdrop-blur-[22px] border-t shadow-[0_18px_40px_rgba(0,0,0,0.18)] px-5 pt-5 pb-7 ${filterPanelClass}`}>
+                <div className="flex items-baseline justify-between gap-3 mb-5">
+                  <div className="min-w-0 flex items-baseline gap-3">
+                    <p className={`shrink-0 text-[20px] font-bold leading-none ${filterPanelTitle}`}>更多标签</p>
+                    <p className={`min-w-0 text-[14px] font-semibold leading-none truncate ${filterPanelHint}`}>点击标签筛选</p>
                   </div>
                   {!pinnedTagChips.includes(activeTag) && (
                     <button
                       onClick={() => { setActiveTag(TAG_ALL); setShowFilter(false) }}
-                      className="text-[13px] font-medium text-[var(--color-primary)]"
+                      className="shrink-0 text-[13px] font-semibold text-[var(--color-primary-600)]"
                     >
                       重置
                     </button>
                   )}
                 </div>
-                <div className="grid grid-cols-4 gap-2.5 max-h-[42vh] overflow-y-auto no-scrollbar">
+                <div className="grid grid-cols-4 gap-x-2.5 gap-y-3 max-h-[42vh] overflow-y-auto no-scrollbar">
                   {extraFilterChips.map((tag) => (
                     <button
                       key={tag}
                       onClick={() => { setActiveTag(tag); setShowFilter(false) }}
-                      className={`h-[40px] rounded-[14px] text-[14px] font-normal border transition-colors ${
+                      className={`min-w-0 h-[46px] rounded-[16px] text-[15px] border transition-colors ${
                         activeTag === tag
-                          ? 'bg-[var(--color-primary)] text-white border-transparent font-medium'
-                          : 'bg-white/[0.04] text-[var(--color-text-secondary)] border-[var(--color-border-glass)]'
+                          ? 'bg-[var(--color-primary)] text-white border-transparent font-bold'
+                          : `${filterChipIdle} font-semibold`
                       }`}
                     >
                       {tag}
