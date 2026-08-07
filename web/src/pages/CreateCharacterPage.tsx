@@ -868,18 +868,6 @@ export function CreateCharacterPage() {
   const isEdit = Boolean(editId)
   const title = isEdit ? '编辑角色' : '创建角色'
   const personaLen = form.persona.trim().length
-  const personaOk = personaLen >= MIN_PERSONA && personaLen <= MAX_PERSONA
-  const taglineLen = form.tagline.trim().length
-  const taglineOk = taglineLen >= MIN_TAGLINE && taglineLen <= MAX_TAGLINE
-  const introLen = form.intro.trim().length
-  const introOk = introLen >= MIN_INTRO && introLen <= MAX_INTRO
-  const canProceed =
-    form.nameZh.trim().length > 0 &&
-    Boolean(form.ageRange) &&
-    form.tags.length > 0 &&
-    personaOk &&
-    taglineOk &&
-    introOk
 
   return (
     <div
@@ -1713,8 +1701,7 @@ export function CreateCharacterPage() {
                 setFieldErrors({})
                 setStep(2)
               }}
-              disabled={!canProceed}
-              className="w-full h-[52px] rounded-[14px] bg-gradient-to-r from-[#FFB7C5] to-[#FF8FAB] text-white text-[17px] font-semibold shadow-[0_8px_24px_-4px_rgba(255,143,171,0.40)] active:scale-[0.98] transition-transform disabled:opacity-40 disabled:pointer-events-none"
+              className="w-full h-[52px] rounded-[14px] bg-gradient-to-r from-[#FFB7C5] to-[#FF8FAB] text-white text-[17px] font-semibold shadow-[0_8px_24px_-4px_rgba(255,143,171,0.40)] active:scale-[0.98] transition-transform"
             >
               下一步 →
             </button>

@@ -173,8 +173,10 @@ export function LoginPage() {
   }, [setSession, acceptLegalVersion, navigate])
 
   const handlePasswordLogin = useCallback(async () => {
-    if (!ageConfirmed) { setToast({ visible: true, message: '请先确认你已年满 18 周岁' }); return }
-    if (!isValidEmail || password.length === 0 || loading) return
+    if (loading) return
+    if (!isValidEmail) { setToast({ visible: true, message: '请输入有效的邮箱' }); return }
+    if (password.length === 0) { setToast({ visible: true, message: '请输入密码' }); return }
+    if (!ageConfirmed) { setToast({ visible: true, message: '请先勾选确认你已年满 18 周岁' }); return }
     setLoading(true)
     try {
       const res = await loginWithPassword(email.trim().toLowerCase(), password)
@@ -193,8 +195,9 @@ export function LoginPage() {
   }, [email, password, isValidEmail, loading, finishLogin, ageConfirmed])
 
   const handleSendOtp = useCallback(async () => {
-    if (!ageConfirmed) { setToast({ visible: true, message: '请先确认你已年满 18 周岁' }); return }
-    if (!isValidEmail || loading) return
+    if (loading) return
+    if (!isValidEmail) { setToast({ visible: true, message: '请输入有效的邮箱' }); return }
+    if (!ageConfirmed) { setToast({ visible: true, message: '请先勾选确认你已年满 18 周岁' }); return }
     setLoading(true)
     try {
       const res = await requestOtp(email.trim().toLowerCase(), 'login')
@@ -343,7 +346,7 @@ export function LoginPage() {
                     variant="primary"
                     size="lg"
                     loading={loading}
-                    disabled={!isValidEmail || password.length === 0 || !ageConfirmed}
+                    disabled={loading}
                     onClick={handlePasswordLogin}
                   >
                     登录
@@ -359,7 +362,7 @@ export function LoginPage() {
                     variant="primary"
                     size="lg"
                     loading={loading}
-                    disabled={!isValidEmail || !ageConfirmed}
+                    disabled={loading}
                     onClick={handleSendOtp}
                   >
                     发送验证码

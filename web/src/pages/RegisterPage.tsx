@@ -94,9 +94,6 @@ export function RegisterPage() {
     }
   }, [email, isValidEmail, cooldown, sending])
 
-  const canSubmit =
-    isValidEmail && code.trim().length === 6 && password.length >= 8 && password === confirm && ageConfirmed && agreed
-
   const handleRegister = async () => {
     if (loading) return
     if (!isValidEmail) return showToast('请输入有效的邮箱', 'error')
@@ -207,7 +204,7 @@ export function RegisterPage() {
             </span>
           </label>
 
-          <Button variant="primary" size="lg" loading={loading} disabled={!canSubmit} onClick={handleRegister}>
+          <Button variant="primary" size="lg" loading={loading} disabled={loading} onClick={handleRegister}>
             注册
           </Button>
         </div>

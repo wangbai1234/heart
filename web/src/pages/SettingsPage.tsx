@@ -220,7 +220,7 @@ export function SettingsPage() {
           <img
             src={memberGemImage}
             alt=""
-            className="absolute right-[92px] bottom-[-118px] w-[210px] h-[318px] object-contain pointer-events-none"
+            className="absolute right-[52px] bottom-[-118px] w-[210px] h-[318px] object-contain pointer-events-none"
           />
           <div className="relative min-h-[144px]">
             <div className="relative z-10 flex items-center justify-between gap-3">
@@ -564,9 +564,9 @@ function InviteShowcase({
       <img
         src="/assets/settings/invite-mascot.png"
         alt=""
-        className="absolute right-[-28px] top-[-78px] w-[300px] h-[390px] object-contain pointer-events-none"
+        className="absolute right-[-14px] top-[-40px] w-[210px] h-[273px] object-contain pointer-events-none"
       />
-      <div className="relative pr-[148px] min-h-[196px] flex flex-col justify-between">
+      <div className="relative pr-[116px] min-h-[196px] flex flex-col justify-between">
         <div>
           <ScaledText as="p" className="text-[15px] font-semibold text-[var(--color-ink)]">
             邀请好友
