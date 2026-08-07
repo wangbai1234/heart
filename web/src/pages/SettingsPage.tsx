@@ -16,7 +16,8 @@ import { Button } from '../components/ui/Button'
 import { Toast } from '../components/ui/Toast'
 import { BottomSheet } from '../components/ui/BottomSheet'
 import { MuteTimePicker } from '../components/ui/MuteTimePicker'
-import { logout as apiLogout, clearConversations, deleteAccount, exportData } from '../services/api'
+import { logout as apiLogout, clearConversations, deleteAccount, exportData, getInviteStatus } from '../services/api'
+import type { InviteStatus } from '../services/api'
 
 export function SettingsPage() {
   const navigate = useNavigate()
@@ -35,18 +36,33 @@ export function SettingsPage() {
   const [deleteConfirmText, setDeleteConfirmText] = useState('')
   const [showClearDialog, setShowClearDialog] = useState(false)
   const [showMuteSheet, setShowMuteSheet] = useState(false)
+  const [showSettingsSheet, setShowSettingsSheet] = useState(false)
+  const [inviteStatus, setInviteStatus] = useState<InviteStatus | null>(null)
   const [toast, setToast] = useState({ visible: false, message: '' })
 
   useEffect(() => { refreshCredits() }, [refreshCredits])
   useEffect(() => { refreshMembership() }, [refreshMembership])
+  useEffect(() => {
+    getInviteStatus().then(setInviteStatus).catch(() => {})
+  }, [])
 
   const TIER_LABELS: Record<string, string> = { free: '体验版', plus: '进阶版', immersive: '沉浸版' }
+  const PROFILE_TIER_LABELS: Record<string, string> = { free: '普通用户', plus: '进阶版VIP', immersive: '沉浸版VIP' }
+  const MEMBERSHIP_HINTS: Record<string, string> = {
+    free: '解锁更多陪伴额度与沉浸体验',
+    plus: '进阶权益已生效',
+    immersive: '沉浸权益已生效',
+  }
 
   const themeLabel = theme === 'light' ? '浅色' : theme === 'dark' ? '深色' : '自动'
 
   const bgImage = resolvedTheme === 'dark'
     ? '/assets/backgrounds/暗色聊天背景图.webp'
     : '/assets/backgrounds/聊天背景图.webp'
+  const isDark = resolvedTheme === 'dark'
+  const memberGemImage = isDark
+    ? '/assets/settings/member-gem-dark.png'
+    : '/assets/settings/member-gem-light.png'
 
   const displayName = user?.display_name || user?.email?.split('@')[0] || '用户'
 
@@ -80,6 +96,19 @@ export function SettingsPage() {
       setToast({ visible: true, message: '数据导出成功' })
     } catch {
       setToast({ visible: true, message: '导出失败，请重试' })
+    }
+  }
+
+  const copyInviteCode = async () => {
+    if (!inviteStatus?.invite_code) {
+      navigate('/invite')
+      return
+    }
+    try {
+      await navigator.clipboard.writeText(inviteStatus.invite_code)
+      setToast({ visible: true, message: '邀请码已复制' })
+    } catch {
+      setToast({ visible: true, message: '复制失败，请前往邀请页复制' })
     }
   }
 
@@ -122,121 +151,220 @@ export function SettingsPage() {
           </svg>
         </button>
         <ScaledText as="span" className="text-[18px] font-medium text-[var(--color-ink)]" center>
-          设置
+          我的
         </ScaledText>
-        <div className="w-[44px]" />
+        <button
+          onClick={() => setShowSettingsSheet(true)}
+          className="w-[44px] h-[44px] flex items-center justify-center rounded-full active:bg-[rgba(255,183,197,0.14)] transition-colors"
+          aria-label="打开设置"
+        >
+          <SettingsIcon />
+        </button>
       </nav>
+
+      <div
+        className={`absolute inset-0 z-[1] pointer-events-none ${
+          isDark
+            ? 'bg-gradient-to-b from-transparent via-[rgba(18,18,26,0.06)] to-[rgba(18,18,26,0.18)]'
+            : 'bg-gradient-to-b from-transparent via-[rgba(255,248,243,0.18)] to-[rgba(255,248,243,0.42)]'
+        }`}
+      />
 
       {/* Scrollable content */}
       <div className="relative z-10 flex-1 overflow-y-auto px-4 pb-10">
-        {/* Profile Card — clickable */}
         <button
           onClick={() => navigate('/settings/profile')}
-          className="w-full bg-[var(--color-glass-card)] backdrop-blur-[20px] rounded-[24px] shadow-[var(--shadow-card)] p-5 flex items-center gap-4 mb-5 mt-4 border border-[var(--color-border-glass)] text-left active:scale-[0.99] transition-transform"
+          className="w-full bg-[var(--color-glass-card)] backdrop-blur-[20px] rounded-[28px] shadow-[0_12px_34px_rgba(58,58,74,0.10)] p-5 mb-5 mt-4 border border-[var(--color-border-glass)] text-left active:scale-[0.99] transition-transform"
         >
-          <Avatar src={userAvatar || user?.avatar_url || undefined} size={56} border />
-          <div className="flex-1 min-w-0">
-            <ScaledText as="p" className="text-[18px] font-semibold text-[var(--color-ink)]">
-              {displayName}
-            </ScaledText>
-            <ScaledText as="span" className="inline-block mt-1 text-[12px] font-medium text-[var(--color-primary)] bg-[rgba(255,183,197,0.20)] rounded-full px-3 py-[2px]">
-              {balance} yuoyuo币
-            </ScaledText>
+          <div className="flex items-center gap-4">
+            <Avatar src={userAvatar || user?.avatar_url || undefined} size={72} border />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 min-w-0">
+                <ScaledText as="p" className="text-[22px] font-semibold text-[var(--color-ink)] truncate">
+                  {displayName}
+                </ScaledText>
+                <ScaledText
+                  as="span"
+                  className={`shrink-0 text-[11px] font-semibold rounded-full px-2.5 py-[3px] ${
+                    membershipTier === 'free'
+                      ? 'text-[var(--color-text-secondary)] bg-[var(--color-glass-55)]'
+                      : 'text-white bg-gradient-to-r from-[#B991FF] to-[#FF8FAB]'
+                  }`}
+                >
+                  {PROFILE_TIER_LABELS[membershipTier] ?? PROFILE_TIER_LABELS.free}
+                </ScaledText>
+              </div>
+              <ScaledText as="p" className="text-[13px] text-[var(--color-text-secondary)] mt-1 truncate">
+                {user?.email || '完善资料，让 yuoyuo 更懂你'}
+              </ScaledText>
+            </div>
+            <ChevronIcon />
           </div>
-          <span className="text-[var(--color-chevron)]">{'>'}</span>
         </button>
 
-        {/* 我的会员 */}
-        <SectionLabel>我的会员</SectionLabel>
-        <GroupCard>
-          <SettingRow icon={<CrownIcon />} label="会员中心" value={TIER_LABELS[membershipTier] ?? '体验版'} chevron onClick={() => navigate('/membership')} />
-          <SettingRow icon={<WalletIcon />} label="yuoyuo币钱包" value={`${balance}`} chevron onClick={() => navigate('/wallet')} />
-          <SettingRow icon={<InviteIcon />} label="邀请好友" chevron onClick={() => navigate('/invite')} />
-        </GroupCard>
+        <WalletPanel
+          balance={balance}
+          onRecharge={() => navigate('/wallet')}
+          onDetails={() => navigate('/credits/transactions')}
+        />
 
-        {/* 角色创作 */}
-        <SectionLabel>角色创作</SectionLabel>
-        <GroupCard>
-          <SettingRow icon={<PencilSparkleIcon />} label="我的自创角色" chevron onClick={() => navigate('/my-characters')} />
-          <SettingRow icon={<PlusCircleIcon />} label="创建新角色" chevron onClick={() => navigate('/characters/new')} />
-        </GroupCard>
-
-        {/* 外观 */}
-        <SectionLabel>外观</SectionLabel>
-        <GroupCard>
-          <div className="flex items-center justify-between px-5 h-[56px]">
-            <div className="flex items-center gap-3">
-              <PaletteIcon />
-              <ScaledText as="span" className="text-[15px] text-[var(--color-ink)]">
-                主题
-              </ScaledText>
+        <button
+          onClick={() => navigate('/membership')}
+          className={`relative w-full min-h-[184px] overflow-hidden mt-5 rounded-[28px] border shadow-[0_16px_38px_rgba(58,58,74,0.18)] p-5 text-left active:scale-[0.99] transition-transform ${
+            isDark
+              ? 'border-[rgba(255,255,255,0.22)] bg-[linear-gradient(135deg,rgba(58,52,86,0.94),rgba(113,91,134,0.90)_54%,rgba(255,183,197,0.70))]'
+              : 'border-[rgba(255,220,232,0.80)] bg-[linear-gradient(135deg,rgba(255,255,255,0.92),rgba(255,240,246,0.88)_52%,rgba(255,183,197,0.54))]'
+          }`}
+        >
+          <div className="absolute inset-x-0 top-0 h-px bg-white/60" />
+          <img
+            src={memberGemImage}
+            alt=""
+            className="absolute right-[92px] bottom-[-118px] w-[210px] h-[318px] object-contain pointer-events-none"
+          />
+          <div className="relative min-h-[144px]">
+            <div className="relative z-10 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className={`w-[34px] h-[34px] rounded-[12px] flex items-center justify-center border ${
+                  isDark
+                    ? 'bg-[linear-gradient(135deg,rgba(255,255,255,0.18),rgba(185,145,255,0.18))] border-white/14'
+                    : 'bg-[linear-gradient(135deg,rgba(255,255,255,0.86),rgba(245,236,255,0.72))] border-white/70'
+                }`}>
+                  <CrownIcon tone={isDark ? 'light' : 'brand'} />
+                </span>
+                <ScaledText as="span" className={`text-[16px] font-semibold ${isDark ? 'text-white' : 'text-[var(--color-ink)]'}`}>
+                  会员中心
+                </ScaledText>
+              </div>
+              <span className={`shrink-0 rounded-full text-[13px] font-semibold px-4 py-2 shadow-[0_8px_20px_rgba(255,255,255,0.18)] ${isDark ? 'bg-white text-[#8C7188]' : 'bg-[#FF9DB6] text-white'}`}>
+                查看权益
+              </span>
             </div>
-            <div className="w-[180px]">
-              <SegmentedControl
-                options={['浅色', '深色', '自动']}
-                value={themeLabel}
-                onChange={(v) => {
-                  const map = { '浅色': 'light', '深色': 'dark', '自动': 'system' } as const
-                  setTheme(map[v as keyof typeof map])
-                }}
-                textClassName="settings-scale-text"
-              />
+            <div className="ml-[18px] mt-7 max-w-[58%] min-w-0">
+              <ScaledText as="p" className={`inline-block rounded-full px-3 py-1 text-[12px] font-semibold ${isDark ? 'bg-[rgba(185,145,255,0.42)] text-white' : 'bg-[rgba(255,143,171,0.26)] text-[#FF6E8A]'}`}>
+                {TIER_LABELS[membershipTier] ?? '体验版'}会员
+              </ScaledText>
+              <ScaledText as="p" className={`text-[14px] mt-3 leading-[1.55] ${isDark ? 'text-white/82' : 'text-[var(--color-text-secondary)]'}`}>
+                {MEMBERSHIP_HINTS[membershipTier] ?? MEMBERSHIP_HINTS.free}
+              </ScaledText>
             </div>
           </div>
-          <Divider />
-          <div className="px-5 py-4">
-            <div className="flex items-center gap-3 mb-3">
-              <TextAIcon />
-              <ScaledText as="span" className="text-[15px] text-[var(--color-ink)]">
-                字体大小
-              </ScaledText>
-            </div>
-            <Slider value={fontScale} onChange={setFontScale} labelClassName="settings-scale-text" />
-          </div>
-        </GroupCard>
+        </button>
 
-        {/* 通知 */}
-        <SectionLabel>通知</SectionLabel>
-        <GroupCard>
-          <div className="flex items-center justify-between px-5 h-[56px] opacity-50">
-            <div className="flex items-center gap-3">
-              <BellIcon />
-              <ScaledText as="span" className="text-[15px] text-[var(--color-ink)]">
-                推送提醒
-              </ScaledText>
-              <ScaledText as="span" className="text-[11px] text-[var(--color-text-muted)]">
-                即将上线
-              </ScaledText>
-            </div>
-            <Switch checked={pushEnabled} onChange={setPushEnabled} disabled />
-          </div>
-          <Divider />
-          <SettingRow icon={<MoonIcon />} label="静音时段" value={isMuteNever ? '永不' : `${muteStart}:${muteStartMin} – ${muteEnd}:${muteEndMin}`} chevron onClick={() => setShowMuteSheet(true)} />
-        </GroupCard>
+        <InviteShowcase
+          code={inviteStatus?.invite_code}
+          invitedCount={inviteStatus?.invited_count ?? 0}
+          totalReward={inviteStatus?.total_reward ?? 0}
+          onInvite={() => navigate('/invite')}
+        />
 
-        {/* 隐私与数据 */}
-        <SectionLabel>隐私与数据</SectionLabel>
-        <GroupCard>
-          <SettingRow icon={<KeyIcon />} label="修改密码" chevron onClick={() => navigate('/settings/change-password')} />
-          <Divider />
-          <SettingRow icon={<LogoutIcon />} label="退出登录" onClick={() => setShowLogoutDialog(true)} />
-          <Divider />
-          <SettingRow icon={<TrashIcon />} label="清除聊天缓存" onClick={() => setShowClearDialog(true)} />
-          <Divider />
-          <SettingRow icon={<DownloadIcon />} label="导出我的数据" onClick={handleExportData} />
-          <Divider />
-          <SettingRow icon={<WarningIcon />} label="注销账号" danger onClick={() => { setDeleteStep(1); setDeleteConfirmText(''); setShowDeleteDialog(true) }} />
-        </GroupCard>
-
-        {/* 关于 */}
-        <SectionLabel>关于</SectionLabel>
-        <GroupCard>
-          <SettingRow icon={<InfoIcon />} label="版本" value={`v${__APP_VERSION__}`} />
-          <SettingRow icon={<DocIcon />} label="用户协议" chevron onClick={() => navigate('/legal/terms')} />
-          <SettingRow icon={<DocIcon />} label="隐私政策" chevron onClick={() => navigate('/legal/privacy')} />
-          <SettingRow icon={<MailIcon />} label="联系我们" chevron onClick={() => window.location.href = 'mailto:support@yuoyuo.app'} />
-        </GroupCard>
+        {inviteStatus?.invite_code && (
+          <InviteCodeCard code={inviteStatus.invite_code} onCopy={copyInviteCode} onOpen={() => navigate('/invite')} />
+        )}
       </div>
+
+      <BottomSheet open={showSettingsSheet} onClose={() => setShowSettingsSheet(false)}>
+        <div className="max-h-[78vh] overflow-y-auto pb-2">
+          <div className="flex items-center justify-between mb-3">
+            <ScaledText as="h2" className="text-[18px] font-semibold text-[var(--color-ink)]">
+              设置
+            </ScaledText>
+            <button
+              onClick={() => setShowSettingsSheet(false)}
+              className="w-[36px] h-[36px] flex items-center justify-center rounded-full active:bg-[rgba(255,183,197,0.14)] transition-colors"
+              aria-label="关闭设置"
+            >
+              <CloseIcon />
+            </button>
+          </div>
+
+          <SectionLabel>外观</SectionLabel>
+          <GroupCard>
+            <div className="flex items-center justify-between px-5 h-[56px]">
+              <div className="flex items-center gap-3">
+                <PaletteIcon />
+                <ScaledText as="span" className="text-[15px] text-[var(--color-ink)]">
+                  主题
+                </ScaledText>
+              </div>
+              <div className="w-[180px]">
+                <SegmentedControl
+                  options={['浅色', '深色', '自动']}
+                  value={themeLabel}
+                  onChange={(v) => {
+                    const map = { '浅色': 'light', '深色': 'dark', '自动': 'system' } as const
+                    setTheme(map[v as keyof typeof map])
+                  }}
+                  textClassName="settings-scale-text"
+                />
+              </div>
+            </div>
+            <Divider />
+            <div className="px-5 py-4">
+              <div className="flex items-center gap-3 mb-3">
+                <TextAIcon />
+                <ScaledText as="span" className="text-[15px] text-[var(--color-ink)]">
+                  字体大小
+                </ScaledText>
+              </div>
+              <Slider value={fontScale} onChange={setFontScale} labelClassName="settings-scale-text" />
+            </div>
+          </GroupCard>
+
+          <SectionLabel>通知</SectionLabel>
+          <GroupCard>
+            <div className="flex items-center justify-between px-5 h-[56px] opacity-50">
+              <div className="flex items-center gap-3">
+                <BellIcon />
+                <ScaledText as="span" className="text-[15px] text-[var(--color-ink)]">
+                  推送提醒
+                </ScaledText>
+                <ScaledText as="span" className="text-[11px] text-[var(--color-text-muted)]">
+                  即将上线
+                </ScaledText>
+              </div>
+              <Switch checked={pushEnabled} onChange={setPushEnabled} disabled />
+            </div>
+            <Divider />
+            <SettingRow
+              icon={<MoonIcon />}
+              label="静音时段"
+              value={isMuteNever ? '永不' : `${muteStart}:${muteStartMin} – ${muteEnd}:${muteEndMin}`}
+              chevron
+              onClick={() => { setShowSettingsSheet(false); setShowMuteSheet(true) }}
+            />
+          </GroupCard>
+
+          <SectionLabel>隐私与数据</SectionLabel>
+          <GroupCard>
+            <SettingRow icon={<KeyIcon />} label="修改密码" chevron onClick={() => navigate('/settings/change-password')} />
+            <Divider />
+            <SettingRow icon={<LogoutIcon />} label="退出登录" onClick={() => { setShowSettingsSheet(false); setShowLogoutDialog(true) }} />
+            <Divider />
+            <SettingRow icon={<TrashIcon />} label="清除聊天缓存" onClick={() => { setShowSettingsSheet(false); setShowClearDialog(true) }} />
+            <Divider />
+            <SettingRow icon={<DownloadIcon />} label="导出我的数据" onClick={() => { setShowSettingsSheet(false); void handleExportData() }} />
+            <Divider />
+            <SettingRow
+              icon={<WarningIcon />}
+              label="注销账号"
+              danger
+              onClick={() => { setShowSettingsSheet(false); setDeleteStep(1); setDeleteConfirmText(''); setShowDeleteDialog(true) }}
+            />
+          </GroupCard>
+
+          <SectionLabel>关于</SectionLabel>
+          <GroupCard>
+            <SettingRow icon={<InfoIcon />} label="版本" value={`v${__APP_VERSION__}`} />
+            <Divider />
+            <SettingRow icon={<DocIcon />} label="用户协议" chevron onClick={() => navigate('/legal/terms')} />
+            <Divider />
+            <SettingRow icon={<DocIcon />} label="隐私政策" chevron onClick={() => navigate('/legal/privacy')} />
+            <Divider />
+            <SettingRow icon={<MailIcon />} label="联系我们" chevron onClick={() => window.location.href = 'mailto:support@yuoyuo.app'} />
+          </GroupCard>
+        </div>
+      </BottomSheet>
 
       {/* Logout Dialog */}
       <Dialog open={showLogoutDialog} onClose={() => setShowLogoutDialog(false)} title="确认退出登录？">
@@ -361,6 +489,143 @@ function GroupCard({ children }: { children: ReactNode }) {
   )
 }
 
+function WalletPanel({
+  balance,
+  onRecharge,
+  onDetails,
+}: {
+  balance: number
+  onRecharge: () => void
+  onDetails: () => void
+}) {
+  return (
+    <div className="relative overflow-hidden rounded-[28px] bg-[var(--color-glass-card)] backdrop-blur-[20px] border border-[var(--color-border-glass)] shadow-[var(--shadow-card)] p-5">
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="w-[30px] h-[30px] rounded-[11px] bg-[rgba(255,183,197,0.16)] flex items-center justify-center text-[var(--color-primary)]">
+            <WalletIcon />
+          </span>
+          <ScaledText as="h2" className="text-[17px] font-semibold text-[var(--color-ink)]">
+            我的钱包
+          </ScaledText>
+        </div>
+        <button onClick={onDetails} className="text-[12px] text-[var(--color-text-secondary)] active:opacity-60 shrink-0">
+          yuoyuo币明细
+        </button>
+      </div>
+
+      <div className="flex items-end justify-between gap-5 mt-7">
+        <WalletAmount value={balance} label="yuoyuo币余额" />
+        <button
+          onClick={onRecharge}
+          className="h-[42px] px-6 rounded-full bg-gradient-to-r from-[#FFB7C5] to-[#FF8FAB] text-white text-[14px] font-semibold shadow-[var(--shadow-btn)] active:scale-[0.97] transition-transform shrink-0"
+        >
+          充值
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function WalletAmount({ value, label }: { value: number; label: string }) {
+  return (
+    <div className="min-w-0">
+      <div className="flex items-center gap-2">
+        <span className="w-[24px] h-[24px] rounded-full flex items-center justify-center text-[13px] font-bold shadow-[0_4px_10px_rgba(58,58,74,0.10)] bg-[linear-gradient(135deg,#FFE08A,#D89B31)] text-white">
+          y
+        </span>
+        <ScaledText as="p" className="text-[24px] font-bold text-[var(--color-ink)] leading-none truncate">
+          {value}
+        </ScaledText>
+      </div>
+      <ScaledText as="p" className="text-[13px] text-[var(--color-text-secondary)] mt-3 truncate">
+        {label}
+      </ScaledText>
+    </div>
+  )
+}
+
+function InviteShowcase({
+  code,
+  invitedCount,
+  totalReward,
+  onInvite,
+}: {
+  code?: string
+  invitedCount: number
+  totalReward: number
+  onInvite: () => void
+}) {
+  return (
+    <button
+      onClick={onInvite}
+      className="relative w-full overflow-hidden mt-5 rounded-[28px] bg-[var(--color-glass-card)] backdrop-blur-[20px] border border-[var(--color-border-glass)] shadow-[var(--shadow-card)] p-5 text-left active:scale-[0.99] transition-transform"
+    >
+      <img
+        src="/assets/settings/invite-mascot.png"
+        alt=""
+        className="absolute right-[-28px] top-[-78px] w-[300px] h-[390px] object-contain pointer-events-none"
+      />
+      <div className="relative pr-[148px] min-h-[196px] flex flex-col justify-between">
+        <div>
+          <ScaledText as="p" className="text-[15px] font-semibold text-[var(--color-ink)]">
+            邀请好友
+          </ScaledText>
+          <ScaledText as="h3" className="text-[24px] font-bold text-[var(--color-ink)] leading-[1.22] mt-5">
+            邀请好友<br />共同获得奖励
+          </ScaledText>
+          <ScaledText as="p" className="text-[13px] text-[var(--color-text-secondary)] leading-[1.65] mt-3">
+            邀请好友完成首次聊天后，奖励会自动发放到账户。
+          </ScaledText>
+          {code && (
+            <div className="flex items-center gap-3 mt-4 text-[12px] text-[var(--color-text-muted)]">
+              <span>已邀请 {invitedCount}</span>
+              <span>累计 {totalReward} 币</span>
+            </div>
+          )}
+        </div>
+        <span className="self-end min-w-[168px] h-[40px] rounded-full bg-gradient-to-r from-[#FFB7C5] to-[#FF8FAB] text-white text-[14px] font-semibold flex items-center justify-center shadow-[var(--shadow-btn)]">
+          立即邀请好友
+        </span>
+      </div>
+    </button>
+  )
+}
+
+function InviteCodeCard({
+  code,
+  onCopy,
+  onOpen,
+}: {
+  code: string
+  onCopy: () => void
+  onOpen: () => void
+}) {
+  return (
+    <div className="mt-5 rounded-[24px] bg-[var(--color-glass-card)] backdrop-blur-[20px] border border-[var(--color-border-glass)] shadow-[var(--shadow-card)] px-5 py-4">
+      <div className="flex items-center justify-between gap-3">
+        <ScaledText as="p" className="text-[15px] font-semibold text-[var(--color-ink)]">
+          我的邀请码
+        </ScaledText>
+        <button onClick={onOpen} className="text-[12px] text-[var(--color-text-secondary)] active:opacity-60">
+          邀请明细
+        </button>
+      </div>
+      <div className="flex items-center justify-between gap-4 mt-4">
+        <ScaledText as="p" className="flex-1 text-center text-[26px] font-bold tracking-[0.14em] text-[var(--color-primary)] font-[var(--font-latin)]">
+          {code}
+        </ScaledText>
+        <button
+          onClick={onCopy}
+          className="h-[44px] px-5 rounded-[14px] bg-[rgba(255,183,197,0.12)] border border-[rgba(255,183,197,0.28)] text-[var(--color-primary)] text-[14px] font-semibold active:scale-[0.97] transition-transform"
+        >
+          复制
+        </button>
+      </div>
+    </div>
+  )
+}
+
 function SettingRow({
   icon,
   label,
@@ -423,20 +688,27 @@ function ScaledText({ as: Component, children, className = '' }: ScaledTextProps
 }
 
 /* ── Icons ─────────────────────────────────────────────────────── */
+function SettingsIcon() {
+  return <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--color-ink)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" /></svg>
+}
+function CloseIcon() {
+  return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--color-ink)" strokeWidth="2" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+}
+function ChevronIcon() {
+  return <svg className="shrink-0" width="8" height="14" viewBox="0 0 8 14" fill="none" stroke="var(--color-chevron)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="1,1 7,7 1,13" /></svg>
+}
 function LogoutIcon() {
   return <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--color-primary)" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16,17 21,12 16,7" /><line x1="21" y1="12" x2="9" y2="12" /></svg>
 }
 function KeyIcon() {
   return <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--color-primary)" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><circle cx="7.5" cy="15.5" r="4.5" /><path d="M10.5 12.5L21 2m-4 2 2 2m-5 1 2 2" /></svg>
 }
-function CrownIcon() {
-  return <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--color-primary)" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M2 20h20L19 8l-5 5-2-7-2 7-5-5-3 12z" /></svg>
+function CrownIcon({ tone = 'brand' }: { tone?: 'brand' | 'light' }) {
+  const stroke = tone === 'light' ? '#FFFFFF' : 'var(--color-primary)'
+  return <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M2 20h20L19 8l-5 5-2-7-2 7-5-5-3 12z" /></svg>
 }
 function WalletIcon() {
   return <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--color-primary)" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z" /><path d="M16 12h2" /><path d="M3 8h14" /></svg>
-}
-function InviteIcon() {
-  return <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--color-primary)" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><line x1="19" y1="8" x2="19" y2="14" /><line x1="22" y1="11" x2="16" y2="11" /></svg>
 }
 function PaletteIcon() {
   return <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--color-primary)" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><circle cx="12" cy="8" r="1.5" fill="var(--color-primary)" /><circle cx="8" cy="12" r="1.5" fill="var(--color-primary)" /><circle cx="16" cy="12" r="1.5" fill="var(--color-primary)" /><circle cx="12" cy="16" r="1.5" fill="var(--color-primary)" /></svg>
@@ -467,10 +739,4 @@ function DocIcon() {
 }
 function MailIcon() {
   return <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--color-primary)" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="4" width="20" height="16" rx="2" /><polyline points="22,4 12,13 2,4" /></svg>
-}
-function PencilSparkleIcon() {
-  return <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--color-primary)" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9" /><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" /></svg>
-}
-function PlusCircleIcon() {
-  return <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--color-primary)" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="16" /><line x1="8" y1="12" x2="16" y2="12" /></svg>
 }

@@ -10,7 +10,7 @@ interface TabItem {
 }
 
 // Regular tabs flank the raised center 创作 button. Order (per product
-// direction 2026-07-31, Nimoo-style): 角色 · 探索 · [创作] · 消息 · 设置.
+// direction 2026-07-31, Nimoo-style): 角色 · 探索 · [创作] · 消息 · 我的.
 // The former 首页 tab was removed — the home page carried no unique function,
 // so the app now lands directly on 角色 after login.
 const leftTabs: TabItem[] = [
@@ -51,12 +51,13 @@ const rightTabs: TabItem[] = [
   },
   {
     id: 'settings',
-    label: '设置',
+    label: '我的',
     path: '/settings',
     icon: (active) => (
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={active ? '#FFB7C5' : '#8E8E9A'} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-        <circle cx="12" cy="12" r="3" />
-        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+      <svg width="24" height="24" viewBox="0 0 24 24" fill={active ? 'rgba(255,183,197,0.16)' : 'none'} stroke={active ? '#FFB7C5' : '#8E8E9A'} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="8" r="4" />
+        <path d="M4.5 21c.8-4.2 3.7-6.5 7.5-6.5s6.7 2.3 7.5 6.5" />
+        <path d="M8.5 19.4c.9-.8 2.1-1.2 3.5-1.2s2.6.4 3.5 1.2" opacity={active ? 1 : 0.6} />
       </svg>
     ),
   },

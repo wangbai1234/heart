@@ -40,6 +40,8 @@ class CharacterRow:
     review_reason: Optional[str] = None
     tags: list[str] = field(default_factory=list)
     cover_url: Optional[str] = None
+    # ISO-8601 creation timestamp; drives the "新角色" (newest) discovery sort.
+    created_at: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -58,6 +60,12 @@ class CharacterEntry:
     tags: list[str] = field(default_factory=list)
     cover_url: Optional[str] = None
     chat_user_count: int = 0
+    # One-line public plot hook shown under the name on the discovery card
+    # (display-only, ≤60 chars). Sourced from the UGC draft; None for built-ins
+    # (the client falls back to the bundled summary).
+    tagline: Optional[str] = None
+    # ISO-8601 creation timestamp; drives the "新角色" (newest) discovery sort.
+    created_at: Optional[str] = None
 
 
 def coerce_tags(raw: object) -> list[str]:
@@ -105,6 +113,7 @@ def build_catalog_entries(
     viewer_id: UUID,
     avatar_urls: dict[str, str | None] | None = None,
     popularity: dict[str, int] | None = None,
+    taglines: dict[str, str | None] | None = None,
 ) -> list[CharacterEntry]:
     """Shape visible rows into API entries, built-ins first then by popularity.
 
@@ -116,9 +125,12 @@ def build_catalog_entries(
             Built-in characters don't have UGC avatars; they're resolved client-side.
         popularity: Optional mapping of character_id → chat user count.
             Higher count = more engagement. Used to sort UGC characters.
+        taglines: Optional mapping of character_id → one-line plot hook (from draft).
+            Built-in characters fall back client-side to bundled summaries.
     """
     avatar_urls = avatar_urls or {}
     popularity = popularity or {}
+    taglines = taglines or {}
 
     def is_owner_fn(row: CharacterRow) -> bool:
         return row.owner_user_id is not None and row.owner_user_id == viewer_id
@@ -137,6 +149,8 @@ def build_catalog_entries(
             tags=list(row.tags or []),
             cover_url=row.cover_url,
             chat_user_count=popularity.get(row.id, 0),
+            tagline=taglines.get(row.id),
+            created_at=row.created_at,
         )
         for row in rows
         if visible_to(row, viewer_id)
