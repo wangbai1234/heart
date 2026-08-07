@@ -900,6 +900,13 @@ async def _handle_chat_message(
     # memory all need the row) but hidden from chat history — replaced by a
     # single call-summary bubble on hang-up. Whitelist to keep the column clean.
     channel = "call" if msg.get("channel") == "call" else "chat"
+    # Voice call forces grok as the primary model regardless of the chat page's
+    # model selection: grok's TTFT is lower, which matters for realtime speech.
+    # The composer's failover chain ([model] + DEFAULT_FAILOVER) still falls back
+    # to deepseek if grok is unavailable or stalls. Call is billed at 20 币/min,
+    # covering grok's per-turn cost, so cost is not a concern here.
+    if channel == "call":
+        model = "grok"
     # Voice-call mode forces a spoken reply even if the user never toggled the
     # per-character voice switch (the call page verified a ready voice exists
     # before entering). Text chat sends its real toggle state, so OR'ing this

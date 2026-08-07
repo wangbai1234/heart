@@ -34,6 +34,16 @@ _DRAIN_TIMEOUT_S = 40.0
 
 SessionFactory = Callable[[str], FishRealtimeSession]
 
+# Per-voice realtime speed overrides, keyed by Fish voice_id (model_id UUID).
+# The realtime WS path otherwise renders every voice at speed=1.0, which for a
+# few presets reads noticeably faster than their REST preview (previews omit the
+# speed field entirely and inherit Fish's REST default). Any voice_id absent
+# here keeps 1.0. Fish accepts 0.5–2.0.
+#   2fe2aecb… = fish_male_bad ("危险痞帅" / 痞帅浪子) — realtime ran too fast.
+_REALTIME_SPEED_OVERRIDES: dict[str, float] = {
+    "2fe2aecb-8a8b-45b1-9de1-ddede0c4da63": 0.9,
+}
+
 
 class RealtimeStreamSession:
     """Streams Fish realtime audio for one turn."""
@@ -99,6 +109,12 @@ class RealtimeStreamSession:
 
         # The Fish clone voiceId registered by resolve_effective_voice.
         model_id = get_voice_id(self._character_id)
+        # Apply a per-voice speed override (see _REALTIME_SPEED_OVERRIDES). Only
+        # narrows the default 1.0 for the few presets whose realtime render is
+        # faster than their preview; unknown voice_ids are untouched.
+        override = _REALTIME_SPEED_OVERRIDES.get(model_id)
+        if override is not None:
+            self._speed = override
         self._session = self._session_factory(model_id)
         await self._session.open()
         self._reader_task = asyncio.create_task(self._pump_audio())

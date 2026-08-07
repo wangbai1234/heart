@@ -275,6 +275,63 @@ class TestRealtimeStreamSession:
         assert fake.finished and fake.closed
 
     @pytest.mark.asyncio
+    async def test_speed_override_applied_for_known_voice(self, monkeypatch):
+        # A voice_id present in _REALTIME_SPEED_OVERRIDES must lower the speed
+        # passed to the Fish session (realtime otherwise renders every voice at
+        # 1.0, which for this preset was faster than its REST preview).
+        from heart.ss08_voice import realtime_stream_session as rss
+
+        override_id = next(iter(rss._REALTIME_SPEED_OVERRIDES))
+        expected = rss._REALTIME_SPEED_OVERRIDES[override_id]
+        monkeypatch.setattr(
+            "heart.ss08_voice.voice_catalog.get_voice_id", lambda cid: override_id
+        )
+
+        async def send_audio(t_id, seq, data, is_last, fmt, sample_rate=None):
+            pass
+
+        captured: dict[str, float] = {}
+
+        def factory(mid: str) -> FakeRealtimeSession:
+            captured["s"] = sess._speed  # speed at the moment the session is built
+            return FakeRealtimeSession([b"a"])
+
+        sess = rss.RealtimeStreamSession(
+            send_audio,
+            api_key="k",
+            url="wss://x",
+            character_id="rin",
+            fmt="wav",
+            session_factory=factory,
+        )
+        await sess.start()
+        assert captured["s"] == expected
+        assert sess._speed == expected
+
+    @pytest.mark.asyncio
+    async def test_speed_default_for_unknown_voice(self, monkeypatch):
+        # A voice_id not in the override table keeps the default 1.0.
+        from heart.ss08_voice import realtime_stream_session as rss
+
+        monkeypatch.setattr(
+            "heart.ss08_voice.voice_catalog.get_voice_id", lambda cid: "not-overridden"
+        )
+
+        async def send_audio(t_id, seq, data, is_last, fmt, sample_rate=None):
+            pass
+
+        sess = rss.RealtimeStreamSession(
+            send_audio,
+            api_key="k",
+            url="wss://x",
+            character_id="rin",
+            fmt="wav",
+            session_factory=lambda mid: FakeRealtimeSession([b"a"]),
+        )
+        await sess.start()
+        assert sess._speed == 1.0
+
+    @pytest.mark.asyncio
     async def test_forwards_sample_rate_from_session(self, monkeypatch):
         # wav/pcm call path: the session reports a sample_rate and it must reach
         # send_audio so the client builds AudioBuffers at the true rate.
