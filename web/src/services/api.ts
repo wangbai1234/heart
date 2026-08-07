@@ -684,6 +684,8 @@ export interface CharacterDTO {
   review_status?: string
   /** Rejection reason — only populated for the character's owner. */
   review_reason?: string | null
+  /** One-line public plot hook shown under the name (display-only, ≤60 chars). */
+  tagline?: string | null
 }
 
 export async function getCharacters(): Promise<{ characters: CharacterDTO[] }> {
