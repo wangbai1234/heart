@@ -427,7 +427,7 @@ export function CharacterPage() {
         {/* Secondary tag chips (scrollable) + funnel filter button (right, fixed) */}
         <div className="relative z-30 shrink-0 px-3 pb-3">
           <div className="flex min-h-[42px] items-center gap-1.5">
-            <div className="flex-1 min-w-0 flex gap-1.5 overflow-x-auto no-scrollbar">
+            <div className="flex-1 min-w-0 flex gap-1.5 overflow-x-auto overflow-y-hidden touch-pan-x no-scrollbar">
               {pinnedTagChips.map((tag) => (
                 <button
                   key={tag}
@@ -449,18 +449,18 @@ export function CharacterPage() {
               <button
                 onClick={() => setShowFilter((v) => !v)}
                 aria-label="筛选"
-                className={`relative shrink-0 w-[42px] h-[42px] rounded-full flex items-center justify-center border transition-colors ${
+                className={`relative shrink-0 w-[38px] h-[38px] flex items-center justify-center transition-colors active:scale-[0.94] ${
                   showFilter || !pinnedTagChips.includes(activeTag)
-                    ? 'bg-[var(--color-primary)] text-white border-transparent shadow-[0_8px_18px_rgba(255,143,171,0.28)]'
-                    : 'bg-[var(--color-glass-55)] text-[var(--color-primary)] border-[var(--color-border-glass)]'
+                    ? 'text-[var(--color-primary)]'
+                    : isDark ? 'text-[var(--color-text-secondary)]' : 'text-[rgba(58,58,74,0.66)]'
                 }`}
               >
-                <svg width="19" height="19" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <svg width="21" height="21" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M2 3.5h12l-4.6 5.2v3.4l-2.8 1.4V8.7L2 3.5Z" />
                 </svg>
                 {/* active-tag dot when a filtered tag is applied */}
                 {!pinnedTagChips.includes(activeTag) && !showFilter && (
-                  <span className="absolute -top-0.5 -right-0.5 w-[8px] h-[8px] rounded-full bg-[var(--color-primary)] border border-white" />
+                  <span className="absolute top-0.5 right-0.5 w-[7px] h-[7px] rounded-full bg-[var(--color-primary)]" />
                 )}
               </button>
             )}
@@ -474,11 +474,11 @@ export function CharacterPage() {
                 onClick={() => setShowFilter(false)}
                 className="fixed inset-0 z-20 cursor-default bg-black/20"
               />
-              <div className={`absolute left-[-12px] right-[-12px] top-full z-30 rounded-b-[28px] backdrop-blur-[22px] border-t shadow-[0_18px_40px_rgba(0,0,0,0.18)] px-5 pt-5 pb-7 ${filterPanelClass}`}>
-                <div className="flex items-baseline justify-between gap-3 mb-5">
-                  <div className="min-w-0 flex items-baseline gap-3">
-                    <p className={`shrink-0 text-[20px] font-bold leading-none ${filterPanelTitle}`}>更多标签</p>
-                    <p className={`min-w-0 text-[14px] font-semibold leading-none truncate ${filterPanelHint}`}>点击标签筛选</p>
+              <div className={`absolute left-[-12px] right-[-12px] top-full z-30 rounded-b-[24px] backdrop-blur-[22px] border-t shadow-[0_18px_40px_rgba(0,0,0,0.18)] px-4 pt-3.5 pb-4 ${filterPanelClass}`}>
+                <div className="flex items-baseline justify-between gap-3 mb-3">
+                  <div className="min-w-0 flex items-baseline gap-2.5">
+                    <p className={`shrink-0 text-[17px] font-bold leading-none ${filterPanelTitle}`}>更多标签</p>
+                    <p className={`min-w-0 text-[13px] font-semibold leading-none truncate ${filterPanelHint}`}>点击标签筛选</p>
                   </div>
                   {!pinnedTagChips.includes(activeTag) && (
                     <button
@@ -489,12 +489,12 @@ export function CharacterPage() {
                     </button>
                   )}
                 </div>
-                <div className="grid grid-cols-4 gap-x-2.5 gap-y-3 max-h-[42vh] overflow-y-auto no-scrollbar">
+                <div className="grid grid-cols-4 gap-x-2 gap-y-2 max-h-[42vh] overflow-y-auto no-scrollbar">
                   {extraFilterChips.map((tag) => (
                     <button
                       key={tag}
                       onClick={() => { setActiveTag(tag); setShowFilter(false) }}
-                      className={`min-w-0 h-[46px] rounded-[16px] text-[15px] border transition-colors ${
+                      className={`min-w-0 h-[38px] rounded-[13px] text-[14px] border transition-colors ${
                         activeTag === tag
                           ? 'bg-[var(--color-primary)] text-white border-transparent font-bold'
                           : `${filterChipIdle} font-semibold`

@@ -114,6 +114,68 @@ def _check_clone_provider_available(provider: str) -> None:
 # varies by provider (MiMo → audio/wav, MiniMax → audio/mpeg).
 _PRESET_SAMPLE_CACHE: dict[str, tuple[str, bytes]] = {}
 
+# Per-preset试听台词 — a short in-character line that shows off each voice's
+# personality instead of a generic "你好，我是X". Keyed by preset_id; falls back
+# to a neutral greeting for any preset not listed. Kept clean (SFW) since the
+# clip is served to any signed-in user browsing the picker.
+_PRESET_SAMPLE_LINES: dict[str, str] = {
+    "fish_male_bad": "别躲啊，我又不吃人。……话说回来，你今天，是不是有点想我了？",
+    "fish_male_uncle": "别急，慢慢说。有我在，天塌下来也先帮你扛着。",
+    "fish_male_yandere": "你只能看着我一个人。其他人……多看一眼都不行，知道吗？",
+    "fish_male_loyal": "今天也辛苦啦，快过来。让我抱一下，什么烦心事都没了。",
+    "fish_female_senior": "欸你怎么啦，不理人家喔？看我一下下嘛，就一下下好不好。",
+    "fish_female_gentle": "今天过得还好吗？累的话，就靠过来，在我这里歇一会儿吧。",
+    "fish_female_yujie": "乖，别闹了。听话，我自然会好好疼你。",
+    "fish_female_jp_sweet": "呐，今天也要一直一直在一起哦，我们说好了的。",
+}
+
+
+def _sample_text_for(preset_id: str, name: str) -> str:
+    """试听台词 for a preset — personality line if defined, else neutral greeting."""
+    return _PRESET_SAMPLE_LINES.get(
+        preset_id,
+        f"你好，我是{name}，很高兴认识你，希望我们能聊得愉快。",
+    )
+
+
+def _sample_s3_key(preset_id: str, media_type: str) -> str:
+    ext = "mp3" if media_type == "audio/mpeg" else "wav"
+    return f"preset_samples/{preset_id}.{ext}"
+
+
+async def _load_sample_from_s3(preset_id: str) -> tuple[str, bytes] | None:
+    """Return (media_type, audio) for a previously-persisted preset clip, or None.
+
+    Tries the mp3 key first (Fish/MiniMax), then wav (MiMo). Any storage error
+    is swallowed to None so the caller falls through to synthesis rather than
+    failing the preview.
+    """
+    from heart.infra.storage import get_s3_object, is_s3_configured
+
+    if not is_s3_configured():
+        return None
+    for media_type in ("audio/mpeg", "audio/wav"):
+        key = _sample_s3_key(preset_id, media_type)
+        try:
+            data, content_type, _etag = await get_s3_object(key)
+        except Exception:
+            continue  # missing key / transient error — try next / fall through
+        return (content_type or media_type, data)
+    return None
+
+
+async def _store_sample_to_s3(preset_id: str, media_type: str, audio: bytes) -> None:
+    """Best-effort persist of a synthesized preset clip; never raises."""
+    from heart.infra.storage import _upload_to_s3, is_s3_configured
+
+    if not is_s3_configured():
+        return
+    key = _sample_s3_key(preset_id, media_type)
+    try:
+        await _upload_to_s3(key, audio, media_type)
+    except Exception:
+        logger.warning("preset_sample_s3_store_failed", preset_id=preset_id, exc_info=True)
+
 
 def _pcm16_to_wav(pcm: bytes, sample_rate: int = 24000, channels: int = 1) -> bytes:
     """Wrap raw PCM16LE samples in a minimal WAV container.
@@ -234,7 +296,7 @@ async def list_preset_voices(
 
 @router.get("/presets/{preset_id}/sample")
 @limiter.limit("60/hour")
-async def get_preset_voice_sample(
+async def get_preset_voice_sample(  # noqa: C901 — multi-provider branching, not reductive
     request: Request,
     preset_id: str,
     current_user: TokenData = Depends(get_current_user),
@@ -245,14 +307,28 @@ async def get_preset_voice_sample(
     Returns playable audio bytes so the character-creation UI can preview a
     voice when the user taps ▶.  The clip is synthesized by the preset's own
     provider — MiMo (returns PCM16, wrapped to WAV here) for the mimo catalog,
-    or MiniMax (MP3) for legacy rows.  Cached per preset_id for the process
-    lifetime so we hit the provider at most once per voice.
+    Fish (MP3), or MiniMax (MP3) for legacy rows.
+
+    Two-level cache so a clip is synthesized at most **once, ever**:
+      1. in-process dict (fast path, per worker)
+      2. durable S3/MinIO object (survives restarts, shared across workers)
+    Only a genuine cold miss (never synthesized) hits the TTS provider; the
+    result is then written to both caches.
     """
     from fastapi.responses import Response
 
     cached = _PRESET_SAMPLE_CACHE.get(preset_id)
     if cached is not None:
         media_type, audio = cached
+        return Response(content=audio, media_type=media_type)
+
+    # Durable cache: previously-synthesized clips live in S3 keyed by preset_id.
+    # Serving from here means Fish/MiMo is never called again after the first
+    # synthesis (even after a deploy or on a fresh worker).
+    s3_hit = await _load_sample_from_s3(preset_id)
+    if s3_hit is not None:
+        media_type, audio = s3_hit
+        _PRESET_SAMPLE_CACHE[preset_id] = (media_type, audio)
         return Response(content=audio, media_type=media_type)
 
     row = (
@@ -272,7 +348,7 @@ async def get_preset_voice_sample(
     if row is None:
         raise HTTPException(status_code=404, detail="预设音色不存在")
 
-    sample_text = f"你好，我是{row['name']}，很高兴认识你，希望我们能聊得愉快。"
+    sample_text = _sample_text_for(preset_id, row["name"])
     provider_name = row["provider"]
 
     from heart.ss08_voice.errors import TTSProviderError
@@ -345,6 +421,9 @@ async def get_preset_voice_sample(
         ) from exc
 
     _PRESET_SAMPLE_CACHE[preset_id] = (media_type, audio)
+    # Persist to S3 so this clip is never synthesized again (best-effort — a
+    # storage hiccup must not fail the preview the user is waiting on).
+    await _store_sample_to_s3(preset_id, media_type, audio)
     logger.info(
         "preset_sample_synthesized",
         preset_id=preset_id,
