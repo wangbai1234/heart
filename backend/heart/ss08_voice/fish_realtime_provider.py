@@ -90,6 +90,14 @@ class FishRealtimeSession:
         self._ws_factory = ws_factory or _default_ws_factory
         self._ws: Any = None
         self._closed = False
+        # For pcm/wav formats Fish reports the real sample rate on the ready
+        # (and every audio) event; the client must honour it or playback pitch
+        # and duration drift. None until the first frame that carries it.
+        self._sample_rate: Optional[int] = None
+
+    @property
+    def sample_rate(self) -> Optional[int]:
+        return self._sample_rate
 
     async def _send_event(self, event: dict[str, Any]) -> None:
         if self._ws is None:
@@ -114,6 +122,9 @@ class FishRealtimeSession:
                 evt = _unpack(frame)
                 etype = evt.get("event")
                 if etype == "ready":
+                    sr = evt.get("sample_rate")
+                    if isinstance(sr, int) and sr > 0:
+                        self._sample_rate = sr
                     return
                 if etype == "error":
                     raise TTSProviderError(
@@ -135,6 +146,22 @@ class FishRealtimeSession:
         await self._send_event({"event": "text", "text": text})
         await self._send_event({"event": "flush"})
 
+    def _extract_audio_bytes(self, evt: dict[str, Any]) -> Optional[bytes]:
+        """Pull sample_rate (side effect) and the binary payload from an audio evt.
+
+        The mp3 path proved ``data`` is the payload key on this build of Fish;
+        the docs also list ``audio`` — accept whichever is present.
+        """
+        sr = evt.get("sample_rate")
+        if isinstance(sr, int) and sr > 0:
+            self._sample_rate = sr
+        data = evt.get("data")
+        if data is None:
+            data = evt.get("audio")
+        if not data:
+            return None
+        return bytes(data)
+
     async def audio_events(self) -> AsyncIterator[bytes]:
         """Yield raw audio bytes as ``audio`` frames arrive; ends on ``finish``.
 
@@ -155,9 +182,9 @@ class FishRealtimeSession:
             evt = _unpack(frame)
             etype = evt.get("event")
             if etype == "audio":
-                data = evt.get("data")
-                if data:
-                    yield data if isinstance(data, (bytes, bytearray)) else bytes(data)
+                payload = self._extract_audio_bytes(evt)
+                if payload:
+                    yield payload
             elif etype == "finish":
                 return
             elif etype == "error":

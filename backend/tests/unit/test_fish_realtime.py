@@ -146,16 +146,73 @@ class TestFishRealtimeSession:
         chunks = [c async for c in sess.audio_events()]
         assert chunks == [b"AAA"]
 
+    @pytest.mark.asyncio
+    async def test_captures_sample_rate_from_ready(self):
+        # pcm/wav: Fish reports the real rate on ready; the client must honour it.
+        ws = FakeWs([{"event": "ready", "sample_rate": 44100}])
+        sess = FishRealtimeSession(
+            api_key="k", url="wss://x", model_id="v", fmt="wav",
+            ws_factory=_factory_for(ws),
+        )
+        await sess.open()
+        assert sess.sample_rate == 44100
+
+    @pytest.mark.asyncio
+    async def test_captures_sample_rate_from_audio_frame(self):
+        # If ready lacked it, the first audio frame carries it (docs say both do).
+        ws = FakeWs(
+            [
+                {"event": "ready"},
+                {"event": "audio", "data": b"AAA", "sample_rate": 24000},
+                {"event": "finish"},
+            ]
+        )
+        sess = FishRealtimeSession(
+            api_key="k", url="wss://x", model_id="v", fmt="wav",
+            ws_factory=_factory_for(ws),
+        )
+        await sess.open()
+        _ = [c async for c in sess.audio_events()]
+        assert sess.sample_rate == 24000
+
+    @pytest.mark.asyncio
+    async def test_accepts_audio_payload_under_audio_key(self):
+        # Docs list the binary key as `audio`; this build sends `data`. Accept both.
+        ws = FakeWs(
+            [
+                {"event": "ready"},
+                {"event": "audio", "audio": b"XYZ"},
+                {"event": "finish"},
+            ]
+        )
+        sess = FishRealtimeSession(
+            api_key="k", url="wss://x", model_id="v", ws_factory=_factory_for(ws)
+        )
+        await sess.open()
+        chunks = [c async for c in sess.audio_events()]
+        assert chunks == [b"XYZ"]
+
+    @pytest.mark.asyncio
+    async def test_mp3_has_no_sample_rate(self):
+        ws = FakeWs([{"event": "ready"}])
+        sess = FishRealtimeSession(
+            api_key="k", url="wss://x", model_id="v", fmt="mp3",
+            ws_factory=_factory_for(ws),
+        )
+        await sess.open()
+        assert sess.sample_rate is None
+
 
 class FakeRealtimeSession:
     """Fake FishRealtimeSession for RealtimeStreamSession tests."""
 
-    def __init__(self, audio_chunks: list[bytes]) -> None:
+    def __init__(self, audio_chunks: list[bytes], sample_rate: int | None = None) -> None:
         self._audio = audio_chunks
         self.opened = False
         self.texts: list[str] = []
         self.finished = False
         self.closed = False
+        self.sample_rate = sample_rate
         self._text_seen = asyncio.Event()
 
     async def open(self) -> None:
@@ -190,8 +247,8 @@ class TestRealtimeStreamSession:
 
         sent: list[tuple] = []
 
-        async def send_audio(t_id, seq, data, is_last, fmt):
-            sent.append((t_id, seq, data, fmt))
+        async def send_audio(t_id, seq, data, is_last, fmt, sample_rate=None):
+            sent.append((t_id, seq, data, fmt, sample_rate))
 
         fake = FakeRealtimeSession([b"one", b"two"])
         session = rss.RealtimeStreamSession(
@@ -209,12 +266,39 @@ class TestRealtimeStreamSession:
 
         assert [s[2] for s in sent] == [b"one", b"two"]  # both chunks, in order
         assert [s[3] for s in sent] == ["mp3", "mp3"]
+        assert [s[4] for s in sent] == [None, None]  # no sample_rate for mp3
         assert all(s[0] == "turn-1" for s in sent)
         assert [s[1] for s in sent] == [0, 1]  # incrementing seq
         assert session.full_audio == b"onetwo"
         assert session.audio_produced is True
         assert session.tts_provider_name == "fish"
         assert fake.finished and fake.closed
+
+    @pytest.mark.asyncio
+    async def test_forwards_sample_rate_from_session(self, monkeypatch):
+        # wav/pcm call path: the session reports a sample_rate and it must reach
+        # send_audio so the client builds AudioBuffers at the true rate.
+        from heart.ss08_voice import realtime_stream_session as rss
+
+        monkeypatch.setattr(
+            "heart.ss08_voice.voice_catalog.get_voice_id", lambda cid: "v"
+        )
+        sent: list[tuple] = []
+
+        async def send_audio(t_id, seq, data, is_last, fmt, sample_rate=None):
+            sent.append((fmt, sample_rate))
+
+        fake = FakeRealtimeSession([b"aa", b"bb"], sample_rate=44100)
+        session = rss.RealtimeStreamSession(
+            send_audio, api_key="k", url="wss://x", character_id="rin",
+            fmt="wav", session_factory=lambda model_id: fake,
+        )
+        await session.start()
+        await session.submit("turn-1", "第一句", None, 0.0, [], "rin")
+        await session.finish()
+
+        assert [s[0] for s in sent] == ["wav", "wav"]
+        assert [s[1] for s in sent] == [44100, 44100]
 
     @pytest.mark.asyncio
     async def test_cancel_closes_session(self, monkeypatch):
@@ -290,6 +374,24 @@ class TestCreateStreamSessionSelection:
             preferred_provider_name="mimo", character_id="rin",
         )
         assert isinstance(sess, StreamSession)
+
+    def test_call_channel_selects_wav_format(self, monkeypatch):
+        from heart.api import routes_chat_ws as m
+        from heart.core.config import settings
+
+        monkeypatch.setattr(settings, "fish_realtime_enabled", True)
+        monkeypatch.setattr(settings, "fish_api_key", "k")
+        monkeypatch.setattr(settings, "fish_realtime_url", "wss://x")
+        call = m._create_stream_session(
+            self._voice_service(), self._ws(),
+            preferred_provider_name="fish", character_id="rin", channel="call",
+        )
+        chat = m._create_stream_session(
+            self._voice_service(), self._ws(),
+            preferred_provider_name="fish", character_id="rin", channel="chat",
+        )
+        assert call._fmt == "wav"  # call needs per-frame decodable linear PCM
+        assert chat._fmt == "mp3"  # chat concatenates + plays once at turn_end
 
     def test_allow_realtime_false_forces_rest(self, monkeypatch):
         from heart.api import routes_chat_ws as m

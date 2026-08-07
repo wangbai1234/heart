@@ -1,33 +1,70 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useChatStore } from '../stores/chatStore'
 import type { CharacterId } from '../data/uiContent'
+import { decodeCallChunk } from '../services/callAudioDecode'
 
 // Headless auto-player for the voice-call page. Plays a character reply
-// PROGRESSIVELY: the backend now streams one audio chunk per sentence (sentence
-// pipeline), so instead of waiting for turn_end to concat the whole reply, we
-// decode + play each sentence the instant it lands and queue the rest. The
-// character starts speaking sentence 1 while sentences 2..N are still being
-// generated — this is the latency win over the old "wait for full audioData".
+// PROGRESSIVELY via the Web Audio API: the backend streams audio frames the
+// instant each is synthesized, so we decode + SCHEDULE each frame on the
+// AudioContext timeline the moment it lands. The character starts speaking
+// while later frames are still being generated — that's the latency win, and
+// timeline scheduling makes the frames play gaplessly (no click between them).
+//
+// Why Web Audio and not one <audio> element per frame: realtime frames are
+// slices of one continuous stream (Fish wav = header + PCM continuation) and
+// are NOT independently decodable — a lone slice fails silently in <audio>,
+// which was the "call has no sound" bug. We hand-build AudioBuffers from the
+// linear PCM instead (see callAudioDecode). mp3 frames (REST fallback, which
+// sends one self-contained file per sentence) go through decodeAudioData.
 //
 // Half-duplex: the call page gates the mic on `isSpeaking`. `stop()` (barge-in,
 // also called before recording a new turn) halts playback and clears the queue.
-type QueueItem = { turnId: string; seq: number; dataB64: string; format: 'wav' | 'mp3' }
+type QueueItem = {
+  turnId: string
+  seq: number
+  dataB64: string
+  format: 'wav' | 'mp3'
+  sampleRate?: number
+}
+
+function b64ToBytes(b64: string): Uint8Array {
+  const bin = atob(b64)
+  const out = new Uint8Array(bin.length)
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i)
+  return out
+}
 
 export function useCallAudioPlayer(characterId: CharacterId) {
   const messages = useChatStore((s) => s.messages[characterId] ?? [])
   const streaming = useChatStore((s) => s.isStreaming[characterId] ?? false)
   const [isSpeaking, setIsSpeaking] = useState(false)
 
-  const audioElRef = useRef<HTMLAudioElement | null>(null)
-  const objectUrlRef = useRef<string | null>(null)
+  const ctxRef = useRef<AudioContext | null>(null)
   const queueRef = useRef<QueueItem[]>([])
   const enqueuedRef = useRef<Set<string>>(new Set()) // `${turnId}:${seq}` already queued
   const pumpingRef = useRef(false)
   const genRef = useRef(0) // bumped on stop() to invalidate in-flight playback
   const streamingRef = useRef(false)
   const seededRef = useRef(false)
+  // The AudioContext-clock time at which the next frame should start. When the
+  // queue keeps up this stays ahead of currentTime and frames butt seamlessly;
+  // when it falls behind (currentTime caught up) we resync to "play now".
+  const nextStartRef = useRef(0)
+  const activeSourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set())
 
   useEffect(() => { streamingRef.current = streaming }, [streaming])
+
+  // Lazily create (and resume) the AudioContext. Called from a user gesture
+  // (mic press) so iOS/Android unlock it; safe to call repeatedly.
+  const ensureCtx = useCallback((): AudioContext | null => {
+    if (!ctxRef.current) {
+      const Ctor = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+      if (!Ctor) return null
+      ctxRef.current = new Ctor()
+    }
+    if (ctxRef.current.state === 'suspended') void ctxRef.current.resume()
+    return ctxRef.current
+  }, [])
 
   // Seed every message already on screen as "handled" so a fresh call opens
   // silently — the character speaks only in reply, never by re-reading history.
@@ -42,92 +79,89 @@ export function useCallAudioPlayer(characterId: CharacterId) {
     seededRef.current = true
   }
 
-  const cleanupUrl = useCallback(() => {
-    if (objectUrlRef.current) {
-      URL.revokeObjectURL(objectUrlRef.current)
-      objectUrlRef.current = null
-    }
-  }, [])
-
   const stop = useCallback(() => {
-    genRef.current += 1 // invalidate any awaiting pump / play
+    genRef.current += 1 // invalidate any awaiting pump / scheduled tail
     queueRef.current = []
     pumpingRef.current = false
-    const el = audioElRef.current
-    if (el) {
-      el.pause()
-      el.src = ''
+    nextStartRef.current = 0
+    for (const src of activeSourcesRef.current) {
+      try { src.onended = null; src.stop() } catch { /* already stopped */ }
     }
-    cleanupUrl()
+    activeSourcesRef.current.clear()
     setIsSpeaking(false)
-  }, [cleanupUrl])
+  }, [])
 
-  // Decode one self-contained chunk (wav or mp3) to a blob URL and play it,
-  // resolving when it finishes (or fails). Rejects nothing — a bad chunk just
-  // resolves so the pump moves on.
-  const playChunk = useCallback((item: QueueItem, gen: number): Promise<void> => {
-    return new Promise((resolve) => {
-      let buf: ArrayBuffer
-      try {
-        // Decode into a concrete ArrayBuffer and pass THAT as the BlobPart — a
-        // Uint8Array infers Uint8Array<ArrayBufferLike> under tsc -b and fails
-        // the BlobPart assignment (SharedArrayBuffer vs ArrayBuffer). ArrayBuffer
-        // is unambiguously a BlobPart.
-        const bin = atob(item.dataB64)
-        buf = new ArrayBuffer(bin.length)
-        const view = new Uint8Array(buf)
-        for (let i = 0; i < bin.length; i++) view[i] = bin.charCodeAt(i)
-      } catch {
-        resolve()
-        return
+  // Turn one chunk's bytes into an AudioBuffer. wav/pcm frames are hand-built
+  // from linear PCM (they are NOT standalone-decodable); mp3 frames are
+  // self-contained REST files decoded by the browser. Returns null on any
+  // failure so the pump just skips that frame.
+  const decodeToBuffer = useCallback(
+    async (item: QueueItem, ctx: AudioContext): Promise<AudioBuffer | null> => {
+      const bytes = b64ToBytes(item.dataB64)
+      if (item.format === 'mp3') {
+        try {
+          const copy = bytes.slice().buffer
+          return await ctx.decodeAudioData(copy)
+        } catch {
+          return null
+        }
       }
-      const mime = item.format === 'mp3' ? 'audio/mpeg' : 'audio/wav'
-      cleanupUrl()
-      const url = URL.createObjectURL(new Blob([buf], { type: mime }))
-      objectUrlRef.current = url
+      const decoded = decodeCallChunk(bytes, item.sampleRate ?? 0)
+      if (!decoded || decoded.samples.length === 0) return null
+      const buf = ctx.createBuffer(1, decoded.samples.length, decoded.sampleRate)
+      buf.getChannelData(0).set(decoded.samples)
+      return buf
+    },
+    [],
+  )
 
-      let el = audioElRef.current
-      if (!el) {
-        el = new Audio()
-        audioElRef.current = el
-      }
-      const done = () => {
-        el!.onended = null
-        el!.onerror = null
-        resolve()
-      }
-      el.onended = done
-      el.onerror = done
-      el.src = url
-      if (genRef.current !== gen) { resolve(); return } // stopped mid-setup
-      void el.play().catch(() => resolve())
-    })
-  }, [cleanupUrl])
+  // Schedule a decoded buffer to start exactly when the previous one ends, so
+  // frames play back-to-back with no click. Resyncs to "now" if we fell behind.
+  const scheduleBuffer = useCallback((buf: AudioBuffer, ctx: AudioContext, gen: number) => {
+    if (genRef.current !== gen) return
+    const src = ctx.createBufferSource()
+    src.buffer = buf
+    src.connect(ctx.destination)
+    const now = ctx.currentTime
+    const startAt = Math.max(now, nextStartRef.current)
+    src.start(startAt)
+    nextStartRef.current = startAt + buf.duration
+    activeSourcesRef.current.add(src)
+    src.onended = () => { activeSourcesRef.current.delete(src) }
+  }, [])
 
-  // Drain the queue in seq order. Keeps `isSpeaking` true across the gap between
-  // a played sentence and the next one still being synthesized — only releases
-  // the mic when the queue is empty AND the turn has stopped streaming.
+  // Drain the queue in seq order: decode each frame and schedule it on the
+  // timeline immediately (non-blocking — scheduling returns at once, the audio
+  // plays later). Keeps `isSpeaking` true until the queue is empty, the turn has
+  // stopped streaming, AND the scheduled tail has finished playing — only then
+  // is the mic released.
   const pump = useCallback(async () => {
     if (pumpingRef.current) return
+    const ctx = ensureCtx()
+    if (!ctx) return
     pumpingRef.current = true
     const gen = genRef.current
     setIsSpeaking(true)
     while (genRef.current === gen) {
       const item = queueRef.current.shift()
       if (item) {
-        await playChunk(item, gen)
+        const buf = await decodeToBuffer(item, ctx)
+        if (buf && genRef.current === gen) scheduleBuffer(buf, ctx, gen)
         continue
       }
-      // Queue drained. If the turn is still streaming, wait for more sentences;
-      // otherwise the reply is over.
-      if (!streamingRef.current) break
-      await new Promise((r) => setTimeout(r, 80))
+      // Queue drained. Still streaming → wait for more frames. Otherwise wait
+      // out any audio still scheduled ahead of the clock before releasing.
+      if (streamingRef.current || ctx.currentTime < nextStartRef.current) {
+        await new Promise((r) => setTimeout(r, 80))
+        continue
+      }
+      break
     }
     if (genRef.current === gen) {
       pumpingRef.current = false
       if (queueRef.current.length === 0) setIsSpeaking(false)
     }
-  }, [playChunk])
+  }, [ensureCtx, decodeToBuffer, scheduleBuffer])
 
   // Watch the latest assistant voice turn and enqueue any chunk we haven't seen.
   // Fires on every appendMessageAudio (store returns a fresh array per chunk).
@@ -145,6 +179,7 @@ export function useCallAudioPlayer(characterId: CharacterId) {
         seq: c.seq,
         dataB64: c.dataB64,
         format: c.format === 'mp3' ? 'mp3' : 'wav',
+        sampleRate: c.sampleRate,
       })
       added = true
     }
@@ -157,11 +192,20 @@ export function useCallAudioPlayer(characterId: CharacterId) {
   useEffect(() => {
     return () => {
       genRef.current += 1
-      const el = audioElRef.current
-      if (el) { el.pause(); el.src = '' }
-      cleanupUrl()
+      for (const src of activeSourcesRef.current) {
+        try { src.onended = null; src.stop() } catch { /* already stopped */ }
+      }
+      activeSourcesRef.current.clear()
+      const ctx = ctxRef.current
+      ctxRef.current = null
+      if (ctx) void ctx.close().catch(() => {})
     }
-  }, [cleanupUrl])
+  }, [])
 
-  return { isSpeaking, stop }
+  // Unlock the AudioContext from a real user gesture (the mic press). iOS/
+  // Android block audio until a gesture resumes a context; doing it here means
+  // the later WS-driven scheduling actually produces sound.
+  const unlock = useCallback(() => { ensureCtx() }, [ensureCtx])
+
+  return { isSpeaking, stop, unlock }
 }

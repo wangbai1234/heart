@@ -23,6 +23,7 @@ interface WsMessage {
   sentence_seq?: number
   is_last?: boolean
   format?: string
+  sample_rate?: number
   vad?: { energy?: number; mood?: string }
   intimacy?: number
   msg?: string
@@ -253,7 +254,9 @@ export function useWebSocket() {
             if (msg.format === 'pcm16') {
               storedB64 = arrayBufferToBase64(wrapPCM16AsWAV(rawBuffer))
             }
-            appendMessageAudio(cid, turnId, storedB64, durationMs, msg.seq ?? 0, audioFormat)
+            // sample_rate is only present on the realtime wav/pcm call frames;
+            // the call player needs it to build AudioBuffers at the true rate.
+            appendMessageAudio(cid, turnId, storedB64, durationMs, msg.seq ?? 0, audioFormat, msg.sample_rate)
           }
           break
         case 'message_bubble': {
