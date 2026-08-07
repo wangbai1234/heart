@@ -205,15 +205,16 @@ async def list_preset_voices(
     """
     if gender not in (None, "male", "female"):
         raise HTTPException(status_code=400, detail="gender must be 'male' or 'female'")
-    # MiMo-only: MiniMax presets are hidden (MiniMax is being retired). The
-    # character-creation picker now shows MiMo voices grouped by gender, each
-    # previewable on demand via /presets/{id}/sample (MiMo synth → WAV).
+    # Fish-only: MiMo + MiniMax presets are hidden from the picker (MiMo is
+    # retained in the table for ASR + legacy characters; MiniMax is retired).
+    # The character-creation picker shows Fish voices grouped by gender, each
+    # previewable on demand via /presets/{id}/sample (Fish synth → mp3).
     if gender is None:
         result = await db.execute(
             text("""
                 SELECT id, name, voice_id, provider, description, sample_url, gender
                 FROM preset_voices
-                WHERE is_active = TRUE AND provider = 'mimo'
+                WHERE is_active = TRUE AND provider = 'fish'
                 ORDER BY gender, id
             """)
         )
@@ -222,7 +223,7 @@ async def list_preset_voices(
             text("""
                 SELECT id, name, voice_id, provider, description, sample_url, gender
                 FROM preset_voices
-                WHERE is_active = TRUE AND provider = 'mimo' AND gender = :gender
+                WHERE is_active = TRUE AND provider = 'fish' AND gender = :gender
                 ORDER BY id
             """),
             {"gender": gender},
@@ -292,6 +293,19 @@ async def get_preset_voice_sample(
             )
             audio = _pcm16_to_wav(result.audio)
             media_type = "audio/wav"
+        elif provider_name == "fish":
+            from heart.api.wiring import get_tts_provider_registry
+
+            fish = get_tts_provider_registry().get("fish")
+            if fish is None:
+                raise HTTPException(status_code=503, detail="Fish 语音服务未配置")
+            # Fish selects the voice by its UUID (voice_id / model_id); the
+            # provider returns mp3 bytes directly.
+            result = await fish.synthesize(
+                TTSRequest(text=sample_text, voice_id=row["voice_id"], format="mp3"),
+            )
+            audio = result.audio
+            media_type = "audio/mpeg"
         else:
             # Legacy MiniMax presets (hidden from the picker, but the endpoint
             # still serves a preview if one is requested directly).

@@ -290,7 +290,11 @@ class Settings(BaseSettings):
     # sentence-by-sentence and returns audio incrementally (much lower
     # time-to-first-audio than the blocking REST synth). Default OFF: needs a
     # live Fish key to validate, and any realtime error falls back to REST.
-    fish_realtime_enabled: bool = False
+    # Default ON: Fish preset/clone voices stream over the realtime WebSocket for
+    # low time-to-first-audio. Any handshake/connect failure falls back to the
+    # blocking REST StreamSession (see routes_chat_ws._create_stream_session), so
+    # enabling this never hard-fails a turn — worst case it degrades to REST synth.
+    fish_realtime_enabled: bool = True
     fish_realtime_url: str = "wss://realtime.fishaudio.org/v1/tts/live"
     # Emotion-control syntax injected into TTS text. Fish backbones each parse a
     # DIFFERENT scheme, and using the wrong one makes the marker get read ALOUD:
