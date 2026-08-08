@@ -1502,6 +1502,21 @@ async def _verify_voice_ws_token(ws: WebSocket, token: str | None) -> str | None
     return token_data.user_id
 
 
+async def _safe_send(ws: WebSocket, payload: dict) -> bool:
+    """Send JSON to the client, tolerating an already-disconnected socket.
+
+    Returns False if the client is gone so the caller can bail cleanly instead of
+    letting a WebSocketDisconnect propagate to uvicorn as a traceback. A streaming
+    ASR client can close the WS at any moment (push-to-talk release, navigation,
+    a slow link giving up), so a failed send is expected, not an error.
+    """
+    try:
+        await ws.send_json(payload)
+        return True
+    except Exception:
+        return False
+
+
 async def _pump_qwen_to_client(ws: WebSocket, session: Any, state: dict) -> None:
     """Relay Qwen transcript events to the browser; record the final transcript."""
     try:
@@ -1575,20 +1590,28 @@ async def asr_stream_ws(ws: WebSocket, token: str | None = Query(None)):
         return
 
     await ws.accept()
+    # Send `ready` BEFORE opening the Qwen session. session.open() costs ~0.7s of
+    # connect latency; sending ready afterwards raced the client — a push-to-talk
+    # release (or a slow mainland->HK link) could close the browser WS during that
+    # ~1.7s window, so send(ready) crashed with ClientDisconnected and the utterance
+    # was never forwarded to Qwen (empty transcript -> "没有识别到语音内容"). The
+    # client streams as soon as it sees ready; frames arriving before Qwen is live
+    # wait in the WS receive buffer and are read once _pump_client_to_qwen starts.
+    if not await _safe_send(ws, {"type": "ready"}):
+        return
+
     session = provider.open_session(language="zh")
     state: dict[str, Any] = {"final": "", "latest": "", "error": None}
     try:
         await session.open()
     except Exception as e:
         logger.warning("asr_stream_open_failed", user_id=user_id, error=str(e))
-        with contextlib.suppress(Exception):
-            await ws.send_json({"type": "error", "message": "语音识别连接失败"})
+        await _safe_send(ws, {"type": "error", "message": "语音识别连接失败"})
         with contextlib.suppress(Exception):
             await ws.close()
         return
 
     pump = asyncio.create_task(_pump_qwen_to_client(ws, session, state))
-    await ws.send_json({"type": "ready"})
 
     try:
         await _pump_client_to_qwen(ws, session)
