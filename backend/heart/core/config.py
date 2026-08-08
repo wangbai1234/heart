@@ -314,6 +314,16 @@ class Settings(BaseSettings):
     voice_provider: str = "minimax"  # "mimo" | "minimax"
     voice_fallback_enabled: bool = True
 
+    # Qwen ASR (Aliyun DashScope) — primary speech-to-text.
+    # Voice chat: one-shot transcription (record → transcribe) via the realtime
+    # WS driven to completion. Voice call: true streaming via the realtime WS.
+    # MiMo ASR remains wired as the fallback if Qwen is unconfigured/fails.
+    qwen_asr_api_key: str | None = None
+    qwen_asr_base_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    qwen_asr_ws_url: str = "wss://dashscope.aliyuncs.com/api-ws/v1/realtime"
+    qwen_asr_model: str = "qwen3-asr-flash"
+    qwen_asr_realtime_model: str = "qwen3-asr-flash-realtime"
+
     # ASR (speech-to-text) billing — 5 display credits = 500 fen
     asr_cost_credits: int = 500
 

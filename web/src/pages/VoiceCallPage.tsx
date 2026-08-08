@@ -6,9 +6,9 @@ import { useAuthStore } from '../stores/authStore'
 import { useCharactersStore } from '../stores/charactersStore'
 import { resolveCharacterProfile, type CharacterId } from '../data/uiContent'
 import { useWebSocket } from '../hooks/useWebSocket'
-import { useVoiceRecorder } from '../hooks/useVoiceRecorder'
+import { useStreamingAsr } from '../hooks/useStreamingAsr'
 import { useCallAudioPlayer } from '../hooks/useCallAudioPlayer'
-import { transcribeAudio, createCallSummary, voiceCallHeartbeat } from '../services/api'
+import { createCallSummary, voiceCallHeartbeat } from '../services/api'
 import { useCreditsStore } from '../stores/creditsStore'
 
 interface VoiceCallPageProps {
@@ -34,7 +34,7 @@ export function VoiceCallPage({ isDark: _isDark }: VoiceCallPageProps) {
   const messages = useChatStore((s) => s.messages[characterId] ?? [])
 
   const { sendMessage, interrupt } = useWebSocket()
-  const recorder = useVoiceRecorder()
+  const asr = useStreamingAsr()
   const { isSpeaking, stop: stopPlayback, unlock: unlockAudio } = useCallAudioPlayer(characterId)
   const setBalance = useCreditsStore((s) => s.setBalance)
 
@@ -120,40 +120,44 @@ export function VoiceCallPage({ isDark: _isDark }: VoiceCallPageProps) {
     unlockAudio()
     setIsRecording(true)
     try {
-      await recorder.start()
+      await asr.start()
     } catch {
       setIsRecording(false)
       busyRef.current = false
       showToast('无法访问麦克风，请检查权限')
     }
-  }, [characterBusy, recorder, showToast, unlockAudio])
+  }, [characterBusy, asr, showToast, unlockAudio])
 
   const endTalk = useCallback(async () => {
     if (!isRecording) return
     setIsRecording(false)
-    const result = await recorder.stop({ cancel: false })
+    let result: Awaited<ReturnType<typeof asr.stop>>
+    try {
+      result = await asr.stop({ cancel: false })
+    } catch (err: unknown) {
+      busyRef.current = false
+      showToast(err instanceof Error ? err.message : '语音识别失败')
+      return
+    }
     busyRef.current = false
     if (!result) {
       showToast('说话时间太短')
       return
     }
-    const { wavBlob, durationMs } = result
-    try {
-      const { transcript, audio_url } = await transcribeAudio(wavBlob, durationMs)
-      if (!transcript) {
-        showToast('没有识别到语音内容')
-        return
-      }
-      const blobUrl = URL.createObjectURL(wavBlob)
-      sendMessage(transcript, {
-        voiceBubble: { audioData: blobUrl, durationMs, format: 'wav', audioUrl: audio_url },
-        forceVoice: true,
-        channel: 'call',
-      })
-    } catch (err: unknown) {
-      showToast(err instanceof Error ? err.message : '语音识别失败')
+    const { transcript, wavBlob, durationMs } = result
+    if (!transcript) {
+      showToast('没有识别到语音内容')
+      return
     }
-  }, [isRecording, recorder, sendMessage, showToast])
+    // Streaming ASR does not persist audio to S3 (calls are ephemeral); play
+    // back the locally-captured WAV via a blob URL, no server audio_url.
+    const blobUrl = URL.createObjectURL(wavBlob)
+    sendMessage(transcript, {
+      voiceBubble: { audioData: blobUrl, durationMs, format: 'wav' },
+      forceVoice: true,
+      channel: 'call',
+    })
+  }, [isRecording, asr, sendMessage, showToast])
 
   // End the call: always persist one call-summary bubble showing the duration
   // (even if the user never spoke — opening then hanging up is still a call),
