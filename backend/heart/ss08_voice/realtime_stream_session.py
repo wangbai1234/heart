@@ -41,7 +41,7 @@ SessionFactory = Callable[[str], FishRealtimeSession]
 # here keeps 1.0. Fish accepts 0.5–2.0.
 #   2fe2aecb… = fish_male_bad ("危险痞帅" / 痞帅浪子) — realtime ran too fast.
 _REALTIME_SPEED_OVERRIDES: dict[str, float] = {
-    "2fe2aecb-8a8b-45b1-9de1-ddede0c4da63": 0.8,
+    "2fe2aecb-8a8b-45b1-9de1-ddede0c4da63": 0.7,
 }
 
 
