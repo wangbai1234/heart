@@ -1549,7 +1549,7 @@ async def _pump_client_to_qwen(ws: WebSocket, session: Any) -> None:
             return
 
 
-@router.websocket("/api/voice/asr-stream")
+@router.websocket("/asr-stream")
 async def asr_stream_ws(ws: WebSocket, token: str | None = Query(None)):
     """Streaming ASR for voice calls.
 

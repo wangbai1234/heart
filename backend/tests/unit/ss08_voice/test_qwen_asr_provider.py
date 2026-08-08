@@ -166,3 +166,18 @@ async def test_provider_transcribe_empty_on_no_pcm():
     prov = QwenAsrProvider(api_key="k", ws_url="wss://x/realtime", ws_factory=_factory([]))
     # A WAV with an empty data chunk → no PCM → empty transcript, no WS opened.
     assert await prov.transcribe(_wav(b""), mime="audio/wav") == ""
+
+
+def test_asr_stream_ws_route_registered_at_expected_path():
+    """Guard against the double-prefix bug: the router carries prefix
+    '/api/voice', so the WS decorator must use a bare '/asr-stream'. The
+    frontend hook connects to '/api/voice/asr-stream' — assert that exact path
+    is what the router registers (not '/api/voice/api/voice/asr-stream')."""
+    from heart.api.routes_voice import router
+
+    ws_paths = [
+        r.path
+        for r in router.routes
+        if "asr-stream" in getattr(r, "path", "")
+    ]
+    assert ws_paths == ["/api/voice/asr-stream"], ws_paths
