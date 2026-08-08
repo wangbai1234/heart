@@ -61,6 +61,10 @@ PyJWT>=2.8.0
 passlib>=1.7.4
 bcrypt==4.0.1
 httpx>=0.27.0
+# certifi: explicit CA bundle for the Qwen ASR realtime WS TLS handshake
+# (ss08_voice/qwen_asr_provider.py). Also a transitive httpx dep; pinned here
+# so the websockets factory can always load a valid trust store.
+certifi>=2024.2.2
 aiosmtplib>=3.0.0
 boto3>=1.34.0
 

@@ -550,6 +550,31 @@ def get_mimo_asr_provider() -> Any:
         return None
 
 
+@lru_cache
+def get_qwen_asr_provider() -> Any:
+    """Process singleton: QwenAsrProvider for ASR (primary transcription).
+
+    Returns None when QWEN_ASR_API_KEY is not configured (caller falls back to
+    MiMo ASR).
+    """
+    if not settings.qwen_asr_api_key:
+        return None
+    try:
+        from heart.ss08_voice.qwen_asr_provider import QwenAsrProvider
+
+        provider = QwenAsrProvider(
+            api_key=settings.qwen_asr_api_key,
+            ws_url=settings.qwen_asr_ws_url,
+            model=settings.qwen_asr_model,
+            realtime_model=settings.qwen_asr_realtime_model,
+        )
+        logger.info("wiring_qwen_asr_initialized")
+        return provider
+    except Exception as e:
+        logger.warning("wiring_qwen_asr_init_failed", error=str(e))
+        return None
+
+
 # ── SS07 Orchestration dependencies ───────────────────────────────
 
 

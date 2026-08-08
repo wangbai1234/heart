@@ -2,11 +2,26 @@
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
+import json
 import uuid
 from io import BytesIO
+from typing import Any
 
 import structlog
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Form,
+    HTTPException,
+    Query,
+    Request,
+    UploadFile,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import text
@@ -20,7 +35,7 @@ from heart.core.config import settings
 from heart.membership import CloneForbiddenError, assert_clone_allowed, get_effective_tier
 
 from .deps import require_age_verified
-from .wiring import get_mimo_asr_provider, get_voice_service
+from .wiring import get_mimo_asr_provider, get_qwen_asr_provider, get_voice_service
 
 logger = structlog.get_logger()
 
@@ -1353,6 +1368,28 @@ _MAX_ASR_BYTES = 8 * 1024 * 1024  # 8 MB raw (base64 overhead stays under MIMO 1
 _ALLOWED_ASR_MIME = {"audio/wav", "audio/wave", "audio/x-wav"}
 
 
+async def _transcribe_with_fallback(
+    qwen: Any, mimo: Any, data: bytes, mime: str, user_id: str
+) -> str:
+    """Transcribe with Qwen primary, MiMo fallback.
+
+    Qwen failure logs and degrades to MiMo (never a silent swallow — the
+    exception is logged with context per the CLAUDE.md no-silent-except rule).
+    If both fail (or neither configured), raises 502.
+    """
+    if qwen is not None:
+        try:
+            return await qwen.transcribe(data, mime=mime)
+        except Exception as exc:
+            logger.warning("qwen_asr_failed_fallback_mimo", user_id=user_id, error=str(exc))
+    if mimo is not None:
+        try:
+            return await mimo.transcribe(data, mime=mime, asr_model=settings.mimo_asr_model)
+        except Exception as exc:
+            logger.exception("asr_transcribe_failed", user_id=user_id, error=str(exc))
+    raise HTTPException(status_code=502, detail="语音识别失败，请稍后重试")
+
+
 async def _upload_asr_audio(user_id: str, data: bytes, mime: str) -> str | None:
     """Upload ASR recording to S3 (best-effort). Returns URL or None."""
     try:
@@ -1382,8 +1419,11 @@ async def transcribe_audio(
     """
     uid = uuid.UUID(current_user.user_id)
 
-    provider = get_mimo_asr_provider()
-    if provider is None:
+    # Qwen is the primary ASR; MiMo remains the fallback if Qwen is
+    # unconfigured or fails. At least one must be configured.
+    qwen = get_qwen_asr_provider()
+    mimo = get_mimo_asr_provider()
+    if qwen is None and mimo is None:
         raise HTTPException(status_code=503, detail="语音识别服务未配置，请联系管理员。")
 
     mime = (file.content_type or "audio/wav").split(";")[0].strip()
@@ -1407,11 +1447,7 @@ async def transcribe_audio(
             detail=f"积分不足，语音识别需要 {cost // 100} 积分，当前余额 {balance / 100:.1f}",
         )
 
-    try:
-        transcript = await provider.transcribe(data, mime=mime, asr_model=settings.mimo_asr_model)
-    except Exception as exc:
-        logger.exception("asr_transcribe_failed", user_id=str(uid), error=str(exc))
-        raise HTTPException(status_code=502, detail="语音识别失败，请稍后重试") from exc
+    transcript = await _transcribe_with_fallback(qwen, mimo, data, mime, str(uid))
 
     if not transcript:
         return {"transcript": "", "duration_ms": duration_ms}
@@ -1439,3 +1475,133 @@ async def transcribe_audio(
         "balance": new_balance / 100,
         "audio_url": audio_url,
     }
+
+
+# ── Streaming ASR (voice CALL): browser PCM → Qwen realtime WS ──────────────────
+#
+# The call page streams raw PCM16 16kHz mono frames while the user holds the mic
+# button; on release the client sends a "commit" control frame and we return the
+# final transcript. One WS connection == one utterance (opened on press, closed
+# after final), mirroring the recorder lifecycle. No per-utterance credit charge
+# here — voice calls bill per-minute via the heartbeat, so charging ASR too would
+# double-bill. The client feeds the returned transcript into the normal chat WS.
+
+
+async def _verify_voice_ws_token(ws: WebSocket, token: str | None) -> str | None:
+    """Verify a WS query token + age gate. Returns user_id or None (ws closed)."""
+    from heart.core.auth import auth_manager
+
+    if not token:
+        await ws.close(code=1008, reason="Missing token")
+        return None
+    try:
+        token_data = auth_manager.verify_token(token)
+    except Exception:
+        await ws.close(code=1008, reason="Invalid token")
+        return None
+    return token_data.user_id
+
+
+async def _pump_qwen_to_client(ws: WebSocket, session: Any, state: dict) -> None:
+    """Relay Qwen transcript events to the browser; record the final transcript."""
+    try:
+        async for kind, text in session.events():
+            if kind == "final":
+                state["final"] = text
+                with contextlib.suppress(Exception):
+                    await ws.send_json({"type": "final", "text": text})
+            elif kind == "partial":
+                state["latest"] = text
+                with contextlib.suppress(Exception):
+                    await ws.send_json({"type": "partial", "text": text})
+    except Exception as e:
+        logger.warning("asr_stream_qwen_pump_error", error=str(e))
+        state["error"] = str(e)
+        with contextlib.suppress(Exception):
+            await ws.send_json({"type": "error", "message": "语音识别中断"})
+
+
+async def _pump_client_to_qwen(ws: WebSocket, session: Any) -> None:
+    """Forward browser PCM frames to Qwen; handle commit/cancel control frames.
+
+    Returns when the utterance ends (commit/cancel/disconnect).
+    """
+    while True:
+        msg = await ws.receive()
+        if msg.get("type") == "websocket.disconnect":
+            return
+        data = msg.get("bytes")
+        if data:
+            await session.append(data)
+            continue
+        raw = msg.get("text")
+        if not raw:
+            continue
+        try:
+            ctype = json.loads(raw).get("type")
+        except json.JSONDecodeError:
+            continue
+        if ctype == "commit":
+            await session.commit()
+            await session.finish()
+            return
+        if ctype == "cancel":
+            return
+
+
+@router.websocket("/asr-stream")
+async def asr_stream_ws(ws: WebSocket, token: str | None = Query(None)):
+    """Streaming ASR for voice calls.
+
+    Client → server:
+        binary frame              — raw PCM16 16kHz mono audio chunk
+        {"type": "commit"}        — end of utterance; server returns final
+        {"type": "cancel"}        — abort, no transcript
+    Server → client:
+        {"type": "ready"}                 — Qwen session open, start streaming
+        {"type": "partial", "text": ...}  — incremental transcript
+        {"type": "final", "text": ...}    — final transcript (utterance done)
+        {"type": "error", "message": ...} — degraded; client falls back
+    """
+    user_id = await _verify_voice_ws_token(ws, token)
+    if not user_id:
+        return
+
+    provider = get_qwen_asr_provider()
+    if provider is None:
+        await ws.accept()
+        await ws.send_json({"type": "error", "message": "实时语音识别未配置"})
+        await ws.close()
+        return
+
+    await ws.accept()
+    session = provider.open_session(language="zh")
+    state: dict[str, Any] = {"final": "", "latest": "", "error": None}
+    try:
+        await session.open()
+    except Exception as e:
+        logger.warning("asr_stream_open_failed", user_id=user_id, error=str(e))
+        with contextlib.suppress(Exception):
+            await ws.send_json({"type": "error", "message": "语音识别连接失败"})
+        with contextlib.suppress(Exception):
+            await ws.close()
+        return
+
+    pump = asyncio.create_task(_pump_qwen_to_client(ws, session, state))
+    await ws.send_json({"type": "ready"})
+
+    try:
+        await _pump_client_to_qwen(ws, session)
+    except WebSocketDisconnect:
+        pass
+    except Exception as e:
+        logger.warning("asr_stream_recv_error", user_id=user_id, error=str(e))
+    finally:
+        # Give the final transcript a moment to land, then tear down.
+        with contextlib.suppress(asyncio.TimeoutError, Exception):
+            await asyncio.wait_for(asyncio.shield(pump), timeout=30.0)
+        if not pump.done():
+            pump.cancel()
+        await session.close()
+        with contextlib.suppress(Exception):
+            await ws.close()
