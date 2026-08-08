@@ -57,6 +57,25 @@ def test_discover_heads_merge_migration_tuple(tmp_path):
     assert heads == {"d"}
 
 
+def test_discover_heads_annotated_form(tmp_path):
+    """Alembic autogenerate emits type-annotated `revision`/`down_revision`.
+
+    Regression: `revision: str = "b"` / `down_revision: Union[...] = "a"` (the
+    autogenerate template form) must parse the same as the bare form. Missing it
+    left the annotated child unparsed, so its parent A was never recorded as
+    having a child and got mis-detected as a head — a false migration_drift_detected
+    (058_chat_messages_channel, via autogen child 88a95a36ffcb_voice_call_quotas).
+    """
+    (tmp_path / "a.py").write_text('revision = "a"\ndown_revision = None\n')
+    (tmp_path / "b.py").write_text(
+        "from typing import Sequence, Union\n"
+        'revision: str = "b"\n'
+        'down_revision: Union[str, Sequence[str], None] = "a"\n'
+    )
+    heads = _discover_migration_heads(tmp_path)
+    assert heads == {"b"}
+
+
 def test_discover_heads_ignores_non_python_files(tmp_path):
     """Files without .py extension are skipped."""
     (tmp_path / "a.py").write_text('revision = "a"\ndown_revision = None\n')

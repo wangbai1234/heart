@@ -18,12 +18,18 @@ import structlog
 
 logger = structlog.get_logger(__name__)
 
-_REV_RE = re.compile(r'^\s*revision\s*=\s*["\']([^"\']+)["\']', re.MULTILINE)
+# The `(?::[^=\n]+)?` tolerates an optional type annotation between the name and
+# `=`. Alembic's autogenerate template emits the annotated form
+# (`revision: str = "abc"`, `down_revision: Union[str, Sequence[str], None] = "x"`)
+# while hand-written migrations use the bare form (`revision = "abc"`). Missing the
+# annotated form left an autogen file unparsed, so its parent was never recorded as
+# having a child and got mis-detected as a head (false migration_drift_detected).
+_REV_RE = re.compile(r'^\s*revision\s*(?::[^=\n]+)?=\s*["\']([^"\']+)["\']', re.MULTILINE)
 # Capture the whole RHS of `down_revision = ...` so we handle BOTH a single
 # string (`= "abc"`) AND a merge migration's tuple (`= ("a", "b")`). Extracting
 # every quoted token from the RHS is what keeps merge parents from being
 # mis-detected as heads (which surfaced as a false migration_drift_detected).
-_DOWN_RE = re.compile(r"^\s*down_revision\s*=\s*(.+)$", re.MULTILINE)
+_DOWN_RE = re.compile(r"^\s*down_revision\s*(?::[^=\n]+)?=\s*(.+)$", re.MULTILINE)
 _QUOTED_RE = re.compile(r'["\']([^"\']+)["\']')
 
 
