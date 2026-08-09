@@ -3,8 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useThemeStore } from '../stores/themeStore'
 import { useScrollRestore } from '../hooks/useScrollRestore'
 import { TabBar } from '../components/ui/TabBar'
-import { Dialog } from '../components/ui/Dialog'
-import { Button } from '../components/ui/Button'
+import { NoticeDialog } from '../components/ui/NoticeDialog'
 import { AnnouncementSheet } from '../components/AnnouncementSheet'
 import {
   resolveCharacterProfile,
@@ -358,7 +357,7 @@ export function CharacterPage() {
           <img
             src="/assets/ui/wordmark-compact.webp"
             alt="yuoyuo"
-            className="shrink-0 h-[26px] w-auto select-none"
+            className="shrink-0 h-[36px] w-auto select-none mt-[6px]"
             draggable={false}
           />
           <div className="flex items-center gap-2">
@@ -537,29 +536,25 @@ export function CharacterPage() {
         <TabBar />
       </div>
 
-      <Dialog
+      <NoticeDialog
         open={showNotice}
         onClose={dismissNotice}
         title="温馨提示"
-        actions={
-          <Button variant="primary" size="sm" className="flex-1" onClick={dismissNotice}>
-            我已满18岁，知道了
-          </Button>
-        }
+        actionLabel="我已满18岁，知道了"
       >
-        <p className="leading-[1.7] text-left">
-          yuoyuo 是一款面向<span className="font-semibold text-[var(--color-ink)]">成年人</span>的 AI 情感陪伴产品，
-          <span className="font-semibold text-[var(--color-ink)]">仅供年满 18 周岁的用户使用</span>。
+        <p className="leading-[1.6]">
+          yuoyuo 是一款面向<span className="font-semibold text-[#2a2a38]">成年人</span>的 AI 情感陪伴产品，
+          <span className="font-semibold text-[#2a2a38]">仅供年满 18 周岁的用户使用</span>。
         </p>
-        <p className="leading-[1.7] text-left mt-2">
-          所有角色均为虚构，回复由 AI 生成。聊天时请<span className="font-semibold text-[var(--color-ink)]">遵守社区公约</span>，
+        <p className="leading-[1.6] mt-2">
+          所有角色均为虚构，回复由 AI 生成。聊天时请<span className="font-semibold text-[#2a2a38]">遵守社区公约</span>，
           不得诱导生成违法或不良内容。
         </p>
-        <p className="leading-[1.7] text-left mt-2 text-[var(--color-text-muted)]">
+        <p className="leading-[1.6] mt-2 text-[#8a8a98]">
           继续使用即表示你已阅读并同意
           <Link to="/legal/age" className="text-[var(--color-primary)]">《年满18周岁确认》</Link>。
         </p>
-      </Dialog>
+      </NoticeDialog>
 
       <AnnouncementSheet open={showAnnounce} onClose={() => setShowAnnounce(false)} />
     </div>

@@ -65,17 +65,22 @@ export function NoticeDialog({
 
         {/* Content column — pinned to the panel's safe interior */}
         <div
-          className="absolute flex flex-col items-center justify-center"
-          style={{ left: '17%', right: '17%', top: '30%', bottom: '18%' }}
+          className="absolute flex flex-col items-center"
+          style={{ left: '17%', right: '17%', top: '28%', bottom: '17%' }}
         >
-          <div className="flex-1 flex flex-col items-center justify-center text-center overflow-hidden">
-            {title && (
-              <h3 className="text-[18px] font-semibold text-[var(--color-ink)] leading-tight mb-2">
-                {title}
-              </h3>
-            )}
-            <div className="text-[13.5px] text-[var(--color-text-secondary)] leading-[1.55]">
-              {children}
+          {/* Scroll region. my-auto on the inner block centers the text when it
+              fits but collapses on overflow so the FIRST line stays reachable
+              (a plain justify-center clips the top when content is taller). */}
+          <div className="flex-1 min-h-0 w-full overflow-y-auto flex flex-col">
+            <div className="my-auto flex flex-col items-center text-center">
+              {title && (
+                <h3 className="text-[18px] font-semibold text-[#2a2a38] leading-tight mb-2">
+                  {title}
+                </h3>
+              )}
+              <div className="text-[13.5px] text-[#5a5a6a] leading-[1.55]">
+                {children}
+              </div>
             </div>
           </div>
 

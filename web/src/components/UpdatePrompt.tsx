@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useRegisterSW } from 'virtual:pwa-register/react'
-import { Dialog } from './ui/Dialog'
-import { Button } from './ui/Button'
+import { NoticeDialog } from './ui/NoticeDialog'
 
 // PWA users can't just "点刷新" — a standalone-installed app has no address bar
 // and its service worker keeps serving the cached shell across app restarts.
@@ -60,30 +59,21 @@ export function UpdatePrompt() {
   if (!needRefresh) return null
 
   return (
-    <Dialog
+    <NoticeDialog
       open={needRefresh}
       onClose={() => setNeedRefresh(false)}
       title="发现新版本"
-      actions={
-        <>
-          <Button variant="ghost" size="sm" onClick={() => setNeedRefresh(false)} className="flex-1">
-            暂不
-          </Button>
-          <Button variant="primary" size="sm" onClick={() => void confirmRefresh()} className="flex-1">
-            确认刷新
-          </Button>
-        </>
-      }
+      actionLabel="确认刷新"
+      onAction={() => void confirmRefresh()}
     >
-      <p className="leading-[1.7]">
-        当前有版本更新，刷新即可使用最新功能。
-      </p>
-      <p className="mt-2 text-[13px] text-[var(--color-text-muted)]">
+      当前有版本更新，刷新即可使用最新功能
+      <br />
+      <span className="text-[12px] text-[#9a9aa8]">
         当前版本 v{__APP_VERSION__}
         {latestVersion && latestVersion !== __APP_VERSION__ && (
-          <> · 最新版本 v{latestVersion}</>
+          <> · 最新 v{latestVersion}</>
         )}
-      </p>
-    </Dialog>
+      </span>
+    </NoticeDialog>
   )
 }

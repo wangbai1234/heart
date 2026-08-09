@@ -5,7 +5,7 @@ import { redeemCode } from '../services/api'
 import { OTPInput } from '../components/ui/OTPInput'
 import { Button } from '../components/ui/Button'
 import { Toast } from '../components/ui/Toast'
-import { Dialog } from '../components/ui/Dialog'
+import { NoticeDialog } from '../components/ui/NoticeDialog'
 import { useSafeBack } from '../hooks/useSafeBack'
 
 export function RedeemPage() {
@@ -166,17 +166,16 @@ export function RedeemPage() {
       </div>
 
       {/* Success Dialog */}
-      <Dialog open={showSuccess} onClose={() => { setShowSuccess(false); goBack() }} title="激活成功">
-        <p>兑换成功！当前余额 {creditsStore.balance} yuoyuo币，尽情享受吧！</p>
-        <Button
-          variant="primary"
-          size="sm"
-          onClick={() => { setShowSuccess(false); goBack() }}
-          className="mt-4 w-full"
-        >
-          好的
-        </Button>
-      </Dialog>
+      <NoticeDialog
+        open={showSuccess}
+        onClose={() => { setShowSuccess(false); goBack() }}
+        title="激活成功"
+        actionLabel="好的"
+      >
+        兑换成功
+        <br />
+        当前余额 {creditsStore.balance} yuoyuo币，尽情享受吧
+      </NoticeDialog>
 
       <Toast visible={toast.visible} message={toast.message} onDismiss={() => setToast({ visible: false, message: '' })} />
     </div>

@@ -14,8 +14,7 @@ import { useToastStore } from '../stores/toastStore'
 // DISABLED 2026-07-24: 角色↔剧情关联功能暂停，见下方渲染块注释
 // import { StoryInviteCard, isHookOnCooldown } from './StoryInviteCard'
 import { BreathingDots } from './ui/BreathingDots'
-import { Dialog } from './ui/Dialog'
-import { Button } from './ui/Button'
+import { NoticeDialog } from './ui/NoticeDialog'
 import { Avatar } from './ui/Avatar'
 import VoiceMessageBubble from './VoiceMessageBubble'
 import { useSwipeNavigation } from '../hooks/useSwipeNavigation'
@@ -1117,34 +1116,30 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
       />
 
       {/* Insufficient credits dialog */}
-      <Dialog open={!!insufficientCredits} onClose={clearInsufficientCredits} title="yuoyuo币不足">
-        <p className="text-[14px] text-[var(--color-text-secondary)] mb-4">
-          你的 yuoyuo币不足以继续对话。前往钱包充值后继续。
-        </p>
-        <div className="flex gap-3">
-          <Button variant="ghost" size="sm" onClick={clearInsufficientCredits} className="flex-1">
-            取消
-          </Button>
-          <Button variant="primary" size="sm" onClick={() => { clearInsufficientCredits(); navigate('/wallet') }} className="flex-1">
-            去充值
-          </Button>
-        </div>
-      </Dialog>
+      <NoticeDialog
+        open={!!insufficientCredits}
+        onClose={clearInsufficientCredits}
+        title="yuoyuo币不足"
+        actionLabel="去充值"
+        onAction={() => { clearInsufficientCredits(); navigate('/wallet') }}
+      >
+        你的 yuoyuo币不足以继续对话
+        <br />
+        前往钱包充值后继续
+      </NoticeDialog>
 
       {/* Model requires higher tier */}
-      <Dialog open={!!modelForbidden} onClose={clearModelForbidden} title="该模型需会员">
-        <p className="text-[14px] text-[var(--color-text-secondary)] mb-4">
-          当前等级暂不能使用该模型，升级会员即可解锁更强的对话模型。
-        </p>
-        <div className="flex gap-3">
-          <Button variant="ghost" size="sm" onClick={clearModelForbidden} className="flex-1">
-            取消
-          </Button>
-          <Button variant="primary" size="sm" onClick={() => { clearModelForbidden(); navigate('/membership') }} className="flex-1">
-            去升级
-          </Button>
-        </div>
-      </Dialog>
+      <NoticeDialog
+        open={!!modelForbidden}
+        onClose={clearModelForbidden}
+        title="该模型需会员"
+        actionLabel="去升级"
+        onAction={() => { clearModelForbidden(); navigate('/membership') }}
+      >
+        当前等级暂不能使用该模型
+        <br />
+        升级会员即可解锁更强的对话模型
+      </NoticeDialog>
 
       {/* Voice recording overlay (WeChat-style) */}
       {isRecording && (
