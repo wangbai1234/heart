@@ -85,7 +85,7 @@ function isDiscoverable(it: GridItem): boolean {
   return !!it.companion && it.companion.companion_status !== 'locked'
 }
 
-const FEATURED_CHARACTER_ORDER = ['gu_beichen', 'qin_xiao', 'li_jue', 'jiang_yueze', 'gu_xingzhou', 'jiang_ye'] as const
+const FEATURED_CHARACTER_ORDER = ['li_shen', 'ji_yu', 'cheng_xu', 'gu_beichen', 'qin_xiao', 'li_jue', 'jiang_yueze', 'gu_xingzhou', 'jiang_ye'] as const
 const FEATURED_CHARACTER_INDEX = new Map<string, number>(FEATURED_CHARACTER_ORDER.map((id, index) => [id, index]))
 const DISCOVERY_TAG_PRIORITY = [
   ...CHARACTER_ROLE_TAGS,
