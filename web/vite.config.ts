@@ -21,19 +21,13 @@ export default defineConfig({
     react(),
     tailwindcss(),
     VitePWA({
-      // ⚠️ ONE-TIME RESCUE (autoUpdate): existing clients are stuck on an old SW
-      // that predates UpdatePrompt.tsx — with 'prompt'+skipWaiting:false the new
-      // SW installs but never activates (mobile users can't force-refresh, and
-      // the prompt code lives in the not-yet-active bundle → chicken-and-egg).
-      // 'autoUpdate' makes the new SW skipWaiting()+clientsClaim() and the client
-      // self-reloads, flushing every stuck client onto a prompt-capable bundle in
-      // ≤2 reloads with zero user action.
-      //
-      // TODO(revert-to-prompt): once telemetry/anecdote confirms the fleet has
-      // migrated off pre-UpdatePrompt bundles, switch this back to 'prompt' so new
-      // deploys surface the civil "发现新版本" dialog (UpdatePrompt.tsx, kept below)
-      // instead of silently reloading mid-conversation.
-      registerType: 'autoUpdate',
+      // The one-time autoUpdate rescue (flushing clients off pre-UpdatePrompt
+      // bundles) is done — the fleet has migrated. Back on 'prompt': a new deploy
+      // installs the SW but waits; UpdatePrompt.tsx surfaces the "发现新版本"
+      // dialog and only activates on user confirm, instead of silently reloading
+      // mid-conversation. The confirm handler also drops the cover caches so a
+      // re-seeded cover shows immediately on that reload (see UpdatePrompt.tsx).
+      registerType: 'prompt',
       // Precache the built app shell; SPA routes fall back to index.html offline.
       includeAssets: ['apple-touch-icon.png', 'favicon-96.png'],
       manifest: {
@@ -101,13 +95,16 @@ export default defineConfig({
           },
           {
             // Character cover images (/character list + /character/:id + /chat
-            // header). Content-addressed filename per character, so CacheFirst
-            // serves the ~1s cross-border cover fetch straight from cache on
-            // every re-open. When a user edits their own character the filename
-            // changes, so the new cover is a cache miss (correctly re-fetched)
-            // rather than a stale hit.
+            // header). Seed covers use a FIXED key (covers/seed/{id}.webp) — the
+            // ?v= querystring is only a client cache-buster, the origin returns
+            // the newest bytes for any ?v=. So CacheFirst would pin a stale cover
+            // forever on re-seed. StaleWhileRevalidate keeps the instant-open
+            // (serves cache immediately) while refetching in the background, so
+            // the next open shows the new cover with no user action. The update
+            // prompt's confirm handler additionally purges this cache for an
+            // immediate swap on that reload.
             urlPattern: /\/api\/profile\/cover-file\//,
-            handler: 'CacheFirst',
+            handler: 'StaleWhileRevalidate',
             options: {
               cacheName: 'character-covers-cache',
               expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 30 },

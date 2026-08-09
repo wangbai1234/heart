@@ -19,6 +19,24 @@ export function UpdatePrompt() {
 
   const [latestVersion, setLatestVersion] = useState<string | null>(null)
 
+  // On confirm, drop the cover caches before activating the new SW. Cover rules
+  // are StaleWhileRevalidate (would otherwise serve the stale cached cover on
+  // this first reload, only refreshing on the *next* one). Seed covers reuse a
+  // fixed key, so a re-seed changes the bytes but not the URL — purging the
+  // cache forces a fresh origin fetch, making the new cover visible on the same
+  // reload the user just confirmed. Best-effort; ignore if Cache API is absent.
+  async function confirmRefresh() {
+    try {
+      const names = await caches.keys()
+      await Promise.all(
+        names.filter((n) => n.includes('covers-cache')).map((n) => caches.delete(n)),
+      )
+    } catch {
+      /* Cache API unavailable / blocked — reload still picks up the new SW */
+    }
+    await updateServiceWorker(true)
+  }
+
   // When an update is waiting, fetch the freshly-deployed version.json to show
   // the user which version they'll get. version.json is not precached (not in
   // workbox globPatterns), and we bypass every cache layer, so this reflects
@@ -51,7 +69,7 @@ export function UpdatePrompt() {
           <Button variant="ghost" size="sm" onClick={() => setNeedRefresh(false)} className="flex-1">
             暂不
           </Button>
-          <Button variant="primary" size="sm" onClick={() => updateServiceWorker(true)} className="flex-1">
+          <Button variant="primary" size="sm" onClick={() => void confirmRefresh()} className="flex-1">
             确认刷新
           </Button>
         </>
