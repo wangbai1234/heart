@@ -350,7 +350,7 @@ export function CharacterPage() {
       <img src={pageBg} alt="" className="absolute inset-0 w-full h-full object-cover z-0" />
 
       <div className="relative z-10 h-full flex flex-col">
-        <div style={{ height: 'var(--safe-top)' }} />
+        <div style={{ height: 'calc(var(--safe-top) + 12px)' }} />
 
         {/* Navigation bar — brand logo (login-page style) + search / announcement. */}
         <div className="relative z-20 flex items-center justify-between gap-2.5 px-5 h-[48px] shrink-0">
