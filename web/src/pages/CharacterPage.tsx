@@ -407,7 +407,7 @@ export function CharacterPage() {
         </div>
 
         {/* Primary mode tabs (推荐 / 新角色 / 收藏 / 我的) — large, underline-active. */}
-        <div className="relative z-20 shrink-0 flex items-center gap-7 px-5 pt-9 pb-2 overflow-x-auto no-scrollbar">
+        <div className="relative z-20 shrink-0 flex items-center gap-7 px-5 pt-2 pb-2 overflow-x-auto no-scrollbar">
           {DISCOVERY_MODES.map((mode) => (
             <button
               key={mode}
