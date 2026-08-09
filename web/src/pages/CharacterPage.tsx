@@ -353,11 +353,11 @@ export function CharacterPage() {
         <div style={{ height: 'calc(var(--safe-top) + 4px)' }} />
 
         {/* Navigation bar — brand logo (login-page style) + search / announcement. */}
-        <div className="relative z-20 flex items-center justify-between gap-2.5 px-5 h-[48px] shrink-0">
+        <div className="relative z-20 flex items-center justify-between gap-2.5 px-5 h-[70px] shrink-0">
           <img
             src="/assets/ui/wordmark.webp"
             alt="yuoyuo"
-            className="shrink-0 h-[44px] w-auto select-none"
+            className="shrink-0 h-[66px] w-auto select-none"
             draggable={false}
           />
           <div className="flex items-center gap-2">
