@@ -218,7 +218,7 @@ export function SettingsPage() {
           <img
             src={memberGemImage}
             alt=""
-            className="absolute right-[-6px] bottom-[-8px] w-[120px] h-[120px] object-contain pointer-events-none drop-shadow-[0_10px_28px_rgba(120,90,160,0.28)]"
+            className="absolute right-[4px] bottom-[-6px] w-[116px] h-[116px] object-contain pointer-events-none drop-shadow-[0_10px_28px_rgba(120,90,160,0.28)]"
           />
           <div className="relative min-h-[144px]">
             <div className="relative z-10 flex items-center justify-between gap-3">

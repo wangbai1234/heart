@@ -350,14 +350,14 @@ export function CharacterPage() {
       <img src={pageBg} alt="" className="absolute inset-0 w-full h-full object-cover z-0" />
 
       <div className="relative z-10 h-full flex flex-col">
-        <div style={{ height: 'calc(var(--safe-top) + 12px)' }} />
+        <div style={{ height: 'calc(var(--safe-top) + 4px)' }} />
 
         {/* Navigation bar — brand logo (login-page style) + search / announcement. */}
         <div className="relative z-20 flex items-center justify-between gap-2.5 px-5 h-[48px] shrink-0">
           <img
             src="/assets/ui/wordmark-compact.webp"
             alt="yuoyuo"
-            className="shrink-0 h-[36px] w-auto select-none mt-[6px]"
+            className="shrink-0 h-[36px] w-auto select-none"
             draggable={false}
           />
           <div className="flex items-center gap-2">
@@ -407,7 +407,7 @@ export function CharacterPage() {
         </div>
 
         {/* Primary mode tabs (推荐 / 新角色 / 收藏 / 我的) — large, underline-active. */}
-        <div className="relative z-20 shrink-0 flex items-center gap-7 px-5 pt-5 pb-2 overflow-x-auto no-scrollbar">
+        <div className="relative z-20 shrink-0 flex items-center gap-7 px-5 pt-9 pb-2 overflow-x-auto no-scrollbar">
           {DISCOVERY_MODES.map((mode) => (
             <button
               key={mode}
