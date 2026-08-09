@@ -1,4 +1,4 @@
-import { Dialog } from './ui/Dialog'
+import { NoticeDialog } from './ui/NoticeDialog'
 import type { ReviewUpdateDTO } from '../services/api'
 
 /**
@@ -16,28 +16,20 @@ export function ReviewResultDialog({
   const open = item !== null
   const approved = item?.review_status === 'approved'
   return (
-    <Dialog
+    <NoticeDialog
       open={open}
       onClose={onConfirm}
       title={approved ? '角色审核通过' : '角色审核未通过'}
-      actions={
-        <button
-          onClick={onConfirm}
-          className="flex-1 h-[44px] rounded-[var(--radius-lg)] bg-[var(--color-primary)] text-[var(--color-text-on-primary)] text-[15px] font-medium active:opacity-80"
-        >
-          知道了
-        </button>
-      }
     >
       {approved ? (
         <>
-          你的角色「{item?.display_name}」已通过审核并公开。
+          「{item?.display_name}」已通过审核并公开
           <br />
-          奖励 100 yuoyuo币 已到账。累计通过 5 个角色可额外获得一个月进阶版会员。
+          奖励 100 yuoyuo币 已到账
         </>
       ) : (
         <>
-          你的角色「{item?.display_name}」未通过审核。
+          「{item?.display_name}」未通过审核
           {item?.review_reason ? (
             <>
               <br />
@@ -45,10 +37,10 @@ export function ReviewResultDialog({
             </>
           ) : null}
           <br />
-          你可以修改后重新提交。
+          可修改后重新提交
         </>
       )}
-    </Dialog>
+    </NoticeDialog>
   )
 }
 
@@ -64,22 +56,10 @@ export function PublishIncentiveDialog({
   onClose: () => void
 }) {
   return (
-    <Dialog
-      open={open}
-      onClose={onClose}
-      title="公开角色，领取奖励"
-      actions={
-        <button
-          onClick={onClose}
-          className="flex-1 h-[44px] rounded-[var(--radius-lg)] bg-[var(--color-primary)] text-[var(--color-text-on-primary)] text-[15px] font-medium active:opacity-80"
-        >
-          知道了
-        </button>
-      }
-    >
-      创建并公开你的角色，审核通过即可获得 100 yuoyuo币。
+    <NoticeDialog open={open} onClose={onClose} title="公开角色，领取奖励">
+      创建并公开角色，审核通过即得 100 yuoyuo币
       <br />
-      累计通过 5 个角色，额外赠送一个月进阶版会员。
-    </Dialog>
+      累计通过 5 个角色，再送一个月进阶版会员
+    </NoticeDialog>
   )
 }

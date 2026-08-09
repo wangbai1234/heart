@@ -278,14 +278,14 @@ export function LoginPage() {
 
       {/* Scrollable content */}
       <div className="flex-1 overflow-y-auto px-5">
-        {/* Brand zone */}
-        <div className="text-center mb-4">
-          <h1 className="text-[40px] font-bold text-[var(--color-ink)] tracking-[0.02em] font-brand">
-            yuoyuo
-          </h1>
-          <p className="text-[14px] text-[var(--color-text-muted)] mt-1">
-            独属于你的虚拟宇宙
-          </p>
+        {/* Brand zone — logo art carries the wordmark + tagline */}
+        <div className="text-center mb-4 mt-1">
+          <img
+            src="/assets/ui/wordmark.webp"
+            alt="yuoyuo"
+            className="mx-auto w-[220px] max-w-[68%] h-auto select-none"
+            draggable={false}
+          />
         </div>
 
         {/* Form card */}

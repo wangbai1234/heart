@@ -60,9 +60,7 @@ export function SettingsPage() {
     ? '/assets/backgrounds/暗色聊天背景图.webp'
     : '/assets/backgrounds/聊天背景图.webp'
   const isDark = resolvedTheme === 'dark'
-  const memberGemImage = isDark
-    ? '/assets/settings/member-gem-dark.png'
-    : '/assets/settings/member-gem-light.png'
+  const memberGemImage = '/assets/settings/member-crown.webp'
 
   const displayName = user?.display_name || user?.email?.split('@')[0] || '用户'
 
@@ -220,7 +218,7 @@ export function SettingsPage() {
           <img
             src={memberGemImage}
             alt=""
-            className="absolute right-[52px] bottom-[-118px] w-[210px] h-[318px] object-contain pointer-events-none"
+            className="absolute right-[-18px] top-1/2 -translate-y-1/2 w-[172px] h-[172px] object-contain pointer-events-none drop-shadow-[0_10px_28px_rgba(120,90,160,0.28)]"
           />
           <div className="relative min-h-[144px]">
             <div className="relative z-10 flex items-center justify-between gap-3">
@@ -562,7 +560,7 @@ function InviteShowcase({
       className="relative w-full overflow-hidden mt-5 rounded-[28px] bg-[var(--color-glass-card)] backdrop-blur-[20px] border border-[var(--color-border-glass)] shadow-[var(--shadow-card)] p-5 text-left active:scale-[0.99] transition-transform"
     >
       <img
-        src="/assets/settings/invite-mascot.png"
+        src="/assets/settings/invite-mascot.webp"
         alt=""
         className="absolute right-[-14px] top-[-40px] w-[210px] h-[273px] object-contain pointer-events-none"
       />

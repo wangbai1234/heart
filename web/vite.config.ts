@@ -29,7 +29,18 @@ export default defineConfig({
       // re-seeded cover shows immediately on that reload (see UpdatePrompt.tsx).
       registerType: 'prompt',
       // Precache the built app shell; SPA routes fall back to index.html offline.
-      includeAssets: ['apple-touch-icon.png', 'favicon-96.png'],
+      // Precache the app-shell icons + the small decorative webp art used on
+      // the first screens (login/character logo, settings crown + mascot, the
+      // notice-frame). These are ~30–100KB each; shipping them in the precache
+      // means they render instantly on first paint instead of a slow cross-
+      // border fetch from the HK origin (large background art stays excluded).
+      includeAssets: [
+        'apple-touch-icon.png',
+        'favicon-96.png',
+        'assets/ui/*.webp',
+        'assets/settings/member-crown.webp',
+        'assets/settings/invite-mascot.webp',
+      ],
       manifest: {
         name: 'yuoyuo',
         short_name: 'yuoyuo',
@@ -119,6 +130,19 @@ export default defineConfig({
             handler: 'CacheFirst',
             options: {
               cacheName: 'backgrounds-cache',
+              expiration: { maxEntries: 40, maxAgeSeconds: 60 * 60 * 24 * 30 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+          {
+            // Small decorative UI art (settings crown/mascot, logo, notice
+            // frame). Content-addressed by filename → CacheFirst gives a zero-
+            // network refresh after the first load. Backs up the precache above
+            // for any client that installed before these were added to it.
+            urlPattern: /\/assets\/(?:ui|settings)\/.*\.(?:webp|png)$/,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'ui-art-cache',
               expiration: { maxEntries: 40, maxAgeSeconds: 60 * 60 * 24 * 30 },
               cacheableResponse: { statuses: [0, 200] },
             },

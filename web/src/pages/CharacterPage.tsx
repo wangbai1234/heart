@@ -355,9 +355,12 @@ export function CharacterPage() {
 
         {/* Navigation bar — brand logo (login-page style) + search / announcement. */}
         <div className="relative z-20 flex items-center justify-between gap-2.5 px-5 h-[48px] shrink-0">
-          <span className="shrink-0 text-[22px] font-bold text-[var(--color-ink)] tracking-[0.02em] font-brand leading-none">
-            yuoyuo
-          </span>
+          <img
+            src="/assets/ui/wordmark-compact.webp"
+            alt="yuoyuo"
+            className="shrink-0 h-[26px] w-auto select-none"
+            draggable={false}
+          />
           <div className="flex items-center gap-2">
             {showSearch ? (
               <div className="flex items-center gap-1.5">
