@@ -11,10 +11,87 @@ import { stageWithIntimacy, isColdWar, intimacyPercent, stageLabel, stageOrderIn
 import { buildShareLink } from '../utils/characterShare'
 import { useSafeBack } from '../hooks/useSafeBack'
 import { CHARACTER_UI_CONFIGS, type CharacterTheme } from '../data/characterUIConfig'
-import { JiYuProfile } from '../components/characterProfiles/JiYuProfile'
+import { JiYuProfile, LiShenProfile, ChengXuProfile } from '../components/characterProfiles'
+import type { ComponentType } from 'react'
 
 /** 关系路线的 6 个可视节点（ACQUAINTANCE/FRIEND 合归「靠近」）。 */
 const ROUTE_NODES = ['STRANGER', 'FRIEND', 'CONFIDANT', 'ROMANTIC_INTEREST', 'LOVER', 'BONDED'] as const
+
+/** Bespoke 详情页组件 registry（iframe-isolated rich profile） */
+const BESPOKE_PROFILES: Record<string, ComponentType<{ profile: CharacterProfileDTO }>> = {
+  ji_yu: JiYuProfile,
+  li_shen: LiShenProfile,
+  cheng_xu: ChengXuProfile,
+}
+
+/** Chrome 视觉调色盘 registry（React 外层chrome，非 iframe 内层） */
+type ChromePalette = {
+  bg: string
+  coverBg: string
+  scrimGradient: string
+  nameColor: string
+  ageColor: string
+  taglineColor: string
+  chipActiveBg: string
+  chipActiveBorder: string
+  chipActiveText: string
+  chipInactiveBg: string
+  chipInactiveBorder: string
+  chipInactiveText: string
+  ctaGradient: string
+  ctaShadow: string
+}
+
+const CHROME_PALETTES: Record<string, ChromePalette> = {
+  ji_yu: {
+    bg: '#171019',
+    coverBg: '#1B1320',
+    scrimGradient: 'linear-gradient(to top,#171019 6%,rgba(23,16,25,.4) 40%,transparent 100%)',
+    nameColor: '#ECE2E7',
+    ageColor: '#B4A4AF',
+    taglineColor: '#E08298',
+    chipActiveBg: 'rgba(194,74,99,.08)',
+    chipActiveBorder: 'rgba(194,74,99,.32)',
+    chipActiveText: '#E08298',
+    chipInactiveBg: 'white/5',
+    chipInactiveBorder: 'white/10',
+    chipInactiveText: '#B4A4AF',
+    ctaGradient: 'linear-gradient(105deg,#C24A63,#9C3A55)',
+    ctaShadow: '0 10px 26px rgba(194,74,99,0.32)',
+  },
+  li_shen: {
+    bg: '#0F0B0D',
+    coverBg: '#1A1315',
+    scrimGradient: 'linear-gradient(to top,#0F0B0D 6%,rgba(15,11,13,.4) 40%,transparent 100%)',
+    nameColor: '#EDE3E5',
+    ageColor: '#B8A8AB',
+    taglineColor: '#D85B74',
+    chipActiveBg: 'rgba(184,58,82,.08)',
+    chipActiveBorder: 'rgba(184,58,82,.32)',
+    chipActiveText: '#D85B74',
+    chipInactiveBg: 'rgba(255,255,255,.05)',
+    chipInactiveBorder: 'rgba(255,255,255,.1)',
+    chipInactiveText: '#B8A8AB',
+    ctaGradient: 'linear-gradient(105deg,#B83A52,#8C2D3E)',
+    ctaShadow: '0 10px 26px rgba(184,58,82,0.38)',
+  },
+  cheng_xu: {
+    bg: '#13151A',
+    coverBg: '#1B1D22',
+    scrimGradient: 'linear-gradient(to top,#13151A 6%,rgba(19,21,26,.4) 40%,transparent 100%)',
+    nameColor: '#EDE8E3',
+    ageColor: '#B8AFA7',
+    taglineColor: '#EAA968',
+    chipActiveBg: 'rgba(208,138,78,.12)',
+    chipActiveBorder: 'rgba(208,138,78,.32)',
+    chipActiveText: '#EAA968',
+    chipInactiveBg: 'rgba(255,255,255,.05)',
+    chipInactiveBorder: 'rgba(255,255,255,.1)',
+    chipInactiveText: '#B8AFA7',
+    ctaGradient: 'linear-gradient(105deg,#D08A4E,#B8743A)',
+    ctaShadow: '0 10px 26px rgba(208,138,78,0.36)',
+  },
+}
 
 type Theme = { accent: string; deep: string; deep2: string; hero: string }
 /** 按角色标签选主题（fallback，优先用 characterUIConfig）。 */
@@ -154,14 +231,21 @@ export function CharacterProfilePage() {
     )
   }
 
-  // 季屿使用 bespoke iframe 详情页，其他角色走原模板
-  if (profile && id === 'ji_yu') {
+  // 角色有 bespoke iframe 详情页则走 bespoke 分支，否则走 generic template
+  const BespokeProfile = profile ? BESPOKE_PROFILES[id] : null
+  const chrome = CHROME_PALETTES[id]
+
+  if (profile && BespokeProfile && chrome) {
     return (
-      <div className="relative w-full h-full overflow-y-auto bg-[#171019]">
+      <div className="relative w-full h-full overflow-y-auto" style={{ background: chrome.bg }}>
         {/* ── 封面 hero（默认露上 3/4，点击展开全图）── */}
         <div
-          className="relative w-full overflow-hidden bg-[#1B1320] cursor-pointer"
-          style={{ height: coverFullH ? (coverExpanded ? coverFullH : Math.round(coverFullH * 0.75)) : undefined, transition: 'height .38s cubic-bezier(.4,0,.2,1)' }}
+          className="relative w-full overflow-hidden cursor-pointer"
+          style={{
+            background: chrome.coverBg,
+            height: coverFullH ? (coverExpanded ? coverFullH : Math.round(coverFullH * 0.75)) : undefined,
+            transition: 'height .38s cubic-bezier(.4,0,.2,1)'
+          }}
           onClick={() => coverFullH && setCoverExpanded((v) => !v)}
           role="button"
           aria-label={coverExpanded ? '收起封面' : '展开完整封面'}
@@ -177,7 +261,7 @@ export function CharacterProfilePage() {
               onLoad={(e) => setCoverFullH(e.currentTarget.offsetHeight)}
             />
           )}
-          <div className="absolute inset-x-0 bottom-0 h-[45%] pointer-events-none" style={{ background: 'linear-gradient(to top,#171019 6%,rgba(23,16,25,.4) 40%,transparent 100%)' }} />
+          <div className="absolute inset-x-0 bottom-0 h-[45%] pointer-events-none" style={{ background: chrome.scrimGradient }} />
           {coverFullH > 0 && (
             <div className="absolute bottom-3 right-3 z-10 text-[11px] text-white/70 bg-black/35 backdrop-blur-[6px] rounded-full px-3 py-1 pointer-events-none">
               {coverExpanded ? '收起' : '点击看全图'}
@@ -195,15 +279,22 @@ export function CharacterProfilePage() {
 
         {/* 名字块 */}
         <div className="relative -mt-[50px] px-[22px] z-[3]">
-          <h1 className="text-[34px] font-semibold leading-[1.1] text-[#ECE2E7]" style={{ fontFamily: '"Songti SC","STSong","Noto Serif SC",Georgia,serif' }}>
+          <h1 className="text-[34px] font-semibold leading-[1.1]" style={{ fontFamily: '"Songti SC","STSong","Noto Serif SC",Georgia,serif', color: chrome.nameColor }}>
             {profile.display_name || '季屿'}
-            {profile.age_range && <span className="text-[12px] text-[#B4A4AF] ml-2.5 align-middle">{profile.age_range}</span>}
+            {profile.age_range && <span className="text-[12px] ml-2.5 align-middle" style={{ color: chrome.ageColor }}>{profile.age_range}</span>}
           </h1>
-          {profile.tagline && <p className="text-[16px] text-[#E08298] mt-2.5 leading-[1.7] italic" style={{ fontFamily: '"Songti SC","STSong","Noto Serif SC",Georgia,serif' }}>{profile.tagline}</p>}
+          {profile.tagline && <p className="text-[16px] mt-2.5 leading-[1.7] italic" style={{ fontFamily: '"Songti SC","STSong","Noto Serif SC",Georgia,serif', color: chrome.taglineColor }}>{profile.tagline}</p>}
           {profile.tags.length > 0 && (
             <div className="flex flex-wrap gap-[7px] mt-3.5">
               {profile.tags.slice(0, 6).map((t, i) => (
-                <span key={t} className={`text-[12px] px-3 py-[5px] rounded-full border ${i < 2 ? 'text-[#E08298] border-[rgba(194,74,99,.32)] bg-[rgba(194,74,99,.08)]' : 'text-[#B4A4AF] border-white/10 bg-white/5'}`}>{t}</span>
+                <span
+                  key={t}
+                  className="text-[12px] px-3 py-[5px] rounded-full border"
+                  style={i < 2
+                    ? { color: chrome.chipActiveText, borderColor: chrome.chipActiveBorder, background: chrome.chipActiveBg }
+                    : { color: chrome.chipInactiveText, borderColor: chrome.chipInactiveBorder, background: chrome.chipInactiveBg }
+                  }
+                >{t}</span>
               ))}
             </div>
           )}
@@ -246,11 +337,12 @@ export function CharacterProfilePage() {
             </button>
             <button
               onClick={openChat}
-              className={`h-[48px] rounded-full text-white text-[16px] font-semibold shadow-[0_10px_26px_rgba(194,74,99,0.32)] active:scale-[0.97] transition-transform ${
+              className={`h-[48px] rounded-full text-white text-[16px] font-semibold active:scale-[0.97] transition-transform ${
                 chatted ? 'px-7' : 'flex-1'
               }`}
               style={{
-                background: 'linear-gradient(105deg,#C24A63,#9C3A55)',
+                background: chrome.ctaGradient,
+                boxShadow: chrome.ctaShadow,
               }}
             >
               和 Ta 聊天
@@ -258,9 +350,9 @@ export function CharacterProfilePage() {
           </div>
         </div>
 
-        {/* 季屿 bespoke 叙事内容（iframe） */}
+        {/* bespoke 叙事内容（iframe） */}
         <div className="mt-6">
-          <JiYuProfile profile={profile} />
+          <BespokeProfile profile={profile} />
         </div>
       </div>
     )

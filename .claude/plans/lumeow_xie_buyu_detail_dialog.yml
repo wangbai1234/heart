@@ -1,0 +1,188 @@
+- generic:
+  - generic:
+    - generic:
+      - generic:
+        - generic:
+          - generic:
+            - generic:
+              - generic:
+                - generic:
+                  - generic: 演绎你的专属故事
+                  - generic:
+                    - button
+                    - button:
+                      - generic: 排行榜
+                    - generic: "80"
+              - generic:
+                - paragraph: 欢迎来到《Lumeow航海计划》
+              - generic:
+                - generic:
+                  - generic:
+                    - generic:
+                      - button
+                      - button
+                      - button
+                      - button
+                      - button
+              - generic:
+                - generic:
+                  - generic:
+                    - generic:
+                      - generic:
+                        - generic:
+                          - button: 推荐
+                          - button: 全部
+                          - button: BG
+                          - button: GB
+                          - button: GL
+                          - button: BL
+                          - button: 全性向
+                          - button: 人外
+                          - button: 其他
+                          - button: 洁
+                          - button: 不洁
+                          - button: 限左
+                          - button: 限右
+                          - button: 不限左右
+                          - button: 单人卡
+                          - button: 多人卡
+                          - button: 工具卡
+                          - button: 模拟器
+                          - button: 近代现代
+                          - button: 架空历史
+                          - button: 幻想未来
+                          - button: 仙侠古风
+                      - button
+                      - button
+              - generic:
+                - generic:
+                  - generic:
+                    - generic:
+                      - generic: 猫猫大王
+                      - generic:
+                        - generic: 顾深意
+                        - generic: 姐夫 / 背德 / 冷脸骚 / BG / 闷骚 / 雄竞
+                        - generic: 半夜爬床认错人了
+                        - generic:
+                          - generic:
+                            - button
+                            - generic: "7"
+                          - generic: "2"
+                  - generic:
+                    - generic:
+                      - generic: 素子（古风哥哥出了）
+                      - generic:
+                        - generic: 谢不逾
+                        - generic: 古板骚 / 封建爹系 / 骨科 / 背德 / 洁 / 限左
+                        - generic: 在兄长面前答应提亲后他失控了
+                        - generic:
+                          - generic:
+                            - button
+                            - generic: "23"
+                          - generic: "85"
+                  - generic:
+                    - generic:
+                      - generic: 狂吃三文鱼
+                      - generic:
+                        - generic: 刘瑭
+                        - generic: 烂人真心 / 回避型 / 金主u / 电竞 / 全性向 / 洁
+                        - generic: 抽象LOL主播被你当众包养…… 唉，主播主播，主播今天抽签了吗？抽到凶了吗？拿错了喵，拿歪了喵，这个其实是区喵。
+                        - generic:
+                          - generic:
+                            - button
+                            - generic: "22"
+                          - generic: "28"
+                  - generic:
+                    - generic:
+                      - generic: 李明月
+                      - generic:
+                        - generic: 贵圈真乱·娱乐圈「10+1」
+                        - generic: 模拟器 / 群像 / 大世界 / 娱乐圈 / 全性向 / 架空世界
+                        - generic: 被金主/偶像盯上了怎么办？！
+                        - generic:
+                          - generic:
+                            - button
+                            - generic: "3228"
+                          - generic: 84.4万
+                  - generic:
+                    - generic:
+                      - generic: Aw
+                      - generic:
+                        - generic: 端云眠
+                        - generic: 穿书 / 万人迷 / 萌脸骚 / 恨海情天 / 修罗场 / 限左
+                        - generic: 一穿书就被拿剑指？我不是万人迷吗。
+                        - generic:
+                          - generic:
+                            - button
+                            - generic: "126"
+                          - generic: "527"
+                  - generic:
+                    - generic:
+                      - generic: 青钰（一江秋月）
+                      - generic:
+                        - generic: 梁劭宁 (6开场白)
+                        - generic: 高干 / 引导型恋人 / 港圈Daddy / 限左 / dom / 洁
+                        - generic: Daddy的见面礼是脚链,我的爱人不需要依附任何人 和Daddy在一起就是要给你钱给你爱给你名分呀～ 限左 · 限皮下女 · 禁撅 · 禁虐。架空世界，港圈，高干，强反差，身心全洁，人前禁欲人后反差，引导型恋人，和外表有很大反差，最夸张的老钱来了。
+                        - generic:
+                          - generic:
+                            - button
+                            - generic: "164"
+                          - generic: "1805"
+        - contentinfo:
+          - generic:
+            - link:
+              - /url: /home
+              - generic: 发现
+            - link:
+              - /url: /recent-chat
+              - generic: 对话
+            - link:
+              - /url: /notification
+              - generic: 通知
+              - generic: "1"
+            - button:
+              - generic: 我的
+    - region "Notifications alt+T"
+  - dialog [active] [ref=f4e241]:
+    - generic [ref=f4e245]:
+      - generic [ref=f4e246]:
+        - generic [ref=f4e247]: 角色详情
+        - generic [ref=f4e251]:
+          - generic [ref=f4e252] [cursor=pointer]: "28"
+          - generic [ref=f4e256] [cursor=pointer]
+      - generic [ref=f4e261]:
+        - generic [ref=f4e263]:
+          - paragraph [ref=f4e264]: 谢不逾
+          - generic [ref=f4e265]:
+            - generic [ref=f4e266]: 仙侠古风
+            - generic [ref=f4e267]: 古板骚
+            - generic [ref=f4e268]: 封建爹系
+            - generic [ref=f4e269]: 骨科
+            - generic [ref=f4e270]: 背德
+            - generic [ref=f4e271]: 洁
+            - generic [ref=f4e272]: 限左
+          - generic [ref=f4e273]: 素子（古风哥哥出了）
+        - generic [ref=f4e276]:
+          - paragraph [ref=f4e278]: 在兄长面前答应提亲后他失控了
+          - paragraph [ref=f4e279]: 故事选择
+          - generic [ref=f4e280]:
+            - generic [ref=f4e284]:
+              - generic [ref=f4e285]: 我才是与你最相配的人…
+              - generic [ref=f4e286]:
+                - generic [ref=f4e287]: 骨科
+                - generic [ref=f4e288]: 阴湿
+              - paragraph [ref=f4e289]: 答应提亲后恪守礼教的兄长破防了
+              - generic [ref=f4e290]:
+                - button "放映室" [ref=f4e291] [cursor=pointer]
+                - button "开始聊天" [ref=f4e292] [cursor=pointer]
+            - generic [ref=f4e293] [cursor=pointer]: 自定义专属开场
+            - generic [ref=f4e294]:
+              - generic [ref=f4e295]: 热门评论
+              - generic [ref=f4e298]:
+                - generic [ref=f4e299]: 爱吃饭的懒猪
+                - paragraph [ref=f4e302]: 来了
+                - generic [ref=f4e303]:
+                  - generic [ref=f4e304]: 2026-08-10 18:00:16
+                  - generic [ref=f4e305]:
+                    - generic [ref=f4e306]: "0"
+                    - generic [ref=f4e310]: "1"

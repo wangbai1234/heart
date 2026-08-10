@@ -33,14 +33,16 @@ yuoyuo.app {
 
 		# Cache policy for static assets:
 		# - Vite build output under /assets/* has content-hashed filenames → cache
-		#   forever (immutable). Excludes /assets/backgrounds/* (non-hashed names).
-		# - Background art (WebP, non-hashed) → 7 days, revalidated via file_server ETag.
+		#   forever (immutable). Excludes /assets/backgrounds/* (non-hashed) and
+		#   /assets/characters/* (fixed-name avatar webp files that change on reseed).
+		# - Background art + character avatars (non-hashed) → 7 days, revalidated via ETag.
 		# - index.html / SPA document → no-cache so app updates ship immediately.
 		@buildassets {
 			path /assets/*
 			not path /assets/backgrounds/*
+			not path /assets/characters/*
 		}
-		@backgrounds path /assets/backgrounds/*
+		@backgrounds path /assets/backgrounds/* /assets/characters/*
 		@html path / *.html
 		header @buildassets Cache-Control "public, max-age=31536000, immutable"
 		header @backgrounds Cache-Control "public, max-age=604800"

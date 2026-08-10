@@ -1,0 +1,241 @@
+<style>
+/* ============ yuoyuo 角色详情页重构 demo · 以 ji_yu 真实文案填充 ============ */
+:root{
+  --ink:#171019; --ink-2:#1E1620; --surface:#241926; --surface-2:#2C2030;
+  --paper:#E9DFD6; --paper-ink:#2A2230; --paper-line:#C9BBAA;
+  --accent:#C24A63; --accent-soft:#E08298; --accent-glow:rgba(194,74,99,.32);
+  --gold:#B08A4F; --gold-soft:#D4B983;
+  --tx:#ECE2E7; --tx-dim:#B4A4AF; --tx-mute:#8A7C87;
+  --hair:rgba(236,226,231,.10); --hair-2:rgba(236,226,231,.06);
+  --shadow:0 18px 46px rgba(0,0,0,.5);
+  --serif:"Songti SC","STSong","Noto Serif SC",Georgia,serif;
+  --sans:"PingFang SC","Helvetica Neue",system-ui,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--ink);color:var(--tx);font-family:var(--sans);
+  -webkit-font-smoothing:antialiased;line-height:1.6}
+.phone{max-width:430px;margin:0 auto;min-height:100vh;
+  background:radial-gradient(120% 60% at 50% 0%,#241826 0%,var(--ink) 46%);
+  position:relative;overflow-x:hidden;padding-bottom:96px}
+.eyebrow{font-size:11px;letter-spacing:.22em;text-transform:uppercase;
+  color:var(--gold-soft);font-weight:600}
+.serif{font-family:var(--serif)}
+
+/* ---- 全幅氛围封面（落地灯光晕，代 3:4 立绘位）---- */
+.cover{position:relative;height:520px;overflow:hidden;
+  background:
+    radial-gradient(60% 42% at 62% 30%,rgba(224,130,152,.28),transparent 70%),
+    radial-gradient(90% 70% at 30% 12%,rgba(176,138,79,.18),transparent 60%),
+    linear-gradient(170deg,#2E2130 0%,#1B1320 60%,var(--ink) 100%)}
+.cover .lamp{position:absolute;top:-40px;right:38px;width:220px;height:360px;
+  background:radial-gradient(circle at 50% 20%,rgba(255,226,180,.42),transparent 62%);
+  filter:blur(6px)}
+.cover .art-note{position:absolute;left:20px;bottom:150px;max-width:210px;
+  font-family:var(--serif);font-size:13px;color:rgba(236,226,231,.5);line-height:1.9}
+.cover .art-note b{color:var(--accent-soft);font-weight:400}
+.cover .scrim{position:absolute;inset:0;
+  background:linear-gradient(to top,var(--ink) 4%,rgba(23,16,25,.4) 34%,transparent 62%)}
+.nav{position:absolute;top:0;left:0;right:0;height:56px;display:flex;
+  align-items:center;justify-content:space-between;padding:0 16px;z-index:5}
+.nav button{width:38px;height:38px;border-radius:50%;border:none;cursor:pointer;
+  background:rgba(0,0,0,.34);backdrop-filter:blur(8px);color:#fff;
+  display:flex;align-items:center;justify-content:center}
+.placeholder-tag{position:absolute;top:16px;left:50%;transform:translateX(-50%);
+  font-size:10px;letter-spacing:.1em;color:rgba(236,226,231,.4);
+  border:1px dashed rgba(236,226,231,.2);border-radius:20px;padding:3px 10px}
+
+/* ---- 名字块 ---- */
+.head{position:relative;margin-top:-74px;padding:0 22px;z-index:3}
+.head h1{font-family:var(--serif);font-size:34px;font-weight:600;letter-spacing:.02em;line-height:1.1}
+.head .age{font-size:12px;color:var(--tx-dim);margin-left:10px}
+.head .tagline{font-family:var(--serif);font-size:16px;color:var(--accent-soft);margin-top:10px;line-height:1.7;font-style:italic}
+.chips{display:flex;flex-wrap:wrap;gap:7px;margin-top:14px}
+.chip{font-size:12px;color:var(--tx-dim);padding:5px 12px;border-radius:20px;background:rgba(236,226,231,.05);border:1px solid var(--hair)}
+.chip.k{color:var(--accent-soft);border-color:var(--accent-glow);background:rgba(194,74,99,.08)}
+/* ---- 区块头 ---- */
+.sect{padding:28px 22px 0}
+.sect-h{display:flex;align-items:center;gap:9px;margin-bottom:14px}
+.sect-h .bar{width:3px;height:15px;border-radius:2px;background:linear-gradient(var(--accent),var(--gold))}
+.sect-h .t{font-size:15px;font-weight:600;letter-spacing:.04em}
+.sect-h .en{font-size:10px;letter-spacing:.2em;color:var(--tx-mute);text-transform:uppercase}
+/* ---- 开场预告卡 ---- */
+.preview{margin:0 22px;border-radius:20px;overflow:hidden;background:linear-gradient(150deg,var(--surface-2),var(--ink-2));border:1px solid var(--hair);box-shadow:var(--shadow);position:relative}
+.preview::before{content:"“";position:absolute;top:-16px;left:14px;font-family:var(--serif);font-size:88px;color:var(--accent-glow);line-height:1}
+.preview .inner{padding:22px 20px 18px}
+.preview .scene{font-family:var(--serif);font-size:13px;color:var(--tx-mute);font-style:italic;margin-bottom:12px}
+.preview .line{font-family:var(--serif);font-size:16.5px;line-height:1.9}
+.preview .line em{color:var(--accent-soft);font-style:normal}
+.preview .foot{margin-top:16px;padding-top:13px;border-top:1px solid var(--hair-2);display:flex;align-items:center;gap:8px;font-size:12px;color:var(--tx-mute)}
+.preview .foot .dot{width:6px;height:6px;border-radius:50%;background:var(--accent);box-shadow:0 0 8px var(--accent-glow)}
+/* ---- 关系路线时间轴 ---- */
+.route{display:flex;gap:0;margin:0 22px}
+.step{flex:1;text-align:center;position:relative}
+.step .node{width:11px;height:11px;border-radius:50%;margin:0 auto 8px;background:var(--surface-2);border:2px solid var(--hair)}
+.step.on .node{background:var(--accent);border-color:var(--accent);box-shadow:0 0 10px var(--accent-glow)}
+.step .rail{position:absolute;top:5px;left:-50%;width:100%;height:2px;background:var(--hair);z-index:-1}
+.step.on .rail{background:linear-gradient(90deg,var(--accent),var(--accent-glow))}
+.step:first-child .rail{display:none}
+.step .nm{font-size:12px;color:var(--tx-dim)}
+.step.on .nm{color:var(--accent-soft);font-weight:600}
+.route-note{margin:12px 22px 0;font-size:12.5px;color:var(--tx-mute);line-height:1.7;font-family:var(--serif);font-style:italic}
+/* ---- 档案拆块卡 ---- */
+.dossier{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:0 22px}
+.card{background:var(--paper);color:var(--paper-ink);border-radius:16px;padding:16px 15px;position:relative;box-shadow:0 10px 24px rgba(0,0,0,.34);overflow:hidden}
+.card::after{content:"";position:absolute;inset:0;background:radial-gradient(120% 80% at 100% 0,rgba(176,138,79,.1),transparent 55%);pointer-events:none}
+.card.wide{grid-column:1/-1}
+.card .kh{font-size:10px;letter-spacing:.2em;color:var(--gold);font-weight:700;margin-bottom:8px}
+.card .kt{font-family:var(--serif);font-size:15px;font-weight:600;margin-bottom:6px}
+.card .kb{font-size:13px;line-height:1.7;color:#5A4E58}
+/* ---- 门控秘密卡 ---- */
+.locked{grid-column:1/-1;background:linear-gradient(150deg,#2A1D28,#1C1420);border:1px solid var(--accent-glow);border-radius:16px;padding:18px;cursor:pointer;position:relative;transition:.35s}
+.locked .seal{position:absolute;right:16px;top:16px;font-family:var(--serif);color:var(--accent);border:1.5px solid var(--accent);border-radius:8px;padding:2px 7px;font-size:12px;opacity:.8}
+.locked .kh{font-size:10px;letter-spacing:.2em;color:var(--gold-soft);font-weight:700;margin-bottom:8px}
+.locked .body{font-family:var(--serif);font-size:14px;line-height:1.8;color:var(--tx-dim);max-height:0;overflow:hidden;transition:max-height .5s ease,margin .4s,opacity .4s;opacity:0}
+.locked .hint{font-size:13px;color:var(--accent-soft);font-family:var(--serif);font-style:italic}
+.locked.open{cursor:default}
+.locked.open .body{max-height:260px;opacity:1;margin-top:6px}
+.locked.open .hint,.locked.open .seal{display:none}
+/* ---- 相遇场景 / 你的身份 ---- */
+.meet{margin:0 22px;border-radius:16px;padding:18px 18px;background:var(--surface);border:1px solid var(--hair);position:relative}
+.meet .scene-line{font-family:var(--serif);font-size:14.5px;line-height:1.85;color:var(--tx-dim)}
+.role{margin:12px 22px 0;display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:16px;background:linear-gradient(150deg,rgba(194,74,99,.1),rgba(176,138,79,.05));border:1px solid var(--accent-glow)}
+.role .badge{font-family:var(--serif);font-size:22px;color:var(--accent-soft)}
+.role .txt{font-size:13px;color:var(--tx-dim);line-height:1.6}
+.role .txt b{color:var(--tx);font-weight:600}
+/* ---- 常驻底部 CTA ---- */
+.cta{position:fixed;bottom:0;left:0;right:0;max-width:430px;margin:0 auto;padding:14px 22px calc(14px + env(safe-area-inset-bottom));background:linear-gradient(to top,var(--ink) 60%,transparent);display:flex;gap:12px;align-items:center;z-index:20}
+.cta .fav{width:50px;height:50px;border-radius:50%;flex:none;background:var(--surface-2);border:1px solid var(--hair);color:var(--accent-soft);font-size:20px;cursor:pointer}
+.cta .go{flex:1;height:50px;border:none;border-radius:26px;cursor:pointer;font-size:16px;font-weight:600;letter-spacing:.08em;color:#fff;font-family:var(--serif);background:linear-gradient(105deg,var(--accent),#9C3A55);box-shadow:0 10px 26px var(--accent-glow)}
+.foot-space{height:20px}
+/* ---- 关于TA 截断卡（共性：绝不平铺，更多展开）---- */
+.about{margin:0 22px}
+.about p{font-size:14px;line-height:1.85;color:var(--tx-dim);
+  display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.about.open p{-webkit-line-clamp:unset}
+.about .more{margin-top:8px;font-size:13px;color:var(--accent-soft);cursor:pointer;
+  background:none;border:none;font-family:var(--serif)}
+/* ---- 叙引 档案册卡（沈渊式通用结构，暗色）---- */
+.xy{margin:0 22px;border-radius:20px;overflow:hidden;
+  background:linear-gradient(160deg,var(--surface),var(--ink-2));
+  border:1px solid var(--hair);box-shadow:var(--shadow)}
+.xy .hero{padding:34px 20px 26px;text-align:center;position:relative;
+  background:radial-gradient(80% 60% at 50% 0,rgba(194,74,99,.1),transparent)}
+.xy .hero .big{font-family:var(--serif);font-size:30px;letter-spacing:.14em;color:var(--tx)}
+.xy .hero .big em{color:var(--accent);font-style:normal;font-size:38px}
+.xy .hero .en{margin-top:10px;font-size:10px;letter-spacing:.34em;color:var(--tx-mute)}
+.xy .hero .no{position:absolute;left:14px;top:14px;font-size:9px;letter-spacing:.2em;
+  color:var(--tx-mute);writing-mode:vertical-rl}
+.idcard{display:flex;gap:14px;align-items:center;padding:18px 20px;
+  border-top:1px solid var(--hair-2);border-bottom:1px solid var(--hair-2)}
+.idcard .av{width:66px;height:66px;border-radius:50%;flex:none;
+  border:2px solid var(--gold);background:linear-gradient(150deg,#3a2836,#241826)}
+.idcard .nm{font-family:var(--serif);font-size:20px;font-weight:600}
+.idcard .sub{font-size:12px;color:var(--tx-dim);margin:3px 0 8px}
+.idcard .attrs{display:flex;gap:7px;flex-wrap:wrap}
+.idcard .attrs span{font-size:11px;color:var(--gold-soft);background:rgba(176,138,79,.12);
+  border:1px solid rgba(176,138,79,.24);border-radius:6px;padding:2px 8px}
+.bio{padding:18px 20px 22px}
+.bio h4{display:flex;align-items:center;gap:8px;font-family:var(--serif);
+  font-size:15px;font-weight:600;margin:16px 0 8px}
+.bio h4:first-child{margin-top:0}
+.bio h4::before{content:"";width:3px;height:14px;border-radius:2px;background:var(--accent)}
+.bio p{font-size:13.5px;line-height:1.85;color:var(--tx-dim)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="phone">
+  <div class="cover">
+    <div class="lamp"></div>
+    <div class="placeholder-tag">立绘位 · 3:4 · 待生图</div>
+    <nav class="nav">
+      <button aria-label="返回">‹</button>
+      <button aria-label="分享">↗</button>
+    </nav>
+    <div class="art-note">此处为 <b>3:4 角色立绘</b><br>（傍晚咨询室 · 落地灯 · 黑发红眸 · 松领口衬衫 · 颈间旧绷带）</div>
+    <div class="scrim"></div>
+  </div>
+
+  <header class="head">
+    <h1 class="serif">季屿<span class="age">27</span></h1>
+    <p class="tagline">“我对全世界失语，只在你面前，愿意生病。”</p>
+    <div class="chips">
+      <span class="chip k">病娇</span><span class="chip k">医患</span>
+      <span class="chip">偏执</span><span class="chip">禁忌</span>
+      <span class="chip">救赎</span><span class="chip">都市</span>
+    </div>
+  </header>
+
+  <section class="sect">
+    <div class="sect-h"><span class="bar"></span><span class="t">关于TA</span><span class="en">About</span></div>
+  </section>
+  <div class="about" id="about">
+    <p>季屿，二十七岁，重度偏执倾向的心理咨询个案。黑发、红眸、白衬衫、颈间旧绷带，破碎又危险。他对外界冷漠疏离，对你却有近乎病态的依恋——会记住你所有细节，也会因为你多看别人一眼而整夜失眠。他把职业界限当成唯一能靠近你的绳索，既怕失去这层关系，又渴望越过它。</p>
+    <button class="more" onclick="document.getElementById('about').classList.toggle('open');this.remove()">更多</button>
+  </div>
+
+  <section class="sect">
+    <div class="sect-h"><span class="bar"></span><span class="t">他会这样对你说</span><span class="en">First Words</span></div>
+  </section>
+  <div class="preview">
+    <div class="inner">
+      <p class="scene serif">傍晚的咨询室，只剩一盏落地灯。他缩在沙发角落，听见你进来，没抬头，指节却几不可察地收紧。</p>
+      <p class="line serif">……你今天，晚了七分钟。<br><em>你说的每句话，我都会在夜里反复想很多遍。你知道的吧？你什么都知道。</em></p>
+      <div class="foot"><span class="dot"></span>开场由他先开口，你只需接住这句话</div>
+    </div>
+  </div>
+
+  <section class="sect">
+    <div class="sect-h"><span class="bar"></span><span class="t">你们会走到哪</span><span class="en">Route</span></div>
+    <div class="route">
+      <div class="step on"><div class="rail"></div><div class="node"></div><div class="nm">初识</div></div>
+      <div class="step"><div class="rail"></div><div class="node"></div><div class="nm">熟悉</div></div>
+      <div class="step"><div class="rail"></div><div class="node"></div><div class="nm">信任</div></div>
+      <div class="step"><div class="rail"></div><div class="node"></div><div class="nm">依赖</div></div>
+      <div class="step"><div class="rail"></div><div class="node"></div><div class="nm">沦陷</div></div>
+    </div>
+    <p class="route-note">从戒备到只对你卸下伪装——他不想痊愈，因为好了，就没有理由再见你。</p>
+  </section>
+
+  <section class="sect">
+    <div class="sect-h"><span class="bar"></span><span class="t">叙引</span><span class="en">Dossier</span></div>
+  </section>
+  <div class="xy">
+    <div class="hero">
+      <div class="no">NO.001 / CASE</div>
+      <div class="big">只对你<em>愿意</em>生病</div>
+      <div class="en">THE ONE I DON'T WANT TO CURE</div>
+    </div>
+    <div class="idcard">
+      <div class="av"></div>
+      <div>
+        <div class="nm serif">季屿</div>
+        <div class="sub">心理咨询个案 · 把你当作唯一出口的偏执者</div>
+        <div class="attrs"><span>27岁</span><span>黑发红眸</span><span>颈间旧绷带</span></div>
+      </div>
+    </div>
+    <div class="bio">
+      <h4 class="serif">人物生平</h4>
+      <p>出生在控制欲极强的家庭，母亲用监视代替关心。少年时唯一信任的人利用了他的日记，把秘密公之于众——从此他学会缄默，也开始出现偏执与被害倾向。成年后辗转多位咨询师，都因他的戒备无功而返。</p>
+      <h4 class="serif">命运交汇</h4>
+      <p>直到遇见你。你没有急着「修好」他，只是听他说完每一段沉默。他把你当成灯塔，也当成执念——偷藏你的照片，不是为了伤害，是怕某天连你也会消失。你是他病里唯一不想痊愈的部分。</p>
+    </div>
+  </div>
+
+  <section class="sect">
+    <div class="sect-h"><span class="bar"></span><span class="t">你们如何相遇</span><span class="en">Scene</span></div>
+  </section>
+  <div class="meet">
+    <p class="scene-line serif">傍晚的心理咨询室，只剩一盏落地灯。这里是你们唯一被允许靠近的地方——每周一次，五十分钟。</p>
+  </div>
+  <div class="role">
+    <div class="badge serif">医</div>
+    <div class="txt">在这段关系里，你是<b>他的心理医生</b>。也是他唯一不设防的人。</div>
+  </div>
+  <div class="foot-space"></div>
+
+  <div class="cta">
+    <button class="fav" aria-label="收藏">♡</button>
+    <button class="go">和 Ta 聊天</button>
+  </div>
+</div>
+
