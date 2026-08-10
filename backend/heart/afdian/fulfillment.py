@@ -150,7 +150,7 @@ async def resolve_user_by_custom_order_id(
 
     Afdian's order/create URL can carry ?custom_order_id=<code>, which the webhook
     echoes back. This does an exact case-insensitive match against active binding
-    codes. Returns user_id if found + not expired + unused, else None.
+    codes. Returns user_id if found + not expired (allows reuse), else None.
     """
     if not custom_order_id:
         return None
@@ -161,7 +161,6 @@ async def resolve_user_by_custom_order_id(
             SELECT user_id FROM user_binding_codes
             WHERE UPPER(code) = UPPER(:custom_id)
               AND (expires_at IS NULL OR expires_at > NOW())
-              AND used_at IS NULL
             LIMIT 1
             """
         ),
@@ -177,7 +176,7 @@ async def resolve_user_by_binding_code(db: AsyncSession, remark: str) -> Optiona
     """Extract binding code from remark and look up the user.
 
     Binding code may appear anywhere in the remark (case-insensitive prefix match
-    on the code field). Returns user_id if found + not expired, else None.
+    on the code field). Returns user_id if found + not expired (allows reuse), else None.
     """
     if not remark:
         return None
@@ -189,7 +188,6 @@ async def resolve_user_by_binding_code(db: AsyncSession, remark: str) -> Optiona
             SELECT user_id FROM user_binding_codes
             WHERE :remark ILIKE '%' || code || '%'
               AND (expires_at IS NULL OR expires_at > NOW())
-              AND used_at IS NULL
             ORDER BY created_at DESC
             LIMIT 1
             """
