@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback, type ComponentType } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useAppStore } from '../stores/appStore'
 import { useChatStore, type Message } from '../stores/chatStore'
@@ -26,9 +26,18 @@ import { ChatPlusMenu } from './ChatPlusMenu'
 import { VoiceChatSheet } from './VoiceChatSheet'
 import { TransferSheet } from './TransferSheet'
 import { JiYuPremiseCard } from './characterProfiles/JiYuPremiseCard'
+import { ChengXuPremiseCard } from './characterProfiles/ChengXuPremiseCard'
+import { LiShenPremiseCard } from './characterProfiles/LiShenPremiseCard'
 import { getCharacterSettings } from '../services/api'
 
 const EMPTY_MESSAGES: Message[] = []
+
+/** 角色专属前情提要卡映射：首聊无用户消息时出现在开场之上 */
+const PREMISE_CARDS: Record<string, ComponentType> = {
+  ji_yu: JiYuPremiseCard,
+  cheng_xu: ChengXuPremiseCard,
+  li_shen: LiShenPremiseCard,
+}
 
 /** 引导回复气泡：首聊时出现在消息区底部，点击直接发送（帮用户破冰）。
  * 优先取角色专属开场白(characterUIConfig.starterPrompts)，缺省用通用三句。*/
@@ -1040,10 +1049,13 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
 
       {/* Messages */}
       <div ref={scrollRef} className="relative z-10 flex-1 overflow-y-auto px-4 py-3 flex flex-col gap-3">
-        {/* 角色专属前情提要卡（ji_yu 样板）：首聊、无用户消息时出现在开场之上 */}
-        {currentCharacterId === 'ji_yu' && historyLoaded && messages.every((m) => m.role !== 'user') && (
-          <JiYuPremiseCard />
-        )}
+        {/* 角色专属前情提要卡：首聊、无用户消息时出现在开场之上 */}
+        {historyLoaded &&
+          messages.every((m) => m.role !== 'user') &&
+          (() => {
+            const PremiseCard = PREMISE_CARDS[currentCharacterId]
+            return PremiseCard ? <PremiseCard /> : null
+          })()}
 
         {!historyLoaded && (
           <div className="flex-1 flex items-center justify-center">
