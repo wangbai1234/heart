@@ -2,3 +2,4 @@
 export { JiYuProfile } from './JiYuProfile'
 export { LiShenProfile } from './LiShenProfile'
 export { ChengXuProfile } from './ChengXuProfile'
+export { LilithProfile } from './LilithProfile'
