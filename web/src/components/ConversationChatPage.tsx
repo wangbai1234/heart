@@ -28,6 +28,14 @@ import { getCharacterSettings } from '../services/api'
 
 const EMPTY_MESSAGES: Message[] = []
 
+/** 引导回复气泡：首聊时出现在消息区底部，点击直接发送（帮用户破冰）。
+ * 设计 3 个跨角色通用、情绪拉开层次的选项：安抚 / 关注 / 轻松。*/
+const STARTER_PROMPTS = [
+  '你还好吗？',
+  '聊聊你的故事？',
+  '有点好奇你在做什么',
+]
+
 // Map a server chat-history item to a store Message. Voice rows get an
 // unambiguous by-message-id audio pointer (keyed on the row id, so it needs no
 // role param). Shared by the mount load and the visibilitychange sync so both
@@ -408,6 +416,11 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
     sendMessage(trimmed)
     setInput('')
   }, [input, isStreaming, sendMessage])
+
+  const handleStarterClick = useCallback((text: string) => {
+    if (isStreaming) return
+    sendMessage(text)
+  }, [isStreaming, sendMessage])
 
   const handleInterrupt = useCallback(() => {
     interrupt()
@@ -993,6 +1006,25 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
 
         {/* Streaming indicator - avatar is already in the bubble via renderMessage */}
       </div>
+
+      {/* 引导回复气泡：仅在首聊（无用户消息）且非流式时显示 */}
+      {historyLoaded && !isStreaming && messages.every((m) => m.role !== 'user') && (
+        <div className="relative z-10 mx-4 mb-3 flex flex-wrap gap-2">
+          {STARTER_PROMPTS.map((prompt) => (
+            <button
+              key={prompt}
+              onClick={() => handleStarterClick(prompt)}
+              className={`inline-flex items-center justify-center px-4 py-2.5 rounded-[18px] text-[14px] backdrop-blur-[16px] active:scale-[0.96] transition-transform ${
+                isDark
+                  ? 'bg-[rgba(255,255,255,0.09)] text-[rgba(248,242,250,0.88)] border border-[rgba(255,255,255,0.12)] shadow-[0_2px_12px_rgba(0,0,0,0.15)]'
+                  : 'bg-[rgba(255,255,255,0.68)] text-[rgba(33,35,57,0.92)] border border-[rgba(255,255,255,0.8)] shadow-[var(--shadow-sheet)]'
+              }`}
+            >
+              {prompt}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* 文字聊天档位入口（输入框左上角） */}
       <div className="relative z-20 mx-4 mb-1.5 flex items-center">
