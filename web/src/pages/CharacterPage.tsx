@@ -4,7 +4,10 @@ import { useThemeStore } from '../stores/themeStore'
 import { useScrollRestore } from '../hooks/useScrollRestore'
 import { TabBar } from '../components/ui/TabBar'
 import { NoticeDialog } from '../components/ui/NoticeDialog'
+import { Dialog } from '../components/ui/Dialog'
 import { AnnouncementSheet } from '../components/AnnouncementSheet'
+import { useToastStore } from '../stores/toastStore'
+import { parseCharacterId } from '../utils/characterShare'
 import {
   resolveCharacterProfile,
   CHARACTER_STYLE_TAGS,
@@ -143,13 +146,38 @@ export function CharacterPage() {
   const loadCompanions = useCompanionsStore((s) => s.load)
   const { has: isFavorite } = useFavoritesStore()
 
+  const showToast = useToastStore((s) => s.show)
+
   const [activeMode, setActiveMode] = useState<string>(MODE_RECOMMENDED)
   const [activeTag, setActiveTag] = useState<string>(TAG_ALL)
   const [showSearch, setShowSearch] = useState(false)
   const [showAnnounce, setShowAnnounce] = useState(false)
   const [showFilter, setShowFilter] = useState(false)
+  const [showOpenLink, setShowOpenLink] = useState(false)
+  const [linkInput, setLinkInput] = useState('')
   const [query, setQuery] = useState('')
   const scrollRef = useScrollRestore()
+
+  async function handlePasteLink() {
+    try {
+      const text = await navigator.clipboard.readText()
+      if (text.trim()) setLinkInput(text.trim())
+      else showToast('剪贴板是空的', 'info')
+    } catch {
+      showToast('无法读取剪贴板，请手动粘贴', 'info')
+    }
+  }
+
+  function handleOpenLink() {
+    const cid = parseCharacterId(linkInput)
+    if (!cid) {
+      showToast('链接无效，请粘贴完整的角色分享链接', 'error')
+      return
+    }
+    setShowOpenLink(false)
+    setLinkInput('')
+    navigate(`/character/${cid}`)
+  }
 
   // First-arrival compliance reminder (18+ / community guidelines). Shows once
   // per device after the user lands on the discovery page (i.e. right after
@@ -394,6 +422,16 @@ export function CharacterPage() {
               </button>
             )}
             <button
+              onClick={() => { setLinkInput(''); setShowOpenLink(true) }}
+              aria-label="打开分享链接"
+              className="w-[34px] h-[34px] rounded-full bg-[var(--color-glass-55)] backdrop-blur-[12px] border border-[var(--color-border-glass)] flex items-center justify-center text-[var(--color-primary)] active:scale-[0.96] transition-transform"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+              </svg>
+            </button>
+            <button
               onClick={() => setShowAnnounce(true)}
               aria-label="公告"
               className="w-[34px] h-[34px] rounded-full bg-[var(--color-glass-55)] backdrop-blur-[12px] border border-[var(--color-border-glass)] flex items-center justify-center text-[var(--color-primary)] active:scale-[0.96] transition-transform"
@@ -557,6 +595,47 @@ export function CharacterPage() {
       </NoticeDialog>
 
       <AnnouncementSheet open={showAnnounce} onClose={() => setShowAnnounce(false)} />
+
+      <Dialog
+        open={showOpenLink}
+        onClose={() => setShowOpenLink(false)}
+        title="打开分享链接"
+        actions={
+          <>
+            <button
+              onClick={() => setShowOpenLink(false)}
+              className="flex-1 h-[44px] rounded-full bg-[var(--color-glass-55)] text-[var(--color-ink)] text-[15px] font-medium active:bg-[rgba(0,0,0,0.04)]"
+            >
+              取消
+            </button>
+            <button
+              onClick={handleOpenLink}
+              disabled={!linkInput.trim()}
+              className="flex-1 h-[44px] rounded-full bg-gradient-to-r from-[#FFB7C5] to-[#FF8FAB] text-white text-[15px] font-semibold disabled:opacity-50"
+            >
+              打开
+            </button>
+          </>
+        }
+      >
+        <p className="text-left leading-[1.6] mb-3">
+          粘贴好友分享的角色链接，直接在应用内打开 Ta 的档案。
+        </p>
+        <div className="flex items-center gap-2">
+          <input
+            value={linkInput}
+            onChange={(e) => setLinkInput(e.target.value)}
+            placeholder="粘贴角色链接"
+            className="flex-1 min-w-0 h-[44px] px-3.5 rounded-[12px] bg-[var(--color-glass-55)] border border-[var(--color-border-glass)] text-[15px] text-[var(--color-ink)] placeholder:text-[var(--color-text-muted)] outline-none focus:border-[var(--color-primary)]"
+          />
+          <button
+            onClick={handlePasteLink}
+            className="shrink-0 h-[44px] px-4 rounded-[12px] bg-[var(--color-glass-55)] border border-[var(--color-border-glass)] text-[14px] text-[var(--color-ink)] active:scale-[0.97] transition-transform"
+          >
+            粘贴
+          </button>
+        </div>
+      </Dialog>
     </div>
   )
 }

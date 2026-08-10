@@ -13,6 +13,7 @@ function useToast() {
 }
 import { ApiError, type CharacterDTO } from '../services/api'
 import { Dialog } from '../components/ui/Dialog'
+import { buildShareLink } from '../utils/characterShare'
 
 // ── Visibility label helpers ────────────────────────────────────────
 
@@ -59,7 +60,7 @@ function CharacterCard({ char, onEdit, onVisibility, onDisable }: CharacterCardP
   const approved = char.review_status === 'approved'
 
   async function handleCopyLink() {
-    const url = `${window.location.origin}/character/${char.id}`
+    const url = buildShareLink(char.id)
     try {
       await navigator.clipboard.writeText(url)
       showToast(

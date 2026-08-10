@@ -5,8 +5,10 @@ import { useCharactersStore } from '../stores/charactersStore'
 import { useCompanionsStore } from '../stores/companionsStore'
 import { useAppStore } from '../stores/appStore'
 import { useFavoritesStore } from '../stores/favoritesStore'
+import { useToastStore } from '../stores/toastStore'
 import { DEFAULT_COVER } from '../data/uiContent'
 import { stageWithIntimacy, isColdWar, intimacyPercent } from '../utils/relationship'
+import { buildShareLink } from '../utils/characterShare'
 import { useSafeBack } from '../hooks/useSafeBack'
 
 /**
@@ -14,7 +16,9 @@ import { useSafeBack } from '../hooks/useSafeBack'
  *
  * Full-bleed cover → 关于TA (tagline + tag chips + intimacy + gradient「和Ta聊天」)
  * → scroll into 叙引 card (archetype badge · name · accented one-liner · intro ·
- * personality axes). Per product direction: NO 评论 / 脉络 tabs, NO share button.
+ * personality axes). Per product direction: NO 评论 / 脉络 tabs. A share button
+ * (top-right of the cover) copies the profile link for link-reachable
+ * characters (public / unlisted+approved), so 「链接可见」 can actually spread.
  *
  * All copy comes from the public profile API, which deliberately never exposes
  * internal persona (core_wound / core_fear …). Missing fields degrade to
@@ -28,6 +32,8 @@ export function CharacterProfilePage() {
   const companions = useCompanionsStore((s) => s.companions)
   const loadCompanions = useCompanionsStore((s) => s.load)
   const loadProfile = useCharactersStore((s) => s.loadProfile)
+  const storeCharacters = useCharactersStore((s) => s.characters)
+  const showToast = useToastStore((s) => s.show)
   const { toggle: toggleFavorite, has: isFavorite } = useFavoritesStore()
 
   // Seed synchronously from the store cache so a re-entry paints instantly with
@@ -74,6 +80,31 @@ export function CharacterProfilePage() {
     navigate(`/chat/${id}`)
   }
 
+  // Shareability: a private character 404s for anyone but its owner, so never
+  // offer a link for one. We only *know* the visibility for characters in the
+  // caller's own catalog (own UGC + public). A character reached purely by link
+  // that isn't in the store must be public/unlisted+approved to have loaded at
+  // all — so default to shareable when the store has no row for it.
+  const storeChar = useMemo(
+    () => storeCharacters.find((c) => c.id === id),
+    [storeCharacters, id],
+  )
+  const shareable = !storeChar || storeChar.visibility !== 'private'
+  const approved = !storeChar || storeChar.is_builtin || storeChar.review_status === 'approved'
+
+  async function handleShare() {
+    const url = buildShareLink(id)
+    try {
+      await navigator.clipboard.writeText(url)
+      showToast(
+        approved ? '链接已复制，分享给好友即可访问' : '链接已复制，审核通过后好友即可访问',
+        'success',
+      )
+    } catch {
+      showToast(url, 'info')
+    }
+  }
+
   if (error) {
     return (
       <div className="relative w-full h-full flex flex-col items-center justify-center gap-3 bg-[var(--color-bg-page)]">
@@ -96,7 +127,7 @@ export function CharacterProfilePage() {
         {/* bottom fade into the sheet below */}
         <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-[var(--color-bg-page)] via-[var(--color-bg-page)]/40 to-transparent" />
 
-        {/* back button (no share button, by design) */}
+        {/* back + share buttons */}
         <div className="absolute left-0 top-0 z-10" style={{ height: 'var(--safe-top)' }} />
         <button
           onClick={goBack}
@@ -108,6 +139,23 @@ export function CharacterProfilePage() {
             <polyline points="10,2 2,10 10,18" />
           </svg>
         </button>
+        {/* Share button — only for link-reachable characters (never private). */}
+        {profile && shareable && (
+          <button
+            onClick={handleShare}
+            aria-label="分享角色"
+            className="absolute right-4 z-10 w-[38px] h-[38px] rounded-full bg-black/30 backdrop-blur-[8px] flex items-center justify-center active:scale-[0.95] transition-transform"
+            style={{ top: 'calc(var(--safe-top) + 8px)' }}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="18" cy="5" r="3" />
+              <circle cx="6" cy="12" r="3" />
+              <circle cx="18" cy="19" r="3" />
+              <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+              <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+            </svg>
+          </button>
+        )}
       </div>
 
       {/* ── 关于TA ── */}

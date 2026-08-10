@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useThemeStore } from '../stores/themeStore'
+import { useToastStore } from '../stores/toastStore'
 import { resolveCharacterProfile } from '../data/uiContent'
+import { buildShareLink } from '../utils/characterShare'
 import type { CharacterDTO } from '../services/api'
 
 const VIS_LABELS: Record<string, { label: string; color: string; bg: string }> = {
@@ -29,6 +31,26 @@ export function CharacterCard({ char, onEdit, onVisibility, onDisable }: Props) 
   const [visMenuOpen, setVisMenuOpen] = useState(false)
   const { resolvedTheme } = useThemeStore()
   const isDark = resolvedTheme === 'dark'
+  const showToast = useToastStore((s) => s.show)
+
+  // Sharing only makes sense for link-reachable visibilities. A private
+  // character 404s for anyone but the owner, so we don't offer a link for it.
+  const shareable = char.visibility === 'public' || char.visibility === 'unlisted'
+  const approved = char.review_status === 'approved'
+
+  async function handleCopyLink() {
+    const url = buildShareLink(char.id)
+    try {
+      await navigator.clipboard.writeText(url)
+      showToast(
+        approved ? '链接已复制，分享给好友即可访问' : '链接已复制，审核通过后好友即可访问',
+        'success',
+      )
+    } catch {
+      // clipboard API unavailable (non-secure context / older webview)
+      showToast(url, 'info')
+    }
+  }
 
   return (
     <div
@@ -86,6 +108,16 @@ export function CharacterCard({ char, onEdit, onVisibility, onDisable }: Props) 
               }`}
             >
               <MenuButton label="编辑角色" icon={<EditIcon />} onClick={() => { setMenuOpen(false); onEdit() }} />
+              {shareable && (
+                <>
+                  <div className="h-px bg-[var(--color-divider)]" />
+                  <MenuButton
+                    label="复制分享链接"
+                    icon={<LinkIcon />}
+                    onClick={() => { setMenuOpen(false); setVisMenuOpen(false); void handleCopyLink() }}
+                  />
+                </>
+              )}
               <div className="h-px bg-[var(--color-divider)]" />
               <MenuButton label="可见范围" icon={<EyeIcon />} onClick={() => setVisMenuOpen((v) => !v)} chevron />
               {visMenuOpen && (
@@ -182,6 +214,15 @@ function EyeIcon() {
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
       <circle cx="12" cy="12" r="3" />
+    </svg>
+  )
+}
+
+function LinkIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
     </svg>
   )
 }
