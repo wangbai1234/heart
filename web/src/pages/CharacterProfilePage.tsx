@@ -11,6 +11,7 @@ import { stageWithIntimacy, isColdWar, intimacyPercent, stageLabel, stageOrderIn
 import { buildShareLink } from '../utils/characterShare'
 import { useSafeBack } from '../hooks/useSafeBack'
 import { CHARACTER_UI_CONFIGS, type CharacterTheme } from '../data/characterUIConfig'
+import { JiYuProfile } from '../components/characterProfiles/JiYuProfile'
 
 /** 关系路线的 6 个可视节点（ACQUAINTANCE/FRIEND 合归「靠近」）。 */
 const ROUTE_NODES = ['STRANGER', 'FRIEND', 'CONFIDANT', 'ROMANTIC_INTEREST', 'LOVER', 'BONDED'] as const
@@ -59,6 +60,9 @@ export function CharacterProfilePage() {
   )
   const [error, setError] = useState(false)
   const [aboutExpanded, setAboutExpanded] = useState(false)
+  // ji_yu 封面：默认只露上 3/4，点击展开看全图
+  const [coverExpanded, setCoverExpanded] = useState(false)
+  const [coverFullH, setCoverFullH] = useState(0)
 
   useEffect(() => {
     void loadCompanions()
@@ -146,6 +150,118 @@ export function CharacterProfilePage() {
         >
           返回
         </button>
+      </div>
+    )
+  }
+
+  // 季屿使用 bespoke iframe 详情页，其他角色走原模板
+  if (profile && id === 'ji_yu') {
+    return (
+      <div className="relative w-full h-full overflow-y-auto bg-[#171019]">
+        {/* ── 封面 hero（默认露上 3/4，点击展开全图）── */}
+        <div
+          className="relative w-full overflow-hidden bg-[#1B1320] cursor-pointer"
+          style={{ height: coverFullH ? (coverExpanded ? coverFullH : Math.round(coverFullH * 0.75)) : undefined, transition: 'height .38s cubic-bezier(.4,0,.2,1)' }}
+          onClick={() => coverFullH && setCoverExpanded((v) => !v)}
+          role="button"
+          aria-label={coverExpanded ? '收起封面' : '展开完整封面'}
+        >
+          {profile.cover_url && (
+            <img
+              src={profile.cover_url}
+              alt={profile.display_name || '季屿'}
+              className="block w-full h-auto"
+              ref={(el) => {
+                if (el && el.complete && el.offsetHeight) setCoverFullH(el.offsetHeight)
+              }}
+              onLoad={(e) => setCoverFullH(e.currentTarget.offsetHeight)}
+            />
+          )}
+          <div className="absolute inset-x-0 bottom-0 h-[45%] pointer-events-none" style={{ background: 'linear-gradient(to top,#171019 6%,rgba(23,16,25,.4) 40%,transparent 100%)' }} />
+          {coverFullH > 0 && (
+            <div className="absolute bottom-3 right-3 z-10 text-[11px] text-white/70 bg-black/35 backdrop-blur-[6px] rounded-full px-3 py-1 pointer-events-none">
+              {coverExpanded ? '收起' : '点击看全图'}
+            </div>
+          )}
+          <button onClick={goBack} aria-label="返回" className="absolute left-4 z-10 w-[38px] h-[38px] rounded-full bg-black/30 backdrop-blur-[8px] flex items-center justify-center active:scale-[0.95] transition-transform" style={{ top: 'calc(var(--safe-top) + 8px)' }}>
+            <svg width="12" height="20" viewBox="0 0 12 20" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="10,2 2,10 10,18" /></svg>
+          </button>
+          {shareable && (
+            <button onClick={handleShare} aria-label="分享角色" className="absolute right-4 z-10 w-[38px] h-[38px] rounded-full bg-black/30 backdrop-blur-[8px] flex items-center justify-center active:scale-[0.95] transition-transform" style={{ top: 'calc(var(--safe-top) + 8px)' }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" /><line x1="8.59" y1="13.51" x2="15.42" y2="17.49" /><line x1="15.41" y1="6.51" x2="8.59" y2="10.49" /></svg>
+            </button>
+          )}
+        </div>
+
+        {/* 名字块 */}
+        <div className="relative -mt-[50px] px-[22px] z-[3]">
+          <h1 className="text-[34px] font-semibold leading-[1.1] text-[#ECE2E7]" style={{ fontFamily: '"Songti SC","STSong","Noto Serif SC",Georgia,serif' }}>
+            {profile.display_name || '季屿'}
+            {profile.age_range && <span className="text-[12px] text-[#B4A4AF] ml-2.5 align-middle">{profile.age_range}</span>}
+          </h1>
+          {profile.tagline && <p className="text-[16px] text-[#E08298] mt-2.5 leading-[1.7] italic" style={{ fontFamily: '"Songti SC","STSong","Noto Serif SC",Georgia,serif' }}>{profile.tagline}</p>}
+          {profile.tags.length > 0 && (
+            <div className="flex flex-wrap gap-[7px] mt-3.5">
+              {profile.tags.slice(0, 6).map((t, i) => (
+                <span key={t} className={`text-[12px] px-3 py-[5px] rounded-full border ${i < 2 ? 'text-[#E08298] border-[rgba(194,74,99,.32)] bg-[rgba(194,74,99,.08)]' : 'text-[#B4A4AF] border-white/10 bg-white/5'}`}>{t}</span>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* 动态 CTA（收藏 + 亲密度 + 开始聊天）——封面下方，nimoo 式内联 */}
+        <div className="px-[22px] mt-5">
+          <div className="flex items-center gap-3">
+            {chatted && companion && (
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between text-[12px] text-[#B4A4AF]">
+                  <span>
+                    {isColdWar(companion.relationship_stage)
+                      ? '闹别扭'
+                      : stageWithIntimacy(companion.relationship_stage, companion.intimacy)}
+                  </span>
+                </div>
+                <div className="mt-1.5 h-[6px] w-full rounded-full bg-white/10 overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-[#C24A63]"
+                    style={{ width: `${intimacyPercent(companion.intimacy)}%` }}
+                  />
+                </div>
+              </div>
+            )}
+            <button
+              onClick={() => toggleFavorite(id)}
+              className="shrink-0 w-[48px] h-[48px] rounded-full bg-white/5 border border-white/10 flex items-center justify-center active:scale-[0.96] transition-transform"
+              aria-label={isFavorite(id) ? '取消收藏' : '收藏'}
+            >
+              {isFavorite(id) ? (
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="#FF6B9D" stroke="#FF6B9D" strokeWidth="1.5">
+                  <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+                </svg>
+              ) : (
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ECE2E7" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+                </svg>
+              )}
+            </button>
+            <button
+              onClick={openChat}
+              className={`h-[48px] rounded-full text-white text-[16px] font-semibold shadow-[0_10px_26px_rgba(194,74,99,0.32)] active:scale-[0.97] transition-transform ${
+                chatted ? 'px-7' : 'flex-1'
+              }`}
+              style={{
+                background: 'linear-gradient(105deg,#C24A63,#9C3A55)',
+              }}
+            >
+              和 Ta 聊天
+            </button>
+          </div>
+        </div>
+
+        {/* 季屿 bespoke 叙事内容（iframe） */}
+        <div className="mt-6">
+          <JiYuProfile profile={profile} />
+        </div>
       </div>
     )
   }
