@@ -28,6 +28,12 @@ import { TransferSheet } from './TransferSheet'
 import { JiYuPremiseCard } from './characterProfiles/JiYuPremiseCard'
 import { ChengXuPremiseCard } from './characterProfiles/ChengXuPremiseCard'
 import { LiShenPremiseCard } from './characterProfiles/LiShenPremiseCard'
+import { GuBeichenPremiseCard } from './characterProfiles/GuBeichenPremiseCard'
+import { QinXiaoPremiseCard } from './characterProfiles/QinXiaoPremiseCard'
+import { JiangYuezePremiseCard } from './characterProfiles/JiangYuezePremiseCard'
+import { JiangYePremiseCard } from './characterProfiles/JiangYePremiseCard'
+import { GuXingzhouPremiseCard } from './characterProfiles/GuXingzhouPremiseCard'
+import { LiJuePremiseCard } from './characterProfiles/LiJuePremiseCard'
 import { getCharacterSettings } from '../services/api'
 
 const EMPTY_MESSAGES: Message[] = []
@@ -37,6 +43,12 @@ const PREMISE_CARDS: Record<string, ComponentType> = {
   ji_yu: JiYuPremiseCard,
   cheng_xu: ChengXuPremiseCard,
   li_shen: LiShenPremiseCard,
+  gu_beichen: GuBeichenPremiseCard,
+  qin_xiao: QinXiaoPremiseCard,
+  jiang_yueze: JiangYuezePremiseCard,
+  jiang_ye: JiangYePremiseCard,
+  gu_xingzhou: GuXingzhouPremiseCard,
+  li_jue: LiJuePremiseCard,
 }
 
 /** 引导回复气泡：首聊时出现在消息区底部，点击直接发送（帮用户破冰）。
