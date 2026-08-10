@@ -589,6 +589,83 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
     })
   }, [])
 
+  // 叩问式引导回复（挂在 AI 开场消息末尾，缩进对齐消息列，不是浮在输入框上的控制栏）。
+  // 有 starterBranches → 先选切入角度再展开台词；否则平铺 starterPrompts。
+  const renderStarterGuide = () => {
+    if (!(historyLoaded && !isStreaming && messages.every((m) => m.role !== 'user'))) return null
+    const branches = CHARACTER_UI_CONFIGS[currentCharacterId]?.starterBranches
+    const chipCls = isDark
+      ? 'bg-[rgba(255,255,255,0.07)] text-[rgba(248,242,250,0.9)] border border-[rgba(255,255,255,0.14)] active:bg-[rgba(255,255,255,0.12)]'
+      : 'bg-[rgba(255,255,255,0.7)] text-[rgba(33,35,57,0.92)] border border-[rgba(0,0,0,0.06)] active:bg-white'
+
+    const lead = (
+      <p className={`text-[12px] mb-2 ${isDark ? 'text-[rgba(248,242,250,0.45)]' : 'text-[rgba(91,93,117,0.7)]'}`}>
+        你会怎么回应他
+      </p>
+    )
+
+    if (branches && branches.length > 0) {
+      const active = starterBranch !== null ? branches[starterBranch] : null
+      return (
+        <div className="mt-1 ml-[48px] mr-2 mb-1">
+          {lead}
+          {!active ? (
+            <div className="flex flex-col gap-1.5">
+              {branches.map((b, i) => (
+                <button
+                  key={b.label}
+                  onClick={() => setStarterBranch(i)}
+                  className={`group flex items-center justify-between w-full px-4 py-3 rounded-[14px] text-[14px] text-left backdrop-blur-[12px] transition-colors ${chipCls}`}
+                >
+                  <span>{b.label}</span>
+                  <span className="text-[13px] opacity-45 font-light">+</span>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="flex flex-col gap-1.5">
+              <button
+                onClick={() => setStarterBranch(null)}
+                className={`self-start inline-flex items-center gap-1 text-[12px] mb-0.5 ${isDark ? 'text-[rgba(248,242,250,0.55)]' : 'text-[rgba(91,93,117,0.8)]'}`}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="15,6 9,12 15,18" />
+                </svg>
+                {active.label}
+              </button>
+              {active.options.map((opt) => (
+                <button
+                  key={opt}
+                  onClick={() => handleStarterClick(opt)}
+                  className={`w-full px-4 py-3 rounded-[14px] text-[14px] text-left backdrop-blur-[12px] transition-colors ${chipCls}`}
+                >
+                  {opt}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )
+    }
+
+    return (
+      <div className="mt-1 ml-[48px] mr-2 mb-1">
+        {lead}
+        <div className="flex flex-col gap-1.5">
+          {(CHARACTER_UI_CONFIGS[currentCharacterId]?.starterPrompts ?? FALLBACK_STARTER_PROMPTS).map((prompt) => (
+            <button
+              key={prompt}
+              onClick={() => handleStarterClick(prompt)}
+              className={`w-full px-4 py-3 rounded-[14px] text-[14px] text-left backdrop-blur-[12px] transition-colors ${chipCls}`}
+            >
+              {prompt}
+            </button>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
   // Render a single message bubble
   const renderMessage = (msg: Message, showAvatar: boolean, isLastAndGenerating = false) => {
     const isAI = msg.role === 'assistant'
@@ -1013,80 +1090,11 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
           )
         })}
 
+        {/* 叩问式引导回复：挂在 AI 开场消息末尾，作为对话的一部分（非浮动控制栏） */}
+        {renderStarterGuide()}
+
         {/* Streaming indicator - avatar is already in the bubble via renderMessage */}
       </div>
-
-      {/* 引导回复气泡：仅在首聊（无用户消息）且非流式时显示。
-          有 starterBranches → 乙游式嵌套（先选切入角度，再选具体台词）；否则平铺 3 条。 */}
-      {historyLoaded && !isStreaming && messages.every((m) => m.role !== 'user') && (() => {
-        const branches = CHARACTER_UI_CONFIGS[currentCharacterId]?.starterBranches
-        const chipCls = isDark
-          ? 'bg-[rgba(255,255,255,0.09)] text-[rgba(248,242,250,0.88)] border border-[rgba(255,255,255,0.12)] shadow-[0_2px_12px_rgba(0,0,0,0.15)]'
-          : 'bg-[rgba(255,255,255,0.68)] text-[rgba(33,35,57,0.92)] border border-[rgba(255,255,255,0.8)] shadow-[var(--shadow-sheet)]'
-
-        if (branches && branches.length > 0) {
-          const active = starterBranch !== null ? branches[starterBranch] : null
-          return (
-            <div className="relative z-10 mx-4 mb-3">
-              {!active ? (
-                <div className="flex flex-wrap gap-2">
-                  {branches.map((b, i) => (
-                    <button
-                      key={b.label}
-                      onClick={() => setStarterBranch(i)}
-                      className={`inline-flex items-center gap-1.5 px-4 py-2.5 rounded-[18px] text-[14px] backdrop-blur-[16px] active:scale-[0.96] transition-transform ${chipCls}`}
-                    >
-                      {b.label}
-                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" className="opacity-60">
-                        <polyline points="9,6 15,12 9,18" />
-                      </svg>
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                <div className="flex flex-col gap-2">
-                  <button
-                    onClick={() => setStarterBranch(null)}
-                    className={`self-start inline-flex items-center gap-1 text-[12px] px-2.5 py-1 rounded-full ${
-                      isDark ? 'text-[rgba(248,242,250,0.6)]' : 'text-[rgba(91,93,117,0.8)]'
-                    }`}
-                  >
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="15,6 9,12 15,18" />
-                    </svg>
-                    {active.label}
-                  </button>
-                  <div className="flex flex-wrap gap-2">
-                    {active.options.map((opt) => (
-                      <button
-                        key={opt}
-                        onClick={() => handleStarterClick(opt)}
-                        className={`inline-flex items-center justify-center px-4 py-2.5 rounded-[18px] text-[14px] backdrop-blur-[16px] active:scale-[0.96] transition-transform ${chipCls}`}
-                      >
-                        {opt}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )
-        }
-
-        return (
-          <div className="relative z-10 mx-4 mb-3 flex flex-wrap gap-2">
-            {(CHARACTER_UI_CONFIGS[currentCharacterId]?.starterPrompts ?? FALLBACK_STARTER_PROMPTS).map((prompt) => (
-              <button
-                key={prompt}
-                onClick={() => handleStarterClick(prompt)}
-                className={`inline-flex items-center justify-center px-4 py-2.5 rounded-[18px] text-[14px] backdrop-blur-[16px] active:scale-[0.96] transition-transform ${chipCls}`}
-              >
-                {prompt}
-              </button>
-            ))}
-          </div>
-        )
-      })()}
 
       {/* 文字聊天档位入口（输入框左上角） */}
       <div className="relative z-20 mx-4 mb-1.5 flex items-center">
