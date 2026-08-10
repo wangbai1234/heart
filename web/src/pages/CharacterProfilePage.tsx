@@ -11,7 +11,7 @@ import { stageWithIntimacy, isColdWar, intimacyPercent, stageLabel, stageOrderIn
 import { buildShareLink } from '../utils/characterShare'
 import { useSafeBack } from '../hooks/useSafeBack'
 import { CHARACTER_UI_CONFIGS, type CharacterTheme } from '../data/characterUIConfig'
-import { JiYuProfile, LiShenProfile, ChengXuProfile, LilithProfile, GuBeichenProfile } from '../components/characterProfiles'
+import { JiYuProfile, LiShenProfile, ChengXuProfile, LilithProfile, GuBeichenProfile, QinXiaoProfile } from '../components/characterProfiles'
 import type { ComponentType } from 'react'
 
 /** 关系路线的 6 个可视节点（ACQUAINTANCE/FRIEND 合归「靠近」）。 */
@@ -24,6 +24,7 @@ const BESPOKE_PROFILES: Record<string, ComponentType<{ profile: CharacterProfile
   cheng_xu: ChengXuProfile,
   lilith: LilithProfile,
   gu_beichen: GuBeichenProfile,
+  qin_xiao: QinXiaoProfile,
 }
 
 /** Chrome 视觉调色盘 registry（React 外层chrome，非 iframe 内层） */
@@ -124,6 +125,22 @@ const CHROME_PALETTES: Record<string, ChromePalette> = {
     chipInactiveText: '#9A938A',
     ctaGradient: 'linear-gradient(105deg,#C4937D,#9C6E58)',
     ctaShadow: '0 10px 26px rgba(196,147,125,0.32)',
+  },
+  qin_xiao: {
+    bg: '#0B0908',
+    coverBg: '#170F0D',
+    scrimGradient: 'linear-gradient(to top,#0B0908 6%,rgba(11,9,8,.4) 40%,transparent 100%)',
+    nameColor: '#ECE2DB',
+    ageColor: '#948A82',
+    taglineColor: '#D98A4A',
+    chipActiveBg: 'rgba(217,138,74,.1)',
+    chipActiveBorder: 'rgba(217,138,74,.34)',
+    chipActiveText: '#D98A4A',
+    chipInactiveBg: 'rgba(255,255,255,.05)',
+    chipInactiveBorder: 'rgba(255,255,255,.1)',
+    chipInactiveText: '#948A82',
+    ctaGradient: 'linear-gradient(105deg,#B82A2A,#8A1F1F)',
+    ctaShadow: '0 10px 26px rgba(184,42,42,0.38)',
   },
 }
 
