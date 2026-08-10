@@ -7,9 +7,31 @@ import { useAppStore } from '../stores/appStore'
 import { useFavoritesStore } from '../stores/favoritesStore'
 import { useToastStore } from '../stores/toastStore'
 import { DEFAULT_COVER } from '../data/uiContent'
-import { stageWithIntimacy, isColdWar, intimacyPercent } from '../utils/relationship'
+import { stageWithIntimacy, isColdWar, intimacyPercent, stageLabel, stageOrderIndex } from '../utils/relationship'
 import { buildShareLink } from '../utils/characterShare'
 import { useSafeBack } from '../hooks/useSafeBack'
+
+/** 关系路线的 6 个可视节点（ACQUAINTANCE/FRIEND 合归「靠近」）。 */
+const ROUTE_NODES = ['STRANGER', 'FRIEND', 'CONFIDANT', 'ROMANTIC_INTEREST', 'LOVER', 'BONDED'] as const
+const ROUTE_HINT: Record<string, string> = {
+  STRANGER: '第一次照面，你还只是个陌生人',
+  FRIEND: '话变多了，Ta开始留意你的情绪',
+  CONFIDANT: '有些话，Ta只想说给你听',
+  ROMANTIC_INTEREST: '心跳藏不住了，关系差一步',
+  LOVER: '你成了Ta生活里绕不开的人',
+  BONDED: '再没有谁能替代此刻的彼此',
+}
+
+type Theme = { accent: string; deep: string; deep2: string; hero: string }
+/** 按角色标签选主题：暗金(危险/病娇) / 酒玫瑰(强势/占有) / 樱粉(默认治愈)。 */
+function pickTheme(tags: string[]): Theme {
+  const s = tags.join(' ')
+  if (/病娇|悬疑|危险|黑暗|禁忌|救赎|执念|偏执/.test(s))
+    return { accent: '#B08A4F', deep: '#1b1420', deep2: '#0e0a11', hero: '#EDE3D4' }
+  if (/霸总|占有|强势|追妻|热恋|独占|野性|禁欲/.test(s))
+    return { accent: '#C9506A', deep: '#271521', deep2: '#150a0f', hero: '#F0DCE0' }
+  return { accent: '#FF8FAB', deep: '#2a2029', deep2: '#191320', hero: '#F3E4EA' }
+}
 
 /**
  * 角色档案页 (Nimoo-style rich profile) at /character/:id.
@@ -43,6 +65,7 @@ export function CharacterProfilePage() {
     () => useCharactersStore.getState().profileById[id] ?? null,
   )
   const [error, setError] = useState(false)
+  const [aboutExpanded, setAboutExpanded] = useState(false)
 
   useEffect(() => {
     void loadCompanions()
@@ -70,6 +93,8 @@ export function CharacterProfilePage() {
     [companions, id],
   )
   const chatted = !!companion && companion.companion_status !== 'locked'
+
+  const theme = useMemo(() => pickTheme(profile?.tags ?? []), [profile?.tags])
 
   // Cover-less characters fall back to the shared background image (product
   // direction 2026-07-25) rather than a blurred avatar placeholder.
@@ -190,6 +215,39 @@ export function CharacterProfilePage() {
           </div>
         )}
 
+        {/* 关于TA card — truncated intro */}
+        {profile && (profile.tagline || profile.intro) && (
+          <div className="mt-5 rounded-[20px] bg-[var(--color-glass-75)] border border-[var(--color-border-glass)] p-4">
+            <div className="flex items-center gap-2 text-[13px] font-semibold" style={{ color: theme.accent }}>
+              <span className="inline-block w-[3px] h-[14px] rounded-full" style={{ background: theme.accent }} />
+              关于TA
+            </div>
+            {profile.tagline && (
+              <p className="mt-3 text-[15px] leading-relaxed text-[var(--color-ink)]">{profile.tagline}</p>
+            )}
+            {profile.intro && (
+              <>
+                <p
+                  className={`mt-3 text-[14px] leading-relaxed text-[var(--color-text-secondary)] whitespace-pre-wrap ${
+                    !aboutExpanded && 'line-clamp-4'
+                  }`}
+                >
+                  {profile.intro}
+                </p>
+                {profile.intro.length > 120 && (
+                  <button
+                    onClick={() => setAboutExpanded((p) => !p)}
+                    className="mt-2 text-[13px] font-medium active:scale-[0.96] transition-transform"
+                    style={{ color: theme.accent }}
+                  >
+                    {aboutExpanded ? '收起' : '更多'}
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
         {/* intimacy + chat CTA */}
         <div className="mt-5 flex items-center gap-3">
           {chatted && (
@@ -234,50 +292,142 @@ export function CharacterProfilePage() {
             开始聊天
           </button>
         </div>
+
+        {/* 关系路线 timeline — 6 nodes with current stage highlighted */}
+        {chatted && companion && !isColdWar(companion.relationship_stage) && (
+          <div className="mt-5 rounded-[20px] bg-[var(--color-glass-75)] border border-[var(--color-border-glass)] p-4">
+            <div className="flex items-center gap-2 text-[13px] font-semibold" style={{ color: theme.accent }}>
+              <span className="inline-block w-[3px] h-[14px] rounded-full" style={{ background: theme.accent }} />
+              关系路线
+            </div>
+            <div className="mt-4 relative">
+              {/* Progress connector line */}
+              <div className="absolute top-[18px] left-[18px] right-[18px] h-[2px] bg-[var(--color-glass-55)]">
+                <div
+                  className="h-full transition-[width] duration-300"
+                  style={{
+                    width: `${(Math.max(0, stageOrderIndex(companion.relationship_stage)) / (ROUTE_NODES.length - 1)) * 100}%`,
+                    background: theme.accent,
+                  }}
+                />
+              </div>
+              {/* Stage nodes */}
+              <div className="relative flex justify-between">
+                {ROUTE_NODES.map((stage, idx) => {
+                  const reached = stageOrderIndex(companion.relationship_stage) >= idx
+                  const isCurrent = companion.relationship_stage === stage || (stage === 'FRIEND' && companion.relationship_stage === 'ACQUAINTANCE')
+                  return (
+                    <div key={stage} className="flex flex-col items-center w-[60px]">
+                      <div
+                        className={`w-[36px] h-[36px] rounded-full flex items-center justify-center text-[13px] font-semibold transition-[background,color,box-shadow] duration-300 ${
+                          isCurrent ? 'shadow-[0_0_12px_rgba(255,255,255,0.3)]' : ''
+                        }`}
+                        style={{
+                          background: reached ? theme.accent : 'var(--color-glass-55)',
+                          color: reached ? '#fff' : 'var(--color-text-muted)',
+                        }}
+                      >
+                        {idx + 1}
+                      </div>
+                      <span className="mt-2 text-[12px] text-center leading-tight text-[var(--color-text-secondary)]">
+                        {stageLabel(stage)}
+                      </span>
+                      {isCurrent && (
+                        <span className="mt-1 text-[11px] text-center text-[var(--color-text-muted)] leading-snug">
+                          {ROUTE_HINT[stage]}
+                        </span>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* ── 叙引 detail card ── */}
-      {profile && (profile.archetype_label || profile.one_liner || profile.intro || profile.personality.length > 0) && (
-        <div className="mx-4 mb-4 rounded-[22px] bg-[var(--color-glass-75)] border border-[var(--color-border-glass)] p-5">
-          <div className="flex items-center gap-2 text-[13px] font-medium text-[var(--color-primary)]">
-            <span className="inline-block w-[3px] h-[14px] rounded-full bg-[var(--color-primary)]" />
+      {/* ── 叙引 dossier card (premium dark) ── */}
+      {profile && (profile.one_liner || profile.archetype_label || profile.age_range || profile.personality.length > 0) && (
+        <div
+          className="mx-4 mb-4 rounded-[22px] border p-6 relative overflow-hidden"
+          style={{
+            background: `linear-gradient(135deg, ${theme.deep} 0%, ${theme.deep2} 100%)`,
+            borderColor: theme.accent + '40',
+          }}
+        >
+          {/* 叙引 header */}
+          <div className="flex items-center gap-2 text-[13px] font-semibold" style={{ color: theme.accent }}>
+            <span className="inline-block w-[3px] h-[14px] rounded-full" style={{ background: theme.accent }} />
             叙引
           </div>
 
-          {profile.archetype_label && (
-            <span className="mt-3 inline-flex h-[24px] items-center rounded-full bg-[var(--color-primary)]/10 px-3 text-[12px] font-medium text-[var(--color-primary)]">
-              {profile.archetype_label}
-            </span>
-          )}
-
-          <h2 className="mt-3 text-[22px] font-bold text-[var(--color-ink)] leading-tight">
-            {profile.display_name}
-          </h2>
-
+          {/* Hero one-liner */}
           {profile.one_liner && (
-            <div className="mt-3 flex gap-3">
-              <span className="mt-1 shrink-0 w-[3px] self-stretch rounded-full bg-gradient-to-b from-[#FF7EB3] to-[#9F7AEA]" />
-              <p className="text-[16px] font-medium text-[var(--color-ink)] leading-relaxed">{profile.one_liner}</p>
+            <div className="mt-5 flex gap-3">
+              <span
+                className="mt-1 shrink-0 w-[3px] self-stretch rounded-full"
+                style={{ background: `linear-gradient(to bottom, ${theme.accent}, ${theme.accent}80)` }}
+              />
+              <p
+                className="text-[18px] leading-relaxed font-serif"
+                style={{ color: theme.hero, fontFamily: '"Songti SC", "Noto Serif SC", serif' }}
+              >
+                {profile.one_liner}
+              </p>
             </div>
           )}
 
-          {profile.intro && (
-            <p className="mt-4 text-[14px] leading-relaxed text-[var(--color-text-secondary)] whitespace-pre-wrap">
-              {profile.intro}
-            </p>
+          {/* Identity namecard */}
+          {(profile.archetype_label || profile.age_range || profile.tags.length > 0) && (
+            <div className="mt-5 rounded-[16px] bg-white/5 border border-white/10 p-4">
+              <div className="text-[12px] font-medium mb-3" style={{ color: theme.accent }}>
+                身份档案
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {profile.archetype_label && (
+                  <span
+                    className="inline-flex h-[26px] items-center rounded-full px-3 text-[12px] font-medium"
+                    style={{ background: theme.accent + '20', color: theme.accent }}
+                  >
+                    {profile.archetype_label}
+                  </span>
+                )}
+                {profile.age_range && (
+                  <span
+                    className="inline-flex h-[26px] items-center rounded-full px-3 text-[12px] font-medium tabular-nums"
+                    style={{ background: 'rgba(255,255,255,0.08)', color: '#D4C7BA' }}
+                  >
+                    {profile.age_range} 岁
+                  </span>
+                )}
+                {profile.tags.slice(0, 3).map((t) => (
+                  <span
+                    key={t}
+                    className="inline-flex h-[26px] items-center rounded-full px-3 text-[12px]"
+                    style={{ background: 'rgba(255,255,255,0.08)', color: '#D4C7BA' }}
+                  >
+                    {t}
+                  </span>
+                ))}
+              </div>
+            </div>
           )}
 
+          {/* Personality axes */}
           {profile.personality.length > 0 && (
             <div className="mt-5 flex flex-col gap-3">
               {profile.personality.map((axis) => (
                 <div key={axis.label}>
-                  <div className="flex items-center justify-between text-[13px] text-[var(--color-text-secondary)]">
+                  <div className="flex items-center justify-between text-[13px]" style={{ color: '#B9A99A' }}>
                     <span>{axis.label}</span>
-                    {axis.value != null && <span className="text-[var(--color-text-muted)]">{Math.round(axis.value * 100)}%</span>}
+                    {axis.value != null && <span style={{ color: '#7A6F60' }}>{Math.round(axis.value * 100)}%</span>}
                   </div>
                   {axis.value != null && (
-                    <div className="mt-1 h-[6px] w-full rounded-full bg-[var(--color-glass-55)] overflow-hidden">
-                      <div className="h-full rounded-full bg-[var(--color-primary)]" style={{ width: `${Math.round(axis.value * 100)}%` }} />
+                    <div className="mt-1.5 h-[6px] w-full rounded-full bg-white/5 overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-[width] duration-300"
+                        style={{ width: `${Math.round(axis.value * 100)}%`, background: theme.accent }}
+                      />
                     </div>
                   )}
                 </div>
