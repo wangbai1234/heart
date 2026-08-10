@@ -4,6 +4,7 @@ import { useAppStore } from '../stores/appStore'
 import { useChatStore, type Message } from '../stores/chatStore'
 import { useAuthStore } from '../stores/authStore'
 import { CHARACTER_PROFILES, resolveCharacterProfile, shouldShowTimestamp, formatChatTime, type CharacterId } from '../data/uiContent'
+import { CHARACTER_UI_CONFIGS } from '../data/characterUIConfig'
 import { useCharactersStore } from '../stores/charactersStore'
 import { useCompanionsStore } from '../stores/companionsStore'
 import { stageLabel, stageWithIntimacy, stageOrderIndex } from '../utils/relationship'
@@ -29,8 +30,8 @@ import { getCharacterSettings } from '../services/api'
 const EMPTY_MESSAGES: Message[] = []
 
 /** 引导回复气泡：首聊时出现在消息区底部，点击直接发送（帮用户破冰）。
- * 设计 3 个跨角色通用、情绪拉开层次的选项：安抚 / 关注 / 轻松。*/
-const STARTER_PROMPTS = [
+ * 优先取角色专属开场白(characterUIConfig.starterPrompts)，缺省用通用三句。*/
+const FALLBACK_STARTER_PROMPTS: [string, string, string] = [
   '你还好吗？',
   '聊聊你的故事？',
   '有点好奇你在做什么',
@@ -1010,7 +1011,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
       {/* 引导回复气泡：仅在首聊（无用户消息）且非流式时显示 */}
       {historyLoaded && !isStreaming && messages.every((m) => m.role !== 'user') && (
         <div className="relative z-10 mx-4 mb-3 flex flex-wrap gap-2">
-          {STARTER_PROMPTS.map((prompt) => (
+          {(CHARACTER_UI_CONFIGS[currentCharacterId]?.starterPrompts ?? FALLBACK_STARTER_PROMPTS).map((prompt) => (
             <button
               key={prompt}
               onClick={() => handleStarterClick(prompt)}

@@ -10,20 +10,13 @@ import { DEFAULT_COVER } from '../data/uiContent'
 import { stageWithIntimacy, isColdWar, intimacyPercent, stageLabel, stageOrderIndex } from '../utils/relationship'
 import { buildShareLink } from '../utils/characterShare'
 import { useSafeBack } from '../hooks/useSafeBack'
+import { CHARACTER_UI_CONFIGS, type CharacterTheme } from '../data/characterUIConfig'
 
 /** 关系路线的 6 个可视节点（ACQUAINTANCE/FRIEND 合归「靠近」）。 */
 const ROUTE_NODES = ['STRANGER', 'FRIEND', 'CONFIDANT', 'ROMANTIC_INTEREST', 'LOVER', 'BONDED'] as const
-const ROUTE_HINT: Record<string, string> = {
-  STRANGER: '第一次照面，你还只是个陌生人',
-  FRIEND: '话变多了，Ta开始留意你的情绪',
-  CONFIDANT: '有些话，Ta只想说给你听',
-  ROMANTIC_INTEREST: '心跳藏不住了，关系差一步',
-  LOVER: '你成了Ta生活里绕不开的人',
-  BONDED: '再没有谁能替代此刻的彼此',
-}
 
 type Theme = { accent: string; deep: string; deep2: string; hero: string }
-/** 按角色标签选主题：暗金(危险/病娇) / 酒玫瑰(强势/占有) / 樱粉(默认治愈)。 */
+/** 按角色标签选主题（fallback，优先用 characterUIConfig）。 */
 function pickTheme(tags: string[]): Theme {
   const s = tags.join(' ')
   if (/病娇|悬疑|危险|黑暗|禁忌|救赎|执念|偏执/.test(s))
@@ -94,7 +87,20 @@ export function CharacterProfilePage() {
   )
   const chatted = !!companion && companion.companion_status !== 'locked'
 
-  const theme = useMemo(() => pickTheme(profile?.tags ?? []), [profile?.tags])
+  // 优先用角色专属 UI 配置(themе + 关系提示),缺省再退回按标签选色。
+  const uiConfig = CHARACTER_UI_CONFIGS[id]
+  const theme = useMemo<Theme>(
+    () => (uiConfig?.theme as CharacterTheme) ?? pickTheme(profile?.tags ?? []),
+    [uiConfig, profile?.tags],
+  )
+  const routeHint = uiConfig?.relationshipHints ?? {
+    STRANGER: '第一次照面，你还只是个陌生人',
+    FRIEND: '话变多了，Ta开始留意你的情绪',
+    CONFIDANT: '有些话，Ta只想说给你听',
+    ROMANTIC_INTEREST: '心跳藏不住了，关系差一步',
+    LOVER: '你成了Ta生活里绕不开的人',
+    BONDED: '再没有谁能替代此刻的彼此',
+  }
 
   // Cover-less characters fall back to the shared background image (product
   // direction 2026-07-25) rather than a blurred avatar placeholder.
@@ -334,7 +340,7 @@ export function CharacterProfilePage() {
                       </span>
                       {isCurrent && (
                         <span className="mt-1 text-[11px] text-center text-[var(--color-text-muted)] leading-snug">
-                          {ROUTE_HINT[stage]}
+                          {routeHint[stage as keyof typeof routeHint]}
                         </span>
                       )}
                     </div>
@@ -347,7 +353,7 @@ export function CharacterProfilePage() {
       </div>
 
       {/* ── 叙引 dossier card (premium dark) ── */}
-      {profile && (profile.one_liner || profile.archetype_label || profile.age_range || profile.personality.length > 0) && (
+      {profile && (profile.one_liner || profile.archetype_label || profile.age_range || profile.tags.length > 0) && (
         <div
           className="mx-4 mb-4 rounded-[22px] border p-6 relative overflow-hidden"
           style={{
@@ -413,27 +419,7 @@ export function CharacterProfilePage() {
             </div>
           )}
 
-          {/* Personality axes */}
-          {profile.personality.length > 0 && (
-            <div className="mt-5 flex flex-col gap-3">
-              {profile.personality.map((axis) => (
-                <div key={axis.label}>
-                  <div className="flex items-center justify-between text-[13px]" style={{ color: '#B9A99A' }}>
-                    <span>{axis.label}</span>
-                    {axis.value != null && <span style={{ color: '#7A6F60' }}>{Math.round(axis.value * 100)}%</span>}
-                  </div>
-                  {axis.value != null && (
-                    <div className="mt-1.5 h-[6px] w-full rounded-full bg-white/5 overflow-hidden">
-                      <div
-                        className="h-full rounded-full transition-[width] duration-300"
-                        style={{ width: `${Math.round(axis.value * 100)}%`, background: theme.accent }}
-                      />
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
+          {/* 性格占比展示已按产品要求移除（用户不感兴趣） */}
         </div>
       )}
 
