@@ -25,6 +25,7 @@ import { TextTierSheet } from './TextTierSheet'
 import { ChatPlusMenu } from './ChatPlusMenu'
 import { VoiceChatSheet } from './VoiceChatSheet'
 import { TransferSheet } from './TransferSheet'
+import { JiYuPremiseCard } from './characterProfiles/JiYuPremiseCard'
 import { getCharacterSettings } from '../services/api'
 
 const EMPTY_MESSAGES: Message[] = []
@@ -78,6 +79,8 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
   const [historyLoaded, setHistoryLoaded] = useState(false)
   const [generatingOpening, setGeneratingOpening] = useState(false)
   const [expandedVoiceTextIds, setExpandedVoiceTextIds] = useState<Set<string>>(new Set())
+  // 分支式首聊引导：选中的切入角度索引（null = 未选，展示角度列表）
+  const [starterBranch, setStarterBranch] = useState<number | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
 
   // Input-area sheets (migrated from the deleted /character-backstage page).
@@ -960,6 +963,11 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
 
       {/* Messages */}
       <div ref={scrollRef} className="relative z-10 flex-1 overflow-y-auto px-4 py-3 flex flex-col gap-3">
+        {/* 角色专属前情提要卡（ji_yu 样板）：首聊、无用户消息时出现在开场之上 */}
+        {currentCharacterId === 'ji_yu' && historyLoaded && messages.every((m) => m.role !== 'user') && (
+          <JiYuPremiseCard />
+        )}
+
         {!historyLoaded && (
           <div className="flex-1 flex items-center justify-center">
             <BreathingDots />
@@ -1008,24 +1016,77 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
         {/* Streaming indicator - avatar is already in the bubble via renderMessage */}
       </div>
 
-      {/* 引导回复气泡：仅在首聊（无用户消息）且非流式时显示 */}
-      {historyLoaded && !isStreaming && messages.every((m) => m.role !== 'user') && (
-        <div className="relative z-10 mx-4 mb-3 flex flex-wrap gap-2">
-          {(CHARACTER_UI_CONFIGS[currentCharacterId]?.starterPrompts ?? FALLBACK_STARTER_PROMPTS).map((prompt) => (
-            <button
-              key={prompt}
-              onClick={() => handleStarterClick(prompt)}
-              className={`inline-flex items-center justify-center px-4 py-2.5 rounded-[18px] text-[14px] backdrop-blur-[16px] active:scale-[0.96] transition-transform ${
-                isDark
-                  ? 'bg-[rgba(255,255,255,0.09)] text-[rgba(248,242,250,0.88)] border border-[rgba(255,255,255,0.12)] shadow-[0_2px_12px_rgba(0,0,0,0.15)]'
-                  : 'bg-[rgba(255,255,255,0.68)] text-[rgba(33,35,57,0.92)] border border-[rgba(255,255,255,0.8)] shadow-[var(--shadow-sheet)]'
-              }`}
-            >
-              {prompt}
-            </button>
-          ))}
-        </div>
-      )}
+      {/* 引导回复气泡：仅在首聊（无用户消息）且非流式时显示。
+          有 starterBranches → 乙游式嵌套（先选切入角度，再选具体台词）；否则平铺 3 条。 */}
+      {historyLoaded && !isStreaming && messages.every((m) => m.role !== 'user') && (() => {
+        const branches = CHARACTER_UI_CONFIGS[currentCharacterId]?.starterBranches
+        const chipCls = isDark
+          ? 'bg-[rgba(255,255,255,0.09)] text-[rgba(248,242,250,0.88)] border border-[rgba(255,255,255,0.12)] shadow-[0_2px_12px_rgba(0,0,0,0.15)]'
+          : 'bg-[rgba(255,255,255,0.68)] text-[rgba(33,35,57,0.92)] border border-[rgba(255,255,255,0.8)] shadow-[var(--shadow-sheet)]'
+
+        if (branches && branches.length > 0) {
+          const active = starterBranch !== null ? branches[starterBranch] : null
+          return (
+            <div className="relative z-10 mx-4 mb-3">
+              {!active ? (
+                <div className="flex flex-wrap gap-2">
+                  {branches.map((b, i) => (
+                    <button
+                      key={b.label}
+                      onClick={() => setStarterBranch(i)}
+                      className={`inline-flex items-center gap-1.5 px-4 py-2.5 rounded-[18px] text-[14px] backdrop-blur-[16px] active:scale-[0.96] transition-transform ${chipCls}`}
+                    >
+                      {b.label}
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" className="opacity-60">
+                        <polyline points="9,6 15,12 9,18" />
+                      </svg>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  <button
+                    onClick={() => setStarterBranch(null)}
+                    className={`self-start inline-flex items-center gap-1 text-[12px] px-2.5 py-1 rounded-full ${
+                      isDark ? 'text-[rgba(248,242,250,0.6)]' : 'text-[rgba(91,93,117,0.8)]'
+                    }`}
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="15,6 9,12 15,18" />
+                    </svg>
+                    {active.label}
+                  </button>
+                  <div className="flex flex-wrap gap-2">
+                    {active.options.map((opt) => (
+                      <button
+                        key={opt}
+                        onClick={() => handleStarterClick(opt)}
+                        className={`inline-flex items-center justify-center px-4 py-2.5 rounded-[18px] text-[14px] backdrop-blur-[16px] active:scale-[0.96] transition-transform ${chipCls}`}
+                      >
+                        {opt}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )
+        }
+
+        return (
+          <div className="relative z-10 mx-4 mb-3 flex flex-wrap gap-2">
+            {(CHARACTER_UI_CONFIGS[currentCharacterId]?.starterPrompts ?? FALLBACK_STARTER_PROMPTS).map((prompt) => (
+              <button
+                key={prompt}
+                onClick={() => handleStarterClick(prompt)}
+                className={`inline-flex items-center justify-center px-4 py-2.5 rounded-[18px] text-[14px] backdrop-blur-[16px] active:scale-[0.96] transition-transform ${chipCls}`}
+              >
+                {prompt}
+              </button>
+            ))}
+          </div>
+        )
+      })()}
 
       {/* 文字聊天档位入口（输入框左上角） */}
       <div className="relative z-20 mx-4 mb-1.5 flex items-center">

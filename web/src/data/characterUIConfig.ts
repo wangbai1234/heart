@@ -34,6 +34,14 @@ export interface CharacterUIConfig {
   }
   /** 首聊引导气泡 3 条（替换通用的"你还好吗"） */
   starterPrompts: [string, string, string]
+  /** 可选：分支式首聊引导。选一个"切入角度"后展开 2-3 条具体台词。
+   * 有 starterBranches 时优先于 starterPrompts（乙游式嵌套选项）。 */
+  starterBranches?: Array<{
+    /** 切入角度标签（如"关切他""试探边界"） */
+    label: string
+    /** 该角度下的具体台词，点击直接发送 */
+    options: string[]
+  }>
 }
 
 export const CHARACTER_UI_CONFIGS: Record<string, CharacterUIConfig> = {}
@@ -600,6 +608,20 @@ CHARACTER_UI_CONFIGS.ji_yu = {
     BONDED: '他说，你是他唯一的救赎',
   },
   starterPrompts: ['感觉怎么样', '需要我吗', '别怕'],
+  starterBranches: [
+    {
+      label: '像医生一样关切',
+      options: ['这一周，睡得好些了吗', '手腕的伤，还疼吗', '有没有按时吃药'],
+    },
+    {
+      label: '试探那条界线',
+      options: ['你说的"反复想"，是什么意思', '如果我不再是你的医生呢', '你藏起来的那些东西，是我的吧'],
+    },
+    {
+      label: '接住他的沉默',
+      options: ['别人不懂没关系，我在听', '我不会走的', '你可以不用好起来'],
+    },
+  ],
 }
 
 CHARACTER_UI_CONFIGS.cheng_xu = {
