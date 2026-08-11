@@ -71,7 +71,7 @@ function RowListEditor({
 export function Step3({ state, updateField }: StepProps) {
   return (
     <div className="max-w-[560px] mx-auto">
-      <SectionHeading index="03" title="档案信息" hint="职业、身份、状态——填几条关键设定" />
+      <SectionHeading title="档案信息" hint="职业、身份、状态——填几条关键设定" />
       <FieldCard label="档案条目" hint={`${state.dossierItems.length}/10 · 填满 3 条详情页更完整`}>
         <RowListEditor
           rows={state.dossierItems}
@@ -91,7 +91,7 @@ export function Step4({ state, updateField }: StepProps) {
   const len = state.quote.length
   return (
     <div className="max-w-[560px] mx-auto">
-      <SectionHeading index="04" title="独白样本" hint="一段第一人称的话，让人听见 Ta 的声音" />
+      <SectionHeading title="独白样本" hint="一段第一人称的话，让人听见 Ta 的声音" />
       <FieldCard label="独白" hint={`${len}/200`}>
         <textarea
           value={state.quote}
@@ -124,7 +124,7 @@ export function Step5({ state, updateField }: StepProps) {
   const t = state.backgroundType
   return (
     <div className="max-w-[560px] mx-auto">
-      <SectionHeading index="05" title="背景故事" hint="选一种最适合 Ta 的讲法" />
+      <SectionHeading title="背景故事" hint="选一种最适合 Ta 的讲法" />
       <div className="grid grid-cols-3 gap-2.5 mb-5">
         {BG_OPTIONS.map((o) => (
           <button
@@ -252,7 +252,7 @@ export function Step6({
 }: StepProps & { onAssistOpening: () => void; assisting: boolean }) {
   return (
     <div className="max-w-[560px] mx-auto">
-      <SectionHeading index="06" title="开场设计" hint="用户点进来看到的第一幕" />
+      <SectionHeading title="开场设计" hint="用户点进来看到的第一幕" />
       <FieldCard
         label="开场白"
         hint="首次对话逐字播放，不走实时生成"
@@ -336,7 +336,7 @@ export function Step7({ state, updateField }: StepProps) {
   const htmlOver = htmlBytes > HTML_MAX
   return (
     <div className="max-w-[560px] mx-auto">
-      <SectionHeading index="07" title="主题配色" hint="给详情页定个基调" />
+      <SectionHeading title="主题配色" hint="给详情页定个基调" />
       <div className="grid grid-cols-2 gap-2.5 mb-6">
         {THEME_PRESETS.map((p) => {
           const active = state.uiChromeThemeId === p.id
@@ -438,7 +438,7 @@ export function Step1({
 }: StepProps & { onCoverUpload: (e: React.ChangeEvent<HTMLInputElement>) => void; uploading: boolean }) {
   return (
     <div className="max-w-[560px] mx-auto">
-      <SectionHeading index="01" title="核心身份" hint="名字、性别、封面、一句话钩子——第一印象" />
+      <SectionHeading title="核心身份" hint="名字、性别、封面、一句话钩子——第一印象" />
       <label
         className={`relative block w-full aspect-[3/4] max-h-[360px] rounded-[20px] cursor-pointer overflow-hidden mb-4 ${
           state.coverUrl
@@ -463,14 +463,16 @@ export function Step1({
                 <path d="M21 15l-5-5L5 21" />
               </svg>
             </div>
-            <span className="text-[14px] text-[var(--color-ink)] font-medium">上传封面</span>
+            <span className="text-[14px] text-[var(--color-ink)] font-medium">
+              <span className="text-[var(--color-error)] mr-0.5">*</span>上传封面
+            </span>
             <span className="text-[12px] text-[var(--color-text-muted)]">建议 3:4 竖图</span>
           </div>
         )}
         <input type="file" accept="image/*" onChange={onCoverUpload} className="hidden" />
       </label>
 
-      <FieldCard label="名字">
+      <FieldCard label="名字" required>
         <input
           value={state.displayName}
           onChange={(e) => updateField('displayName', e.target.value.slice(0, 20))}
@@ -478,7 +480,7 @@ export function Step1({
           className={textInputCls}
         />
       </FieldCard>
-      <FieldCard label="性别">
+      <FieldCard label="性别" required>
         <div className="flex gap-3">
           {(['male', 'female'] as const).map((g) => (
             <button
@@ -512,8 +514,8 @@ export function Step2({ state, updateField }: StepProps) {
   const len = state.persona.length
   return (
     <div className="max-w-[560px] mx-auto">
-      <SectionHeading index="02" title="人设与介绍" hint="人设至少 20 字，介绍和标签显示在详情页顶部" />
-      <FieldCard label="人设描述" hint={`${len}/1500 · 最少 20 字`}>
+      <SectionHeading title="人设与介绍" hint="人设至少 20 字，介绍和标签显示在详情页顶部" />
+      <FieldCard label="人设描述" required hint={`${len}/1500 · 最少 20 字`}>
         <textarea
           value={state.persona}
           onChange={(e) => updateField('persona', e.target.value.slice(0, 1500))}

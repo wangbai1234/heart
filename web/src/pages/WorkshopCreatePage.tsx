@@ -4,22 +4,12 @@ import { useToastStore } from '../stores/toastStore'
 import {
   ApiError,
   createCharacter,
-  updateCharacter,
   uploadCharacterCover,
   generateOpeningPreview,
 } from '../services/api'
 import { compressImageToTarget } from '../utils/imageCompress'
 import { CreateShell } from '../components/create/CreateShell'
-import {
-  Step1,
-  Step2,
-  Step3,
-  Step4,
-  Step5,
-  Step6,
-  Step7,
-  HTML_MAX,
-} from './workshop/WorkshopSteps'
+import { Step1, Step2, Step3, Step4, Step5, Step6, Step7, HTML_MAX } from './workshop/WorkshopSteps'
 import {
   EMPTY_STATE,
   STORAGE_KEY,
@@ -29,18 +19,20 @@ import {
   type WorkshopState,
 } from './workshop/workshopTypes'
 
+const TABS = ['基础信息', '角色设定', '美化设置'] as const
+
 /**
- * 角色创作页（七步引导）- 批 6
+ * 角色创作页（三 Tab）- 对齐 nimoo singleCard 产品逻辑
  *
- * 反转 nimoo 的"先选版式后填内容"：用户填什么内容，系统生成对应区块。
- * 进度用质感分级（素描→半成品→有模样→成品），不用百分比。
- * 第 1-2 步创建角色，之后每步 PATCH 全量草稿（后端整体替换）。
+ * 基础信息 / 角色设定 / 美化设置三个 Tab 可自由跳转；内容按 Tab 分组复用
+ * 既有 Step 组件，localStorage 本地留存草稿，仅在最终「创建」时一次性提交。
+ * 必填（封面/名字/性别/人设）缺项跳到对应 Tab 并 toast 提示，按钮始终可点。
  */
 export function WorkshopCreatePage() {
   const navigate = useNavigate()
   const showToast = useToastStore((s) => s.show)
 
-  const [step, setStep] = useState(1)
+  const [tab, setTab] = useState(0)
   const [state, setState] = useState<WorkshopState>(() => {
     const saved = localStorage.getItem(STORAGE_KEY)
     if (saved) {
@@ -52,7 +44,6 @@ export function WorkshopCreatePage() {
     }
     return EMPTY_STATE
   })
-  const [characterId, setCharacterId] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [assisting, setAssisting] = useState(false)
@@ -62,14 +53,11 @@ export function WorkshopCreatePage() {
   }, [state])
 
   const qualityLevel = getQualityLevel(state)
+  const htmlOver = state.advancedHtmlMode && new Blob([state.customHtml]).size > HTML_MAX
 
   const updateField = <K extends keyof WorkshopState>(key: K, value: WorkshopState[K]) => {
     setState((prev) => ({ ...prev, [key]: value }))
   }
-
-  const canAdvance1 = state.displayName.trim().length > 0
-  const canAdvance2 = state.persona.trim().length >= 20
-  const htmlOver = state.advancedHtmlMode && new Blob([state.customHtml]).size > HTML_MAX
 
   async function handleCoverUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -103,89 +91,114 @@ export function WorkshopCreatePage() {
     }
   }
 
-  /** 第 2 步首次提交创建角色；之后每步 PATCH 全量草稿。 */
-  async function persistDraft(): Promise<boolean> {
-    const draft = buildDraft(state)
+  /** 校验必填 → 返回 {tab, msg}；全部通过返回 null。 */
+  function firstMissing(): { tab: number; msg: string } | null {
+    if (!state.coverUrl) return { tab: 0, msg: '请上传角色封面' }
+    if (!state.displayName.trim()) return { tab: 0, msg: '请填写角色名字' }
+    if (!state.gender) return { tab: 0, msg: '请选择性别' }
+    if (state.persona.trim().length < 20) return { tab: 0, msg: '人设描述至少 20 字' }
+    return null
+  }
+
+  async function handleCreate() {
+    const missing = firstMissing()
+    if (missing) {
+      setTab(missing.tab)
+      showToast(missing.msg, 'error')
+      return
+    }
+    if (htmlOver) {
+      setTab(2)
+      showToast('自定义 HTML 超出 50KB，请精简', 'error')
+      return
+    }
+    setBusy(true)
     try {
-      if (!characterId) {
-        const created = await createCharacter(draft)
-        setCharacterId(created.id)
-      } else {
-        await updateCharacter(characterId, draft)
-      }
-      return true
+      const created = await createCharacter(buildDraft(state))
+      localStorage.removeItem(STORAGE_KEY)
+      navigate(`/characters/${created.id}`)
     } catch (err) {
-      showToast(err instanceof ApiError ? err.message : '保存失败，请重试', 'error')
-      return false
+      showToast(err instanceof ApiError ? err.message : '创建失败，请重试', 'error')
+    } finally {
+      setBusy(false)
     }
   }
 
-  async function handleNext() {
-    if (step === 1) {
-      if (!canAdvance1) return showToast('请先填写名字', 'error')
-      setStep(2)
-      return
-    }
-    if (step === 2 && !canAdvance2) return showToast('人设描述至少需要 20 字', 'error')
-    if (step === 7 && htmlOver) return showToast('自定义 HTML 超出 50KB，请精简', 'error')
-
-    setBusy(true)
-    const ok = await persistDraft()
-    setBusy(false)
-    if (!ok) return
-
-    if (step === 7) {
-      localStorage.removeItem(STORAGE_KEY)
-      if (characterId) navigate(`/characters/${characterId}`)
-      return
-    }
-    setStep(step + 1)
+  /** 底部主按钮：非末 Tab 前进一格，末 Tab 触发创建。 */
+  function handlePrimary() {
+    if (tab < TABS.length - 1) setTab(tab + 1)
+    else handleCreate()
   }
 
   function handleBack() {
-    if (step > 1) setStep(step - 1)
+    if (tab > 0) setTab(tab - 1)
     else navigate('/create')
   }
 
   return (
     <CreateShell
       title="角色创作"
-      backLabel={step > 1 ? '上一步' : '返回创作中心'}
+      backLabel={tab > 0 ? '上一步' : '返回创作中心'}
       onBack={handleBack}
       headerExtra={
-        <div className="relative z-10 px-5 pb-1 flex items-center justify-center gap-3">
-          <div className="flex gap-1.5">
-            {[1, 2, 3, 4, 5, 6, 7].map((n) => (
-              <span
-                key={n}
-                className={`h-[3px] rounded-full transition-all ${
-                  n === step ? 'w-[20px] bg-[var(--color-primary)]' : n < step ? 'w-[10px] bg-[var(--color-primary)]/50' : 'w-[10px] bg-[var(--color-border-glass)]'
-                }`}
-              />
-            ))}
+        <div className="relative z-10 px-5 pb-2">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex gap-5">
+              {TABS.map((label, i) => (
+                <button
+                  key={label}
+                  onClick={() => setTab(i)}
+                  className={`relative text-[15px] pb-1.5 transition-colors ${
+                    tab === i
+                      ? 'font-semibold text-[var(--color-ink)]'
+                      : 'font-normal text-[var(--color-text-muted)]'
+                  }`}
+                >
+                  {label}
+                  {tab === i && (
+                    <span className="absolute -bottom-px left-0 right-0 h-[2.5px] rounded-full bg-[var(--color-primary)]" />
+                  )}
+                </button>
+              ))}
+            </div>
+            <span className="text-[12px] text-[var(--color-text-secondary)] shrink-0">
+              {QUALITY_LABELS[qualityLevel]}
+            </span>
           </div>
-          <span className="text-[12px] text-[var(--color-text-secondary)]">{QUALITY_LABELS[qualityLevel]}</span>
+          <div className="h-px bg-[var(--color-border-glass)]" />
         </div>
       }
       footer={
         <div className="fixed bottom-0 left-0 right-0 px-5 pb-[env(safe-area-inset-bottom,20px)] pt-3 z-30 bg-gradient-to-t from-[var(--color-bg-page)] via-[var(--color-bg-page)] to-transparent">
           <button
-            onClick={handleNext}
-            disabled={busy || (step === 1 && !canAdvance1) || (step === 2 && !canAdvance2)}
-            className="w-full h-[52px] rounded-full bg-gradient-to-r from-[#C8B6FF] to-[#9D7CFF] text-white text-[16px] font-semibold shadow-[0_8px_28px_-4px_rgba(157,124,255,0.45)] active:scale-[0.98] transition-transform disabled:opacity-45 disabled:active:scale-100"
+            onClick={handlePrimary}
+            disabled={busy}
+            className="w-full h-[52px] rounded-full bg-gradient-to-r from-[#C8B6FF] to-[#9D7CFF] text-white text-[16px] font-semibold shadow-[0_8px_28px_-4px_rgba(157,124,255,0.45)] active:scale-[0.98] transition-transform disabled:opacity-60"
           >
-            {busy ? '保存中...' : step < 7 ? '下一步' : '完成创作'}
+            {busy ? '创建中...' : tab < TABS.length - 1 ? '下一步' : '创建角色'}
           </button>
         </div>
       }
     >
-      {step === 1 && <Step1 state={state} updateField={updateField} onCoverUpload={handleCoverUpload} uploading={uploading} />}
-      {step === 2 && <Step2 state={state} updateField={updateField} />}
-      {step === 3 && <Step3 state={state} updateField={updateField} />}
-      {step === 4 && <Step4 state={state} updateField={updateField} />}
-      {step === 5 && <Step5 state={state} updateField={updateField} />}
-      {step === 6 && <Step6 state={state} updateField={updateField} onAssistOpening={handleAssistOpening} assisting={assisting} />}
-      {step === 7 && <Step7 state={state} updateField={updateField} />}
+      {tab === 0 && (
+        <>
+          <Step1 state={state} updateField={updateField} onCoverUpload={handleCoverUpload} uploading={uploading} />
+          <Step2 state={state} updateField={updateField} />
+        </>
+      )}
+      {tab === 1 && (
+        <>
+          <Step3 state={state} updateField={updateField} />
+          <Step4 state={state} updateField={updateField} />
+          <Step5 state={state} updateField={updateField} />
+        </>
+      )}
+      {tab === 2 && (
+        <>
+          <Step6 state={state} updateField={updateField} onAssistOpening={handleAssistOpening} assisting={assisting} />
+          <Step7 state={state} updateField={updateField} />
+        </>
+      )}
     </CreateShell>
   )
 }
