@@ -11,7 +11,7 @@ import { stageWithIntimacy, isColdWar, intimacyPercent, stageLabel, stageOrderIn
 import { buildShareLink } from '../utils/characterShare'
 import { useSafeBack } from '../hooks/useSafeBack'
 import { CHARACTER_UI_CONFIGS, type CharacterTheme } from '../data/characterUIConfig'
-import { JiYuProfile, LiShenProfile, ChengXuProfile, LilithProfile, GuBeichenProfile, QinXiaoProfile, JiangYuezeProfile, JiangYeProfile, GuXingzhouProfile, LiJueProfile, ShenYichenProfile, ShenYuchuanProfile, LuoFeiProfile, PeiTinglanProfile, FuMingxiuProfile, XizeProfile, JiangLiProfile, PeiJueProfile, HuoChengProfile, ZhouJinProfile, BaiQinghuanProfile, ChengZhiProfile, LuTingshengProfile, GuNanqiaoProfile, YunZhiProfile, SuWanProfile, LinXiaomanProfile, LuZhaoProfile, SuYueyaoProfile, HuoShiyuProfile, SuNianProfile, SuYunProfile, GuQingwanProfile, GuXingmianProfile, SongYeProfile, VitoRosettiProfile, XieCiProfile, ShenLiaoProfile, LuWenjingProfile, JiangRanProfile, GuYanliProfile, XuZhihanProfile } from '../components/characterProfiles'
+import { JiYuProfile, LiShenProfile, ChengXuProfile, LilithProfile, GuBeichenProfile, QinXiaoProfile, JiangYuezeProfile, JiangYeProfile, GuXingzhouProfile, LiJueProfile, ShenYichenProfile, ShenYuchuanProfile, LuoFeiProfile, PeiTinglanProfile, FuMingxiuProfile, XizeProfile, JiangLiProfile, PeiJueProfile, HuoChengProfile, ZhouJinProfile, BaiQinghuanProfile, ChengZhiProfile, LuTingshengProfile, GuNanqiaoProfile, YunZhiProfile, SuWanProfile, LinXiaomanProfile, LuZhaoProfile, SuYueyaoProfile, HuoShiyuProfile, SuNianProfile, SuYunProfile, GuQingwanProfile, GuXingmianProfile, SongYeProfile, VitoRosettiProfile, XieCiProfile, ShenLiaoProfile, LuWenjingProfile, JiangRanProfile, GuYanliProfile, XuZhihanProfile, LinyuanManorProfile, FreeMuseProfile, QingyuBandProfile } from '../components/characterProfiles'
 import type { ComponentType } from 'react'
 
 /** 关系路线的 6 个可视节点（ACQUAINTANCE/FRIEND 合归「靠近」）。 */
@@ -61,6 +61,9 @@ const BESPOKE_PROFILES: Record<string, ComponentType<{ profile: CharacterProfile
   jiang_ran: JiangRanProfile,
   gu_yanli: GuYanliProfile,
   xu_zhihan: XuZhihanProfile,
+  linyuan_manor: LinyuanManorProfile,
+  free_muse: FreeMuseProfile,
+  qingyu_band: QingyuBandProfile,
 }
 
 /** Chrome 视觉调色盘 registry（React 外层chrome，非 iframe 内层） */
@@ -753,6 +756,54 @@ const CHROME_PALETTES: Record<string, ChromePalette> = {
     chipInactiveText: '#7a9abf',
     ctaGradient: 'linear-gradient(135deg, #5a7a9f, #4a6a8f)',
     ctaShadow: '0 4px 12px rgba(90,122,159,0.3)',
+  },
+  linyuan_manor: {
+    bg: '#14181c',
+    coverBg: '#1a2026',
+    scrimGradient: 'linear-gradient(to top,#14181c 6%,rgba(20,24,28,.4) 40%,transparent 100%)',
+    nameColor: '#e4e8ec',
+    ageColor: '#9aa6b3',
+    taglineColor: '#b4bcc5',
+    chipActiveBg: 'rgba(107,122,140,0.28)',
+    chipActiveBorder: 'rgba(107,122,140,0.5)',
+    chipActiveText: '#d4dae0',
+    chipInactiveBg: 'rgba(107,122,140,0.1)',
+    chipInactiveBorder: 'rgba(107,122,140,0.24)',
+    chipInactiveText: '#9aa6b3',
+    ctaGradient: 'linear-gradient(135deg, #6B7A8C, #55636f)',
+    ctaShadow: '0 4px 14px rgba(107,122,140,0.35)',
+  },
+  free_muse: {
+    bg: '#0a0d12',
+    coverBg: '#12161d',
+    scrimGradient: 'linear-gradient(to top,#0a0d12 6%,rgba(10,13,18,.4) 40%,transparent 100%)',
+    nameColor: '#dbe3ea',
+    ageColor: '#95a1ad',
+    taglineColor: '#aeb8c2',
+    chipActiveBg: 'rgba(143,165,184,0.26)',
+    chipActiveBorder: 'rgba(143,165,184,0.5)',
+    chipActiveText: '#d4dde5',
+    chipInactiveBg: 'rgba(143,165,184,0.09)',
+    chipInactiveBorder: 'rgba(143,165,184,0.22)',
+    chipInactiveText: '#95a1ad',
+    ctaGradient: 'linear-gradient(135deg, #8FA5B8, #7089a0)',
+    ctaShadow: '0 4px 14px rgba(143,165,184,0.35)',
+  },
+  qingyu_band: {
+    bg: '#15181f',
+    coverBg: '#1c2029',
+    scrimGradient: 'linear-gradient(to top,#15181f 6%,rgba(21,24,31,.4) 40%,transparent 100%)',
+    nameColor: '#e6ebf0',
+    ageColor: '#9aa6b3',
+    taglineColor: '#b2bbc5',
+    chipActiveBg: 'rgba(224,169,109,0.24)',
+    chipActiveBorder: 'rgba(224,169,109,0.5)',
+    chipActiveText: '#e8c79f',
+    chipInactiveBg: 'rgba(143,165,184,0.1)',
+    chipInactiveBorder: 'rgba(143,165,184,0.24)',
+    chipInactiveText: '#9aa6b3',
+    ctaGradient: 'linear-gradient(135deg, #8FA5B8, #E0A96D)',
+    ctaShadow: '0 4px 14px rgba(224,169,109,0.3)',
   },
 }
 

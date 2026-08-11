@@ -338,6 +338,24 @@ CHARACTER_UI_CONFIGS.linyuan_manor = {
     BONDED: '谜底揭晓，你与TA的故事才刚刚开始',
   },
   starterPrompts: ['这里发生了什么', '你知道些什么', '我能相信你吗'],
+  starterBranches: [
+    {
+      label: '叩开某个人的门',
+      options: [
+        '钢琴师，你刚才那首曲子……为谁而弹',
+        '女主人，这一夜留我下来，你到底想要什么',
+        '小少爷，你说的那个「不存在的管家」，在哪',
+      ],
+    },
+    {
+      label: '试探庄园的秘密',
+      options: [
+        '二十年前，这座庄园到底发生过什么',
+        '你们五个人，是自愿留在这里的吗',
+        '这场雨……真的只是一场雨吗',
+      ],
+    },
+  ],
 }
 
 CHARACTER_UI_CONFIGS.free_muse = {
@@ -351,6 +369,24 @@ CHARACTER_UI_CONFIGS.free_muse = {
     BONDED: '无论哪条路，TA都在终点等你',
   },
   starterPrompts: ['想去哪里看看', '今天想做什么', '陪我探索这世界'],
+  starterBranches: [
+    {
+      label: '召唤一个角色',
+      options: [
+        '给我一个古风侠客，江湖夜雨十年灯的那种',
+        '我想要一个都市里对我一见钟情的人',
+        '来一个毒舌又护短的星际船长',
+      ],
+    },
+    {
+      label: '搭建一个世界',
+      options: [
+        '带我去一座下着雪的古巷长街',
+        '造一片星海，我们在船舱里看漫天流火',
+        '末世第七年，只剩我和你——开始吧',
+      ],
+    },
+  ],
 }
 
 CHARACTER_UI_CONFIGS.gu_xingzhou = {
@@ -644,6 +680,24 @@ CHARACTER_UI_CONFIGS.qingyu_band = {
     BONDED: '无论选择谁，青春的舞台都有你',
   },
   starterPrompts: ['要一起排练吗', '这首歌怎么样', '陪我们演出吧'],
+  starterBranches: [
+    {
+      label: '走近某位成员',
+      options: [
+        '主唱，你练到这么晚，要人陪吗',
+        '吉他手，别起哄了，说点真心话',
+        '键盘手，你写的那首歌，是想说给谁听',
+      ],
+    },
+    {
+      label: '聊聊乐队与音乐',
+      options: [
+        '你们五个，是怎么凑到一起的',
+        '下一场演出，想让我听谁的独奏',
+        '这支乐队，接下来想走到哪一步',
+      ],
+    },
+  ],
 }
 
 CHARACTER_UI_CONFIGS.zhou_jin = {
