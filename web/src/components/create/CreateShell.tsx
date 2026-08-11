@@ -102,11 +102,22 @@ export function SectionHeading({ index, title, hint }: { index?: string; title: 
 }
 
 /** 字段卡：玻璃卡片 + 呼吸 padding（模式11 毛玻璃 + 模式10 圆角层次） */
-export function FieldCard({ label, hint, children }: { label?: string; hint?: string; children: ReactNode }) {
+export function FieldCard({
+  label,
+  hint,
+  required,
+  children,
+}: {
+  label?: string
+  hint?: string
+  required?: boolean
+  children: ReactNode
+}) {
   return (
-    <div className="mb-4 rounded-[18px] bg-[var(--color-glass-35)] border border-[var(--color-border-glass)] p-4 backdrop-blur-[8px]">
+    <div className="mb-3 rounded-[16px] bg-[var(--color-glass-35)] border border-[var(--color-border-glass)] p-3.5 backdrop-blur-[8px]">
       {label && (
-        <label className="block text-[14px] font-medium text-[var(--color-ink)] mb-2.5">
+        <label className="flex items-center text-[14px] font-medium text-[var(--color-ink)] mb-2">
+          {required && <span className="text-[var(--color-error)] mr-0.5">*</span>}
           {label}
           {hint && <span className="ml-1.5 text-[12px] font-normal text-[var(--color-text-muted)]">{hint}</span>}
         </label>

@@ -6,10 +6,11 @@ import { compressImageToTarget } from '../utils/imageCompress'
 import { CreateShell, FieldCard, textInputCls } from '../components/create/CreateShell'
 
 /**
- * 快速创建页 - 批3 + 批4（批6 视觉重构）
+ * 快速创建页 - 批3/4（视觉重构对齐 nimoo quickCreation）
  *
- * 只问四项：封面(3:4)、名字(1-20字)、性别、人设(20-1500字)
- * 下一步调用 AI 预填，跳转确认页(可见性选择在确认页)
+ * 布局参照 nimoo：小尺寸左置封面(112×152, 3:4) + 右侧说明，紧凑字段。
+ * 四项必填：封面、名字、性别、人设。按钮任意时刻可点，缺项走 toast 提示。
+ * 按钮文案「AI 快速创建」——诚实表达点击即触发 AI 生成，非单纯翻页。
  */
 export function QuickCreatePage() {
   const navigate = useNavigate()
@@ -22,129 +23,127 @@ export function QuickCreatePage() {
   const [uploading, setUploading] = useState(false)
   const [prefilling, setPrefilling] = useState(false)
 
-  const personaLength = persona.length
-  const personaValid = personaLength >= 20 && personaLength <= 1500
-  const canSubmit = coverUrl && name.length >= 1 && name.length <= 20 && gender && personaValid
-
   async function handleCoverUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
-
     setUploading(true)
     try {
       const compressed = await compressImageToTarget(file, 900 * 1024)
       const { cover_url } = await uploadCharacterCover(compressed)
       setCoverUrl(cover_url)
     } catch (err) {
-      const msg = err instanceof ApiError ? err.message : '封面上传失败，请重试'
-      showToast(msg, 'error')
+      showToast(err instanceof ApiError ? err.message : '封面上传失败，请重试', 'error')
     } finally {
       setUploading(false)
     }
   }
 
-  async function handleNext() {
-    if (gender === '' || !canSubmit) {
-      if (personaLength < 20) {
-        showToast('人设描述至少需要 20 字', 'error')
-        return
-      }
-      showToast('请填写完整信息', 'error')
+  /** 校验缺项 → 返回第一条提示文案；全部通过返回 null。 */
+  function firstMissing(): string | null {
+    if (!coverUrl) return '请上传角色封面'
+    if (!name.trim()) return '请填写角色名字'
+    if (!gender) return '请选择性别'
+    if (persona.trim().length < 20) return '角色描述至少 20 字'
+    return null
+  }
+
+  async function handleCreate() {
+    const missing = firstMissing()
+    if (missing) {
+      showToast(missing, 'error')
       return
     }
-
     setPrefilling(true)
     try {
-      const prefill = await quickPrefill({ display_name: name, gender, persona })
+      const prefill = await quickPrefill({
+        display_name: name,
+        gender: gender as 'male' | 'female',
+        persona,
+      })
       navigate('/characters/new/quick/confirm', {
         state: { base: { coverUrl, name, gender, persona }, prefill },
       })
     } catch (err) {
-      const msg = err instanceof ApiError ? err.message : 'AI 预填失败，请重试'
-      showToast(msg, 'error')
+      showToast(err instanceof ApiError ? err.message : 'AI 生成失败，请重试', 'error')
     } finally {
       setPrefilling(false)
     }
   }
 
+  const personaLen = persona.length
+
   return (
-    <CreateShell title="快速创建" backLabel="返回创作中心" onBack={() => navigate('/create')}
+    <CreateShell
+      title="快速创建"
+      backLabel="返回创作中心"
+      onBack={() => navigate('/create')}
       footer={
         <div className="fixed bottom-0 left-0 right-0 px-5 pb-[env(safe-area-inset-bottom,20px)] pt-3 z-30 bg-gradient-to-t from-[var(--color-bg-page)] via-[var(--color-bg-page)] to-transparent">
           <button
-            onClick={handleNext}
-            disabled={!canSubmit || prefilling}
-            className="w-full h-[52px] rounded-full bg-gradient-to-r from-[#FFB7C5] to-[#FF8FAB] text-white text-[16px] font-semibold shadow-[0_8px_28px_-4px_rgba(255,143,171,0.45)] active:scale-[0.98] transition-transform disabled:opacity-45 disabled:active:scale-100"
+            onClick={handleCreate}
+            disabled={prefilling}
+            className="w-full h-[50px] rounded-full bg-gradient-to-r from-[#FFB7C5] to-[#FF8FAB] text-white text-[16px] font-semibold shadow-[0_8px_24px_-4px_rgba(255,143,171,0.40)] active:scale-[0.98] transition-transform disabled:opacity-60"
           >
-            {prefilling ? 'AI 生成中...' : '下一步'}
+            {prefilling ? 'AI 生成中...' : 'AI 快速创建'}
           </button>
         </div>
       }
     >
-      {/* 引导语 */}
-      <p className="text-[14px] text-[var(--color-text-secondary)] leading-[1.7] mb-5 px-1">
-        填这四项，剩下交给 AI。几十秒后你会拿到一个能直接聊天的角色。
+      <p className="text-[13px] text-[var(--color-text-secondary)] leading-[1.6] mb-4">
+        简单填写，AI 帮你把角色卡补全。几十秒后就能直接开聊。
       </p>
 
-      {/* 封面 hero 上传（模式2 单一 hero 元素） */}
-      <div className="mb-5">
-        <label
-          className={`relative block w-full aspect-[3/4] max-h-[380px] rounded-[20px] cursor-pointer overflow-hidden group ${
-            coverUrl
-              ? 'shadow-[0_12px_40px_-8px_rgba(0,0,0,0.3)]'
-              : 'border-2 border-dashed border-[var(--color-border-glass)] bg-[var(--color-glass-35)]'
-          }`}
-        >
-          {uploading ? (
-            <div className="w-full h-full flex items-center justify-center">
-              <span className="text-[14px] text-[var(--color-text-secondary)]">上传中...</span>
-            </div>
-          ) : coverUrl ? (
-            <>
+      {/* 封面：小尺寸左置 + 右侧说明（对齐 nimoo） */}
+      <FieldCard label="角色封面" required>
+        <div className="flex gap-3.5">
+          <label
+            className={`relative shrink-0 w-[104px] h-[140px] rounded-[12px] cursor-pointer overflow-hidden ${
+              coverUrl ? '' : 'border-2 border-dashed border-[var(--color-border-glass)] bg-[var(--color-glass-55)]'
+            }`}
+          >
+            {uploading ? (
+              <div className="w-full h-full flex items-center justify-center text-[12px] text-[var(--color-text-secondary)]">上传中</div>
+            ) : coverUrl ? (
               <img src={coverUrl} alt="封面" className="w-full h-full object-cover" />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-transparent" />
-              <span className="absolute bottom-3 left-4 text-[13px] text-white/90 font-medium">点击更换封面</span>
-            </>
-          ) : (
-            <div className="w-full h-full flex flex-col items-center justify-center gap-3">
-              <div className="w-[56px] h-[56px] rounded-full bg-gradient-to-br from-[#FFB7C5]/30 to-[#FF8FAB]/20 flex items-center justify-center">
-                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--color-primary)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="3" y="3" width="18" height="18" rx="2" />
-                  <circle cx="8.5" cy="8.5" r="1.5" />
-                  <path d="M21 15l-5-5L5 21" />
+            ) : (
+              <div className="w-full h-full flex flex-col items-center justify-center gap-1.5">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--color-text-muted)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 5v14M5 12h14" />
                 </svg>
+                <span className="text-[12px] text-[var(--color-text-muted)]">上传图片</span>
               </div>
-              <span className="text-[14px] text-[var(--color-ink)] font-medium">上传封面</span>
-              <span className="text-[12px] text-[var(--color-text-muted)]">建议 3:4 竖图，人物居中</span>
-            </div>
-          )}
-          <input type="file" accept="image/*" onChange={handleCoverUpload} className="hidden" />
-        </label>
-      </div>
+            )}
+            <input type="file" accept="image/*" onChange={handleCoverUpload} className="hidden" />
+          </label>
+          <ul className="flex-1 text-[12px] leading-[1.6] text-[var(--color-text-muted)] space-y-1.5 pt-0.5">
+            <li>· 建议上传 3:4 或 9:16 竖图，人物居中</li>
+            <li>· 图片同时用作封面和聊天背景</li>
+            <li>· 请勿上传涉及未成年或过度暴露的图像</li>
+          </ul>
+        </div>
+      </FieldCard>
 
       {/* 名字 */}
-      <FieldCard label="名字">
+      <FieldCard label="角色名字" required>
         <input
-          type="text"
           value={name}
           onChange={(e) => setName(e.target.value.slice(0, 20))}
           placeholder="给 Ta 起个名字"
           maxLength={20}
-          className={textInputCls}
+          className={`${textInputCls} h-[44px]`}
         />
-        <div className="mt-1.5 text-[12px] text-[var(--color-text-muted)] text-right">{name.length}/20</div>
       </FieldCard>
 
       {/* 性别 */}
-      <FieldCard label="性别">
-        <div className="flex gap-3">
+      <FieldCard label="性别" required>
+        <div className="flex gap-2.5">
           {(['male', 'female'] as const).map((g) => (
             <button
               key={g}
               onClick={() => setGender(g)}
-              className={`flex-1 h-[48px] rounded-[14px] text-[15px] font-medium transition-all ${
+              className={`flex-1 h-[42px] rounded-[12px] text-[15px] font-medium transition-all ${
                 gender === g
-                  ? 'bg-gradient-to-r from-[#FFB7C5] to-[#FF8FAB] text-white shadow-[0_4px_16px_rgba(255,143,171,0.32)]'
+                  ? 'bg-gradient-to-r from-[#FFB7C5] to-[#FF8FAB] text-white shadow-[0_4px_14px_rgba(255,143,171,0.30)]'
                   : 'bg-[var(--color-glass-55)] border border-[var(--color-border-glass)] text-[var(--color-ink)]'
               }`}
             >
@@ -155,20 +154,20 @@ export function QuickCreatePage() {
       </FieldCard>
 
       {/* 人设 */}
-      <FieldCard label="人设描述" hint="20-1500 字">
+      <FieldCard label="角色描述" required hint="至少 20 字">
         <textarea
           value={persona}
           onChange={(e) => setPersona(e.target.value.slice(0, 1500))}
-          placeholder="描述 Ta 的性格、背景、说话方式..."
+          placeholder="一句话介绍你的角色，包括性格、背景、说话方式。例：清冷孤傲的剑修，话少但护短……"
           maxLength={1500}
-          rows={7}
-          className={`w-full px-4 py-3 rounded-[14px] text-[15px] leading-[1.7] resize-none bg-[var(--color-glass-55)] border border-[var(--color-border-glass)] text-[var(--color-ink)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-primary)] transition-colors`}
+          rows={4}
+          className="w-full px-3.5 py-2.5 rounded-[12px] text-[14px] leading-[1.6] resize-none bg-[var(--color-glass-55)] border border-[var(--color-border-glass)] text-[var(--color-ink)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-primary)] transition-colors"
         />
-        <div className="mt-1.5 flex items-center justify-between text-[12px]">
-          <span className={personaLength < 20 ? 'text-[var(--color-error)]' : 'text-[var(--color-text-muted)]'}>
-            {personaLength < 20 ? `还需 ${20 - personaLength} 字` : ''}
+        <div className="mt-1 flex items-center justify-between text-[12px]">
+          <span className={personaLen > 0 && personaLen < 20 ? 'text-[var(--color-error)]' : 'text-transparent'}>
+            {personaLen > 0 && personaLen < 20 ? `还需 ${20 - personaLen} 字` : '·'}
           </span>
-          <span className="text-[var(--color-text-muted)]">{personaLength}/1500</span>
+          <span className="text-[var(--color-text-muted)]">{personaLen}/1500</span>
         </div>
       </FieldCard>
     </CreateShell>
