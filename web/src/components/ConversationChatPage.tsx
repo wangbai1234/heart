@@ -34,6 +34,13 @@ import { JiangYuezePremiseCard } from './characterProfiles/JiangYuezePremiseCard
 import { JiangYePremiseCard } from './characterProfiles/JiangYePremiseCard'
 import { GuXingzhouPremiseCard } from './characterProfiles/GuXingzhouPremiseCard'
 import { LiJuePremiseCard } from './characterProfiles/LiJuePremiseCard'
+import { ShenYichenPremiseCard } from './characterProfiles/ShenYichenPremiseCard'
+import { ShenYuchuanPremiseCard } from './characterProfiles/ShenYuchuanPremiseCard'
+import { LuoFeiPremiseCard } from './characterProfiles/LuoFeiPremiseCard'
+import { PeiTinglanPremiseCard } from './characterProfiles/PeiTinglanPremiseCard'
+import { FuMingxiuPremiseCard } from './characterProfiles/FuMingxiuPremiseCard'
+import { XizePremiseCard } from './characterProfiles/XizePremiseCard'
+import { JiangLiPremiseCard } from './characterProfiles/JiangLiPremiseCard'
 import { getCharacterSettings } from '../services/api'
 
 const EMPTY_MESSAGES: Message[] = []
@@ -49,6 +56,13 @@ const PREMISE_CARDS: Record<string, ComponentType> = {
   jiang_ye: JiangYePremiseCard,
   gu_xingzhou: GuXingzhouPremiseCard,
   li_jue: LiJuePremiseCard,
+  shen_yichen: ShenYichenPremiseCard,
+  shen_yuchuan: ShenYuchuanPremiseCard,
+  luo_fei: LuoFeiPremiseCard,
+  pei_tinglan: PeiTinglanPremiseCard,
+  fu_mingxiu: FuMingxiuPremiseCard,
+  xize: XizePremiseCard,
+  jiang_li: JiangLiPremiseCard,
 }
 
 /** 引导回复气泡：首聊时出现在消息区底部，点击直接发送（帮用户破冰）。
