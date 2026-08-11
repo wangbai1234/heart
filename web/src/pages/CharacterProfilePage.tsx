@@ -14,6 +14,7 @@ import { CHARACTER_UI_CONFIGS, type CharacterTheme } from '../data/characterUICo
 import { JiYuProfile, LiShenProfile, ChengXuProfile, LilithProfile, GuBeichenProfile, QinXiaoProfile, JiangYuezeProfile, JiangYeProfile, GuXingzhouProfile, LiJueProfile, ShenYichenProfile, ShenYuchuanProfile, LuoFeiProfile, PeiTinglanProfile, FuMingxiuProfile, XizeProfile, JiangLiProfile, PeiJueProfile, HuoChengProfile, ZhouJinProfile, BaiQinghuanProfile, ChengZhiProfile, LuTingshengProfile, GuNanqiaoProfile, YunZhiProfile, SuWanProfile, LinXiaomanProfile, LuZhaoProfile, SuYueyaoProfile, HuoShiyuProfile, SuNianProfile, SuYunProfile, GuQingwanProfile, GuXingmianProfile, SongYeProfile, VitoRosettiProfile, XieCiProfile, ShenLiaoProfile, LuWenjingProfile, JiangRanProfile, GuYanliProfile, XuZhihanProfile, LinyuanManorProfile, FreeMuseProfile, QingyuBandProfile } from '../components/characterProfiles'
 import type { ComponentType } from 'react'
 import { BlockRenderer } from '../components/profileBlocks/BlockRenderer'
+import { CustomHtmlRenderer } from '../components/profileBlocks/CustomHtmlRenderer'
 
 /** 关系路线的 6 个可视节点（ACQUAINTANCE/FRIEND 合归「靠近」）。 */
 const ROUTE_NODES = ['STRANGER', 'FRIEND', 'CONFIDANT', 'ROMANTIC_INTEREST', 'LOVER', 'BONDED'] as const
@@ -1226,11 +1227,17 @@ export function CharacterProfilePage() {
           </div>
         )}
 
-        {/* Profile blocks — UGC 角色创作工坊区块 */}
-        {profile && profile.profile_blocks && profile.profile_blocks.length > 0 && (
-          <div className="mt-6 rounded-[20px] bg-[var(--color-glass-55)] border border-[var(--color-border-glass)] p-5">
-            <BlockRenderer blocks={profile.profile_blocks} chrome={chrome} />
+        {/* UGC 详情页自定义区 —— 有 custom_html 优先，否则渲染 profile_blocks（批 6 互斥） */}
+        {profile && profile.custom_html && profile.custom_html.trim() ? (
+          <div className="mt-6 rounded-[20px] overflow-hidden bg-[var(--color-glass-55)] border border-[var(--color-border-glass)] p-2">
+            <CustomHtmlRenderer html={profile.custom_html} chrome={chrome} />
           </div>
+        ) : (
+          profile && profile.profile_blocks && profile.profile_blocks.length > 0 && (
+            <div className="mt-6 rounded-[20px] bg-[var(--color-glass-55)] border border-[var(--color-border-glass)] p-5">
+              <BlockRenderer blocks={profile.profile_blocks} chrome={chrome} />
+            </div>
+          )
         )}
 
         {/* intimacy + chat CTA */}
