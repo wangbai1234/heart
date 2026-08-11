@@ -84,20 +84,10 @@ export function CreateHubPage() {
 
       <div ref={scrollRef} className="relative z-10 flex-1 overflow-y-auto px-4 pb-[120px] pt-4">
         {myChars.length === 0 ? (
-          <EmptyState onCreateClick={() => navigate('/characters/new')} />
+          <EmptyState />
         ) : (
           <>
-            <button
-              onClick={() => navigate('/characters/new')}
-              disabled={atLimit}
-              className="w-full mb-6 h-[64px] rounded-[20px] bg-gradient-to-r from-[#FFB7C5] to-[#FF8FAB] text-white text-[18px] font-bold shadow-[0_8px_24px_-4px_rgba(255,143,171,0.40)] active:scale-[0.98] transition-transform disabled:opacity-50 disabled:active:scale-100 flex items-center justify-center gap-2"
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                <line x1="12" y1="5" x2="12" y2="19" />
-                <line x1="5" y1="12" x2="19" y2="12" />
-              </svg>
-              <span>{atLimit ? '已达上限(5个角色)' : '创建新角色'}</span>
-            </button>
+            <ModeSelector atLimit={atLimit} />
 
             <div className="mb-4">
               <p className="text-[15px] font-semibold text-[var(--color-ink)] px-1 mb-1">我的创造</p>
@@ -152,7 +142,7 @@ export function CreateHubPage() {
   )
 }
 
-function EmptyState({ onCreateClick }: { onCreateClick: () => void }) {
+function EmptyState() {
   const { resolvedTheme } = useThemeStore()
   const isDark = resolvedTheme === 'dark'
 
@@ -173,11 +163,74 @@ function EmptyState({ onCreateClick }: { onCreateClick: () => void }) {
       <p className="text-[14px] text-[var(--color-text-secondary)] leading-[1.65] mb-8 max-w-[260px]">
         创建属于你的专属角色，设计 Ta 的名字、性格与说话方式。
       </p>
+      <ModeSelector atLimit={false} />
+    </div>
+  )
+}
+
+/** 批3: 两档入口 - 快速创建 vs 角色创作 */
+function ModeSelector({ atLimit }: { atLimit: boolean }) {
+  const navigate = useNavigate()
+  const { resolvedTheme } = useThemeStore()
+  const isDark = resolvedTheme === 'dark'
+
+  if (atLimit) {
+    return (
+      <div className="w-full mb-6 h-[64px] rounded-[20px] bg-[var(--color-glass-55)] border border-[var(--color-border-glass)] text-[var(--color-text-muted)] text-[18px] font-bold flex items-center justify-center">
+        已达上限(5个角色)
+      </div>
+    )
+  }
+
+  return (
+    <div className="w-full mb-6 flex flex-col gap-3">
       <button
-        onClick={onCreateClick}
-        className="h-[50px] px-8 rounded-full bg-gradient-to-r from-[#FFB7C5] to-[#FF8FAB] text-white text-[16px] font-semibold shadow-[0_8px_24px_-4px_rgba(255,143,171,0.40)] active:scale-[0.98] transition-transform"
+        onClick={() => navigate('/characters/new/quick')}
+        className={`w-full p-5 rounded-[20px] text-left active:scale-[0.98] transition-transform ${
+          isDark
+            ? 'bg-[var(--color-glass-75)] border border-[var(--color-border-glass)]'
+            : 'bg-white/80 backdrop-blur-sm border border-[rgba(255,183,197,0.20)] shadow-[0_4px_16px_rgba(255,183,197,0.12)]'
+        }`}
       >
-        立刻创建
+        <div className="flex items-start gap-3">
+          <div className="shrink-0 w-[44px] h-[44px] rounded-full bg-gradient-to-br from-[#FFB7C5] to-[#FF8FAB] flex items-center justify-center">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+            </svg>
+          </div>
+          <div className="flex-1">
+            <h3 className="text-[17px] font-semibold text-[var(--color-ink)] mb-1">快速创建</h3>
+            <p className="text-[13px] text-[var(--color-text-secondary)] leading-[1.5]">
+              填四项，剩下交给 AI，几十秒出一个能聊的角色
+            </p>
+          </div>
+        </div>
+      </button>
+
+      <button
+        onClick={() => navigate('/characters/new/workshop')}
+        className={`w-full p-5 rounded-[20px] text-left active:scale-[0.98] transition-transform ${
+          isDark
+            ? 'bg-[var(--color-glass-75)] border border-[var(--color-border-glass)]'
+            : 'bg-white/80 backdrop-blur-sm border border-[rgba(200,182,255,0.20)] shadow-[0_4px_16px_rgba(200,182,255,0.12)]'
+        }`}
+      >
+        <div className="flex items-start gap-3">
+          <div className="shrink-0 w-[44px] h-[44px] rounded-full bg-gradient-to-br from-[#C8B6FF] to-[#9D7CFF] flex items-center justify-center">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 19l7-7 3 3-7 7-3-3z" />
+              <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z" />
+              <path d="M2 2l7.586 7.586" />
+              <circle cx="11" cy="11" r="2" />
+            </svg>
+          </div>
+          <div className="flex-1">
+            <h3 className="text-[17px] font-semibold text-[var(--color-ink)] mb-1">角色创作</h3>
+            <p className="text-[13px] text-[var(--color-text-secondary)] leading-[1.5]">
+              一步步填，详情页会跟着变好看，可申请公开
+            </p>
+          </div>
+        </div>
       </button>
     </div>
   )

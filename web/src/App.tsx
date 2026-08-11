@@ -24,9 +24,10 @@ import { InvitePage } from './pages/InvitePage'
 import { AgeGatePage } from './pages/AgeGatePage'
 import { LegalPage } from './pages/LegalPage'
 import { UIStatePreviewPage } from './pages/UIStatePreviewPage'
-import { CreateCharacterPage } from './pages/CreateCharacterPage'
 import { MyCharactersPage } from './pages/MyCharactersPage'
 import { CreateHubPage } from './pages/CreateHubPage'
+import { QuickCreatePage } from './pages/QuickCreatePage'
+import { WorkshopCreatePage } from './pages/WorkshopCreatePage'
 import { ExplorePage } from './pages/ExplorePage'
 import { ScenarioDetailPage } from './pages/ScenarioDetailPage'
 import { StoryPlayerPage } from './pages/StoryPlayerPage'
@@ -243,7 +244,9 @@ export function App() {
         <Route path="/age-gate" element={<AgeGatePage />} />
         <Route path="/legal/:type" element={<LegalPage />} />
         <Route path="/qa/states" element={<UIStatePreviewPage />} />
-        <Route path="/characters/new" element={<CreateCharacterPage />} />
+        <Route path="/characters/new" element={<Navigate to="/create" replace />} />
+        <Route path="/characters/new/quick" element={<QuickCreatePage />} />
+        <Route path="/characters/new/workshop" element={<WorkshopCreatePage />} />
         <Route path="/my-characters" element={<MyCharactersPage />} />
         <Route path="/admin/review" element={<AdminReviewPage />} />
         <Route path="*" element={<NotFoundRedirect />} />
