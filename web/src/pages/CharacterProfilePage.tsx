@@ -13,6 +13,7 @@ import { useSafeBack } from '../hooks/useSafeBack'
 import { CHARACTER_UI_CONFIGS, type CharacterTheme } from '../data/characterUIConfig'
 import { JiYuProfile, LiShenProfile, ChengXuProfile, LilithProfile, GuBeichenProfile, QinXiaoProfile, JiangYuezeProfile, JiangYeProfile, GuXingzhouProfile, LiJueProfile, ShenYichenProfile, ShenYuchuanProfile, LuoFeiProfile, PeiTinglanProfile, FuMingxiuProfile, XizeProfile, JiangLiProfile, PeiJueProfile, HuoChengProfile, ZhouJinProfile, BaiQinghuanProfile, ChengZhiProfile, LuTingshengProfile, GuNanqiaoProfile, YunZhiProfile, SuWanProfile, LinXiaomanProfile, LuZhaoProfile, SuYueyaoProfile, HuoShiyuProfile, SuNianProfile, SuYunProfile, GuQingwanProfile, GuXingmianProfile, SongYeProfile, VitoRosettiProfile, XieCiProfile, ShenLiaoProfile, LuWenjingProfile, JiangRanProfile, GuYanliProfile, XuZhihanProfile, LinyuanManorProfile, FreeMuseProfile, QingyuBandProfile } from '../components/characterProfiles'
 import type { ComponentType } from 'react'
+import { BlockRenderer } from '../components/profileBlocks/BlockRenderer'
 
 /** 关系路线的 6 个可视节点（ACQUAINTANCE/FRIEND 合归「靠近」）。 */
 const ROUTE_NODES = ['STRANGER', 'FRIEND', 'CONFIDANT', 'ROMANTIC_INTEREST', 'LOVER', 'BONDED'] as const
@@ -1222,6 +1223,13 @@ export function CharacterProfilePage() {
                 )}
               </>
             )}
+          </div>
+        )}
+
+        {/* Profile blocks — UGC 角色创作工坊区块 */}
+        {profile && profile.profile_blocks && profile.profile_blocks.length > 0 && (
+          <div className="mt-6 rounded-[20px] bg-[var(--color-glass-55)] border border-[var(--color-border-glass)] p-5">
+            <BlockRenderer blocks={profile.profile_blocks} chrome={chrome} />
           </div>
         )}
 
