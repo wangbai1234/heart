@@ -168,7 +168,16 @@ nimoo 的做法本质上还是让用户写 HTML 或选模板，用户得自己�
 
 区块编辑器覆盖不写代码的用户；额外给「高级模式」开放原始 HTML（≤50KB）。
 
-**沙箱可以不给脚本**：已核对全部 37 个 bespoke 组件，`<script>` 出现次数为 0，动效全是 CSS。所以禁脚本对 UGC **不产生能力落差**，可以直接上最严设置。注意既有 bespoke iframe 都没有 `sandbox` 属性，给 UGC 加 sandbox 是新增措施，不是照搬。
+**沙箱可以不给脚本**：已核对全部 37 个 bespoke 组件，`<script>` 出现次数为 0，动效全是 CSS。所以禁脚本对 UGC **不产生能力落差**，可以直接上最严设置。
+
+关于既有 iframe 的 sandbox（**修正 2026-08-11 初稿的错误论断**）：`PremiseCardBase.tsx:166` 实际**有** `sandbox` 属性，值是 `allow-same-origin allow-scripts`。这个组合是已知的危险配置（两者同时给，沙箱可被脚本绕过访问父页 DOM）。但它有真实功能依赖：
+
+- `allow-scripts` 支撑卡片的展开/收起（`onclick="parent.postMessage('toggle','*')"`）
+- `allow-same-origin` 支撑高度测量（`:42-43` 读 `iframe.contentDocument.body.scrollHeight`），去掉则 `contentDocument` 返回 null，46 张卡片全部塌成默认 200px
+
+**收紧方案（独立批次，不并入批 0）**：把高度测量从"父页读 contentDocument"改成"iframe 内部 postMessage 上报高度"——现成的 message 通道已经在用了。改完即可去掉 `allow-same-origin`。之所以单独走：它动的是全部 46 张卡片的版式测量，有回归风险，不该和转义修复混在一个 PR。
+
+批 0 + 批 1 色值白名单落地后，注入面已经关闭（文本节点转义 + CSS 通道白名单），sandbox 收紧属纵深防御而非主漏洞。
 
 存储前净化：移除 `<script>`、`on*` 事件属性、外链资源。公开需过审；私密/链接分享可跳过审核但仍须净化。提供 CSS 变量文档（`--theme-accent` 等）让用户的 HTML 能吃到所选配色。
 
@@ -277,4 +286,16 @@ def quick_mode_limits(self):
 - 不把 37 个内置角色的配色搬进数据库。收益是"少一处重复"，代价是动全部 bespoke 组件 + 回归风险，不值当。以后想搬随时可以，架构没堵死。
 - 不给 UGC 脚本能力。已核实内置角色零 `<script>`，禁脚本无能力落差。
 - 不做反向降级（角色创作 → 快速创建）。升级是单向的：快速创建可升级进工坊，已填字段带过去从第 3 步续填，`creation_mode` 改 `workshop` 并解锁可见性选项。反向没有意义。
+
+---
+
+## 11. 批 0 完成记录（2026-08-11）
+
+- 新建 `web/src/utils/escapeHtml.ts`：`escapeHtml`（严格）+ `escapeHtmlAllowBr`（仅放行 `<br>`）
+- `PremiseCardBase.tsx` 六个字段接上转义：`label`/`value`/`leadIn`/`title`/`warning` 用严格版，`note` 用允许 `<br>` 版
+- 新建 `web/src/utils/escapeHtml.test.ts`：11 个测试，覆盖 script 中和、属性逃逸、二次转义、`<br>` 三种写法与大小写、`<brx>` 近似标签、真实 note 内容
+
+**为何 `note` 需要例外**：审计全部 46 个内置 premise card，`<br>` 共 86 处且**全部集中在 `note`**，其余五字段零标签。全量转义会让 44 个文件的换行变成可见的 `&lt;br&gt;`。
+
+**未纳入批 0**：`accent` 走 CSS 通道（`border-left: 2px solid ${accent}`），转义在 CSS 上下文无效，须靠色值白名单——已排进批 1 的 `ChromeDraft` 校验。sandbox 收紧见第 5.5 节。
 

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useThemeStore } from '../../stores/themeStore'
+import { escapeHtml, escapeHtmlAllowBr } from '../../utils/escapeHtml'
 
 export interface PremiseRow {
   label: string
@@ -85,7 +86,7 @@ export function PremiseCardBase({ accent, leadIn, title, rows, note, warning }: 
   const rowsHtml = rows
     .map(
       (r) =>
-        `<div class="row"><span class="label">${r.label}</span><span class="value">${r.value}</span></div>`,
+        `<div class="row"><span class="label">${escapeHtml(r.label)}</span><span class="value">${escapeHtml(r.value)}</span></div>`,
     )
     .join('')
 
@@ -145,12 +146,12 @@ body {
 </style>
 </head>
 <body onclick="parent.postMessage('toggle','*')">
-<div class="lead">${leadIn}</div>
+<div class="lead">${escapeHtml(leadIn)}</div>
 <div class="card">
-  <div class="card-title">${title}</div>
+  <div class="card-title">${escapeHtml(title)}</div>
   ${rowsHtml}
-  ${note ? `<div class="note">${note}</div>` : ''}
-  ${warning ? `<div class="warning">${warning}</div>` : ''}
+  ${note ? `<div class="note">${escapeHtmlAllowBr(note)}</div>` : ''}
+  ${warning ? `<div class="warning">${escapeHtml(warning)}</div>` : ''}
 </div>
 <div class="expand-hint">点击${isExpanded ? '收起' : '查看详情'}</div>
 </body>
