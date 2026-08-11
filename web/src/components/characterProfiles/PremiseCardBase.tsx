@@ -58,11 +58,15 @@ export function PremiseCardBase({ accent, leadIn, title, rows, note, warning }: 
     const ro = new ResizeObserver(onResize)
     ro.observe(iframe)
     window.addEventListener('message', handleMessage)
-    measure()
+
+    // isExpanded 变化后强制重新测量高度（srcdoc 变化不触发 load）
+    const timer = setTimeout(measure, 16)
+
     return () => {
       iframe.removeEventListener('load', measure)
       ro.disconnect()
       window.removeEventListener('message', handleMessage)
+      clearTimeout(timer)
     }
   }, [isExpanded])
 
