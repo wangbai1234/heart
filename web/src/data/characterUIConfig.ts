@@ -32,8 +32,8 @@ export interface CharacterUIConfig {
     LOVER: string
     BONDED: string
   }
-  /** 首聊引导气泡 3 条（替换通用的"你还好吗"） */
-  starterPrompts?: [string, string, string]
+  /** 首聊引导气泡（替换通用的"你还好吗"），最少1条，无上限 */
+  starterPrompts?: string[]
   /** 可选：分支式首聊引导。选一个"切入角度"后展开 2-3 条具体台词。
    * 有 starterBranches 时优先于 starterPrompts（乙游式嵌套选项）。 */
   starterBranches?: Array<{

@@ -10,7 +10,7 @@ import { useCompanionsStore } from '../stores/companionsStore'
 import { stageLabel, stageWithIntimacy, stageOrderIndex } from '../utils/relationship'
 import { useWebSocket } from '../hooks/useWebSocket'
 import { useProactiveStore } from '../stores/proactiveStore'
-import { getChatHistory, generateOpening, ackProactive, markCharacterRead, transcribeAudio, getCharacterVoice, sendTransfer } from '../services/api'
+import { getChatHistory, generateOpening, ackProactive, markCharacterRead, transcribeAudio, getCharacterVoice, sendTransfer, getCharacterProfile, type CharacterProfileDTO } from '../services/api'
 import { useToastStore } from '../stores/toastStore'
 // DISABLED 2026-07-24: 角色↔剧情关联功能暂停，见下方渲染块注释
 // import { StoryInviteCard, isHookOnCooldown } from './StoryInviteCard'
@@ -25,6 +25,8 @@ import { TextTierSheet } from './TextTierSheet'
 import { ChatPlusMenu } from './ChatPlusMenu'
 import { VoiceChatSheet } from './VoiceChatSheet'
 import { TransferSheet } from './TransferSheet'
+import { PremiseCardBase } from './characterProfiles/PremiseCardBase'
+import { parseRichOpening } from '../utils/parseRichOpening'
 import { JiYuPremiseCard } from './characterProfiles/JiYuPremiseCard'
 import { ChengXuPremiseCard } from './characterProfiles/ChengXuPremiseCard'
 import { LiShenPremiseCard } from './characterProfiles/LiShenPremiseCard'
@@ -125,7 +127,7 @@ const PREMISE_CARDS: Record<string, ComponentType> = {
 
 /** 引导回复气泡：首聊时出现在消息区底部，点击直接发送（帮用户破冰）。
  * 优先取角色专属开场白(characterUIConfig.starterPrompts)，缺省用通用三句。*/
-const FALLBACK_STARTER_PROMPTS: [string, string, string] = [
+const FALLBACK_STARTER_PROMPTS: string[] = [
   '你还好吗？',
   '聊聊你的故事？',
   '有点好奇你在做什么',
@@ -256,6 +258,17 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
   const profile = resolveCharacterProfile(currentCharacterId, displayName, avatarUrl, {
     coverUrl: currentCharacter?.cover_url,
   })
+
+  // Fetch full character profile for UGC fields (premise_card, starter_config, opening_format)
+  const [fullProfile, setFullProfile] = useState<CharacterProfileDTO | null>(null)
+  useEffect(() => {
+    getCharacterProfile(currentCharacterId)
+      .then(setFullProfile)
+      .catch(() => {
+        // Fallback: fullProfile stays null, UGC features won't render
+      })
+  }, [currentCharacterId])
+
   const pageBg = isDark
     ? '/assets/backgrounds/暗色聊天背景图.webp'
     : '/assets/backgrounds/聊天背景图.webp'
@@ -745,7 +758,18 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
       <div className="mt-1 ml-[48px] mr-2 mb-1">
         {lead}
         <div className="flex flex-col gap-1.5">
-          {(CHARACTER_UI_CONFIGS[currentCharacterId]?.starterPrompts ?? FALLBACK_STARTER_PROMPTS).map((prompt) => (
+          {(() => {
+            // Four-level chain: builtin config → UGC starter_config (flat) → fallback
+            const builtinPrompts = CHARACTER_UI_CONFIGS[currentCharacterId]?.starterPrompts
+            if (builtinPrompts) return builtinPrompts
+
+            const ugcConfig = fullProfile?.starter_config
+            if (ugcConfig?.type === 'flat' && ugcConfig.prompts.length > 0) {
+              return ugcConfig.prompts
+            }
+
+            return FALLBACK_STARTER_PROMPTS
+          })().map((prompt: string) => (
             <button
               key={prompt}
               onClick={() => handleStarterClick(prompt)}
@@ -1037,7 +1061,9 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
           }`}
         >
           <p className="text-[16px] leading-[1.6] whitespace-pre-wrap break-words">
-            {msg.content}
+            {isAI && messages[0]?.id === msg.id && fullProfile?.opening_format === 'rich'
+              ? parseRichOpening(msg.content)
+              : msg.content}
           </p>
         </div>
       </div>
@@ -1137,8 +1163,15 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
         {historyLoaded &&
           messages.every((m) => m.role !== 'user') &&
           (() => {
-            const PremiseCard = PREMISE_CARDS[currentCharacterId]
-            return PremiseCard ? <PremiseCard /> : null
+            // Three-level chain: builtin component → UGC premise_card → none
+            const BuiltinCard = PREMISE_CARDS[currentCharacterId]
+            if (BuiltinCard) {
+              return <BuiltinCard />
+            }
+            if (fullProfile?.premise_card) {
+              return <PremiseCardBase {...fullProfile.premise_card} />
+            }
+            return null
           })()}
 
         {!historyLoaded && (
