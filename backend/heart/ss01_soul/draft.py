@@ -13,6 +13,14 @@ from typing import Annotated, Literal, Optional
 
 from pydantic import BaseModel, Field, model_validator
 
+# Import new UGC creation models (batch 1)
+from heart.ss01_soul.draft_new_models import (
+    ChromeDraft,
+    PremiseCardDraft,
+    ProfileBlock,
+    StarterConfig,
+)
+
 
 class GreetingStyle(str, Enum):
     warm = "warm"
@@ -106,3 +114,35 @@ class CharacterDraft(BaseModel, extra="forbid"):
     # public/unlisted → enters review pipeline; private → immediately live,
     # no review, no reward.
     visibility: Literal["public", "unlisted", "private"] = "private"
+
+    # ── Batch 1: UGC Creation Redesign Fields ──
+    # 创建模式: quick (快速创建) vs workshop (角色创作)
+    creation_mode: Literal["quick", "workshop"] = "quick"
+    # 主题配色 (14 槽位)
+    ui_chrome: Optional[ChromeDraft] = None
+    # 详情页区块 (最多 12 个)
+    profile_blocks: list[ProfileBlock] = Field(default_factory=list, max_length=12)
+    # 高级 HTML (50KB 上限)
+    custom_html: Optional[Annotated[str, Field(max_length=51200)]] = None
+    # 开场档案卡
+    premise_card: Optional[PremiseCardDraft] = None
+    # 聊天开场选项配置
+    starter_config: Optional[StarterConfig] = None
+    # 开场白格式: plain (纯文本) vs rich (带 <scene>/<plot>/<dialogue> 标签)
+    opening_format: Literal["plain", "rich"] = "plain"
+
+    @model_validator(mode="after")
+    def quick_mode_limits(self) -> "CharacterDraft":
+        """快速创建模式限制: 不得公开，不得使用角色创作专属字段。"""
+        if self.creation_mode == "quick":
+            if self.visibility == "public":
+                raise ValueError("quick mode cannot be public")
+            workshop_fields = [
+                self.custom_html,
+                self.profile_blocks,
+                self.premise_card,
+                self.starter_config,
+            ]
+            if any(workshop_fields):
+                raise ValueError("quick mode cannot set workshop-only fields")
+        return self

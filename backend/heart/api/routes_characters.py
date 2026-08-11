@@ -336,6 +336,13 @@ async def get_character_profile(
         "tags": coerce_tags(row["tags"]),
         "source": "built_in" if is_builtin else "user_created",
         "has_voice": bool(row["has_voice"]),
+        # Batch 1: UGC creation redesign fields
+        "ui_chrome": draft_json.get("ui_chrome"),
+        "profile_blocks": draft_json.get("profile_blocks", []),
+        "custom_html": draft_json.get("custom_html"),
+        "premise_card": draft_json.get("premise_card"),
+        "starter_config": draft_json.get("starter_config"),
+        "opening_format": draft_json.get("opening_format", "plain"),
         **presentation,
     }
 
@@ -960,6 +967,24 @@ async def set_character_visibility(
     if body.visibility not in ("public", "unlisted", "private"):
         raise HTTPException(status_code=422, detail="visibility 必须是 public / unlisted / private")
     await _require_owner(character_id, uid, db)
+
+    # Batch 1: 快速创建模式不得切换到 public
+    if body.visibility == "public":
+        # 读取 draft 检查 creation_mode
+        result = await db.execute(
+            text("""
+                SELECT draft FROM soul_specs
+                WHERE character_id = :cid AND status = 'active'
+                ORDER BY created_at DESC LIMIT 1
+            """),
+            {"cid": character_id},
+        )
+        draft_json = result.scalar_one_or_none()
+        if draft_json and draft_json.get("creation_mode") == "quick":
+            raise HTTPException(
+                status_code=403,
+                detail="快速创建的角色不能设为公开。请使用「链接分享」或「私密」。",
+            )
 
     if body.visibility in ("public", "unlisted"):
         await db.execute(
