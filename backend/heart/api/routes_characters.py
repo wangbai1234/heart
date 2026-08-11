@@ -1252,7 +1252,7 @@ async def quick_prefill(
     "steadiness": 0.0-1.0之间的值
   }},
   "catchphrases": ["口头禅1", "口头禅2", "口头禅3"],
-  "opening": "200-400字的第一次见面开场白，代入角色口吻",
+  "opening": "200-400字的第一次见面开场白，代入角色口吻。格式要求：场景描述和动作、神态用中文括号（）包裹独立成行，说出口的话不加引号直接输出，括号段与对白段自由穿插",
   "theme_preset_id": "推荐配色id(night_velvet/crimson_noir/amber_warm/royal_gold/earth_sage/ocean_depth/bright_warm/forest_mint之一)"
 }}
 
@@ -1261,7 +1261,7 @@ async def quick_prefill(
 - greeting_style 与性格匹配
 - sliders 反映人设描述的性格特质
 - catchphrases 符合角色说话风格，每条≤20字
-- opening 代入角色视角，营造氛围，有画面感
+- opening 必须符合格式：场景/动作用（）包裹独立成行，对白无引号直接输出，action与dialogue自由穿插。例：（深夜的酒吧，烟雾缭绕）\n你来晚了\n（轻轻点燃一支烟，眼神慵懒扫过来）
 - theme_preset_id 根据角色气质选择(如冷峻选crimson_noir，温暖选bright_warm)
 
 只返回JSON，不要其他文字。"""

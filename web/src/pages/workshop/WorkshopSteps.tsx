@@ -1,5 +1,7 @@
+import { useState } from 'react'
 import { FieldCard, SectionHeading, textInputCls } from '../../components/create/CreateShell'
 import { THEME_PRESETS } from '../../data/characterThemePresets'
+import { CHARACTER_ROLE_TAGS } from '../../data/uiContent'
 import type { WorkshopState } from './workshopTypes'
 
 export interface StepProps {
@@ -8,6 +10,61 @@ export interface StepProps {
 }
 
 type Row = { label: string; value: string }
+
+const MAX_TAGS = 10
+const MAX_TAG_LEN = 20
+
+/** 标签选择器：预设标签 pill 可点选 + 自定义标签输入（复用角色创建的标签选择方式）。 */
+function TagPicker({ tags, onChange }: { tags: string[]; onChange: (t: string[]) => void }) {
+  const [custom, setCustom] = useState('')
+  const toggle = (tag: string) =>
+    onChange(tags.includes(tag) ? tags.filter((t) => t !== tag) : tags.length < MAX_TAGS ? [...tags, tag] : tags)
+  const addCustom = () => {
+    const t = custom.trim().slice(0, MAX_TAG_LEN)
+    if (t && !tags.includes(t) && tags.length < MAX_TAGS) onChange([...tags, t])
+    setCustom('')
+  }
+  const customTags = tags.filter((t) => !(CHARACTER_ROLE_TAGS as readonly string[]).includes(t))
+  const pill = (active: boolean) =>
+    `h-[32px] px-3.5 rounded-full text-[13px] font-medium border transition-all active:scale-[0.96] ${
+      active
+        ? 'bg-[rgba(255,183,197,0.22)] border-[rgba(255,183,197,0.55)] text-[#E86083]'
+        : 'bg-[var(--color-glass-55)] border-[var(--color-border-glass)] text-[var(--color-text-secondary)]'
+    }`
+  return (
+    <div>
+      <div className="flex flex-wrap gap-2 mb-3">
+        {CHARACTER_ROLE_TAGS.map((tag) => (
+          <button key={tag} type="button" onClick={() => toggle(tag)} className={pill(tags.includes(tag))}>
+            {tag}
+          </button>
+        ))}
+        {customTags.map((tag) => (
+          <button key={tag} type="button" onClick={() => toggle(tag)} className={pill(true)}>
+            {tag}
+          </button>
+        ))}
+      </div>
+      <div className="flex gap-2">
+        <input
+          value={custom}
+          onChange={(e) => setCustom(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCustom() } }}
+          placeholder="添加自定义标签…"
+          maxLength={MAX_TAG_LEN}
+          className={`${textInputCls} flex-1 h-[42px]`}
+        />
+        <button
+          type="button"
+          onClick={addCustom}
+          className="w-[52px] h-[42px] shrink-0 rounded-[14px] bg-[rgba(255,183,197,0.22)] text-[#E86083] text-[20px] font-medium leading-none active:scale-[0.96] transition-transform"
+        >
+          ＋
+        </button>
+      </div>
+    </div>
+  )
+}
 
 /** 通用 label/value 行列表编辑器（档案/时间线/物件/对照/档案卡共用）。 */
 function RowListEditor({
@@ -439,38 +496,36 @@ export function Step1({
   return (
     <div className="max-w-[560px] mx-auto">
       <SectionHeading title="核心身份" hint="名字、性别、封面、一句话钩子——第一印象" />
-      <label
-        className={`relative block w-full aspect-[3/4] max-h-[360px] rounded-[20px] cursor-pointer overflow-hidden mb-4 ${
-          state.coverUrl
-            ? 'shadow-[0_12px_40px_-8px_rgba(0,0,0,0.3)]'
-            : 'border-2 border-dashed border-[var(--color-border-glass)] bg-[var(--color-glass-35)]'
-        }`}
-      >
-        {uploading ? (
-          <div className="w-full h-full flex items-center justify-center text-[14px] text-[var(--color-text-secondary)]">上传中...</div>
-        ) : state.coverUrl ? (
-          <>
-            <img src={state.coverUrl} alt="封面" className="w-full h-full object-cover" />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-transparent" />
-            <span className="absolute bottom-3 left-4 text-[13px] text-white/90 font-medium">点击更换封面</span>
-          </>
-        ) : (
-          <div className="w-full h-full flex flex-col items-center justify-center gap-2.5">
-            <div className="w-[52px] h-[52px] rounded-full bg-gradient-to-br from-[#FFB7C5]/30 to-[#FF8FAB]/20 flex items-center justify-center">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--color-primary)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-                <rect x="3" y="3" width="18" height="18" rx="2" />
-                <circle cx="8.5" cy="8.5" r="1.5" />
-                <path d="M21 15l-5-5L5 21" />
-              </svg>
-            </div>
-            <span className="text-[14px] text-[var(--color-ink)] font-medium">
-              <span className="text-[var(--color-error)] mr-0.5">*</span>上传封面
-            </span>
-            <span className="text-[12px] text-[var(--color-text-muted)]">建议 3:4 竖图</span>
-          </div>
-        )}
-        <input type="file" accept="image/*" onChange={onCoverUpload} className="hidden" />
-      </label>
+
+      {/* 封面：小尺寸左置 + 右侧说明（对齐快速创建与 nimoo） */}
+      <FieldCard label="封面" required>
+        <div className="flex gap-3.5">
+          <label
+            className={`relative shrink-0 w-[104px] h-[140px] rounded-[12px] cursor-pointer overflow-hidden ${
+              state.coverUrl ? '' : 'border-2 border-dashed border-[var(--color-border-glass)] bg-[var(--color-glass-55)]'
+            }`}
+          >
+            {uploading ? (
+              <div className="w-full h-full flex items-center justify-center text-[12px] text-[var(--color-text-secondary)]">上传中</div>
+            ) : state.coverUrl ? (
+              <img src={state.coverUrl} alt="封面" className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full flex flex-col items-center justify-center gap-1.5">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--color-text-muted)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 5v14M5 12h14" />
+                </svg>
+                <span className="text-[12px] text-[var(--color-text-muted)]">上传图片</span>
+              </div>
+            )}
+            <input type="file" accept="image/*" onChange={onCoverUpload} className="hidden" />
+          </label>
+          <ul className="flex-1 text-[12px] leading-[1.6] text-[var(--color-text-muted)] space-y-1.5 pt-0.5">
+            <li>· 建议上传 3:4 或 9:16 竖图，人物居中</li>
+            <li>· 图片同时用作封面和聊天背景</li>
+            <li>· 请勿上传涉及未成年或过度暴露的图像</li>
+          </ul>
+        </div>
+      </FieldCard>
 
       <FieldCard label="名字" required>
         <input
@@ -527,21 +582,14 @@ export function Step2({ state, updateField }: StepProps) {
       <FieldCard label="简介" hint="显示在详情页名字下方">
         <textarea
           value={state.intro}
-          onChange={(e) => updateField('intro', e.target.value.slice(0, 600))}
+          onChange={(e) => updateField('intro', e.target.value.slice(0, 500))}
           placeholder="一段简短的介绍"
           rows={3}
           className="w-full px-4 py-3 rounded-[14px] text-[15px] leading-[1.7] resize-none bg-[var(--color-glass-55)] border border-[var(--color-border-glass)] text-[var(--color-ink)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-primary)] transition-colors"
         />
       </FieldCard>
-      <FieldCard label="标签" hint="逗号分隔，最多 10 个">
-        <input
-          value={state.tags.join(', ')}
-          onChange={(e) =>
-            updateField('tags', e.target.value.split(',').map((t) => t.trim()).filter(Boolean).slice(0, 10))
-          }
-          placeholder="温柔, 强攻, 危险"
-          className={textInputCls}
-        />
+      <FieldCard label="标签" hint={`${state.tags.length}/10 · 点选预设或自定义`}>
+        <TagPicker tags={state.tags} onChange={(t) => updateField('tags', t)} />
       </FieldCard>
     </div>
   )

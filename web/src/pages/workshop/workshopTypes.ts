@@ -98,13 +98,14 @@ export function getQualityLevel(s: WorkshopState): QualityLevel {
   return 'finished'
 }
 
+// 后端 SliderSet 要求 0.0–1.0 浮点，中性值 0.5（不是 0–100 UI 刻度）。
 const DEFAULT_SLIDERS = {
-  warmth: 50,
-  talkativeness: 50,
-  directness: 50,
-  humor: 50,
-  playfulness: 50,
-  steadiness: 50,
+  warmth: 0.5,
+  talkativeness: 0.5,
+  directness: 0.5,
+  humor: 0.5,
+  playfulness: 0.5,
+  steadiness: 0.5,
 }
 
 /** 内容→区块：用户填什么，系统生成对应区块（反转"先选版式"）。 */

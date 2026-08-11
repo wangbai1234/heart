@@ -118,7 +118,15 @@ export function WorkshopCreatePage() {
       localStorage.removeItem(STORAGE_KEY)
       navigate(`/characters/${created.id}`)
     } catch (err) {
-      showToast(err instanceof ApiError ? err.message : '创建失败，请重试', 'error')
+      // 422 的 detail 是后端字段校验（英文 pydantic 文案），对用户不友好——
+      // 客户端已做必填校验，走到这里的 422 属于字段格式问题，给中文兜底。
+      const msg =
+        err instanceof ApiError
+          ? err.status === 422
+            ? '有字段格式不符合要求，请检查各项内容后重试'
+            : err.message
+          : '创建失败，请重试'
+      showToast(msg, 'error')
     } finally {
       setBusy(false)
     }
@@ -173,7 +181,7 @@ export function WorkshopCreatePage() {
           <button
             onClick={handlePrimary}
             disabled={busy}
-            className="w-full h-[52px] rounded-full bg-gradient-to-r from-[#C8B6FF] to-[#9D7CFF] text-white text-[16px] font-semibold shadow-[0_8px_28px_-4px_rgba(157,124,255,0.45)] active:scale-[0.98] transition-transform disabled:opacity-60"
+            className="w-full h-[52px] rounded-full bg-gradient-to-r from-[#FFB7C5] to-[#FF8FAB] text-white text-[16px] font-semibold shadow-[0_8px_28px_-4px_rgba(255,143,171,0.45)] active:scale-[0.98] transition-transform disabled:opacity-60"
           >
             {busy ? '创建中...' : tab < TABS.length - 1 ? '下一步' : '创建角色'}
           </button>
