@@ -307,12 +307,8 @@ export function CharacterPage() {
         return it.isOwner || it.isBuiltin || (it.profile.tags ?? []).includes(DISCOVERY_RECOMMENDED)
       })
     } else if (activeMode === MODE_NEWEST) {
-      // 新角色 = public+approved UGC sorted by created_at DESC, exclude built-ins
-      base = rankedItems.filter((it) => {
-        if (it.isBuiltin) return false // only UGC
-        if (!isDiscoverable(it)) return false
-        return true
-      })
+      // 新角色 = 所有可见角色（内置+UGC）按 created_at DESC
+      base = rankedItems.filter((it) => isDiscoverable(it))
     } else if (activeMode === MODE_FAVORITES) {
       // 收藏 = user's favorited characters (can include private/unlisted own UGC)
       base = rankedItems.filter((it) => isFavorite(it.id))
