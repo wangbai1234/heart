@@ -47,6 +47,26 @@ import { HuoChengPremiseCard } from './characterProfiles/HuoChengPremiseCard'
 import { ZhouJinPremiseCard } from './characterProfiles/ZhouJinPremiseCard'
 import { BaiQinghuanPremiseCard } from './characterProfiles/BaiQinghuanPremiseCard'
 import { ChengZhiPremiseCard } from './characterProfiles/ChengZhiPremiseCard'
+import { LuTingshengPremiseCard } from './characterProfiles/LuTingshengPremiseCard'
+import { GuNanqiaoPremiseCard } from './characterProfiles/GuNanqiaoPremiseCard'
+import { YunZhiPremiseCard } from './characterProfiles/YunZhiPremiseCard'
+import { SuWanPremiseCard } from './characterProfiles/SuWanPremiseCard'
+import { LinXiaomanPremiseCard } from './characterProfiles/LinXiaomanPremiseCard'
+import { LuZhaoPremiseCard } from './characterProfiles/LuZhaoPremiseCard'
+import { SuYueyaoPremiseCard } from './characterProfiles/SuYueyaoPremiseCard'
+import { HuoShiyuPremiseCard } from './characterProfiles/HuoShiyuPremiseCard'
+import { SuNianPremiseCard } from './characterProfiles/SuNianPremiseCard'
+import { SuYunPremiseCard } from './characterProfiles/SuYunPremiseCard'
+import { GuQingwanPremiseCard } from './characterProfiles/GuQingwanPremiseCard'
+import { GuXingmianPremiseCard } from './characterProfiles/GuXingmianPremiseCard'
+import { SongYePremiseCard } from './characterProfiles/SongYePremiseCard'
+import { VitoRosettiPremiseCard } from './characterProfiles/VitoRosettiPremiseCard'
+import { XieCiPremiseCard } from './characterProfiles/XieCiPremiseCard'
+import { ShenLiaoPremiseCard } from './characterProfiles/ShenLiaoPremiseCard'
+import { LuWenjingPremiseCard } from './characterProfiles/LuWenjingPremiseCard'
+import { JiangRanPremiseCard } from './characterProfiles/JiangRanPremiseCard'
+import { GuYanliPremiseCard } from './characterProfiles/GuYanliPremiseCard'
+import { XuZhihanPremiseCard } from './characterProfiles/XuZhihanPremiseCard'
 import { getCharacterSettings } from '../services/api'
 
 const EMPTY_MESSAGES: Message[] = []
@@ -75,6 +95,27 @@ const PREMISE_CARDS: Record<string, ComponentType> = {
   zhou_jin: ZhouJinPremiseCard,
   bai_qinghuan: BaiQinghuanPremiseCard,
   cheng_zhi: ChengZhiPremiseCard,
+  lu_tingsheng: LuTingshengPremiseCard,
+  gu_nanqiao: GuNanqiaoPremiseCard,
+  yun_zhi: YunZhiPremiseCard,
+  su_wan: SuWanPremiseCard,
+  lin_xiaoman: LinXiaomanPremiseCard,
+  lu_zhao: LuZhaoPremiseCard,
+  su_yueyao: SuYueyaoPremiseCard,
+  huo_shiyu: HuoShiyuPremiseCard,
+  su_nian: SuNianPremiseCard,
+  su_yun: SuYunPremiseCard,
+  gu_qingwan: GuQingwanPremiseCard,
+  gu_xingmian: GuXingmianPremiseCard,
+  song_ye: SongYePremiseCard,
+  vito_rosetti: VitoRosettiPremiseCard,
+  xie_ci: XieCiPremiseCard,
+  shen_liao: ShenLiaoPremiseCard,
+  lu_wenjing: LuWenjingPremiseCard,
+  jiang_ran: JiangRanPremiseCard,
+  gu_yanli: GuYanliPremiseCard,
+  xu_zhihan: XuZhihanPremiseCard,
+
 }
 
 /** 引导回复气泡：首聊时出现在消息区底部，点击直接发送（帮用户破冰）。
