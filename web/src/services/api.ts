@@ -743,7 +743,41 @@ export interface CharacterProfileDTO {
   personality: Array<{ label: string; value: number | null }>
   source: string
   has_voice: boolean
+  // Batch 1 & 2: UGC creation redesign fields
+  ui_chrome?: ChromePalette | null
+  profile_blocks?: ProfileBlock[]
+  custom_html?: string | null
+  premise_card?: PremiseCardData | null
+  starter_config?: StarterConfig | null
+  opening_format?: 'plain' | 'rich'
 }
+
+// Import Chrome types from CharacterProfilePage
+import type { ChromePalette } from '../pages/CharacterProfilePage'
+
+// Profile blocks types
+export type ProfileBlock =
+  | { type: 'dossier'; title: string; rows: { label: string; value: string }[] }
+  | { type: 'quote'; text: string; attribution?: string }
+  | { type: 'timeline'; title: string; events: { label: string; value: string }[] }
+  | { type: 'objects'; title: string; items: { label: string; value: string }[] }
+  | { type: 'contrast'; leftLabel: string; rightLabel: string; pairs: { label: string; value: string }[] }
+  | { type: 'prose'; title?: string; text: string }
+
+// Premise card data
+export interface PremiseCardData {
+  accent: string
+  leadIn: string
+  title: string
+  rows: { label: string; value: string }[]
+  note?: string
+  warning?: string
+}
+
+// Starter config types
+export type StarterConfig =
+  | { type: 'flat'; prompts: string[] }
+  | { type: 'branched'; branches: { label: string; lines: string[] }[] }
 
 export async function getCharacterProfile(id: string): Promise<CharacterProfileDTO> {
   return request(`/characters/${encodeURIComponent(id)}/profile`)

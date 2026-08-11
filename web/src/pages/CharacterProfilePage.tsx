@@ -67,7 +67,7 @@ const BESPOKE_PROFILES: Record<string, ComponentType<{ profile: CharacterProfile
 }
 
 /** Chrome 视觉调色盘 registry（React 外层chrome，非 iframe 内层） */
-type ChromePalette = {
+export type ChromePalette = {
   bg: string
   coverBg: string
   scrimGradient: string
@@ -947,9 +947,28 @@ export function CharacterProfilePage() {
 
   // 角色有 bespoke iframe 详情页则走 bespoke 分支，否则走 generic template
   const BespokeProfile = profile ? BESPOKE_PROFILES[id] : null
-  const chrome = CHROME_PALETTES[id]
 
-  if (profile && BespokeProfile && chrome) {
+  // Batch 2: 配色三级链 - 内置硬编码 → UGC 自选 → 默认盘
+  // 保持内置优先级在前，CHROME_PALETTES 命中时行为完全不变（零回归）
+  const DEFAULT_PALETTE: ChromePalette = {
+    bg: '#171019',
+    coverBg: '#1B1320',
+    scrimGradient: 'linear-gradient(to top,#171019 6%,rgba(23,16,25,.4) 40%,transparent 100%)',
+    nameColor: '#ECE2E7',
+    ageColor: '#B4A4AF',
+    taglineColor: '#E08298',
+    chipActiveBg: 'rgba(194,74,99,.08)',
+    chipActiveBorder: 'rgba(194,74,99,.32)',
+    chipActiveText: '#E08298',
+    chipInactiveBg: 'rgba(255,255,255,.05)',
+    chipInactiveBorder: 'rgba(255,255,255,.1)',
+    chipInactiveText: '#B4A4AF',
+    ctaGradient: 'linear-gradient(105deg,#C24A63,#9C3A55)',
+    ctaShadow: '0 10px 26px rgba(194,74,99,0.32)',
+  }
+  const chrome = CHROME_PALETTES[id] ?? profile?.ui_chrome ?? DEFAULT_PALETTE
+
+  if (profile && BespokeProfile && CHROME_PALETTES[id]) {
     return (
       <div className="relative w-full h-full overflow-y-auto" style={{ background: chrome.bg }}>
         {/* ── 封面 hero（默认露上 3/4，点击展开全图）── */}
@@ -1073,7 +1092,25 @@ export function CharacterProfilePage() {
   }
 
   return (
-    <div className="relative w-full h-full overflow-y-auto bg-[var(--color-bg-page)]">
+    <div
+      className="relative w-full h-full overflow-y-auto bg-[var(--color-bg-page)]"
+      style={
+        {
+          '--chrome-bg': chrome.bg,
+          '--chrome-name-color': chrome.nameColor,
+          '--chrome-age-color': chrome.ageColor,
+          '--chrome-tagline-color': chrome.taglineColor,
+          '--chrome-cta-gradient': chrome.ctaGradient,
+          '--chrome-cta-shadow': chrome.ctaShadow,
+          '--chrome-chip-active-bg': chrome.chipActiveBg,
+          '--chrome-chip-active-border': chrome.chipActiveBorder,
+          '--chrome-chip-active-text': chrome.chipActiveText,
+          '--chrome-chip-inactive-bg': chrome.chipInactiveBg,
+          '--chrome-chip-inactive-border': chrome.chipInactiveBorder,
+          '--chrome-chip-inactive-text': chrome.chipInactiveText,
+        } as React.CSSProperties
+      }
+    >
       {/* ── Full-bleed cover ── */}
       <div className="relative w-full h-[62vh] min-h-[380px] overflow-hidden">
         <img src={cover} alt={profile?.display_name ?? ''} className="absolute inset-0 w-full h-full object-cover" />
@@ -1113,7 +1150,7 @@ export function CharacterProfilePage() {
 
       {/* ── 关于TA ── */}
       <div className="relative -mt-14 px-5 pb-4">
-        <h1 className="text-[26px] font-bold text-[var(--color-ink)] leading-tight">
+        <h1 className="text-[26px] font-bold leading-tight" style={{ color: chrome.nameColor }}>
           {profile?.display_name ?? '　'}
         </h1>
         {profile?.creator_name && (
@@ -1121,13 +1158,18 @@ export function CharacterProfilePage() {
         )}
 
         {profile?.age_range && (
-          <span className="mt-2 inline-flex h-[24px] items-center rounded-full bg-[var(--color-glass-75)] border border-[var(--color-border-glass)] px-3 text-[12px] font-medium text-[var(--color-text-secondary)] tabular-nums">
+          <span
+            className="mt-2 inline-flex h-[24px] items-center rounded-full bg-[var(--color-glass-75)] border border-[var(--color-border-glass)] px-3 text-[12px] font-medium tabular-nums"
+            style={{ color: chrome.ageColor }}
+          >
             {profile.age_range} 岁
           </span>
         )}
 
         {profile?.tagline && (
-          <p className="mt-3 text-[15px] leading-relaxed text-[var(--color-text-secondary)]">{profile.tagline}</p>
+          <p className="mt-3 text-[15px] leading-relaxed" style={{ color: chrome.taglineColor }}>
+            {profile.tagline}
+          </p>
         )}
 
         {profile && profile.tags.length > 0 && (
@@ -1135,7 +1177,14 @@ export function CharacterProfilePage() {
             {profile.tags.map((t) => (
               <span
                 key={t}
-                className="h-[26px] px-3 inline-flex items-center rounded-full bg-[var(--color-glass-75)] border border-[var(--color-border-glass)] text-[12px] text-[var(--color-text-secondary)]"
+                className="h-[26px] px-3 inline-flex items-center rounded-full text-[12px]"
+                style={{
+                  backgroundColor: chrome.chipInactiveBg,
+                  borderWidth: '1px',
+                  borderStyle: 'solid',
+                  borderColor: chrome.chipInactiveBorder,
+                  color: chrome.chipInactiveText,
+                }}
               >
                 {t}
               </span>
@@ -1213,7 +1262,11 @@ export function CharacterProfilePage() {
           </button>
           <button
             onClick={openChat}
-            className={`h-[48px] rounded-full bg-gradient-to-r from-[#FFB7C5] to-[#FF8FAB] text-white text-[16px] font-semibold shadow-[var(--shadow-btn)] active:scale-[0.97] transition-transform ${
+            style={{
+              background: chrome.ctaGradient,
+              boxShadow: chrome.ctaShadow,
+            }}
+            className={`h-[48px] rounded-full text-white text-[16px] font-semibold active:scale-[0.97] transition-transform ${
               chatted ? 'px-7' : 'flex-1'
             }`}
           >
