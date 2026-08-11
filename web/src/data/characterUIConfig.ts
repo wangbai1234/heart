@@ -33,7 +33,7 @@ export interface CharacterUIConfig {
     BONDED: string
   }
   /** 首聊引导气泡 3 条（替换通用的"你还好吗"） */
-  starterPrompts: [string, string, string]
+  starterPrompts?: [string, string, string]
   /** 可选：分支式首聊引导。选一个"切入角度"后展开 2-3 条具体台词。
    * 有 starterBranches 时优先于 starterPrompts（乙游式嵌套选项）。 */
   starterBranches?: Array<{
@@ -84,6 +84,20 @@ CHARACTER_UI_CONFIGS.gu_beichen = {
     BONDED: '商业帝国，不及你一个回头',
   },
   starterPrompts: ['又加班到很晚', '需要我陪你吗', '你累了吗'],
+  starterBranches: [
+    {
+      label: '保持距离感',
+      options: ['顾总，这份文件需要您签字', '我把报表放这了', '不打扰您了'],
+    },
+    {
+      label: '试探那条线',
+      options: ['你今天看起来很累', '如果不是工作关系，你会找我吗', '飞纽约那么重要，为什么取消了'],
+    },
+    {
+      label: '接住他的脆弱',
+      options: ['有些东西，不是钱能换来的', '如果你什么都没有，我还在', '你可以不用那么强'],
+    },
+  ],
 }
 
 CHARACTER_UI_CONFIGS.cheng_zhi = {
@@ -239,7 +253,20 @@ CHARACTER_UI_CONFIGS.gu_xingzhou = {
     LOVER: '他的占有欲，吞噬了你所有退路',
     BONDED: '你是他的软肋，也是他的铠甲',
   },
-  starterPrompts: ['你去哪了', '过来', '别想离开我'],
+  starterBranches: [
+    {
+      label: '挑战他的控制',
+      options: ['我不需要向你报备', '你没资格管我', '我想去哪就去哪'],
+    },
+    {
+      label: '理解他的执念',
+      options: ['你为什么这么害怕失去', '我不会走的', '你什么时候能放松点'],
+    },
+    {
+      label: '试探他的底线',
+      options: ['如果我不听话呢', '你最怕的是什么', '你会永远这样吗'],
+    },
+  ],
 }
 
 // ═══════════════ 第二批：强制爱/病娇/校园/黑道 ═══════════════
@@ -254,7 +281,20 @@ CHARACTER_UI_CONFIGS.li_jue = {
     LOVER: '黑暗世界里，你是他唯一的光',
     BONDED: '就算血溅五步，他也要护你周全',
   },
-  starterPrompts: ['有人欺负你吗', '过来', '离我近一点'],
+  starterBranches: [
+    {
+      label: '守住距离',
+      options: ['我不需要你保护', '你们的世界我不想碰', '放开我'],
+    },
+    {
+      label: '靠近他的黑暗',
+      options: ['我不怕你的世界', '让我留在你身边', '你的伤是怎么来的'],
+    },
+    {
+      label: '成为他的光',
+      options: ['我想看你笑一次', '血和暴力不是全部', '如果有一天你想离开这一切'],
+    },
+  ],
 }
 
 CHARACTER_UI_CONFIGS.shen_yichen = {
@@ -280,7 +320,20 @@ CHARACTER_UI_CONFIGS.jiang_yueze = {
     LOVER: '他跪在你面前，求你再给一次机会',
     BONDED: '错过一次，余生他都在追你回来',
   },
-  starterPrompts: ['我们能谈谈吗', '对不起', '我错了'],
+  starterBranches: [
+    {
+      label: '逼他说清楚',
+      options: ['当年为什么不告而别', '你消失的那些年在哪', '现在回来想得到什么'],
+    },
+    {
+      label: '假装不在意',
+      options: ['我过得很好', '你走的时候我就知道不会回来', '别觉得还能回到从前'],
+    },
+    {
+      label: '给彼此机会',
+      options: ['你一句话都没留下', '我等了你很久', '如果你当初说一声'],
+    },
+  ],
 }
 
 CHARACTER_UI_CONFIGS.bai_qinghuan = {
@@ -319,7 +372,20 @@ CHARACTER_UI_CONFIGS.jiang_ye = {
     LOVER: '痞帅的外壳下，藏着只对你的认真',
     BONDED: '坏学长这辈子，栽在你手里了',
   },
-  starterPrompts: ['学妹这么早', '躲我干嘛', '陪学长逃个课'],
+  starterBranches: [
+    {
+      label: '拆穿他的套路',
+      options: ['你是不是对每个学妹都这样', '我不吃你这套', '你的招数太老套了'],
+    },
+    {
+      label: '配合他的撩拨',
+      options: ['学长想教我什么', '那我不逃了，你敢抓吗', '坏学长只对我坏吗'],
+    },
+    {
+      label: '看穿他的认真',
+      options: ['你什么时候能正经点', '我想知道你真实的样子', '别总用痞气掩饰自己'],
+    },
+  ],
 }
 
 CHARACTER_UI_CONFIGS.huo_shiyu = {
@@ -358,7 +424,20 @@ CHARACTER_UI_CONFIGS.qin_xiao = {
     LOVER: '这条街的狠人，只对你服软',
     BONDED: '刀口舔血的日子，只为护你安稳',
   },
-  starterPrompts: ['谁惹你了', '过来', '跟着我'],
+  starterBranches: [
+    {
+      label: '挑衅他的底线',
+      options: ['我不需要你保护', '这条街我也能走', '你管不着我'],
+    },
+    {
+      label: '试探他的温柔',
+      options: ['你能不能别叼烟了', '如果我受伤了，你会心疼吗', '你什么时候能不那么凶'],
+    },
+    {
+      label: '直面他的野性',
+      options: ['我就喜欢你这样的狠人', '带我去你常去的地方', '教我怎么保护自己'],
+    },
+  ],
 }
 
 CHARACTER_UI_CONFIGS.su_yun = {
@@ -679,5 +758,18 @@ CHARACTER_UI_CONFIGS.lilith = {
     LOVER: '她的反差，只在你面前显露',
     BONDED: '危险的关系，她只想和你维持',
   },
-  starterPrompts: ['小可爱在想什么', '陪我玩玩', '别想逃'],
+  starterBranches: [
+    {
+      label: '抵抗她的诱惑',
+      options: ['我不是你的玩物', '别用那种眼神看我', '我不会被你控制'],
+    },
+    {
+      label: '顺从她的支配',
+      options: ['你想怎么玩', '我好奇你的世界', '你想要什么'],
+    },
+    {
+      label: '看穿她的脆弱',
+      options: ['女王也会累吗', '支配不了我你会怎样', '我想看你真实的样子'],
+    },
+  ],
 }

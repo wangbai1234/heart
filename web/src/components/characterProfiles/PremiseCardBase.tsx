@@ -30,6 +30,7 @@ export function PremiseCardBase({ accent, leadIn, title, rows, note, warning }: 
   const isDark = useThemeStore((s) => s.resolvedTheme) === 'dark'
   const ref = useRef<HTMLIFrameElement>(null)
   const [height, setHeight] = useState(0)
+  const [isExpanded, setIsExpanded] = useState(false)
 
   useEffect(() => {
     const iframe = ref.current
@@ -48,15 +49,22 @@ export function PremiseCardBase({ accent, leadIn, title, rows, note, warning }: 
         measure()
       }
     }
+    const handleMessage = (e: MessageEvent) => {
+      if (e.data === 'toggle') {
+        setIsExpanded((prev) => !prev)
+      }
+    }
     iframe.addEventListener('load', measure)
     const ro = new ResizeObserver(onResize)
     ro.observe(iframe)
+    window.addEventListener('message', handleMessage)
     measure()
     return () => {
       iframe.removeEventListener('load', measure)
       ro.disconnect()
+      window.removeEventListener('message', handleMessage)
     }
-  }, [])
+  }, [isExpanded])
 
   const ink = isDark ? 'rgba(248,242,250,0.85)' : 'rgba(30,32,51,0.9)'
   const muted = isDark ? 'rgba(248,242,250,0.5)' : 'rgba(91,93,117,0.7)'
@@ -82,17 +90,23 @@ body {
   color: ${ink};
   font-size: 13px;
   line-height: 1.6;
+  cursor: pointer;
+  user-select: none;
 }
-.lead { font-style: italic; color: ${muted}; margin-bottom: 12px; font-size: 12px; line-height: 1.7; }
+.lead {
+  font-style: italic; color: ${muted}; margin-bottom: 12px; font-size: 12px; line-height: 1.7;
+  ${!isExpanded ? 'display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;' : ''}
+}
 .card {
   background: ${isDark ? 'rgba(36,38,50,0.5)' : 'rgba(248,249,250,0.8)'};
   border: 1px solid ${isDark ? 'rgba(248,242,250,0.08)' : 'rgba(30,32,51,0.08)'};
   border-left: 2px solid ${accent};
   border-radius: 8px;
   padding: 12px;
+  ${!isExpanded ? 'opacity: 0.5;' : ''}
 }
 .card-title { font-weight: 600; font-size: 12px; margin-bottom: 8px; color: ${accent}; letter-spacing: 0.5px; }
-.row { display: flex; margin-bottom: 6px; font-size: 12px; }
+.row { display: flex; margin-bottom: 6px; font-size: 12px; ${!isExpanded ? 'display: none;' : ''} }
 .label { color: ${muted}; min-width: 48px; }
 .value { color: ${ink}; flex: 1; }
 .note {
@@ -100,6 +114,7 @@ body {
   border-top: 1px solid ${isDark ? 'rgba(248,242,250,0.06)' : 'rgba(30,32,51,0.06)'};
   font-size: 11px; line-height: 1.6; color: ${isDark ? 'rgba(248,242,250,0.55)' : 'rgba(91,93,117,0.75)'};
   font-style: italic;
+  ${!isExpanded ? 'display: none;' : ''}
 }
 .warning {
   margin-top: 8px; padding: 8px;
@@ -107,10 +122,15 @@ body {
   border-left: 2px solid ${isDark ? 'rgba(255,107,107,0.6)' : 'rgba(255,107,107,0.5)'};
   border-radius: 4px; font-size: 10px;
   color: ${isDark ? 'rgba(255,107,107,0.8)' : 'rgba(200,60,60,0.9)'};
+  ${!isExpanded ? 'display: none;' : ''}
+}
+.expand-hint {
+  margin-top: 8px; text-align: center; font-size: 11px; color: ${muted};
+  ${isExpanded ? 'display: none;' : ''}
 }
 </style>
 </head>
-<body>
+<body onclick="parent.postMessage('toggle','*')">
 <div class="lead">${leadIn}</div>
 <div class="card">
   <div class="card-title">${title}</div>
@@ -118,6 +138,7 @@ body {
   ${note ? `<div class="note">${note}</div>` : ''}
   ${warning ? `<div class="warning">${warning}</div>` : ''}
 </div>
+<div class="expand-hint">点击${isExpanded ? '收起' : '查看详情'}</div>
 </body>
 </html>
   `.trim()
