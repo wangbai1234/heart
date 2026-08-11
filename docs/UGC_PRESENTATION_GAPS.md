@@ -1,7 +1,7 @@
 # UGC 角色呈现层缺口与创建功能重构方案
 
 > 创建：2026-08-11 · 基于代码精读（非凭记忆），每条附验证位置
-> 范围：UGC 角色的**详情页 UI + 聊天页开场钩子**，与内置 37 个 bespoke 角色的对比
+> 范围：UGC 角色的**详情页 UI + 聊天页开场钩子**，与内置 45 个 bespoke 角色的对比
 > 配套：`UGC_COMPATIBILITY_GAPS.md`（2026-07-09）覆盖后端行为层，本文覆盖呈现层，两者互补不重叠
 
 ---
@@ -126,7 +126,7 @@ LLM 失败时**绝不能**偷偷套 `warm` + 全 0.5 然后假装成功——那
 
 ### 5.1 核心矛盾
 
-要详情页精美，就要用户产出足够内容——内置角色精美是因为那 37 个组件是手写的，各有一套排版语言。UGC 想达到同等水准，避不开让用户填更多。
+要详情页精美，就要用户产出足够内容——内置角色精美是因为那 45 个组件是手写的，各有一套排版语言。UGC 想达到同等水准，避不开让用户填更多。
 
 所以设计目标**不是减少输入**（那是快速创建的职责），而是让填的过程本身有即时回报：每填一段，详情页当场变好看一点。
 
@@ -168,18 +168,20 @@ nimoo 的做法本质上还是让用户写 HTML 或选模板，用户得自己�
 
 区块编辑器覆盖不写代码的用户；额外给「高级模式」开放原始 HTML（≤50KB）。
 
-**沙箱可以不给脚本**：已核对全部 37 个 bespoke 组件，`<script>` 出现次数为 0，动效全是 CSS。所以禁脚本对 UGC **不产生能力落差**，可以直接上最严设置。
+**沙箱可以不给脚本**：已核对全部 45 个 bespoke 组件，`<script>` 出现次数为 0，动效全是 CSS。所以禁脚本对 UGC **不产生能力落差**，可以直接上最严设置。
 
 关于既有 iframe 的 sandbox（**修正 2026-08-11 初稿的错误论断**）：`PremiseCardBase.tsx:166` 实际**有** `sandbox` 属性，值是 `allow-same-origin allow-scripts`。这个组合是已知的危险配置（两者同时给，沙箱可被脚本绕过访问父页 DOM）。但它有真实功能依赖：
 
 - `allow-scripts` 支撑卡片的展开/收起（`onclick="parent.postMessage('toggle','*')"`）
-- `allow-same-origin` 支撑高度测量（`:42-43` 读 `iframe.contentDocument.body.scrollHeight`），去掉则 `contentDocument` 返回 null，46 张卡片全部塌成默认 200px
+- `allow-same-origin` 支撑高度测量（`:42-43` 读 `iframe.contentDocument.body.scrollHeight`），去掉则 `contentDocument` 返回 null，45 张卡片全部塌成默认 200px
 
-**收紧方案（独立批次，不并入批 0）**：把高度测量从"父页读 contentDocument"改成"iframe 内部 postMessage 上报高度"——现成的 message 通道已经在用了。改完即可去掉 `allow-same-origin`。之所以单独走：它动的是全部 46 张卡片的版式测量，有回归风险，不该和转义修复混在一个 PR。
+**收紧方案（独立批次，不并入批 0）**：把高度测量从"父页读 contentDocument"改成"iframe 内部 postMessage 上报高度"——现成的 message 通道已经在用了。改完即可去掉 `allow-same-origin`。之所以单独走：它动的是全部 45 张卡片的版式测量，有回归风险，不该和转义修复混在一个 PR。
 
 批 0 + 批 1 色值白名单落地后，注入面已经关闭（文本节点转义 + CSS 通道白名单），sandbox 收紧属纵深防御而非主漏洞。
 
-存储前净化：移除 `<script>`、`on*` 事件属性、外链资源。公开需过审；私密/链接分享可跳过审核但仍须净化。提供 CSS 变量文档（`--theme-accent` 等）让用户的 HTML 能吃到所选配色。
+存储前净化：移除 `<script>`、`on*` 事件属性、外链资源。提供 CSS 变量文档（`--theme-accent` 等）让用户的 HTML 能吃到所选配色。
+
+**审核范围修正（初稿写错）**：初稿称"私密/链接分享可跳过审核"，实际只有 `private` 跳过。`unlisted` 与 `public` 同样进审核队列——创建时 `visibility in ("public","unlisted")` → `review_status = "pending"`（`routes_characters.py:722-726`），且对他人可见需 `review_status = 'approved'`（`:293`）。产品后果：用户选"链接分享"后，链接要等过审才生效，UI 必须明说。净化对所有档位都做。
 
 区块与高级 HTML **互斥**：有 `custom_html` 优先用它，否则渲染 `profile_blocks`，都没有则 generic。
 
@@ -236,7 +238,7 @@ def quick_mode_limits(self):
   → generic
 ```
 
-配色同样链式回退：`CHROME_PALETTES[id]` → `profile.ui_chrome` → 默认盘。内置优先级在前，**37 个 bespoke 组件一行不动**。
+配色同样链式回退：`CHROME_PALETTES[id]` → `profile.ui_chrome` → 默认盘。内置优先级在前，**45 个 bespoke 组件一行不动**。
 
 `ConversationChatPage.tsx:1140` 的开场卡：先查 `PREMISE_CARDS[id]`，没有则用 `character.premise_card` 喂 `PremiseCardBase`。
 
@@ -248,7 +250,7 @@ def quick_mode_limits(self):
 |---|------|------|
 | **0** | `PremiseCardBase` 六个字段转义 + 新建 `web/src/utils/escapeHtml.ts`。**独立 PR，不混业务** | 无 |
 | **1** | 后端 draft 新字段 + validator + profile DTO 扩展 | 无 |
-| **2** | 从 37 个角色配色提炼 8 套预置盘 + 配色选择器 + generic 分支应用配色 | 批 1 |
+| **2** | 从 45 个角色配色提炼 8 套预置盘 + 配色选择器 + generic 分支应用配色 | 批 1 |
 | **3** | `CreateHubPage` 出两档入口 + 快速创建 4 字段表单 | 批 1、2 |
 | **4** | AI 预填一次调用 + 确认页（含失败处理） | 批 3 |
 | **5** | 区块渲染器（7 种版式） | 批 1 |
@@ -283,7 +285,7 @@ def quick_mode_limits(self):
 
 ## 10. 不作为
 
-- 不把 37 个内置角色的配色搬进数据库。收益是"少一处重复"，代价是动全部 bespoke 组件 + 回归风险，不值当。以后想搬随时可以，架构没堵死。
+- 不把 45 个内置角色的配色搬进数据库。收益是"少一处重复"，代价是动全部 bespoke 组件 + 回归风险，不值当。以后想搬随时可以，架构没堵死。
 - 不给 UGC 脚本能力。已核实内置角色零 `<script>`，禁脚本无能力落差。
 - 不做反向降级（角色创作 → 快速创建）。升级是单向的：快速创建可升级进工坊，已填字段带过去从第 3 步续填，`creation_mode` 改 `workshop` 并解锁可见性选项。反向没有意义。
 
@@ -295,7 +297,7 @@ def quick_mode_limits(self):
 - `PremiseCardBase.tsx` 六个字段接上转义：`label`/`value`/`leadIn`/`title`/`warning` 用严格版，`note` 用允许 `<br>` 版
 - 新建 `web/src/utils/escapeHtml.test.ts`：11 个测试，覆盖 script 中和、属性逃逸、二次转义、`<br>` 三种写法与大小写、`<brx>` 近似标签、真实 note 内容
 
-**为何 `note` 需要例外**：审计全部 46 个内置 premise card，`<br>` 共 86 处且**全部集中在 `note`**，其余五字段零标签。全量转义会让 44 个文件的换行变成可见的 `&lt;br&gt;`。
+**为何 `note` 需要例外**：审计全部 45 个内置 premise card，`<br>` 共 86 处且**全部集中在 `note`**，其余五字段零标签。全量转义会让 44 个文件的换行变成可见的 `&lt;br&gt;`。
 
 **未纳入批 0**：`accent` 走 CSS 通道（`border-left: 2px solid ${accent}`），转义在 CSS 上下文无效，须靠色值白名单——已排进批 1 的 `ChromeDraft` 校验。sandbox 收紧见第 5.5 节。
 
