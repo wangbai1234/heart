@@ -29,6 +29,7 @@ export interface PremiseCardData {
 export function PremiseCardBase({ accent, leadIn, title, rows, note, warning }: PremiseCardData) {
   const isDark = useThemeStore((s) => s.resolvedTheme) === 'dark'
   const ref = useRef<HTMLIFrameElement>(null)
+  const wrapperRef = useRef<HTMLDivElement>(null)
   const [height, setHeight] = useState(0)
   const [isExpanded, setIsExpanded] = useState(false)
 
@@ -51,7 +52,16 @@ export function PremiseCardBase({ accent, leadIn, title, rows, note, warning }: 
     }
     const handleMessage = (e: MessageEvent) => {
       if (e.data === 'toggle') {
-        setIsExpanded((prev) => !prev)
+        setIsExpanded((prev) => {
+          const next = !prev
+          // 展开时，延迟滚动到视图确保内容可见
+          if (next) {
+            setTimeout(() => {
+              wrapperRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+            }, 100)
+          }
+          return next
+        })
       }
     }
     iframe.addEventListener('load', measure)
@@ -148,11 +158,13 @@ body {
   `.trim()
 
   return (
-    <iframe
-      ref={ref}
-      srcDoc={srcDoc}
-      style={{ width: '100%', height: height || 200, border: 'none', display: 'block' }}
-      sandbox="allow-same-origin allow-scripts"
-    />
+    <div ref={wrapperRef}>
+      <iframe
+        ref={ref}
+        srcDoc={srcDoc}
+        style={{ width: '100%', height: height || 200, border: 'none', display: 'block' }}
+        sandbox="allow-same-origin allow-scripts"
+      />
+    </div>
   )
 }
