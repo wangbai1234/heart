@@ -148,7 +148,7 @@ body {
       ref={ref}
       srcDoc={srcDoc}
       style={{ width: '100%', height: height || 200, border: 'none', display: 'block' }}
-      sandbox="allow-same-origin"
+      sandbox="allow-same-origin allow-scripts"
     />
   )
 }
