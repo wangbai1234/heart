@@ -11,7 +11,7 @@ import { stageWithIntimacy, isColdWar, intimacyPercent, stageLabel, stageOrderIn
 import { buildShareLink } from '../utils/characterShare'
 import { useSafeBack } from '../hooks/useSafeBack'
 import { CHARACTER_UI_CONFIGS, type CharacterTheme } from '../data/characterUIConfig'
-import { JiYuProfile, LiShenProfile, ChengXuProfile, LilithProfile, GuBeichenProfile, QinXiaoProfile, JiangYuezeProfile, JiangYeProfile, GuXingzhouProfile, LiJueProfile, ShenYichenProfile, ShenYuchuanProfile, LuoFeiProfile, PeiTinglanProfile, FuMingxiuProfile, XizeProfile, JiangLiProfile } from '../components/characterProfiles'
+import { JiYuProfile, LiShenProfile, ChengXuProfile, LilithProfile, GuBeichenProfile, QinXiaoProfile, JiangYuezeProfile, JiangYeProfile, GuXingzhouProfile, LiJueProfile, ShenYichenProfile, ShenYuchuanProfile, LuoFeiProfile, PeiTinglanProfile, FuMingxiuProfile, XizeProfile, JiangLiProfile, PeiJueProfile, HuoChengProfile, ZhouJinProfile, BaiQinghuanProfile, ChengZhiProfile } from '../components/characterProfiles'
 import type { ComponentType } from 'react'
 
 /** 关系路线的 6 个可视节点（ACQUAINTANCE/FRIEND 合归「靠近」）。 */
@@ -36,6 +36,11 @@ const BESPOKE_PROFILES: Record<string, ComponentType<{ profile: CharacterProfile
   fu_mingxiu: FuMingxiuProfile,
   xize: XizeProfile,
   jiang_li: JiangLiProfile,
+  pei_jue: PeiJueProfile,
+  huo_cheng: HuoChengProfile,
+  zhou_jin: ZhouJinProfile,
+  bai_qinghuan: BaiQinghuanProfile,
+  cheng_zhi: ChengZhiProfile,
 }
 
 /** Chrome 视觉调色盘 registry（React 外层chrome，非 iframe 内层） */
@@ -328,6 +333,86 @@ const CHROME_PALETTES: Record<string, ChromePalette> = {
     chipInactiveText: '#988486',
     ctaGradient: 'linear-gradient(105deg,#A96B6B,#824F4F)',
     ctaShadow: '0 10px 26px rgba(169,107,107,0.36)',
+  },
+  pei_jue: {
+    bg: '#0a0a0c',
+    coverBg: '#151517',
+    scrimGradient: 'linear-gradient(180deg, rgba(10,10,12,0) 0%, rgba(10,10,12,0.7) 50%, rgba(10,10,12,0.95) 100%)',
+    nameColor: '#e8ddd0',
+    ageColor: '#b59b82',
+    taglineColor: '#d4c4b0',
+    chipActiveBg: 'rgba(195,68,58,0.2)',
+    chipActiveBorder: 'rgba(195,68,58,0.32)',
+    chipActiveText: '#c3443a',
+    chipInactiveBg: 'rgba(248,242,250,0.06)',
+    chipInactiveBorder: 'rgba(248,242,250,0.1)',
+    chipInactiveText: '#998877',
+    ctaGradient: 'linear-gradient(135deg, #c3443a 0%, #9a342b 100%)',
+    ctaShadow: '0 4px 16px rgba(195,68,58,0.3)',
+  },
+  huo_cheng: {
+    bg: '#1A1612',
+    coverBg: '#2A2218',
+    scrimGradient: 'linear-gradient(180deg, rgba(26,22,18,0) 0%, rgba(26,22,18,0.85) 70%, rgba(26,22,18,0.95) 100%)',
+    nameColor: '#F5E6D3',
+    ageColor: '#B39E8D',
+    taglineColor: '#D4CFC8',
+    chipActiveBg: '#D97843',
+    chipActiveBorder: 'rgba(217,120,67,0.32)',
+    chipActiveText: '#1A1612',
+    chipInactiveBg: 'rgba(217,120,67,0.15)',
+    chipInactiveBorder: 'rgba(217,120,67,0.2)',
+    chipInactiveText: '#D4A882',
+    ctaGradient: 'linear-gradient(135deg, #D97843 0%, #B85E2F 100%)',
+    ctaShadow: '0 4px 16px rgba(217,120,67,0.35)',
+  },
+  zhou_jin: {
+    bg: '#0a0a0d',
+    coverBg: '#12121a',
+    scrimGradient: 'linear-gradient(180deg, rgba(10,10,13,0) 0%, rgba(10,10,13,0.85) 65%, #0a0a0d 100%)',
+    nameColor: '#eae5de',
+    ageColor: '#dc3c48',
+    taglineColor: '#b8aea6',
+    chipActiveBg: 'rgba(220,60,72,0.15)',
+    chipActiveBorder: 'rgba(220,60,72,0.32)',
+    chipActiveText: '#dc7c82',
+    chipInactiveBg: 'rgba(220,60,72,0.04)',
+    chipInactiveBorder: 'rgba(220,60,72,0.1)',
+    chipInactiveText: '#8a7670',
+    ctaGradient: 'linear-gradient(135deg, #dc3c48 0%, #a82832 100%)',
+    ctaShadow: '0 4px 16px rgba(220,60,72,0.3), 0 2px 8px rgba(220,60,72,0.2)',
+  },
+  bai_qinghuan: {
+    bg: '#fdfcfa',
+    coverBg: 'linear-gradient(165deg,#fdfcfa 0%,#f8f5f0 100%)',
+    scrimGradient: 'linear-gradient(180deg,rgba(255,182,193,0.12),transparent)',
+    nameColor: '#3a3330',
+    ageColor: '#7a6f68',
+    taglineColor: '#5a5350',
+    chipActiveBg: 'rgba(255,182,193,0.25)',
+    chipActiveBorder: 'rgba(255,182,193,0.32)',
+    chipActiveText: '#6a4f4a',
+    chipInactiveBg: 'rgba(255,182,193,0.08)',
+    chipInactiveBorder: 'rgba(255,182,193,0.12)',
+    chipInactiveText: '#9a8580',
+    ctaGradient: 'linear-gradient(135deg,#d89098,#c77f8a)',
+    ctaShadow: '0 4px 12px rgba(216,144,152,0.25)',
+  },
+  cheng_zhi: {
+    bg: '#f8f6f3',
+    coverBg: '#4A9B9B',
+    scrimGradient: 'linear-gradient(180deg, rgba(74,155,155,0) 0%, rgba(74,155,155,0.85) 100%)',
+    nameColor: '#ffffff',
+    ageColor: '#e8f5f5',
+    taglineColor: '#f0f8f8',
+    chipActiveBg: '#4A9B9B',
+    chipActiveBorder: 'rgba(74,155,155,0.32)',
+    chipActiveText: '#ffffff',
+    chipInactiveBg: 'rgba(74,155,155,0.15)',
+    chipInactiveBorder: 'rgba(74,155,155,0.2)',
+    chipInactiveText: '#3a7a7a',
+    ctaGradient: 'linear-gradient(135deg, #4A9B9B 0%, #3a8a8a 100%)',
+    ctaShadow: '0 4px 12px rgba(74,155,155,0.3)',
   },
 }
 

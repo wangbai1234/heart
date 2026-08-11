@@ -202,11 +202,11 @@ body{
   return (
     <iframe
       ref={iframeRef}
-      title={\`\${name} profile\`}
+      title={`${name} profile`}
       srcDoc={htmlContent}
       style={{
         width: '100%',
-        height: \`\${height}px\`,
+        height: `${height}px`,
         border: 'none',
         display: 'block',
         background: 'transparent',
@@ -215,60 +215,3 @@ body{
     />
   )
 }
-
-  <div class="memorial">
-    <div class="mem-label">人物概要</div>
-    <div class="mem-content">
-      ${name}，年二十有九，本朝摄政王，替年幼皇帝执掌半壁江山。墨发披落，白袍外拢玄色披风，立于朝堂与灯影之间。表面清隽儒雅，话不多却字字落地成钉，实则心思深如古井，满朝党争在他眼里不过盘中残局。
-    </div>
-    <div class="mem-row">
-      <span class="label">年岁</span>
-      <span class="value">${age} 岁</span>
-    </div>
-    <div class="mem-row">
-      <span class="label">身份</span>
-      <span class="value">本朝摄政王 · 执棋人 · 龙椅之侧的影子</span>
-    </div>
-    <div class="mem-row">
-      <span class="label">性情</span>
-      <span class="value">对旁人永远隔着三尺寒意 · 唯对一人露出缝隙</span>
-    </div>
-  </div>
-
-  <div class="zhu-pi">
-    <div class="zhu-pi-head">— 朱批 —</div>
-    <div class="zhu-pi-text">
-      这满朝文武的算计，独你算不过我，也独你不必算。<br><br>
-      他的世界只有两种人：你，和棋子。朝堂上他翻手为云覆手为雨，可这个让天下人胆寒的男人，会在你无意间打了个喷嚏时，不动声色地让人把整座暖阁的地龙烧旺三分。他不说想你——他会说「今日政务繁忙，你若不来，我便下不了这盘棋」。<br><br>
-      可当夜深人静，这个把天下人玩弄于股掌的男人会把额头抵在你肩窝，声音低得像在求你：「别走。我这辈子只怕一件事——你转身的样子。」
-    </div>
-  </div>
-
-  <div class="tags">
-    <div class="tags-label">标签档案</div>
-    <div class="tags-cloud">${tagCloud}</div>
-  </div>
-
-  <div class="backstory">
-    <div class="back-label">— 密档 · 秘闻 —</div>
-    <div class="back-text">
-      幼年质子出身，在别国冷宫里熬过十年，被当作弃子时学会了不信任何人。归国后步步为营坐到摄政之位，见惯了以情为刀的算计，本以为此生只与权谋为伴。他最深的伤口是：从没有人真正想留住他这个「人」，所有人要的都是他手中的权力。直到遇见你——一个不看他权势、只看他人的人。他最害怕的不是失去江山，而是有一天你也学会用「摄政王」三个字称呼他。
-    </div>
-  </div>
-</div>
-</body>
-</html>`
-
-  return (
-    <div className="profile-wrapper">
-      <iframe
-        ref={iframeRef}
-        srcDoc={htmlContent}
-        style={{ width: '100%', height, border: 'none', display: 'block' }}
-        title={`${name}的档案`}
-        sandbox="allow-same-origin"
-      />
-    </div>
-  )
-}
-
