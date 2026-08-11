@@ -63,7 +63,7 @@ export function CreateShell({
             <polyline points="8,2 2,8 8,14" />
           </svg>
         </button>
-        <span className="flex-1 text-center text-[17px] font-semibold text-[var(--color-ink)] -ml-[32px]">
+        <span className="flex-1 text-center text-[17px] font-semibold text-[var(--color-ink)] -ml-[32px] pointer-events-none">
           {title}
         </span>
       </nav>
