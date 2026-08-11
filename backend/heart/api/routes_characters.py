@@ -6,10 +6,11 @@ import json
 import re
 import uuid
 from dataclasses import asdict
+from typing import Literal
 
 import structlog
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -767,6 +768,48 @@ async def create_character(
         draft=draft_dict,
     )
     await upsert_content(db, character_id=character_id, **content)
+
+    # Seed a canonical default voice by gender so the character is voiceable
+    # immediately. Pick the first active Fish preset for the draft's gender; the
+    # owner can change it later in character voice settings. If gender is unset
+    # we skip — no sensible default without one.
+    if draft.gender in ("male", "female"):
+        preset_row = (
+            (
+                await db.execute(
+                    text(
+                        "SELECT id, provider FROM preset_voices"
+                        " WHERE is_active = TRUE AND provider = 'fish' AND gender = :g"
+                        " ORDER BY id LIMIT 1"
+                    ),
+                    {"g": draft.gender},
+                )
+            )
+            .mappings()
+            .first()
+        )
+        if preset_row is not None:
+            await db.execute(
+                text("""
+                    INSERT INTO character_voices
+                        (character_id, user_id, voice_type, preset_voice_id,
+                         clone_status, voice_provider, is_public)
+                    VALUES (:cid, :uid, 'preset', :pid, 'ready', :prov, TRUE)
+                    ON CONFLICT (character_id, voice_provider) WHERE is_public
+                    DO NOTHING
+                """),
+                {
+                    "cid": character_id,
+                    "uid": uid,
+                    "pid": preset_row["id"],
+                    "prov": preset_row["provider"] or "fish",
+                },
+            )
+            await db.execute(
+                text("UPDATE characters SET has_voice = TRUE WHERE id = :cid"),
+                {"cid": character_id},
+            )
+
     await db.commit()
 
     # Attach the raw draft so the opening generator can read the authored
@@ -1146,3 +1189,135 @@ async def delete_character(
     reload_character(character_id, spec=None)
     logger.info("ugc_character_deleted", character_id=character_id)
     return {"id": character_id, "deleted": True}
+
+
+# ── 批4: 快速创建 AI 预填 ──
+
+
+class QuickPrefillRequest(BaseModel):
+    """快速创建 AI 预填请求体"""
+
+    display_name: str = Field(min_length=1, max_length=20)
+    gender: Literal["male", "female"]
+    persona: str = Field(min_length=20, max_length=1500)
+
+
+class QuickPrefillResponse(BaseModel):
+    """快速创建 AI 预填响应"""
+
+    age_range: str
+    greeting_style: Literal["warm", "cool", "playful", "reserved", "intense"]
+    sliders: dict[str, float]  # 6个slider值
+    catchphrases: list[str]  # 3条
+    opening: str
+    theme_preset_id: str  # 推荐的主题配色id
+
+
+@router.post("/quick-prefill")
+async def quick_prefill(
+    body: QuickPrefillRequest,
+    current_user: TokenData = Depends(get_current_user),
+) -> QuickPrefillResponse:
+    """快速创建：一次性 AI 预填所有设定（批4）。
+
+    主模型、创作者审、不落库、后续 verbatim 零运行时 LLM。
+    失败时抛异常到前端，绝不偷偷套默认值假装成功。
+    """
+    from heart.api.wiring import get_model_router
+
+    router = get_model_router()
+    if router is None:
+        msg = "AI 预填暂不可用，请稍后再试或使用「角色创作」模式手动填写"
+        logger.error("quick_prefill_unavailable", extra={"user_id": current_user.user_id})
+        raise HTTPException(status_code=503, detail=msg)
+
+    # 构建prompt让LLM一次性产出所有字段
+    prompt = f"""你是角色创作助手。根据用户提供的基础信息，生成完整的角色设定。
+
+基础信息：
+- 名字：{body.display_name}
+- 性别：{"男" if body.gender == "male" else "女"}
+- 人设：{body.persona}
+
+请生成以下内容（必须是合法JSON）：
+{{
+  "age_range": "年龄段(如: 18-24, 25-30, 30-35等)",
+  "greeting_style": "相处风格(warm/cool/playful/reserved/intense之一)",
+  "sliders": {{
+    "warmth": 0.0-1.0之间的值,
+    "talkativeness": 0.0-1.0之间的值,
+    "directness": 0.0-1.0之间的值,
+    "humor": 0.0-1.0之间的值,
+    "playfulness": 0.0-1.0之间的值,
+    "steadiness": 0.0-1.0之间的值
+  }},
+  "catchphrases": ["口头禅1", "口头禅2", "口头禅3"],
+  "opening": "200-400字的第一次见面开场白，代入角色口吻",
+  "theme_preset_id": "推荐配色id(night_velvet/crimson_noir/amber_warm/royal_gold/earth_sage/ocean_depth/bright_warm/forest_mint之一)"
+}}
+
+要求：
+- age_range 从人设推断合理年龄段
+- greeting_style 与性格匹配
+- sliders 反映人设描述的性格特质
+- catchphrases 符合角色说话风格，每条≤20字
+- opening 代入角色视角，营造氛围，有画面感
+- theme_preset_id 根据角色气质选择(如冷峻选crimson_noir，温暖选bright_warm)
+
+只返回JSON，不要其他文字。"""
+
+    try:
+        response_text = await router.call_main(
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.8,
+            max_tokens=800,
+            agent_name="QuickPrefill.ugc",
+        )
+    except Exception as e:
+        logger.exception(
+            "quick_prefill_llm_failed",
+            extra={"user_id": current_user.user_id, "error": str(e)},
+        )
+        raise HTTPException(
+            status_code=502,
+            detail="AI 预填失败，请重试或使用「角色创作」模式手动填写",
+        ) from e
+
+    if not response_text or not response_text.strip():
+        logger.error(
+            "quick_prefill_empty_response",
+            extra={"user_id": current_user.user_id},
+        )
+        raise HTTPException(status_code=502, detail="AI 生成为空，请重试")
+
+    # 解析JSON
+    try:
+        # 提取JSON（可能被markdown包裹）
+        parsed_text = response_text.strip()
+        if parsed_text.startswith("```"):
+            # 去除markdown代码块
+            lines = parsed_text.split("\n")
+            parsed_text = "\n".join(lines[1:-1]) if len(lines) > 2 else parsed_text
+        data = json.loads(parsed_text)
+
+        return QuickPrefillResponse(
+            age_range=data["age_range"],
+            greeting_style=data["greeting_style"],
+            sliders=data["sliders"],
+            catchphrases=data["catchphrases"][:3],  # 只取前3条
+            opening=data["opening"],
+            theme_preset_id=data["theme_preset_id"],
+        )
+    except (json.JSONDecodeError, KeyError, ValueError) as e:
+        logger.exception(
+            "quick_prefill_parse_failed",
+            extra={
+                "user_id": current_user.user_id,
+                "response_text": response_text[:500],
+                "error": str(e),
+            },
+        )
+        raise HTTPException(
+            status_code=502,
+            detail="AI 响应格式错误，请重试",
+        ) from e

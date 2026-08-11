@@ -2,12 +2,14 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useThemeStore } from '../stores/themeStore'
 import { useToastStore } from '../stores/toastStore'
+import { ApiError, quickPrefill, uploadCharacterCover } from '../services/api'
+import { compressImageToTarget } from '../utils/imageCompress'
 
 /**
- * 快速创建页 - 批3
+ * 快速创建页 - 批3 + 批4
  *
  * 只问四项：封面(3:4)、名字(1-20字)、性别、人设(20-1500字)
- * 可见性选择放在批4的确认页
+ * 下一步调用 AI 预填，跳转确认页(可见性选择在确认页)
  */
 export function QuickCreatePage() {
   const navigate = useNavigate()
@@ -20,6 +22,7 @@ export function QuickCreatePage() {
   const [gender, setGender] = useState<'male' | 'female' | ''>('')
   const [persona, setPersona] = useState('')
   const [uploading, setUploading] = useState(false)
+  const [prefilling, setPrefilling] = useState(false)
 
   const personaLength = persona.length
   const personaValid = personaLength >= 20 && personaLength <= 1500
@@ -29,16 +32,21 @@ export function QuickCreatePage() {
     const file = e.target.files?.[0]
     if (!file) return
 
-    // TODO: 调用 POST /characters/cover 上传
-    // 暂时模拟
     setUploading(true)
-    await new Promise((resolve) => setTimeout(resolve, 1000))
-    setCoverUrl('https://example.com/mock-cover.jpg')
-    setUploading(false)
+    try {
+      const compressed = await compressImageToTarget(file, 900 * 1024)
+      const { cover_url } = await uploadCharacterCover(compressed)
+      setCoverUrl(cover_url)
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : '封面上传失败，请重试'
+      showToast(msg, 'error')
+    } finally {
+      setUploading(false)
+    }
   }
 
-  function handleNext() {
-    if (!canSubmit) {
+  async function handleNext() {
+    if (gender === '' || !canSubmit) {
       if (personaLength < 20) {
         showToast('人设描述至少需要 20 字', 'error')
         return
@@ -47,8 +55,27 @@ export function QuickCreatePage() {
       return
     }
 
-    // TODO 批4: 调用 AI 预填并跳转到确认页
-    showToast('批4 将实现 AI 预填与确认页', 'info')
+    // 调用 AI 预填 (此处 gender 已收窄为 'male' | 'female')
+    setPrefilling(true)
+    try {
+      const prefill = await quickPrefill({
+        display_name: name,
+        gender,
+        persona,
+      })
+      // 携带基础信息 + 预填结果跳转确认页
+      navigate('/characters/new/quick/confirm', {
+        state: {
+          base: { coverUrl, name, gender, persona },
+          prefill,
+        },
+      })
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : 'AI 预填失败，请重试'
+      showToast(msg, 'error')
+    } finally {
+      setPrefilling(false)
+    }
   }
 
   return (
@@ -191,10 +218,10 @@ export function QuickCreatePage() {
       <div className="fixed bottom-0 left-0 right-0 px-5 pb-[env(safe-area-inset-bottom,20px)] pt-3 bg-[var(--color-bg-page)] border-t border-[var(--color-border-subtle)] z-30">
         <button
           onClick={handleNext}
-          disabled={!canSubmit}
+          disabled={!canSubmit || prefilling}
           className="w-full h-[50px] rounded-full bg-gradient-to-r from-[#FFB7C5] to-[#FF8FAB] text-white text-[16px] font-semibold shadow-[0_8px_24px_-4px_rgba(255,143,171,0.40)] active:scale-[0.98] transition-transform disabled:opacity-50 disabled:active:scale-100"
         >
-          下一步
+          {prefilling ? 'AI 生成中...' : '下一步'}
         </button>
       </div>
     </div>

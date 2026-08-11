@@ -27,6 +27,7 @@ import { UIStatePreviewPage } from './pages/UIStatePreviewPage'
 import { MyCharactersPage } from './pages/MyCharactersPage'
 import { CreateHubPage } from './pages/CreateHubPage'
 import { QuickCreatePage } from './pages/QuickCreatePage'
+import { QuickConfirmPage } from './pages/QuickConfirmPage'
 import { WorkshopCreatePage } from './pages/WorkshopCreatePage'
 import { ExplorePage } from './pages/ExplorePage'
 import { ScenarioDetailPage } from './pages/ScenarioDetailPage'
@@ -246,6 +247,7 @@ export function App() {
         <Route path="/qa/states" element={<UIStatePreviewPage />} />
         <Route path="/characters/new" element={<Navigate to="/create" replace />} />
         <Route path="/characters/new/quick" element={<QuickCreatePage />} />
+        <Route path="/characters/new/quick/confirm" element={<QuickConfirmPage />} />
         <Route path="/characters/new/workshop" element={<WorkshopCreatePage />} />
         <Route path="/my-characters" element={<MyCharactersPage />} />
         <Route path="/admin/review" element={<AdminReviewPage />} />

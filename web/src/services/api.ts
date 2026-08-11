@@ -783,6 +783,37 @@ export async function getCharacterProfile(id: string): Promise<CharacterProfileD
   return request(`/characters/${encodeURIComponent(id)}/profile`)
 }
 
+// ── 批4: 快速创建 AI 预填 ──
+
+export interface QuickPrefillRequest {
+  display_name: string
+  gender: 'male' | 'female'
+  persona: string
+}
+
+export interface QuickPrefillResponse {
+  age_range: string
+  greeting_style: 'warm' | 'cool' | 'playful' | 'reserved' | 'intense'
+  sliders: {
+    warmth: number
+    talkativeness: number
+    directness: number
+    humor: number
+    playfulness: number
+    steadiness: number
+  }
+  catchphrases: string[]
+  opening: string
+  theme_preset_id: string
+}
+
+export async function quickPrefill(body: QuickPrefillRequest): Promise<QuickPrefillResponse> {
+  return request('/characters/quick-prefill', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
 // ── UGC Character CRUD ─────────────────────────────────────────────
 
 /** Mirrors backend CharacterDraft (heart/ss01_soul/draft.py). */
@@ -822,6 +853,21 @@ export interface CharacterDraftDTO {
   locale?: string
   /** Intended visibility on publish. public/unlisted enter review; private is immediate. */
   visibility?: 'public' | 'unlisted' | 'private'
+  // Batch 1 & 4: UGC creation redesign fields
+  /** 创建模式: quick(快速创建) vs workshop(角色创作) */
+  creation_mode?: 'quick' | 'workshop'
+  /** 主题配色(14槽位) */
+  ui_chrome?: ChromePalette | null
+  /** 详情页区块 */
+  profile_blocks?: ProfileBlock[]
+  /** 高级HTML */
+  custom_html?: string | null
+  /** 开场档案卡 */
+  premise_card?: PremiseCardData | null
+  /** 聊天开场选项 */
+  starter_config?: StarterConfig | null
+  /** 开场白格式 */
+  opening_format?: 'plain' | 'rich'
 }
 
 export async function uploadCharacterAvatar(file: File): Promise<{ avatar_url: string }> {
