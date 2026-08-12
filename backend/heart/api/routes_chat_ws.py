@@ -182,12 +182,20 @@ def _create_stream_session(
             # turn_end (it must show a duration), so it needs no per-frame decode
             # and benefits from mp3's ~10x smaller size.
             realtime_fmt = "wav" if channel == "call" else "mp3"
+            # A live call optimises for time-to-first-audio: latency="low" +
+            # a small chunk_length makes Fish emit the opening audio sooner (at a
+            # slight quality cost that a phone-call register tolerates). Chat is
+            # played as one clip at turn_end, so it keeps the smoother balanced/
+            # larger-chunk profile.
+            is_call = channel == "call"
             return RealtimeStreamSession(
                 send_audio,
                 api_key=settings.fish_api_key,
                 url=settings.fish_realtime_url,
                 character_id=character_id,
                 fmt=realtime_fmt,
+                chunk_length=100 if is_call else 200,
+                latency="low" if is_call else "balanced",
             )
         except Exception as e:
             logger.warning("fish_realtime_session_init_failed", error=str(e))
@@ -1005,28 +1013,14 @@ async def _handle_chat_message(
         character_id=character_id,
         channel=channel,
     )
+    # Kick the (Fish WebSocket) session open OFF as a background task instead of
+    # blocking on it here: the handshake (~0.3s) then overlaps the history load
+    # and turn_start send below. We await it (with REST fallback) just before the
+    # orchestrator streams — no submit() can fire until start() has resolved, so
+    # the fallback window is preserved and no audio is ever lost.
+    stream_start_task: Optional[asyncio.Task] = None
     if stream_session:
-        try:
-            await stream_session.start()
-        except Exception as e:
-            # A realtime (Fish WebSocket) start() failure must not degrade the
-            # turn to text — rebuild the REST StreamSession and start that
-            # instead. No audio has been streamed yet at this point.
-            logger.warning("stream_session_start_failed_fallback_rest", error=str(e))
-            with contextlib.suppress(Exception):
-                stream_session.cancel()
-            stream_session = _create_stream_session(
-                voice_service if effective_voice else None,
-                ws,
-                cache=cache,
-                preferred_provider_name=voice_provider,
-                clone_reference=clone_reference,
-                character_id=character_id,
-                allow_realtime=False,
-                channel=channel,
-            )
-            if stream_session:
-                await stream_session.start()
+        stream_start_task = asyncio.create_task(stream_session.start())
 
     # A turn MUST always end with exactly one terminal frame for the client so
     # neither the "正在回复中" indicator nor a voice bubble's "加载中" can hang.
@@ -1057,6 +1051,31 @@ async def _handle_chat_message(
             await ws.send_json(
                 {"type": "turn_start", "turn_id": turn_id, "character_id": character_id}
             )
+
+            # Join the backgrounded realtime open. A start() failure must not
+            # degrade the turn to text — rebuild the REST StreamSession and start
+            # that instead. No audio has streamed yet, so the swap is invisible.
+            if stream_start_task is not None:
+                try:
+                    await stream_start_task
+                except Exception as e:
+                    logger.warning("stream_session_start_failed_fallback_rest", error=str(e))
+                    if stream_session is not None:
+                        with contextlib.suppress(Exception):
+                            stream_session.cancel()
+                    stream_session = _create_stream_session(
+                        voice_service if effective_voice else None,
+                        ws,
+                        cache=cache,
+                        preferred_provider_name=voice_provider,
+                        clone_reference=clone_reference,
+                        character_id=character_id,
+                        allow_realtime=False,
+                        channel=channel,
+                    )
+                    if stream_session:
+                        await stream_session.start()
+
             try:
                 (
                     turn_completed,

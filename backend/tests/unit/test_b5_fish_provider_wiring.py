@@ -57,6 +57,49 @@ async def test_fish_provider_synthesize_success():
 
 
 @pytest.mark.asyncio
+async def test_fish_provider_sends_stability_similarity_default():
+    """stability/similarity default to 0.9 and ride the sync-HTTP payload."""
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.content = b"audio"
+
+    mock_client = AsyncMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+    mock_client.post = AsyncMock(return_value=mock_response)
+
+    with patch("heart.ss08_voice.fish_provider.httpx.AsyncClient", return_value=mock_client):
+        provider = FishProvider(api_key="test-key")
+        await provider.synthesize(TTSRequest(text="hi", voice_id="v1"))
+
+    payload = mock_client.post.call_args.kwargs["json"]
+    assert payload["stability"] == 0.9
+    assert payload["similarity"] == 0.9
+
+
+@pytest.mark.asyncio
+async def test_fish_provider_omits_stability_similarity_at_default_one():
+    """At 1.0 (gateway default) the keys are omitted so a non-Fish backbone that
+    rejects unknown keys stays unaffected."""
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.content = b"audio"
+
+    mock_client = AsyncMock()
+    mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+    mock_client.__aexit__ = AsyncMock(return_value=False)
+    mock_client.post = AsyncMock(return_value=mock_response)
+
+    with patch("heart.ss08_voice.fish_provider.httpx.AsyncClient", return_value=mock_client):
+        provider = FishProvider(api_key="test-key", stability=1.0, similarity=1.0)
+        await provider.synthesize(TTSRequest(text="hi", voice_id="v1"))
+
+    payload = mock_client.post.call_args.kwargs["json"]
+    assert "stability" not in payload
+    assert "similarity" not in payload
+
+
+@pytest.mark.asyncio
 async def test_fish_provider_synthesize_error_raises():
     import httpx
 
