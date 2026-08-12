@@ -1247,7 +1247,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
 
       {/* Input bar */}
       <div
-        className={`relative z-20 mx-3 mb-3 flex items-center gap-3 px-4 py-3 backdrop-blur-[24px] rounded-[28px] border ${
+        className={`relative z-20 mx-3 mb-3 flex items-center gap-2.5 px-4 py-3 backdrop-blur-[24px] rounded-[28px] border ${
           isDark
             ? 'bg-[rgba(26,26,46,0.7)] border-[rgba(255,255,255,0.08)] shadow-[var(--shadow-sheet)]'
             : 'bg-[var(--color-glass-75)] border-[var(--color-border-glass)] shadow-[var(--shadow-sheet)]'
@@ -1293,24 +1293,24 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
         <button
           onClick={handleSend}
           disabled={isStreaming || !input.trim()}
-          className={`w-[44px] h-[44px] rounded-full bg-gradient-to-r from-[#FFB7C5] to-[#FF8FAB] flex items-center justify-center shrink-0 shadow-[var(--shadow-send)] active:scale-90 transition-transform ${
+          className={`w-[40px] h-[40px] rounded-full bg-gradient-to-r from-[#FFB7C5] to-[#FF8FAB] flex items-center justify-center shrink-0 shadow-[var(--shadow-send)] active:scale-90 transition-transform ${
             isStreaming || !input.trim() ? 'opacity-50' : ''
           }`}
         >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="white">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="white">
             <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
           </svg>
         </button>
-        {/* + 菜单：语音聊天 / 语音通话。可见圆与发送键同尺寸(44x44 实心圆)，
+        {/* + 菜单：语音聊天 / 语音通话。可见圆与发送键同尺寸，
             用中性表面色区分主次，不与发送键的粉色渐变撞色。 */}
         <button
           onClick={() => setPlusMenuOpen(true)}
           aria-label="更多"
-          className={`w-[44px] h-[44px] rounded-full flex items-center justify-center shrink-0 active:scale-90 transition-transform ${
+          className={`w-[40px] h-[40px] rounded-full flex items-center justify-center shrink-0 active:scale-90 transition-transform ${
             isDark ? 'bg-[rgba(255,255,255,0.08)]' : 'bg-[rgba(47,54,74,0.06)]'
           }`}
         >
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={isDark ? '#B9B9C0' : '#6B7280'} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={isDark ? '#B9B9C0' : '#6B7280'} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
             <line x1="12" y1="6" x2="12" y2="18" />
             <line x1="6" y1="12" x2="18" y2="12" />
           </svg>
