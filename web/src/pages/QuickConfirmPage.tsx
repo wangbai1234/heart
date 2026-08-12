@@ -135,7 +135,7 @@ export function QuickConfirmPage() {
       })
       await reloadCharacters()
       showToast('角色创建成功', 'success')
-      navigate(`/character/${result.id}`, { replace: true })
+      navigate(`/character/${result.id}`, { replace: true, state: { fromCreate: true } })
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : '创建失败，请重试'
       showToast(msg, 'error')

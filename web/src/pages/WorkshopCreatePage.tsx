@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useToastStore } from '../stores/toastStore'
 import {
   ApiError,
-  createCharacter,
   uploadCharacterCover,
   generateOpeningPreview,
+  getCharacterDraft,
 } from '../services/api'
+import { useCharactersStore } from '../stores/charactersStore'
 import { compressImageToTarget } from '../utils/imageCompress'
 import { CreateShell } from '../components/create/CreateShell'
 import { Step1, Step2, Step3, Step4, Step5, Step6, Step7, HTML_MAX } from './workshop/WorkshopSteps'
@@ -16,6 +17,7 @@ import {
   QUALITY_LABELS,
   getQualityLevel,
   buildDraft,
+  draftToWorkshopState,
   type WorkshopState,
 } from './workshop/workshopTypes'
 
@@ -31,9 +33,16 @@ const TABS = ['基础信息', '角色设定', '美化设置'] as const
 export function WorkshopCreatePage() {
   const navigate = useNavigate()
   const showToast = useToastStore((s) => s.show)
+  const [searchParams] = useSearchParams()
+  const editId = searchParams.get('edit') ?? ''
+  const isEdit = editId.length > 0
+  const { createCharacter, updateCharacter } = useCharactersStore()
 
   const [tab, setTab] = useState(0)
   const [state, setState] = useState<WorkshopState>(() => {
+    // Edit mode starts blank and hydrates from the server draft below; the
+    // localStorage draft belongs to the create flow and must not leak in.
+    if (isEdit) return EMPTY_STATE
     const saved = localStorage.getItem(STORAGE_KEY)
     if (saved) {
       try {
@@ -47,10 +56,34 @@ export function WorkshopCreatePage() {
   const [busy, setBusy] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [assisting, setAssisting] = useState(false)
+  const [loadingDraft, setLoadingDraft] = useState(isEdit)
+
+  // Edit mode: hydrate the form from the saved draft once.
+  useEffect(() => {
+    if (!isEdit) return
+    let cancelled = false
+    setLoadingDraft(true)
+    getCharacterDraft(editId)
+      .then((draft) => {
+        if (!cancelled) setState(draftToWorkshopState(draft))
+      })
+      .catch(() => {
+        if (!cancelled) showToast('无法加载角色草稿，请重试', 'error')
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingDraft(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [isEdit, editId, showToast])
 
   useEffect(() => {
+    // Only the create flow persists a local draft; editing an existing
+    // character must not clobber it.
+    if (isEdit) return
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state))
-  }, [state])
+  }, [state, isEdit])
 
   const qualityLevel = getQualityLevel(state)
   const htmlOver = state.advancedHtmlMode && new Blob([state.customHtml]).size > HTML_MAX
@@ -114,9 +147,19 @@ export function WorkshopCreatePage() {
     }
     setBusy(true)
     try {
-      const created = await createCharacter(buildDraft(state))
-      localStorage.removeItem(STORAGE_KEY)
-      navigate(`/characters/${created.id}`)
+      const draft = buildDraft(state)
+      if (isEdit) {
+        await updateCharacter(editId, draft)
+        showToast(
+          state.visibility === 'private' ? '角色已更新' : '角色已更新，重新提交审核',
+          'success',
+        )
+        navigate(`/character/${editId}`, { replace: true, state: { fromCreate: true } })
+      } else {
+        const created = await createCharacter(draft)
+        localStorage.removeItem(STORAGE_KEY)
+        navigate(`/character/${created.id}`, { replace: true, state: { fromCreate: true } })
+      }
     } catch (err) {
       // 422 的 detail 是后端字段校验（英文 pydantic 文案），对用户不友好——
       // 客户端已做必填校验，走到这里的 422 属于字段格式问题，给中文兜底。
@@ -125,7 +168,9 @@ export function WorkshopCreatePage() {
           ? err.status === 422
             ? '有字段格式不符合要求，请检查各项内容后重试'
             : err.message
-          : '创建失败，请重试'
+          : isEdit
+            ? '保存失败，请重试'
+            : '创建失败，请重试'
       showToast(msg, 'error')
     } finally {
       setBusy(false)
@@ -145,7 +190,7 @@ export function WorkshopCreatePage() {
 
   return (
     <CreateShell
-      title="角色创作"
+      title={isEdit ? '编辑角色' : '角色创作'}
       backLabel={tab > 0 ? '上一步' : '返回创作中心'}
       onBack={handleBack}
       headerExtra={
@@ -183,28 +228,44 @@ export function WorkshopCreatePage() {
             disabled={busy}
             className="w-full h-[52px] rounded-full bg-gradient-to-r from-[#FFB7C5] to-[#FF8FAB] text-white text-[16px] font-semibold shadow-[0_8px_28px_-4px_rgba(255,143,171,0.45)] active:scale-[0.98] transition-transform disabled:opacity-60"
           >
-            {busy ? '创建中...' : tab < TABS.length - 1 ? '下一步' : '创建角色'}
+            {busy
+              ? isEdit
+                ? '保存中...'
+                : '创建中...'
+              : tab < TABS.length - 1
+                ? '下一步'
+                : isEdit
+                  ? '保存修改'
+                  : '创建角色'}
           </button>
         </div>
       }
     >
-      {tab === 0 && (
+      {loadingDraft ? (
+        <div className="flex items-center justify-center py-24 text-[14px] text-[var(--color-text-muted)]">
+          正在加载角色草稿...
+        </div>
+      ) : (
         <>
-          <Step1 state={state} updateField={updateField} onCoverUpload={handleCoverUpload} uploading={uploading} />
-          <Step2 state={state} updateField={updateField} />
-        </>
-      )}
-      {tab === 1 && (
-        <>
-          <Step3 state={state} updateField={updateField} />
-          <Step4 state={state} updateField={updateField} />
-          <Step5 state={state} updateField={updateField} />
-        </>
-      )}
-      {tab === 2 && (
-        <>
-          <Step6 state={state} updateField={updateField} onAssistOpening={handleAssistOpening} assisting={assisting} />
-          <Step7 state={state} updateField={updateField} />
+          {tab === 0 && (
+            <>
+              <Step1 state={state} updateField={updateField} onCoverUpload={handleCoverUpload} uploading={uploading} />
+              <Step2 state={state} updateField={updateField} />
+            </>
+          )}
+          {tab === 1 && (
+            <>
+              <Step3 state={state} updateField={updateField} />
+              <Step4 state={state} updateField={updateField} />
+              <Step5 state={state} updateField={updateField} />
+            </>
+          )}
+          {tab === 2 && (
+            <>
+              <Step6 state={state} updateField={updateField} onAssistOpening={handleAssistOpening} assisting={assisting} />
+              <Step7 state={state} updateField={updateField} />
+            </>
+          )}
         </>
       )}
     </CreateShell>

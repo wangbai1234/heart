@@ -24,13 +24,16 @@ function useToast() {
  */
 export function CreateHubPage() {
   const navigate = useNavigate()
-  const { characters, loaded, load, setVisibility, disableCharacter } = useCharactersStore()
+  const { characters, loaded, load, setVisibility, disableCharacter, reactivateCharacter, deleteCharacter } =
+    useCharactersStore()
   const showToast = useToast()
   const { resolvedTheme } = useThemeStore()
   const isDark = resolvedTheme === 'dark'
   const scrollRef = useScrollRestore()
   const [disableTarget, setDisableTarget] = useState<CharacterDTO | null>(null)
   const [disabling, setDisabling] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<CharacterDTO | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
   useEffect(() => {
     if (!loaded) void load()
@@ -69,6 +72,35 @@ export function CreateHubPage() {
     }
   }
 
+  async function handleReactivate(char: CharacterDTO) {
+    try {
+      await reactivateCharacter(char.id)
+      const msg =
+        char.visibility === 'public' || char.visibility === 'unlisted'
+          ? `「${char.display_name}」已重新提交审核，通过后展示`
+          : `「${char.display_name}」已重新发布`
+      showToast(msg, 'success')
+    } catch (err) {
+      const m = err instanceof ApiError ? err.message : '操作失败，请稍后再试'
+      showToast(m, 'error')
+    }
+  }
+
+  async function handleDelete() {
+    if (!deleteTarget) return
+    setDeleting(true)
+    try {
+      await deleteCharacter(deleteTarget.id)
+      showToast(`「${deleteTarget.display_name}」已删除`, 'success')
+      setDeleteTarget(null)
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : '操作失败，请稍后再试'
+      showToast(msg, 'error')
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   return (
     <div
       className="relative w-full min-h-full flex flex-col"
@@ -99,9 +131,11 @@ export function CreateHubPage() {
                 <CharacterCard
                   key={char.id}
                   char={char}
-                  onEdit={() => navigate(`/characters/new?edit=${char.id}`)}
+                  onEdit={() => navigate(`/characters/new/workshop?edit=${char.id}`)}
                   onVisibility={(v) => handleVisibility(char.id, v)}
                   onDisable={() => setDisableTarget(char)}
+                  onReactivate={() => handleReactivate(char)}
+                  onDelete={() => setDeleteTarget(char)}
                 />
               ))}
             </div>
@@ -113,7 +147,7 @@ export function CreateHubPage() {
 
       <Dialog open={disableTarget !== null} onClose={() => setDisableTarget(null)} title={`停用「${disableTarget?.display_name ?? ''}」？`}>
         <p className="text-[14px] text-[var(--color-text-secondary)] leading-[1.7]">
-          停用后该角色将从列表中隐藏，聊天记录保留。你可以在账号设置中重新启用。
+          停用后该角色对他人不可见，聊天记录保留。它会以「已停用」保留在这里，你随时可以重新发布。
         </p>
         <div className="flex gap-3 mt-4">
           <button
@@ -134,6 +168,34 @@ export function CreateHubPage() {
               </svg>
             ) : (
               '确认停用'
+            )}
+          </button>
+        </div>
+      </Dialog>
+
+      <Dialog open={deleteTarget !== null} onClose={() => setDeleteTarget(null)} title={`删除「${deleteTarget?.display_name ?? ''}」？`}>
+        <p className="text-[14px] text-[var(--color-text-secondary)] leading-[1.7]">
+          删除是永久操作，无法撤销。该角色及其聊天记录、设定将被彻底移除，不会再找回。
+        </p>
+        <div className="flex gap-3 mt-4">
+          <button
+            onClick={() => setDeleteTarget(null)}
+            className={`flex-1 h-[44px] rounded-full text-[var(--color-ink)] text-[15px] font-medium active:bg-[rgba(0,0,0,0.04)] ${isDark ? 'bg-[var(--color-glass-55)]' : 'bg-[rgba(255,255,255,0.75)]'}`}
+          >
+            取消
+          </button>
+          <button
+            onClick={handleDelete}
+            disabled={deleting}
+            className="flex-1 h-[44px] rounded-full bg-[var(--color-error)] text-white text-[15px] font-semibold disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            {deleting ? (
+              <svg className="animate-spin w-4 h-4" viewBox="0 0 24 24" fill="none">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+            ) : (
+              '永久删除'
             )}
           </button>
         </div>

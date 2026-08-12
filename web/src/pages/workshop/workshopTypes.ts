@@ -5,7 +5,7 @@ import type {
   StarterConfig,
 } from '../../services/api'
 import type { ChromePalette } from '../CharacterProfilePage'
-import { getThemePresetById } from '../../data/characterThemePresets'
+import { getThemePresetById, findThemePresetIdByPalette } from '../../data/characterThemePresets'
 
 export type QualityLevel = 'sketch' | 'draft' | 'shaped' | 'finished'
 
@@ -189,4 +189,65 @@ export function buildDraft(s: WorkshopState): CharacterDraftDTO {
     premise_card: premise,
     starter_config: starter,
   }
+}
+
+/**
+ * Reverse of buildDraft: hydrate a WorkshopState from a saved draft (edit flow).
+ * The draft stores resolved blocks/palette rather than the raw form fields, so
+ * we unpack profile_blocks → dossier/quote/background and match the palette back
+ * to a preset id. Unknown/legacy shapes degrade to empty (never throw).
+ */
+export function draftToWorkshopState(d: CharacterDraftDTO): WorkshopState {
+  const s: WorkshopState = { ...EMPTY_STATE }
+  s.displayName = d.display_name?.zh ?? d.display_name?.en ?? ''
+  s.gender = d.gender === 'male' || d.gender === 'female' ? d.gender : ''
+  s.coverUrl = d.cover_url ?? ''
+  s.tagline = d.tagline ?? ''
+  s.persona = d.persona ?? ''
+  s.intro = d.intro ?? ''
+  s.tags = Array.isArray(d.tags) ? d.tags.slice(0, 10) : []
+  s.opening = d.opening ?? ''
+  s.openingFormat = d.opening_format === 'rich' ? 'rich' : 'plain'
+  s.visibility =
+    d.visibility === 'public' || d.visibility === 'unlisted' ? d.visibility : 'private'
+  s.uiChromeThemeId = findThemePresetIdByPalette(d.ui_chrome ?? null)
+
+  // Advanced HTML takes precedence; otherwise unpack the structured blocks.
+  if (d.custom_html && d.custom_html.trim()) {
+    s.advancedHtmlMode = true
+    s.customHtml = d.custom_html
+  }
+  for (const block of d.profile_blocks ?? []) {
+    if (block.type === 'dossier') {
+      s.dossierItems = block.rows.map((r) => ({ label: r.label, value: r.value }))
+    } else if (block.type === 'quote') {
+      s.quote = block.text
+      s.quoteAttribution = block.attribution ?? ''
+    } else if (block.type === 'timeline') {
+      s.backgroundType = 'timeline'
+      s.timelineItems = block.events.map((r) => ({ label: r.label, value: r.value }))
+    } else if (block.type === 'objects') {
+      s.backgroundType = 'objects'
+      s.objectItems = block.items.map((r) => ({ label: r.label, value: r.value }))
+    } else if (block.type === 'contrast') {
+      s.backgroundType = 'contrast'
+      s.contrastLeftLabel = block.leftLabel
+      s.contrastRightLabel = block.rightLabel
+      s.contrastPairs = block.pairs.map((r) => ({ label: r.label, value: r.value }))
+    }
+  }
+
+  if (d.premise_card) {
+    s.premiseLeadIn = d.premise_card.leadIn ?? ''
+    s.premiseTitle = d.premise_card.title ?? ''
+    s.premiseRows = (d.premise_card.rows ?? []).map((r) => ({ label: r.label, value: r.value }))
+    s.premiseNote = d.premise_card.note ?? ''
+    s.premiseWarning = d.premise_card.warning ?? ''
+  }
+
+  if (d.starter_config && d.starter_config.type === 'flat') {
+    s.starterPrompts = d.starter_config.prompts.slice(0, 5)
+  }
+
+  return s
 }

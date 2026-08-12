@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useLocation } from 'react-router-dom'
 import type { CharacterProfileDTO } from '../services/api'
 import { useCharactersStore } from '../stores/charactersStore'
 import { useCompanionsStore } from '../stores/companionsStore'
@@ -835,7 +835,13 @@ function pickTheme(tags: string[]): Theme {
  */
 export function CharacterProfilePage() {
   const navigate = useNavigate()
-  const goBack = useSafeBack('/character')
+  const location = useLocation()
+  const safeBack = useSafeBack('/character')
+  // Arriving straight from a creation flow (quick/workshop): the wizard is still
+  // in the history stack, so a plain back would drop the user back into it.
+  // Route them to the creation hub instead. See QuickConfirmPage / WorkshopCreatePage.
+  const fromCreate = (location.state as { fromCreate?: boolean } | null)?.fromCreate === true
+  const goBack = fromCreate ? () => navigate('/create', { replace: true }) : safeBack
   const { id = '' } = useParams<{ id: string }>()
   const setCharacter = useAppStore((s) => s.setCharacter)
   const companions = useCompanionsStore((s) => s.companions)
@@ -902,6 +908,7 @@ export function CharacterProfilePage() {
   // Cover-less characters fall back to the shared background image (product
   // direction 2026-07-25) rather than a blurred avatar placeholder.
   const cover = profile?.cover_url || DEFAULT_COVER
+  const hasRealCover = Boolean(profile?.cover_url)
 
   const openChat = () => {
     setCharacter(id)
@@ -1113,16 +1120,51 @@ export function CharacterProfilePage() {
         } as React.CSSProperties
       }
     >
-      {/* ── Full-bleed cover ── */}
-      <div className="relative w-full h-[62vh] min-h-[380px] overflow-hidden">
-        <img src={cover} alt={profile?.display_name ?? ''} className="absolute inset-0 w-full h-full object-cover" />
+      {/* ── Cover ── 有真实封面时：默认露上 3/4，点击展开全图（对齐内置角色）；
+          无封面回退到共享背景图时保持固定高度裁切。 */}
+      <div
+        className="relative w-full overflow-hidden"
+        style={
+          hasRealCover
+            ? {
+                height: coverFullH ? (coverExpanded ? coverFullH : Math.round(coverFullH * 0.75)) : undefined,
+                transition: 'height .38s cubic-bezier(.4,0,.2,1)',
+                cursor: coverFullH ? 'pointer' : undefined,
+              }
+            : undefined
+        }
+        onClick={hasRealCover ? () => coverFullH && setCoverExpanded((v) => !v) : undefined}
+        role={hasRealCover ? 'button' : undefined}
+        aria-label={hasRealCover ? (coverExpanded ? '收起封面' : '展开完整封面') : undefined}
+      >
+        {hasRealCover ? (
+          <img
+            src={cover}
+            alt={profile?.display_name ?? ''}
+            className="block w-full h-auto"
+            ref={(el) => {
+              if (el && el.complete && el.offsetHeight) setCoverFullH(el.offsetHeight)
+            }}
+            onLoad={(e) => setCoverFullH(e.currentTarget.offsetHeight)}
+          />
+        ) : (
+          <div className="relative w-full h-[62vh] min-h-[380px]">
+            <img src={cover} alt={profile?.display_name ?? ''} className="absolute inset-0 w-full h-full object-cover" />
+          </div>
+        )}
         {/* bottom fade into the sheet below */}
-        <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-[var(--color-bg-page)] via-[var(--color-bg-page)]/40 to-transparent" />
+        <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-[var(--color-bg-page)] via-[var(--color-bg-page)]/40 to-transparent pointer-events-none" />
+
+        {hasRealCover && coverFullH > 0 && (
+          <div className="absolute bottom-3 right-3 z-10 text-[11px] text-white/70 bg-black/35 backdrop-blur-[6px] rounded-full px-3 py-1 pointer-events-none">
+            {coverExpanded ? '收起' : '点击看全图'}
+          </div>
+        )}
 
         {/* back + share buttons */}
         <div className="absolute left-0 top-0 z-10" style={{ height: 'var(--safe-top)' }} />
         <button
-          onClick={goBack}
+          onClick={(e) => { e.stopPropagation(); goBack() }}
           aria-label="返回"
           className="absolute left-4 z-10 w-[38px] h-[38px] rounded-full bg-black/30 backdrop-blur-[8px] flex items-center justify-center active:scale-[0.95] transition-transform"
           style={{ top: 'calc(var(--safe-top) + 8px)' }}
@@ -1134,7 +1176,7 @@ export function CharacterProfilePage() {
         {/* Share button — only for link-reachable characters (never private). */}
         {profile && shareable && (
           <button
-            onClick={handleShare}
+            onClick={(e) => { e.stopPropagation(); handleShare() }}
             aria-label="分享角色"
             className="absolute right-4 z-10 w-[38px] h-[38px] rounded-full bg-black/30 backdrop-blur-[8px] flex items-center justify-center active:scale-[0.95] transition-transform"
             style={{ top: 'calc(var(--safe-top) + 8px)' }}

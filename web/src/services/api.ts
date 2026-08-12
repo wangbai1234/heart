@@ -680,6 +680,8 @@ export interface CharacterDTO {
   tags?: string[]
   /** Engagement heat: distinct user count who chatted with this character. */
   chat_user_count?: number
+  /** Lifecycle state: active | disabled. A disabled row only reaches its owner. */
+  status?: string
   /** Moderation state: not_required | pending | approved | rejected. Owner-only meaning. */
   review_status?: string
   /** Rejection reason — only populated for the character's owner. */
@@ -957,6 +959,18 @@ export async function disableCharacter(
   characterId: string,
 ): Promise<{ id: string; status: string }> {
   return request(`/characters/${characterId}/disable`, { method: 'POST' })
+}
+
+/** Re-publish a disabled character. Public/unlisted re-enters review. */
+export async function reactivateCharacter(
+  characterId: string,
+): Promise<{ id: string; status: string }> {
+  return request(`/characters/${characterId}/reactivate`, { method: 'POST' })
+}
+
+/** Permanently delete a UGC character. Irreversible — cascades all data. */
+export async function deleteCharacter(characterId: string): Promise<{ id: string; deleted: boolean }> {
+  return request(`/characters/${characterId}`, { method: 'DELETE' })
 }
 
 // ── Character Settings API ─────────────────────────────────────────

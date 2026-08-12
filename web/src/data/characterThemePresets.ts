@@ -187,3 +187,17 @@ export function getThemePresetById(id: string): ThemePreset | undefined {
 export function getDefaultThemePreset(): ThemePreset {
   return getThemePresetById(DEFAULT_THEME_PRESET_ID) ?? THEME_PRESETS[0]
 }
+
+/**
+ * Reverse-lookup a preset id from a stored palette (edit flow). A UGC character
+ * persists the resolved ChromePalette, not the preset id it came from, so on
+ * edit we match by the distinctive bg + ctaGradient. Returns '' if no preset
+ * matches (custom/legacy palette) — the editor then keeps the stored palette.
+ */
+export function findThemePresetIdByPalette(palette: { bg?: string; ctaGradient?: string } | null | undefined): string {
+  if (!palette) return ''
+  const match = THEME_PRESETS.find(
+    (p) => p.palette.bg === palette.bg && p.palette.ctaGradient === palette.ctaGradient,
+  )
+  return match?.id ?? ''
+}
