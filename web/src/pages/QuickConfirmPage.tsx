@@ -75,6 +75,14 @@ export function QuickConfirmPage() {
   const [regenerating, setRegenerating] = useState(false)
   const [creating, setCreating] = useState(false)
 
+  // Editable prefill fields - 批 7：更多设定可编辑
+  const [ageRange, setAgeRange] = useState(initialPrefill?.age_range ?? '')
+  const [greetingStyle, setGreetingStyle] = useState<QuickPrefillResponse['greeting_style']>(
+    initialPrefill?.greeting_style ?? 'warm',
+  )
+  const [sliders, setSliders] = useState<Record<string, number>>(initialPrefill?.sliders ?? {})
+  const [catchphrases, setCatchphrases] = useState<string[]>(initialPrefill?.catchphrases ?? [])
+
   if (!base || !initialPrefill) {
     return (
       <div className="w-full h-full flex items-center justify-center px-6 text-center">
@@ -92,8 +100,6 @@ export function QuickConfirmPage() {
       </div>
     )
   }
-
-  const prefill = initialPrefill
 
   async function handleRegenerate() {
     if (regenerateCount >= MAX_REGENERATE) {
@@ -135,10 +141,17 @@ export function QuickConfirmPage() {
         gender: base.gender,
         persona: base.persona,
         creation_mode: 'quick',
-        greeting_style: prefill.greeting_style,
-        age_range: prefill.age_range,
-        sliders: prefill.sliders,
-        catchphrases: prefill.catchphrases,
+        greeting_style: greetingStyle,
+        age_range: ageRange,
+        sliders: sliders as {
+          warmth: number
+          talkativeness: number
+          directness: number
+          humor: number
+          playfulness: number
+          steadiness: number
+        },
+        catchphrases,
         opening,
         ui_chrome: selectedTheme?.palette ?? null,
         visibility,
@@ -167,9 +180,9 @@ export function QuickConfirmPage() {
   }
 
   const summaryLine = [
-    prefill.age_range,
-    GREETING_STYLE_LABELS[prefill.greeting_style] ?? prefill.greeting_style,
-    `${prefill.catchphrases.length} 条口癖`,
+    ageRange,
+    GREETING_STYLE_LABELS[greetingStyle] ?? greetingStyle,
+    `${catchphrases.length} 条口癖`,
   ].join(' · ')
 
   return (
@@ -347,29 +360,94 @@ export function QuickConfirmPage() {
 
           {moreExpanded && (
             <div className={`mt-2 p-4 rounded-[12px] ${isDark ? 'bg-[var(--color-glass-55)]' : 'bg-white/60'}`}>
-              <Row label="年龄段" value={`${prefill.age_range} 岁`} />
-              <Row label="相处风格" value={GREETING_STYLE_LABELS[prefill.greeting_style] ?? prefill.greeting_style} />
+              {/* 年龄段 */}
+              <div className="mb-3">
+                <label className="block text-[13px] text-[var(--color-text-secondary)] mb-1">年龄段</label>
+                <input
+                  type="text"
+                  value={ageRange}
+                  onChange={(e) => setAgeRange(e.target.value)}
+                  placeholder="例如：20-25"
+                  className="w-full px-3 py-2 rounded-[10px] text-[14px] bg-[var(--color-glass-35)] border border-[var(--color-border-subtle)] text-[var(--color-ink)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-primary)]"
+                />
+              </div>
+
+              {/* 相处风格 */}
+              <div className="mb-3">
+                <label className="block text-[13px] text-[var(--color-text-secondary)] mb-2">相处风格</label>
+                <div className="flex flex-wrap gap-2">
+                  {(['warm', 'cool', 'playful', 'reserved', 'intense'] as const).map((style) => (
+                    <button
+                      key={style}
+                      onClick={() => setGreetingStyle(style)}
+                      className={`px-3 py-1.5 rounded-full text-[13px] font-medium transition-all ${
+                        greetingStyle === style
+                          ? 'bg-[rgba(255,183,197,0.25)] text-[#E86083] border border-[rgba(255,183,197,0.55)]'
+                          : 'bg-[var(--color-glass-35)] text-[var(--color-text-secondary)] border border-transparent'
+                      }`}
+                    >
+                      {GREETING_STYLE_LABELS[style]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <div className="my-3 h-px bg-[var(--color-border-subtle)]" />
-              {Object.entries(prefill.sliders).map(([key, val]) => (
-                <div key={key} className="mb-2">
-                  <div className="flex items-center justify-between text-[13px] mb-1">
+
+              {/* 六个滑块 */}
+              {Object.entries(sliders).map(([key, val]) => (
+                <div key={key} className="mb-3">
+                  <div className="flex items-center justify-between text-[13px] mb-1.5">
                     <span className="text-[var(--color-text-secondary)]">{SLIDER_LABELS[key] ?? key}</span>
                     <span className="text-[var(--color-text-muted)] tabular-nums">{Math.round(val * 100)}%</span>
                   </div>
-                  <div className="h-[4px] rounded-full bg-[var(--color-glass-55)] overflow-hidden">
-                    <div className="h-full rounded-full bg-[var(--color-primary)]" style={{ width: `${val * 100}%` }} />
-                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    value={val}
+                    onChange={(e) => setSliders({ ...sliders, [key]: Number.parseFloat(e.target.value) })}
+                    className="w-full h-[4px] rounded-full appearance-none bg-[var(--color-glass-55)] [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-[14px] [&::-webkit-slider-thumb]:h-[14px] [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-[var(--color-primary)] [&::-webkit-slider-thumb]:cursor-pointer"
+                  />
                 </div>
               ))}
+
               <div className="my-3 h-px bg-[var(--color-border-subtle)]" />
-              <div className="text-[13px] text-[var(--color-text-secondary)] mb-1">口癖</div>
-              <div className="flex flex-wrap gap-2">
-                {prefill.catchphrases.map((cp, i) => (
-                  <span key={i} className="px-2.5 py-1 rounded-full bg-[var(--color-glass-75)] text-[12px] text-[var(--color-ink)]">
-                    {cp}
-                  </span>
+
+              {/* 口癖 */}
+              <div className="text-[13px] text-[var(--color-text-secondary)] mb-2">口癖</div>
+              <div className="flex flex-wrap gap-2 mb-2">
+                {catchphrases.map((cp, i) => (
+                  <div
+                    key={i}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-[var(--color-glass-75)] text-[12px] text-[var(--color-ink)]"
+                  >
+                    <span>{cp}</span>
+                    <button
+                      onClick={() => setCatchphrases(catchphrases.filter((_, idx) => idx !== i))}
+                      className="w-[14px] h-[14px] rounded-full flex items-center justify-center hover:bg-[var(--color-glass-55)] transition-colors"
+                      aria-label="删除"
+                    >
+                      <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
+                        <line x1="18" y1="6" x2="6" y2="18" />
+                        <line x1="6" y1="6" x2="18" y2="18" />
+                      </svg>
+                    </button>
+                  </div>
                 ))}
               </div>
+              <input
+                type="text"
+                placeholder="输入口癖后按回车添加"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && e.currentTarget.value.trim()) {
+                    setCatchphrases([...catchphrases, e.currentTarget.value.trim()])
+                    e.currentTarget.value = ''
+                  }
+                }}
+                className="w-full px-3 py-2 rounded-[10px] text-[13px] bg-[var(--color-glass-35)] border border-[var(--color-border-subtle)] text-[var(--color-ink)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-primary)]"
+              />
             </div>
           )}
         </div>
@@ -394,15 +472,6 @@ export function QuickConfirmPage() {
         onConfirm={setVoiceSelection}
         initialSelection={voiceSelection}
       />
-    </div>
-  )
-}
-
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-center justify-between py-1.5 text-[13px]">
-      <span className="text-[var(--color-text-secondary)]">{label}</span>
-      <span className="text-[var(--color-ink)] font-medium">{value}</span>
     </div>
   )
 }

@@ -94,9 +94,10 @@ async def list_characters(
     ]
     has_voice_map = {row["id"]: bool(row.get("has_voice", False)) for row in raw_rows}
 
-    # Fetch avatar_url from soul_specs.draft for UGC characters
+    # Fetch avatar_url, tagline, creation_mode from soul_specs.draft for UGC characters
     avatar_urls: dict[str, str | None] = {}
     taglines: dict[str, str | None] = {}
+    creation_modes: dict[str, str | None] = {}
     ugc_ids = [row.id for row in rows if row.owner_user_id is not None]
     if ugc_ids:
         content_result = await db.execute(
@@ -104,7 +105,8 @@ async def list_characters(
                 """
                 SELECT character_id,
                        draft->>'avatar_url' AS avatar_url,
-                       draft->>'tagline' AS tagline
+                       draft->>'tagline' AS tagline,
+                       draft->>'creation_mode' AS creation_mode
                 FROM soul_specs
                 WHERE character_id = ANY(:ids) AND status = 'active'
                 """
@@ -116,6 +118,8 @@ async def list_characters(
                 avatar_urls[row.character_id] = row.avatar_url
             if row.tagline:
                 taglines[row.character_id] = row.tagline
+            if row.creation_mode:
+                creation_modes[row.character_id] = row.creation_mode
 
     # Compute popularity by counting distinct chat users per character
     popularity: dict[str, int] = {}
@@ -131,7 +135,7 @@ async def list_characters(
     for row in pop_result:
         popularity[row.character_id] = int(row.cnt)
 
-    entries = build_catalog_entries(rows, uid, avatar_urls, popularity, taglines)
+    entries = build_catalog_entries(rows, uid, avatar_urls, popularity, taglines, creation_modes)
     result_list = []
     for e in entries:
         entry_dict = asdict(e)

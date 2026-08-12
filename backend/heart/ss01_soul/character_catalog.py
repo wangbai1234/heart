@@ -69,6 +69,9 @@ class CharacterEntry:
     tagline: Optional[str] = None
     # ISO-8601 creation timestamp; drives the "新角色" (newest) discovery sort.
     created_at: Optional[str] = None
+    # Creation mode: 'quick' (快速创建) | 'workshop' (角色创作) | None (built-in).
+    # Drives the edit route in CharacterCard: quick → quick-edit, workshop → workshop edit.
+    creation_mode: Optional[str] = None
 
 
 def coerce_tags(raw: object) -> list[str]:
@@ -117,6 +120,7 @@ def build_catalog_entries(
     avatar_urls: dict[str, str | None] | None = None,
     popularity: dict[str, int] | None = None,
     taglines: dict[str, str | None] | None = None,
+    creation_modes: dict[str, str | None] | None = None,
 ) -> list[CharacterEntry]:
     """Shape visible rows into API entries, built-ins first then by popularity.
 
@@ -130,10 +134,13 @@ def build_catalog_entries(
             Higher count = more engagement. Used to sort UGC characters.
         taglines: Optional mapping of character_id → one-line plot hook (from draft).
             Built-in characters fall back client-side to bundled summaries.
+        creation_modes: Optional mapping of character_id → 'quick' | 'workshop'.
+            Drives the edit route in CharacterCard.
     """
     avatar_urls = avatar_urls or {}
     popularity = popularity or {}
     taglines = taglines or {}
+    creation_modes = creation_modes or {}
 
     def is_owner_fn(row: CharacterRow) -> bool:
         return row.owner_user_id is not None and row.owner_user_id == viewer_id
@@ -155,6 +162,7 @@ def build_catalog_entries(
             chat_user_count=popularity.get(row.id, 0),
             tagline=taglines.get(row.id),
             created_at=row.created_at,
+            creation_mode=creation_modes.get(row.id),
         )
         for row in rows
         if visible_to(row, viewer_id)
