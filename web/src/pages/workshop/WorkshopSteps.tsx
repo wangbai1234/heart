@@ -73,6 +73,9 @@ function RowListEditor({
   onChange,
   labelPlaceholder,
   valuePlaceholder,
+  labelHeader,
+  valueHeader,
+  equalWidth = false,
   max,
   addLabel,
 }: {
@@ -80,27 +83,43 @@ function RowListEditor({
   onChange: (rows: Row[]) => void
   labelPlaceholder: string
   valuePlaceholder: string
+  /** 左列表头（可选）——不传则不显示表头行。 */
+  labelHeader?: string
+  /** 右列表头（可选）。 */
+  valueHeader?: string
+  /** true = 两列 50/50 等宽（表里反差用）；false = 左列窄右列宽。 */
+  equalWidth?: boolean
   max: number
   addLabel: string
 }) {
   const update = (i: number, patch: Partial<Row>) =>
     onChange(rows.map((r, idx) => (idx === i ? { ...r, ...patch } : r)))
   const remove = (i: number) => onChange(rows.filter((_, idx) => idx !== i))
+  // min-w-0 是关键：input 默认 min-width:auto 会撑破 flex-1，导致右列被挤成小条。
+  const labelCls = equalWidth ? 'flex-1 min-w-0' : 'w-[34%] shrink-0'
+  const valueCls = equalWidth ? 'flex-1 min-w-0' : 'flex-1 min-w-0'
   return (
     <div className="space-y-3">
+      {(labelHeader || valueHeader) && rows.length > 0 && (
+        <div className="flex gap-2 items-center px-1">
+          <span className={`${labelCls} text-[12px] text-[var(--color-text-muted)]`}>{labelHeader}</span>
+          <span className={`${valueCls} text-[12px] text-[var(--color-text-muted)]`}>{valueHeader}</span>
+          <span className="w-[46px] shrink-0" />
+        </div>
+      )}
       {rows.map((row, i) => (
         <div key={i} className="flex gap-2 items-start">
           <input
             value={row.label}
             onChange={(e) => update(i, { label: e.target.value.slice(0, 20) })}
             placeholder={labelPlaceholder}
-            className={`${textInputCls} w-[34%] h-[46px]`}
+            className={`${textInputCls} ${labelCls} h-[46px]`}
           />
           <input
             value={row.value}
             onChange={(e) => update(i, { value: e.target.value.slice(0, 120) })}
             placeholder={valuePlaceholder}
-            className={`${textInputCls} flex-1 h-[46px]`}
+            className={`${textInputCls} ${valueCls} h-[46px]`}
           />
           <button
             onClick={() => remove(i)}
@@ -134,6 +153,8 @@ export function Step3({ state, updateField }: StepProps) {
         <RowListEditor
           rows={state.dossierItems}
           onChange={(r) => updateField('dossierItems', r)}
+          labelHeader="条目"
+          valueHeader="内容"
           labelPlaceholder="身份"
           valuePlaceholder="例：帝国近卫军统领"
           max={10}
@@ -205,8 +226,10 @@ export function Step5({ state, updateField }: StepProps) {
           <RowListEditor
             rows={state.timelineItems}
             onChange={(r) => updateField('timelineItems', r)}
-            labelPlaceholder="时间"
-            valuePlaceholder="例：十六岁，入伍"
+            labelHeader="时间"
+            valueHeader="发生了什么"
+            labelPlaceholder="如：十六岁"
+            valuePlaceholder="例：入伍从军"
             max={8}
             addLabel="添加一段经历"
           />
@@ -217,8 +240,10 @@ export function Step5({ state, updateField }: StepProps) {
           <RowListEditor
             rows={state.objectItems}
             onChange={(r) => updateField('objectItems', r)}
-            labelPlaceholder="物件"
-            valuePlaceholder="例：一枚旧怀表——父亲的遗物"
+            labelHeader="物件"
+            valueHeader="故事/意义"
+            labelPlaceholder="如：旧怀表"
+            valuePlaceholder="例：父亲的遗物"
             max={6}
             addLabel="添加一件物品"
           />
@@ -248,12 +273,15 @@ export function Step5({ state, updateField }: StepProps) {
               </div>
             </div>
           </FieldCard>
-          <FieldCard label="对照项" hint={`${state.contrastPairs.length}/6`}>
+          <FieldCard label="对照项" hint={`${state.contrastPairs.length}/6 · 每组填“表”与“里”两面`}>
             <RowListEditor
               rows={state.contrastPairs}
               onChange={(r) => updateField('contrastPairs', r)}
-              labelPlaceholder="表现"
-              valuePlaceholder="内里"
+              labelHeader={state.contrastLeftLabel.trim() || '表（外显）'}
+              valueHeader={state.contrastRightLabel.trim() || '里（内在）'}
+              labelPlaceholder="如：温和有礼"
+              valuePlaceholder="如：内心疏离"
+              equalWidth
               max={6}
               addLabel="添加一组对照"
             />
@@ -396,9 +424,17 @@ const VISIBILITY_OPTIONS: Array<{
 
 const HTML_MAX = 50 * 1024
 
-/** 第 7 步：主题配色 + 可见性 + 高级 HTML（分层第二层）。 */
-export function Step7({ state, updateField }: StepProps) {
-  const [voicePickerOpen, setVoicePickerOpen] = useState(false)
+/** 第 7 步：主题配色 + 可见性 + 高级 HTML（分层第二层）。
+ * voicePickerOpen 由父组件持有——底部「创建角色」按钮需要在弹窗打开时隐藏，避免重叠。 */
+export function Step7({
+  state,
+  updateField,
+  voicePickerOpen,
+  setVoicePickerOpen,
+}: StepProps & {
+  voicePickerOpen: boolean
+  setVoicePickerOpen: (open: boolean) => void
+}) {
   const htmlBytes = new Blob([state.customHtml]).size
   const htmlOver = htmlBytes > HTML_MAX
   return (

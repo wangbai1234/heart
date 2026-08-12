@@ -59,6 +59,8 @@ export function WorkshopCreatePage() {
   const [uploading, setUploading] = useState(false)
   const [assisting, setAssisting] = useState(false)
   const [loadingDraft, setLoadingDraft] = useState(isEdit)
+  // 音色弹窗状态提升到此层：底部主按钮需在弹窗打开时隐藏，避免与弹窗「确定」重叠。
+  const [voicePickerOpen, setVoicePickerOpen] = useState(false)
 
   // Edit mode: hydrate the form from the saved draft once.
   useEffect(() => {
@@ -240,6 +242,8 @@ export function WorkshopCreatePage() {
         </div>
       }
       footer={
+        // 音色弹窗打开时隐藏底部主按钮，避免与弹窗「确定」重叠。
+        voicePickerOpen ? null : (
         <div className="fixed bottom-0 left-0 right-0 px-5 pb-[env(safe-area-inset-bottom,20px)] pt-3 z-30 bg-gradient-to-t from-[var(--color-bg-page)] via-[var(--color-bg-page)] to-transparent">
           <button
             onClick={handlePrimary}
@@ -257,6 +261,7 @@ export function WorkshopCreatePage() {
                   : '创建角色'}
           </button>
         </div>
+        )
       }
     >
       {loadingDraft ? (
@@ -281,7 +286,12 @@ export function WorkshopCreatePage() {
           {tab === 2 && (
             <>
               <Step6 state={state} updateField={updateField} onAssistOpening={handleAssistOpening} assisting={assisting} />
-              <Step7 state={state} updateField={updateField} />
+              <Step7
+                state={state}
+                updateField={updateField}
+                voicePickerOpen={voicePickerOpen}
+                setVoicePickerOpen={setVoicePickerOpen}
+              />
             </>
           )}
         </>

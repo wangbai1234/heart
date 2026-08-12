@@ -134,7 +134,8 @@ export function CreateHubPage() {
                   onEdit={() => {
                     // 根据创建模式选择编辑路由（批7）
                     if (char.creation_mode === 'quick') {
-                      navigate(`/characters/new/quick?edit=${char.id}`)
+                      // 快速创建编辑走确认页（单页承载全部字段，含封面/名字/性别/描述）
+                      navigate(`/characters/new/quick/confirm?edit=${char.id}`)
                     } else {
                       navigate(`/characters/new/workshop?edit=${char.id}`)
                     }
