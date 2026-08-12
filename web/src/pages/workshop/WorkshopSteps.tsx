@@ -226,20 +226,28 @@ export function Step5({ state, updateField }: StepProps) {
       )}
       {t === 'contrast' && (
         <>
-          <div className="flex gap-2 mb-3">
-            <input
-              value={state.contrastLeftLabel}
-              onChange={(e) => updateField('contrastLeftLabel', e.target.value.slice(0, 20))}
-              placeholder="表（如：人前）"
-              className={`${textInputCls} flex-1`}
-            />
-            <input
-              value={state.contrastRightLabel}
-              onChange={(e) => updateField('contrastRightLabel', e.target.value.slice(0, 20))}
-              placeholder="里（如：人后）"
-              className={`${textInputCls} flex-1`}
-            />
-          </div>
+          <FieldCard label="对照维度" hint="给两面起个名">
+            <div className="flex gap-3">
+              <div className="flex-1">
+                <label className="block text-[12px] text-[var(--color-text-muted)] mb-1.5">表（外显）</label>
+                <input
+                  value={state.contrastLeftLabel}
+                  onChange={(e) => updateField('contrastLeftLabel', e.target.value.slice(0, 20))}
+                  placeholder="如：人前"
+                  className={textInputCls}
+                />
+              </div>
+              <div className="flex-1">
+                <label className="block text-[12px] text-[var(--color-text-muted)] mb-1.5">里（内在）</label>
+                <input
+                  value={state.contrastRightLabel}
+                  onChange={(e) => updateField('contrastRightLabel', e.target.value.slice(0, 20))}
+                  placeholder="如：人后"
+                  className={textInputCls}
+                />
+              </div>
+            </div>
+          </FieldCard>
           <FieldCard label="对照项" hint={`${state.contrastPairs.length}/6`}>
             <RowListEditor
               rows={state.contrastPairs}

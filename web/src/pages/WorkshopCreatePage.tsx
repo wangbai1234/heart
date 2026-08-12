@@ -67,7 +67,12 @@ export function WorkshopCreatePage() {
     setLoadingDraft(true)
     getCharacterDraft(editId)
       .then((draft) => {
-        if (!cancelled) setState(draftToWorkshopState(draft))
+        if (!cancelled) {
+          console.log('[WorkshopCreatePage] Loaded draft:', draft)
+          const hydrated = draftToWorkshopState(draft)
+          console.log('[WorkshopCreatePage] Hydrated state dossierItems:', hydrated.dossierItems)
+          setState(hydrated)
+        }
       })
       .catch(() => {
         if (!cancelled) showToast('无法加载角色草稿，请重试', 'error')

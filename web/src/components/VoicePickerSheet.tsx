@@ -195,7 +195,7 @@ export function VoicePickerSheet({
         </div>
 
         {/* Content */}
-        <div className="overflow-y-auto max-h-[calc(85vh-140px)] px-5 py-4">
+        <div className="overflow-y-auto max-h-[calc(85vh-140px)] px-5 py-4 pb-20">
           <p className="text-[13px] text-[var(--color-text-muted)] mb-4">
             选择一个预设音色，或上传音频克隆（3-10 分钟音频，不含背景音）
           </p>
