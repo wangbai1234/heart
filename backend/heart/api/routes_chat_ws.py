@@ -182,11 +182,11 @@ def _create_stream_session(
             # turn_end (it must show a duration), so it needs no per-frame decode
             # and benefits from mp3's ~10x smaller size.
             realtime_fmt = "wav" if channel == "call" else "mp3"
-            # A live call optimises for time-to-first-audio: latency="low" +
+            # A live call optimises for time-to-first-audio: latency="normal" +
             # a small chunk_length makes Fish emit the opening audio sooner (at a
-            # slight quality cost that a phone-call register tolerates). Chat is
-            # played as one clip at turn_end, so it keeps the smoother balanced/
-            # larger-chunk profile.
+            # slight quality cost that a phone-call register tolerates). Chat keeps
+            # the smoother balanced/larger-chunk profile. (v1 API only has normal/
+            # balanced; normal is the lower-latency option.)
             is_call = channel == "call"
             return RealtimeStreamSession(
                 send_audio,
@@ -195,7 +195,7 @@ def _create_stream_session(
                 character_id=character_id,
                 fmt=realtime_fmt,
                 chunk_length=100 if is_call else 200,
-                latency="low" if is_call else "balanced",
+                latency="normal" if is_call else "balanced",
             )
         except Exception as e:
             logger.warning("fish_realtime_session_init_failed", error=str(e))

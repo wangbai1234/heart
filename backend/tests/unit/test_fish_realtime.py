@@ -512,8 +512,9 @@ class TestCreateStreamSessionSelection:
         )
         assert call._fmt == "wav"  # call needs per-frame decodable linear PCM
         assert chat._fmt == "mp3"  # chat concatenates + plays once at turn_end
-        # Call optimises for time-to-first-audio: low latency + small chunks.
-        assert call._latency == "low"
+        # Call optimises for time-to-first-audio: normal latency (v1's lower-
+        # latency option; v1 has only normal/balanced) + small chunks.
+        assert call._latency == "normal"
         assert call._chunk_length == 100
         # Chat keeps the smoother balanced/larger-chunk profile.
         assert chat._latency == "balanced"
