@@ -101,14 +101,14 @@ function RowListEditor({
   return (
     <div className="space-y-3">
       {(labelHeader || valueHeader) && rows.length > 0 && (
-        <div className="flex gap-2 items-center px-1">
+        <div className="flex gap-1.5 items-center px-1">
           <span className={`${labelCls} text-[12px] text-[var(--color-text-muted)]`}>{labelHeader}</span>
           <span className={`${valueCls} text-[12px] text-[var(--color-text-muted)]`}>{valueHeader}</span>
-          <span className="w-[46px] shrink-0" />
+          <span className="w-[40px] shrink-0" />
         </div>
       )}
       {rows.map((row, i) => (
-        <div key={i} className="flex gap-2 items-start">
+        <div key={i} className="flex gap-1.5 items-start">
           <input
             value={row.label}
             onChange={(e) => update(i, { label: e.target.value.slice(0, 20) })}
@@ -124,9 +124,9 @@ function RowListEditor({
           <button
             onClick={() => remove(i)}
             aria-label="删除该行"
-            className="w-[46px] h-[46px] shrink-0 rounded-[14px] flex items-center justify-center text-[var(--color-text-muted)] bg-[var(--color-glass-35)] border border-[var(--color-border-glass)] active:scale-95 transition-transform"
+            className="w-[40px] h-[40px] shrink-0 rounded-[14px] flex items-center justify-center text-[var(--color-text-muted)] bg-[var(--color-glass-35)] border border-[var(--color-border-glass)] active:scale-95 transition-transform"
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
               <path d="M18 6L6 18M6 6l12 12" />
             </svg>
           </button>
