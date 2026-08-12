@@ -690,6 +690,8 @@ export interface CharacterDTO {
   tagline?: string | null
   /** ISO-8601 creation timestamp — drives the「新角色」(newest) discovery sort. */
   created_at?: string | null
+  /** Creation mode: 'quick' | 'workshop' | null (built-in). Drives the edit route. */
+  creation_mode?: 'quick' | 'workshop' | null
 }
 
 export async function getCharacters(): Promise<{ characters: CharacterDTO[] }> {

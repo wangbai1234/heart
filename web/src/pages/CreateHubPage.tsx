@@ -131,7 +131,14 @@ export function CreateHubPage() {
                 <CharacterCard
                   key={char.id}
                   char={char}
-                  onEdit={() => navigate(`/characters/new/workshop?edit=${char.id}`)}
+                  onEdit={() => {
+                    // 根据创建模式选择编辑路由（批7）
+                    if (char.creation_mode === 'quick') {
+                      navigate(`/characters/new/quick?edit=${char.id}`)
+                    } else {
+                      navigate(`/characters/new/workshop?edit=${char.id}`)
+                    }
+                  }}
                   onVisibility={(v) => handleVisibility(char.id, v)}
                   onDisable={() => setDisableTarget(char)}
                   onReactivate={() => handleReactivate(char)}
