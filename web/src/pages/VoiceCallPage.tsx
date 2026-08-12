@@ -44,6 +44,10 @@ export function VoiceCallPage({ isDark: _isDark }: VoiceCallPageProps) {
   const [showSubtitle, setShowSubtitle] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
+  // Live ASR transcript while the user holds the mic. Shown immediately so the
+  // wait between speaking and the reply feels shorter — the words the user just
+  // said appear as they speak, not after the full round-trip.
+  const [liveTranscript, setLiveTranscript] = useState('')
   const [elapsedMs, setElapsedMs] = useState(0)
   const busyRef = useRef(false)
   // Call bookkeeping: wall-clock start for the duration summary, and an ended
@@ -119,8 +123,9 @@ export function VoiceCallPage({ isDark: _isDark }: VoiceCallPageProps) {
     // let the WS-driven playback make sound otherwise.
     unlockAudio()
     setIsRecording(true)
+    setLiveTranscript('')
     try {
-      await asr.start()
+      await asr.start({ onPartial: (text) => setLiveTranscript(text) })
     } catch {
       setIsRecording(false)
       busyRef.current = false
@@ -131,6 +136,7 @@ export function VoiceCallPage({ isDark: _isDark }: VoiceCallPageProps) {
   const endTalk = useCallback(async () => {
     if (!isRecording) return
     setIsRecording(false)
+    setLiveTranscript('')
     let result: Awaited<ReturnType<typeof asr.stop>>
     try {
       result = await asr.stop({ cancel: false })
@@ -276,8 +282,17 @@ export function VoiceCallPage({ isDark: _isDark }: VoiceCallPageProps) {
         <p className="mt-2 text-[15px] text-white/70">{statusText}</p>
       </div>
 
-      {/* 字幕：本轮角色对白（可关闭） */}
-      {showSubtitle && subtitleText && (
+      {/* 实时听写：用户说话时即时回显自己的话（无需开字幕），录完即清空 */}
+      {isRecording && liveTranscript && (
+        <div className="absolute z-10 left-6 right-6 top-1/2 -translate-y-1/2">
+          <p className="text-center text-[18px] leading-[1.7] text-white/85 drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)]">
+            {liveTranscript}
+          </p>
+        </div>
+      )}
+
+      {/* 字幕：本轮角色对白（可关闭）。录音时让位给实时听写。 */}
+      {!isRecording && showSubtitle && subtitleText && (
         <div className="absolute z-10 left-6 right-6 top-1/2 -translate-y-1/2">
           <p className="text-center text-[18px] leading-[1.7] text-white/92 drop-shadow-[0_2px_8px_rgba(0,0,0,0.6)]">
             {subtitleText}

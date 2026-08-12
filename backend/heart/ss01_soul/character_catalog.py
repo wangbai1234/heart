@@ -53,6 +53,9 @@ class CharacterEntry:
     visibility: str
     is_builtin: bool
     is_owner: bool
+    # Lifecycle state: 'active' | 'disabled'. Only the owner ever sees a
+    # 'disabled' row (drives the「已停用」badge + re-publish action).
+    status: str = "active"
     review_status: str = "not_required"
     # review_reason is only populated for the owner; never exposed to other users.
     review_reason: Optional[str] = None
@@ -66,6 +69,9 @@ class CharacterEntry:
     tagline: Optional[str] = None
     # ISO-8601 creation timestamp; drives the "新角色" (newest) discovery sort.
     created_at: Optional[str] = None
+    # Creation mode: 'quick' (快速创建) | 'workshop' (角色创作) | None (built-in).
+    # Drives the edit route in CharacterCard: quick → quick-edit, workshop → workshop edit.
+    creation_mode: Optional[str] = None
 
 
 def coerce_tags(raw: object) -> list[str]:
@@ -97,15 +103,15 @@ def visible_to(row: CharacterRow, viewer_id: UUID) -> bool:
     - ``public`` rows with review_status='approved' are visible to everyone.
     - ``unlisted`` / ``private`` rows (or un-approved public) are owner-only.
     """
-    if row.status != "active":
-        return False
     if row.owner_user_id is None:
-        # Built-in character — always listed.
-        return True
+        # Built-in character — always listed (only ever 'active').
+        return row.status == "active"
     if row.owner_user_id == viewer_id:
+        # Owner sees their own characters at any status — including 'disabled',
+        # so the creator can find and re-publish them from the creation hub.
         return True
-    # Non-owner can only see public+approved characters.
-    return row.visibility == "public" and row.review_status == "approved"
+    # Non-owner can only see active public+approved characters.
+    return row.status == "active" and row.visibility == "public" and row.review_status == "approved"
 
 
 def build_catalog_entries(
@@ -114,6 +120,7 @@ def build_catalog_entries(
     avatar_urls: dict[str, str | None] | None = None,
     popularity: dict[str, int] | None = None,
     taglines: dict[str, str | None] | None = None,
+    creation_modes: dict[str, str | None] | None = None,
 ) -> list[CharacterEntry]:
     """Shape visible rows into API entries, built-ins first then by popularity.
 
@@ -127,10 +134,13 @@ def build_catalog_entries(
             Higher count = more engagement. Used to sort UGC characters.
         taglines: Optional mapping of character_id → one-line plot hook (from draft).
             Built-in characters fall back client-side to bundled summaries.
+        creation_modes: Optional mapping of character_id → 'quick' | 'workshop'.
+            Drives the edit route in CharacterCard.
     """
     avatar_urls = avatar_urls or {}
     popularity = popularity or {}
     taglines = taglines or {}
+    creation_modes = creation_modes or {}
 
     def is_owner_fn(row: CharacterRow) -> bool:
         return row.owner_user_id is not None and row.owner_user_id == viewer_id
@@ -142,6 +152,7 @@ def build_catalog_entries(
             visibility=row.visibility,
             is_builtin=row.owner_user_id is None,
             is_owner=is_owner_fn(row),
+            status=row.status,
             review_status=row.review_status,
             # Only expose rejection reason to the character owner.
             review_reason=row.review_reason if is_owner_fn(row) else None,
@@ -151,6 +162,7 @@ def build_catalog_entries(
             chat_user_count=popularity.get(row.id, 0),
             tagline=taglines.get(row.id),
             created_at=row.created_at,
+            creation_mode=creation_modes.get(row.id),
         )
         for row in rows
         if visible_to(row, viewer_id)

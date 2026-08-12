@@ -6,6 +6,8 @@ import {
   updateCharacter as apiUpdateCharacter,
   setCharacterVisibility as apiSetVisibility,
   disableCharacter as apiDisableCharacter,
+  reactivateCharacter as apiReactivateCharacter,
+  deleteCharacter as apiDeleteCharacter,
   type CharacterDTO,
   type CharacterDraftDTO,
   type CharacterProfileDTO,
@@ -45,6 +47,8 @@ interface CharactersState {
   updateCharacter: (id: string, draft: CharacterDraftDTO) => Promise<void>
   setVisibility: (id: string, visibility: 'public' | 'unlisted' | 'private') => Promise<void>
   disableCharacter: (id: string) => Promise<void>
+  reactivateCharacter: (id: string) => Promise<void>
+  deleteCharacter: (id: string) => Promise<void>
 }
 
 // Deduplicate concurrent / repeated loads across the app.
@@ -127,6 +131,27 @@ export const useCharactersStore = create<CharactersState>((set, get) => ({
 
   disableCharacter: async (id) => {
     await apiDisableCharacter(id)
+    await get().load(true)
+  },
+
+  reactivateCharacter: async (id) => {
+    await apiReactivateCharacter(id)
+    // Drop the cached profile so a re-open reflects the restored/review state.
+    set((s) => {
+      const next = { ...s.profileById }
+      delete next[id]
+      return { profileById: next }
+    })
+    await get().load(true)
+  },
+
+  deleteCharacter: async (id) => {
+    await apiDeleteCharacter(id)
+    set((s) => {
+      const next = { ...s.profileById }
+      delete next[id]
+      return { profileById: next }
+    })
     await get().load(true)
   },
 }))

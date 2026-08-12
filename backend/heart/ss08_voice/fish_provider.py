@@ -25,6 +25,13 @@ logger = structlog.get_logger(__name__)
 
 _DEFAULT_BASE_URL = "https://fishaudio.org/api/open/v1"
 _DEFAULT_MODEL = "fishaudio-s21pro-flash"
+# Fish sync-HTTP tone controls (0.5–1.5, gateway default 1.0). 0.9 nudges the
+# render toward a steadier, more voice-consistent read than the 1.0 default
+# without flattening expressiveness — applied to every REST synth (voice chat +
+# the call path's REST fallback). The realtime WS has no such field; it tunes
+# tone via temperature/top_p instead, so these only ride the sync payload.
+_DEFAULT_STABILITY = 0.9
+_DEFAULT_SIMILARITY = 0.9
 
 
 class FishProvider:
@@ -36,11 +43,15 @@ class FishProvider:
         base_url: str = _DEFAULT_BASE_URL,
         model: str = _DEFAULT_MODEL,
         timeout: float = 60.0,
+        stability: float = _DEFAULT_STABILITY,
+        similarity: float = _DEFAULT_SIMILARITY,
     ) -> None:
         self._api_key = api_key
         self._base_url = base_url.rstrip("/")
         self._model = model
         self._timeout = timeout
+        self._stability = stability
+        self._similarity = similarity
 
     @property
     def name(self) -> str:
@@ -49,7 +60,7 @@ class FishProvider:
     def estimate_cost_cents(self, text: str) -> float:
         return 0.0
 
-    async def synthesize(self, req: TTSRequest) -> TTSResult:
+    async def synthesize(self, req: TTSRequest) -> TTSResult:  # noqa: C901 — tone params
         """Synthesize speech via POST {base}/speech/tts (returns binary audio)."""
         audio_format: str = req.format if req.format in ("mp3", "wav") else "mp3"
         payload: dict = {"text": req.text, "format": audio_format}
@@ -60,6 +71,13 @@ class FishProvider:
             payload["modelId"] = self._model
         if req.speed and req.speed != 1.0:
             payload["speed"] = req.speed
+        # stability / similarity are Fish-model-only sync-HTTP tone controls; send
+        # them only when they diverge from the gateway's 1.0 default so a future
+        # non-Fish backbone (which would reject unknown keys) stays unaffected.
+        if self._stability != 1.0:
+            payload["stability"] = self._stability
+        if self._similarity != 1.0:
+            payload["similarity"] = self._similarity
 
         # X-Request-Id lets us correlate a failed turn with the Fish dashboard's
         # request log (the gateway echoes it back in error.requestId).

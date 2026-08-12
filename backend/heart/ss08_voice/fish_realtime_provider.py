@@ -38,6 +38,12 @@ _SUBPROTOCOL = "realtime.tts.msgpack.v1"
 # Ceiling for the handshake (start → ready). The turn-level 45s timeout also
 # covers this, but a local bound gives a clean, fast fallback to REST.
 _READY_TIMEOUT_S = 10.0
+# Fish flags transient start failures with error.retryable=True (e.g. a cold
+# backend or a momentary gateway hiccup). Re-dialing once or twice recovers the
+# turn on the realtime path instead of dropping it to the slower REST fallback.
+# Kept tiny so a genuinely-down realtime service still fails fast to REST.
+_OPEN_MAX_ATTEMPTS = 3
+_OPEN_RETRY_DELAY_S = 0.25
 
 # A ws_factory takes (url, api_key) and returns an object exposing async
 # send(bytes) / recv() -> bytes|str / close(). Injectable for tests.
@@ -90,6 +96,9 @@ class FishRealtimeSession:
         self._ws_factory = ws_factory or _default_ws_factory
         self._ws: Any = None
         self._closed = False
+        # Set by _open_once when a start failure is safe to re-dial (Fish
+        # error.retryable, a dropped socket, or a silent handshake timeout).
+        self._retryable = False
         # For pcm/wav formats Fish reports the real sample rate on the ready
         # (and every audio) event; the client must honour it or playback pitch
         # and duration drift. None until the first frame that carries it.
@@ -104,8 +113,9 @@ class FishRealtimeSession:
             raise TTSProviderError("fish realtime: socket not open")
         await self._ws.send(_pack(event))
 
-    async def open(self) -> None:
-        """Connect, send ``start``, and wait for ``ready`` (raises on failure)."""
+    async def _open_once(self) -> None:
+        """One connect + start + await-ready cycle. Sets ``_retryable`` on error."""
+        self._retryable = False
         self._ws = await self._ws_factory(self._url, self._api_key)
         request: dict[str, Any] = {
             "model_id": self._model_id,
@@ -127,6 +137,8 @@ class FishRealtimeSession:
                         self._sample_rate = sr
                     return
                 if etype == "error":
+                    # Carry Fish's retryable hint out so open() can re-dial.
+                    self._retryable = bool(evt.get("retryable"))
                     raise TTSProviderError(
                         f"fish realtime start error: {evt.get('message') or evt}"
                     )
@@ -134,12 +146,50 @@ class FishRealtimeSession:
 
         try:
             await asyncio.wait_for(_await_ready(), timeout=_READY_TIMEOUT_S)
-        except (asyncio.TimeoutError, TTSProviderError):
+        except asyncio.TimeoutError:
+            # A silent handshake is transient far more often than not — let the
+            # retry loop re-dial rather than falling straight through to REST.
+            self._retryable = True
+            await self.close()
+            raise
+        except TTSProviderError:
             await self.close()
             raise
         except Exception as e:  # connection dropped mid-handshake, etc.
+            self._retryable = True
             await self.close()
             raise TTSProviderError(f"fish realtime handshake failed: {e}") from e
+
+    async def open(self) -> None:
+        """Connect, send ``start``, wait for ``ready`` — retrying transient fails.
+
+        Fish marks recoverable start failures with ``error.retryable``; a dropped
+        or silent handshake is treated the same. We re-dial up to
+        ``_OPEN_MAX_ATTEMPTS`` before surfacing the error so the caller falls back
+        to REST. A non-retryable error (bad model_id, auth) raises immediately.
+        """
+        last_exc: Optional[BaseException] = None
+        for attempt in range(1, _OPEN_MAX_ATTEMPTS + 1):
+            # A prior failed attempt may have marked the session closed; reset so
+            # the fresh socket from _open_once isn't torn down by a stale flag.
+            self._closed = False
+            try:
+                await self._open_once()
+                return
+            except TTSProviderError as e:
+                last_exc = e
+                if not self._retryable or attempt >= _OPEN_MAX_ATTEMPTS:
+                    raise
+                logger.warning(
+                    "fish_realtime_open_retry",
+                    attempt=attempt,
+                    max_attempts=_OPEN_MAX_ATTEMPTS,
+                    error=str(e),
+                )
+                await asyncio.sleep(_OPEN_RETRY_DELAY_S)
+        # Unreachable (loop either returns or raises), but keeps mypy happy.
+        if last_exc is not None:
+            raise last_exc
 
     async def send_text(self, text: str) -> None:
         """Send a sentence and flush it so generation starts promptly."""

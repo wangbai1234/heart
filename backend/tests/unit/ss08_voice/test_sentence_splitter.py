@@ -68,6 +68,41 @@ def test_hard_max_forces_split_when_bracket_never_closes():
     assert len(out[0]) == SentenceSplitter.HARD_MAX
 
 
+def test_first_clause_splits_early_on_comma():
+    """The FIRST sentence breaks on a comma once past FIRST_MIN_LEN, so the
+    opening audio reaches TTS a beat sooner than waiting for a terminator."""
+    splitter = SentenceSplitter()
+    # 9 chars then a comma (>= FIRST_MIN_LEN=8) → early clause split.
+    out = splitter.feed("其实我今天有点累，")
+    assert out == ["其实我今天有点累，"]
+
+
+def test_only_first_clause_splits_on_comma():
+    """After the first sentence emits, later commas no longer split — cadence
+    returns to terminator/MAX_LEN so mid-reply isn't chopped at every comma."""
+    splitter = SentenceSplitter()
+    assert splitter.feed("其实我今天有点累，") == ["其实我今天有点累，"]
+    # A second comma clause of the same length must NOT split now.
+    assert splitter.feed("然后又下了雨，") == []
+    out = splitter.feed("心情更差了。")
+    assert out == ["然后又下了雨，心情更差了。"]
+
+
+def test_first_clause_not_split_below_min_len():
+    """A very short leading clause (< FIRST_MIN_LEN) is not worth splitting."""
+    splitter = SentenceSplitter()
+    assert splitter.feed("你好，") == []  # only 3 chars before the comma
+
+
+def test_first_clause_comma_inside_instruction_bracket_kept():
+    """A comma inside a [中文指令] span must not bisect the instruction."""
+    splitter = SentenceSplitter()
+    # The comma sits inside [温柔，轻声] — splitting there would send half an
+    # instruction to Fish as speech. Held until a real boundary.
+    out = splitter.feed("[温柔，轻声]我在这儿。")
+    assert out == ["[温柔，轻声]我在这儿。"]
+
+
 def test_flush_remaining():
     """Test flush returns remaining buffer."""
     splitter = SentenceSplitter()

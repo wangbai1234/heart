@@ -203,6 +203,69 @@ class TestFishRealtimeSession:
         assert sess.sample_rate is None
 
 
+class TestFishRealtimeOpenRetry:
+    """open() re-dials transient (retryable) start failures before giving up."""
+
+    def _seq_factory(self, sockets: list[FakeWs]):
+        """Hand out one FakeWs per connect attempt (each open() re-dials)."""
+        it = iter(sockets)
+
+        async def _factory(url: str, api_key: str):
+            return next(it)
+
+        return _factory
+
+    @pytest.mark.asyncio
+    async def test_retries_retryable_error_then_succeeds(self, monkeypatch):
+        import heart.ss08_voice.fish_realtime_provider as frp
+
+        monkeypatch.setattr(frp, "_OPEN_RETRY_DELAY_S", 0)  # no sleep in tests
+        fail = FakeWs([{"event": "error", "message": "cold start", "retryable": True}])
+        ok = FakeWs([{"event": "ready"}])
+        sess = FishRealtimeSession(
+            api_key="k", url="wss://x", model_id="v",
+            ws_factory=self._seq_factory([fail, ok]),
+        )
+        await sess.open()  # first attempt fails (retryable), second succeeds
+        assert fail.closed  # the failed socket was cleaned up
+        assert any(f.get("event") == "start" for f in ok.sent)
+
+    @pytest.mark.asyncio
+    async def test_non_retryable_error_raises_immediately(self, monkeypatch):
+        import heart.ss08_voice.fish_realtime_provider as frp
+
+        monkeypatch.setattr(frp, "_OPEN_RETRY_DELAY_S", 0)
+        # retryable omitted → falsey → must NOT re-dial (would consume socket 2).
+        bad = FakeWs([{"event": "error", "message": "unknown model_id"}])
+        never = FakeWs([{"event": "ready"}])
+        sess = FishRealtimeSession(
+            api_key="k", url="wss://x", model_id="v",
+            ws_factory=self._seq_factory([bad, never]),
+        )
+        with pytest.raises(TTSProviderError):
+            await sess.open()
+        assert bad.closed
+        assert never.sent == []  # second socket never dialed
+
+    @pytest.mark.asyncio
+    async def test_gives_up_after_max_attempts(self, monkeypatch):
+        import heart.ss08_voice.fish_realtime_provider as frp
+
+        monkeypatch.setattr(frp, "_OPEN_RETRY_DELAY_S", 0)
+        monkeypatch.setattr(frp, "_OPEN_MAX_ATTEMPTS", 3)
+        sockets = [
+            FakeWs([{"event": "error", "message": "busy", "retryable": True}])
+            for _ in range(3)
+        ]
+        sess = FishRealtimeSession(
+            api_key="k", url="wss://x", model_id="v",
+            ws_factory=self._seq_factory(sockets),
+        )
+        with pytest.raises(TTSProviderError):
+            await sess.open()
+        assert all(s.closed for s in sockets)  # every attempt cleaned up
+
+
 class FakeRealtimeSession:
     """Fake FishRealtimeSession for RealtimeStreamSession tests."""
 
@@ -449,6 +512,13 @@ class TestCreateStreamSessionSelection:
         )
         assert call._fmt == "wav"  # call needs per-frame decodable linear PCM
         assert chat._fmt == "mp3"  # chat concatenates + plays once at turn_end
+        # Call optimises for time-to-first-audio: normal latency (v1's lower-
+        # latency option; v1 has only normal/balanced) + small chunks.
+        assert call._latency == "normal"
+        assert call._chunk_length == 100
+        # Chat keeps the smoother balanced/larger-chunk profile.
+        assert chat._latency == "balanced"
+        assert chat._chunk_length == 200
 
     def test_allow_realtime_false_forces_rest(self, monkeypatch):
         from heart.api import routes_chat_ws as m

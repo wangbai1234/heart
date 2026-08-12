@@ -71,11 +71,8 @@ async def list_characters(
             SELECT id, owner_user_id, visibility, status, has_voice,
                    tags, cover_url, review_status, review_reason, created_at
             FROM characters
-            WHERE status = 'active'
-              AND (
-                    owner_user_id = :uid
-                    OR (visibility = 'public' AND review_status = 'approved')
-              )
+            WHERE owner_user_id = :uid
+               OR (status = 'active' AND visibility = 'public' AND review_status = 'approved')
             """
         ),
         {"uid": uid},
@@ -97,9 +94,10 @@ async def list_characters(
     ]
     has_voice_map = {row["id"]: bool(row.get("has_voice", False)) for row in raw_rows}
 
-    # Fetch avatar_url from soul_specs.draft for UGC characters
+    # Fetch avatar_url, tagline, creation_mode from soul_specs.draft for UGC characters
     avatar_urls: dict[str, str | None] = {}
     taglines: dict[str, str | None] = {}
+    creation_modes: dict[str, str | None] = {}
     ugc_ids = [row.id for row in rows if row.owner_user_id is not None]
     if ugc_ids:
         content_result = await db.execute(
@@ -107,7 +105,8 @@ async def list_characters(
                 """
                 SELECT character_id,
                        draft->>'avatar_url' AS avatar_url,
-                       draft->>'tagline' AS tagline
+                       draft->>'tagline' AS tagline,
+                       draft->>'creation_mode' AS creation_mode
                 FROM soul_specs
                 WHERE character_id = ANY(:ids) AND status = 'active'
                 """
@@ -119,6 +118,8 @@ async def list_characters(
                 avatar_urls[row.character_id] = row.avatar_url
             if row.tagline:
                 taglines[row.character_id] = row.tagline
+            if row.creation_mode:
+                creation_modes[row.character_id] = row.creation_mode
 
     # Compute popularity by counting distinct chat users per character
     popularity: dict[str, int] = {}
@@ -134,7 +135,7 @@ async def list_characters(
     for row in pop_result:
         popularity[row.character_id] = int(row.cnt)
 
-    entries = build_catalog_entries(rows, uid, avatar_urls, popularity, taglines)
+    entries = build_catalog_entries(rows, uid, avatar_urls, popularity, taglines, creation_modes)
     result_list = []
     for e in entries:
         entry_dict = asdict(e)
@@ -600,6 +601,33 @@ def _attach_draft(spec: object, draft_dict: dict) -> None:
         logger.warning("attach_draft_failed", error=str(exc))
 
 
+async def _reload_active_spec(character_id: str, db: AsyncSession) -> None:
+    """Re-register a character's active spec into the live registry.
+
+    Used when a previously-disabled character is brought back (reactivate /
+    edit-of-disabled) so chat works again without a service restart. Mirrors the
+    startup DB-overlay path: validate the stored spec, re-attach its draft.
+    """
+    from heart.ss01_soul.reload import reload_character
+    from heart.ss01_soul.schema_validator import SoulSpec
+    from heart.ss01_soul.spec_store import fetch_active_spec
+
+    row = await fetch_active_spec(db, character_id)
+    if not row:
+        logger.warning("reactivate_no_active_spec", character_id=character_id)
+        return
+    spec_data = row["spec"]
+    if isinstance(spec_data, str):
+        spec_data = json.loads(spec_data)
+    spec = SoulSpec.model_validate(spec_data)
+    draft_data = row.get("draft")
+    if isinstance(draft_data, str):
+        draft_data = json.loads(draft_data)
+    if isinstance(draft_data, dict):
+        _attach_draft(spec, draft_data)
+    reload_character(character_id, spec=spec)
+
+
 class VisibilityUpdate(BaseModel):
     visibility: str  # public | unlisted | private
 
@@ -964,10 +992,25 @@ async def update_character(
         spec=spec_dict,
         draft=draft_dict,
     )
+    # Editing a public/unlisted character changes published content, so it must
+    # pass review again (approved → pending). Editing also reactivates a
+    # disabled character (status → active). Private characters stay live.
+    vis = row.get("visibility") or "private"
+    was_disabled = row.get("status") == "disabled"
+    if vis in ("public", "unlisted"):
+        review_sql = (
+            ", status = 'active', review_status = 'pending',"
+            " submitted_at = NOW(), result_ack_at = NULL"
+        )
+    elif was_disabled:
+        review_sql = ", status = 'active', review_status = 'not_required'"
+    else:
+        review_sql = ""
     await db.execute(
         text(
             "UPDATE characters"
             " SET soul_spec_version = :ver, tags = CAST(:tags AS jsonb), cover_url = :cover"
+            f"{review_sql}"
             " WHERE id = :cid"
         ),
         {
@@ -1158,6 +1201,57 @@ async def disable_character(
     return {"id": character_id, "status": "disabled"}
 
 
+@router.post("/{character_id}/reactivate")
+async def reactivate_character(
+    character_id: str,
+    current_user: TokenData = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Re-publish a previously-disabled UGC character (owner only).
+
+    Reverses ``disable``: status → 'active' and the character is hot-loaded back
+    into the registry so it is chattable again. If it is public/unlisted it must
+    pass review again, so review_status is reset to 'pending' (unless already
+    approved); private characters go live immediately.
+    """
+    uid = uuid.UUID(current_user.user_id)
+    row = await _require_owner(character_id, uid, db)
+    vis = row.get("visibility") or "private"
+
+    if vis in ("public", "unlisted"):
+        await db.execute(
+            text(
+                """
+                UPDATE characters
+                   SET status        = 'active',
+                       review_status = CASE
+                                         WHEN review_status = 'approved' THEN 'approved'
+                                         ELSE 'pending'
+                                       END,
+                       submitted_at  = CASE
+                                         WHEN review_status = 'approved' THEN submitted_at
+                                         ELSE NOW()
+                                       END,
+                       result_ack_at = NULL
+                 WHERE id = :cid
+                """
+            ),
+            {"cid": character_id},
+        )
+    else:
+        await db.execute(
+            text(
+                "UPDATE characters SET status = 'active',"
+                " review_status = 'not_required' WHERE id = :cid"
+            ),
+            {"cid": character_id},
+        )
+    await db.commit()
+    await _reload_active_spec(character_id, db)
+    logger.info("ugc_character_reactivated", character_id=character_id, visibility=vis)
+    return {"id": character_id, "status": "active"}
+
+
 @router.delete("/{character_id}")
 async def delete_character(
     character_id: str,
@@ -1252,7 +1346,7 @@ async def quick_prefill(
     "steadiness": 0.0-1.0之间的值
   }},
   "catchphrases": ["口头禅1", "口头禅2", "口头禅3"],
-  "opening": "200-400字的第一次见面开场白，代入角色口吻",
+  "opening": "200-400字的第一次见面开场白，代入角色口吻。格式要求：场景描述和动作、神态用中文括号（）包裹独立成行，说出口的话不加引号直接输出，括号段与对白段自由穿插",
   "theme_preset_id": "推荐配色id(night_velvet/crimson_noir/amber_warm/royal_gold/earth_sage/ocean_depth/bright_warm/forest_mint之一)"
 }}
 
@@ -1261,7 +1355,7 @@ async def quick_prefill(
 - greeting_style 与性格匹配
 - sliders 反映人设描述的性格特质
 - catchphrases 符合角色说话风格，每条≤20字
-- opening 代入角色视角，营造氛围，有画面感
+- opening 必须符合格式：场景/动作用（）包裹独立成行，对白无引号直接输出，action与dialogue自由穿插。例：（深夜的酒吧，烟雾缭绕）\n你来晚了\n（轻轻点燃一支烟，眼神慵懒扫过来）
 - theme_preset_id 根据角色气质选择(如冷峻选crimson_noir，温暖选bright_warm)
 
 只返回JSON，不要其他文字。"""

@@ -12,15 +12,25 @@ const VIS_LABELS: Record<string, { label: string; color: string; bg: string }> =
   private: { label: '私密', color: '#B0A8B4', bg: 'rgba(176,168,180,0.14)' },
 }
 
+// Status/review badge shown alongside the visibility pill. Only meaningful for
+// the owner: 已停用 (disabled), or — when public/unlisted — 审核中 / 审核未通过.
+const STATUS_BADGE: Record<string, { label: string; color: string; bg: string }> = {
+  disabled: { label: '已停用', color: '#B0A8B4', bg: 'rgba(176,168,180,0.16)' },
+  pending: { label: '审核中', color: '#E0A458', bg: 'rgba(224,164,88,0.16)' },
+  rejected: { label: '审核未通过', color: '#E06B6B', bg: 'rgba(224,107,107,0.16)' },
+}
+
 interface Props {
   char: CharacterDTO
   onEdit: () => void
   onVisibility: (v: 'public' | 'unlisted' | 'private') => void
   onDisable: () => void
+  onReactivate: () => void
+  onDelete: () => void
 }
 
-/** 自创角色卡片 + 三点菜单(编辑/可见范围/停用) */
-export function CharacterCard({ char, onEdit, onVisibility, onDisable }: Props) {
+/** 自创角色卡片 + 三点菜单(编辑/可见范围/停用/重新发布/删除) + 状态标签 */
+export function CharacterCard({ char, onEdit, onVisibility, onDisable, onReactivate, onDelete }: Props) {
   const profile = resolveCharacterProfile(char.id, char.display_name, char.avatar_url, {
     isOwner: char.is_owner && !char.is_builtin,
     coverUrl: char.cover_url,
@@ -35,8 +45,19 @@ export function CharacterCard({ char, onEdit, onVisibility, onDisable }: Props) 
 
   // Sharing only makes sense for link-reachable visibilities. A private
   // character 404s for anyone but the owner, so we don't offer a link for it.
-  const shareable = char.visibility === 'public' || char.visibility === 'unlisted'
+  const disabled = char.status === 'disabled'
+  const shareable = !disabled && (char.visibility === 'public' || char.visibility === 'unlisted')
   const approved = char.review_status === 'approved'
+  const inReviewPipeline = char.visibility === 'public' || char.visibility === 'unlisted'
+
+  // Pick the status badge: 已停用 wins; otherwise a review badge for
+  // public/unlisted characters still in / failing review. Approved & private
+  // characters show no extra badge (the visibility pill is enough).
+  const badge = disabled
+    ? STATUS_BADGE.disabled
+    : inReviewPipeline && (char.review_status === 'pending' || char.review_status === 'rejected')
+      ? STATUS_BADGE[char.review_status]
+      : null
 
   async function handleCopyLink() {
     const url = buildShareLink(char.id)
@@ -75,12 +96,24 @@ export function CharacterCard({ char, onEdit, onVisibility, onDisable }: Props) 
         </div>
 
         <div className="flex-1 min-w-0">
-          <p className="text-[16px] font-semibold text-[var(--color-ink)] truncate">{char.display_name}</p>
-          <div className="flex items-center gap-2 mt-1">
+          <p className={`text-[16px] font-semibold truncate ${disabled ? 'text-[var(--color-text-muted)]' : 'text-[var(--color-ink)]'}`}>
+            {char.display_name}
+          </p>
+          <div className="flex items-center gap-2 mt-1 flex-wrap">
             <span className="text-[11px] font-medium rounded-full px-2.5 py-[3px]" style={{ color: vis.color, background: vis.bg }}>
               {vis.label}
             </span>
+            {badge && (
+              <span className="text-[11px] font-medium rounded-full px-2.5 py-[3px]" style={{ color: badge.color, background: badge.bg }}>
+                {badge.label}
+              </span>
+            )}
           </div>
+          {char.review_status === 'rejected' && char.review_reason && (
+            <p className="mt-1.5 text-[12px] leading-[1.5] text-[var(--color-error)]">
+              未通过原因：{char.review_reason}
+            </p>
+          )}
         </div>
 
         <button
@@ -107,6 +140,12 @@ export function CharacterCard({ char, onEdit, onVisibility, onDisable }: Props) 
                   : 'bg-white/90 border border-[rgba(255,255,255,0.70)]'
               }`}
             >
+              {disabled && (
+                <>
+                  <MenuButton label="重新发布" icon={<ReactivateIcon />} onClick={() => { setMenuOpen(false); onReactivate() }} />
+                  <div className="h-px bg-[var(--color-divider)]" />
+                </>
+              )}
               <MenuButton label="编辑角色" icon={<EditIcon />} onClick={() => { setMenuOpen(false); onEdit() }} />
               {shareable && (
                 <>
@@ -118,39 +157,45 @@ export function CharacterCard({ char, onEdit, onVisibility, onDisable }: Props) 
                   />
                 </>
               )}
-              <div className="h-px bg-[var(--color-divider)]" />
-              <MenuButton label="可见范围" icon={<EyeIcon />} onClick={() => setVisMenuOpen((v) => !v)} chevron />
-              {visMenuOpen && (
-                <div
-                  className={`border-t border-[var(--color-divider)] ${
-                    isDark ? 'bg-[var(--color-surface)]' : 'bg-[rgba(255,248,243,0.95)]'
-                  }`}
-                >
-                  {(['private', 'unlisted', 'public'] as const).map((v) => {
-                    const info = VIS_LABELS[v]
-                    return (
-                      <MenuButton
-                        key={v}
-                        label={info.label}
-                        icon={
-                          <span
-                            className="w-5 h-5 inline-block rounded-full"
-                            style={{ background: info.bg, border: `1.5px solid ${info.color}` }}
+              {!disabled && (
+                <>
+                  <div className="h-px bg-[var(--color-divider)]" />
+                  <MenuButton label="可见范围" icon={<EyeIcon />} onClick={() => setVisMenuOpen((v) => !v)} chevron />
+                  {visMenuOpen && (
+                    <div
+                      className={`border-t border-[var(--color-divider)] ${
+                        isDark ? 'bg-[var(--color-surface)]' : 'bg-[rgba(255,248,243,0.95)]'
+                      }`}
+                    >
+                      {(['private', 'unlisted', 'public'] as const).map((v) => {
+                        const info = VIS_LABELS[v]
+                        return (
+                          <MenuButton
+                            key={v}
+                            label={info.label}
+                            icon={
+                              <span
+                                className="w-5 h-5 inline-block rounded-full"
+                                style={{ background: info.bg, border: `1.5px solid ${info.color}` }}
+                              />
+                            }
+                            onClick={() => {
+                              setMenuOpen(false)
+                              setVisMenuOpen(false)
+                              onVisibility(v)
+                            }}
+                            active={char.visibility === v}
                           />
-                        }
-                        onClick={() => {
-                          setMenuOpen(false)
-                          setVisMenuOpen(false)
-                          onVisibility(v)
-                        }}
-                        active={char.visibility === v}
-                      />
-                    )
-                  })}
-                </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                  <div className="h-px bg-[var(--color-divider)]" />
+                  <MenuButton label="停用角色" icon={<DisableIcon />} onClick={() => { setMenuOpen(false); onDisable() }} />
+                </>
               )}
               <div className="h-px bg-[var(--color-divider)]" />
-              <MenuButton label="停用角色" icon={<DisableIcon />} danger onClick={() => { setMenuOpen(false); onDisable() }} />
+              <MenuButton label="删除角色" icon={<DeleteIcon />} danger onClick={() => { setMenuOpen(false); onDelete() }} />
             </div>
           </>,
           document.body
@@ -232,6 +277,26 @@ function DisableIcon() {
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="12" cy="12" r="10" />
       <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
+    </svg>
+  )
+}
+
+function ReactivateIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M23 4v6h-6" />
+      <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+    </svg>
+  )
+}
+
+function DeleteIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="3 6 5 6 21 6" />
+      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+      <line x1="10" y1="11" x2="10" y2="17" />
+      <line x1="14" y1="11" x2="14" y2="17" />
     </svg>
   )
 }
