@@ -6,6 +6,8 @@ import {
   uploadCharacterCover,
   generateOpeningPreview,
   getCharacterDraft,
+  setPresetVoice,
+  uploadVoiceClone,
 } from '../services/api'
 import { useCharactersStore } from '../stores/charactersStore'
 import { compressImageToTarget } from '../utils/imageCompress'
@@ -157,6 +159,17 @@ export function WorkshopCreatePage() {
         navigate(`/character/${editId}`, { replace: true, state: { fromCreate: true } })
       } else {
         const created = await createCharacter(draft)
+        // Configure voice if selected (new character only)
+        const { voiceSelection } = state
+        if (voiceSelection.type === 'preset' && voiceSelection.presetVoiceId) {
+          await setPresetVoice(created.id, voiceSelection.presetVoiceId).catch(
+            () => {}, // silent fail
+          )
+        } else if (voiceSelection.type === 'clone' && voiceSelection.cloneFile) {
+          await uploadVoiceClone(created.id, voiceSelection.cloneFile).catch(
+            () => {}, // silent fail
+          )
+        }
         localStorage.removeItem(STORAGE_KEY)
         navigate(`/character/${created.id}`, { replace: true, state: { fromCreate: true } })
       }

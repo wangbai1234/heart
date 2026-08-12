@@ -5,6 +5,7 @@ import type {
   StarterConfig,
 } from '../../services/api'
 import type { ChromePalette } from '../CharacterProfilePage'
+import type { VoiceSelection } from '../../components/VoicePickerSheet'
 import { getThemePresetById, findThemePresetIdByPalette } from '../../data/characterThemePresets'
 
 export type QualityLevel = 'sketch' | 'draft' | 'shaped' | 'finished'
@@ -45,6 +46,8 @@ export interface WorkshopState {
   visibility: 'public' | 'unlisted' | 'private'
   advancedHtmlMode: boolean
   customHtml: string
+  // 音色选择（批7）
+  voiceSelection: VoiceSelection
 }
 
 export const EMPTY_STATE: WorkshopState = {
@@ -76,6 +79,7 @@ export const EMPTY_STATE: WorkshopState = {
   visibility: 'private',
   advancedHtmlMode: false,
   customHtml: '',
+  voiceSelection: { type: null },
 }
 
 export const STORAGE_KEY = 'workshop_draft_state'

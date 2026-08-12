@@ -3,8 +3,16 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { useThemeStore } from '../stores/themeStore'
 import { useToastStore } from '../stores/toastStore'
 import { useCharactersStore } from '../stores/charactersStore'
-import { ApiError, createCharacter, quickPrefill, type QuickPrefillResponse } from '../services/api'
+import {
+  ApiError,
+  createCharacter,
+  quickPrefill,
+  setPresetVoice,
+  uploadVoiceClone,
+  type QuickPrefillResponse,
+} from '../services/api'
 import { THEME_PRESETS, getThemePresetById } from '../data/characterThemePresets'
+import { VoicePickerSheet, type VoiceSelection } from '../components/VoicePickerSheet'
 
 interface BaseInfo {
   coverUrl: string
@@ -60,6 +68,8 @@ export function QuickConfirmPage() {
   const [opening, setOpening] = useState(initialPrefill?.opening ?? '')
   const [themeId, setThemeId] = useState(initialPrefill?.theme_preset_id ?? 'night_velvet')
   const [visibility, setVisibility] = useState<'private' | 'unlisted'>('private')
+  const [voiceSelection, setVoiceSelection] = useState<VoiceSelection>({ type: null })
+  const [voicePickerOpen, setVoicePickerOpen] = useState(false)
   const [moreExpanded, setMoreExpanded] = useState(false)
   const [regenerateCount, setRegenerateCount] = useState(0)
   const [regenerating, setRegenerating] = useState(false)
@@ -133,6 +143,18 @@ export function QuickConfirmPage() {
         ui_chrome: selectedTheme?.palette ?? null,
         visibility,
       })
+
+      // Configure voice if selected
+      if (voiceSelection.type === 'preset' && voiceSelection.presetVoiceId) {
+        await setPresetVoice(result.id, voiceSelection.presetVoiceId).catch(
+          () => {}, // silent fail - user can configure later
+        )
+      } else if (voiceSelection.type === 'clone' && voiceSelection.cloneFile) {
+        await uploadVoiceClone(result.id, voiceSelection.cloneFile).catch(
+          () => {}, // silent fail - user can configure later
+        )
+      }
+
       await reloadCharacters()
       showToast('角色创建成功', 'success')
       navigate(`/character/${result.id}`, { replace: true, state: { fromCreate: true } })
@@ -258,6 +280,44 @@ export function QuickConfirmPage() {
           </div>
         </div>
 
+        {/* 角色声音 */}
+        <div className="mb-6">
+          <label className="block text-[14px] font-medium text-[var(--color-ink)] mb-2">角色声音</label>
+          <button
+            onClick={() => setVoicePickerOpen(true)}
+            className={`w-full p-4 rounded-[12px] flex items-center justify-between ${
+              isDark ? 'bg-[var(--color-glass-75)]' : 'bg-white/80'
+            }`}
+          >
+            <div className="text-left">
+              <div className="text-[14px] font-medium text-[var(--color-ink)]">
+                {voiceSelection.type === 'preset'
+                  ? voiceSelection.presetName
+                  : voiceSelection.type === 'clone'
+                    ? '克隆音色（上传中）'
+                    : '请选择'}
+              </div>
+              {!voiceSelection.type && (
+                <div className="text-[12px] text-[var(--color-text-secondary)] mt-0.5">
+                  可选，让角色开口说话
+                </div>
+              )}
+            </div>
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="var(--color-text-muted)"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <polyline points="9,6 15,12 9,18" />
+            </svg>
+          </button>
+        </div>
+
         {/* 更多设定 - 折叠 */}
         <div className="mb-6">
           <button
@@ -325,6 +385,15 @@ export function QuickConfirmPage() {
           {creating ? '创建中...' : '确认创建'}
         </button>
       </div>
+
+      {/* Voice picker sheet */}
+      <VoicePickerSheet
+        open={voicePickerOpen}
+        onClose={() => setVoicePickerOpen(false)}
+        gender={base?.gender}
+        onConfirm={setVoiceSelection}
+        initialSelection={voiceSelection}
+      />
     </div>
   )
 }

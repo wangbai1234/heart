@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { FieldCard, SectionHeading, textInputCls } from '../../components/create/CreateShell'
 import { THEME_PRESETS } from '../../data/characterThemePresets'
 import { CHARACTER_ROLE_TAGS } from '../../data/uiContent'
+import { VoicePickerSheet } from '../../components/VoicePickerSheet'
 import type { WorkshopState } from './workshopTypes'
 
 export interface StepProps {
@@ -389,6 +390,7 @@ const HTML_MAX = 50 * 1024
 
 /** 第 7 步：主题配色 + 可见性 + 高级 HTML（分层第二层）。 */
 export function Step7({ state, updateField }: StepProps) {
+  const [voicePickerOpen, setVoicePickerOpen] = useState(false)
   const htmlBytes = new Blob([state.customHtml]).size
   const htmlOver = htmlBytes > HTML_MAX
   return (
@@ -450,6 +452,39 @@ export function Step7({ state, updateField }: StepProps) {
         ))}
       </div>
 
+      <SectionHeading index="" title="角色声音" hint="可选，让角色开口说话" />
+      <button
+        onClick={() => setVoicePickerOpen(true)}
+        className="w-full flex items-center justify-between p-3.5 rounded-[16px] border border-[var(--color-border-glass)] bg-[var(--color-glass-35)] text-left transition-all active:scale-[0.98] mb-6"
+      >
+        <div>
+          <div className="text-[15px] font-medium text-[var(--color-ink)]">
+            {state.voiceSelection.type === 'preset'
+              ? state.voiceSelection.presetName
+              : state.voiceSelection.type === 'clone'
+                ? '克隆音色（上传中）'
+                : '请选择音色'}
+          </div>
+          {!state.voiceSelection.type && (
+            <div className="text-[12px] text-[var(--color-text-muted)] mt-0.5">
+              预设音色或上传克隆
+            </div>
+          )}
+        </div>
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="var(--color-text-muted)"
+          strokeWidth="2.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <polyline points="9,6 15,12 9,18" />
+        </svg>
+      </button>
+
       <SectionHeading index="" title="高级模式" hint="会写 HTML？直接自定义详情页" />
       <FieldCard label="自定义 HTML" hint="开启后区块编辑器内容不再显示">
         <label className="flex items-center gap-2 text-[14px] text-[var(--color-ink)] mb-3">
@@ -480,6 +515,14 @@ export function Step7({ state, updateField }: StepProps) {
           </>
         )}
       </FieldCard>
+
+      <VoicePickerSheet
+        open={voicePickerOpen}
+        onClose={() => setVoicePickerOpen(false)}
+        gender={state.gender === 'male' || state.gender === 'female' ? state.gender : undefined}
+        onConfirm={(selection) => updateField('voiceSelection', selection)}
+        initialSelection={state.voiceSelection}
+      />
     </div>
   )
 }
