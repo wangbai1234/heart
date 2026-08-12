@@ -57,6 +57,8 @@ class RealtimeStreamSession:
         character_id: str,
         fmt: str = "mp3",
         speed: float = 1.0,
+        chunk_length: int = 200,
+        latency: str = "balanced",
         session_factory: Optional[SessionFactory] = None,
     ) -> None:
         self._send = ws_send_audio
@@ -65,6 +67,8 @@ class RealtimeStreamSession:
         self._character_id = character_id
         self._fmt = fmt
         self._speed = speed
+        self._chunk_length = chunk_length
+        self._latency = latency
         self._session_factory = session_factory or self._default_session_factory
 
         self._session: Optional[FishRealtimeSession] = None
@@ -85,6 +89,8 @@ class RealtimeStreamSession:
             model_id=model_id,
             fmt=self._fmt,
             speed=self._speed,
+            chunk_length=self._chunk_length,
+            latency=self._latency,
         )
 
     # ── public surface (matches StreamSession) ──────────────────────────────
