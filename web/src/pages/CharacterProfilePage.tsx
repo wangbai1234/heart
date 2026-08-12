@@ -1236,52 +1236,6 @@ export function CharacterProfilePage() {
           </div>
         )}
 
-        {/* 关于TA card — truncated intro */}
-        {profile && (profile.tagline || profile.intro) && (
-          <div className="mt-5 rounded-[20px] bg-[var(--color-glass-75)] border border-[var(--color-border-glass)] p-4">
-            <div className="flex items-center gap-2 text-[13px] font-semibold" style={{ color: theme.accent }}>
-              <span className="inline-block w-[3px] h-[14px] rounded-full" style={{ background: theme.accent }} />
-              关于TA
-            </div>
-            {profile.tagline && (
-              <p className="mt-3 text-[15px] leading-relaxed text-[var(--color-ink)]">{profile.tagline}</p>
-            )}
-            {profile.intro && (
-              <>
-                <p
-                  className={`mt-3 text-[14px] leading-relaxed text-[var(--color-text-secondary)] whitespace-pre-wrap ${
-                    !aboutExpanded && 'line-clamp-4'
-                  }`}
-                >
-                  {profile.intro}
-                </p>
-                {profile.intro.length > 120 && (
-                  <button
-                    onClick={() => setAboutExpanded((p) => !p)}
-                    className="mt-2 text-[13px] font-medium active:scale-[0.96] transition-transform"
-                    style={{ color: theme.accent }}
-                  >
-                    {aboutExpanded ? '收起' : '更多'}
-                  </button>
-                )}
-              </>
-            )}
-          </div>
-        )}
-
-        {/* UGC 详情页自定义区 —— 有 custom_html 优先，否则渲染 profile_blocks（批 6 互斥） */}
-        {profile && profile.custom_html && profile.custom_html.trim() ? (
-          <div className="mt-6 rounded-[20px] overflow-hidden bg-[var(--color-glass-55)] border border-[var(--color-border-glass)] p-2">
-            <CustomHtmlRenderer html={profile.custom_html} chrome={chrome} />
-          </div>
-        ) : (
-          profile && profile.profile_blocks && profile.profile_blocks.length > 0 && (
-            <div className="mt-6 rounded-[20px] bg-[var(--color-glass-55)] border border-[var(--color-border-glass)] p-5">
-              <BlockRenderer blocks={profile.profile_blocks} chrome={chrome} />
-            </div>
-          )
-        )}
-
         {/* intimacy + chat CTA */}
         <div className="mt-5 flex items-center gap-3">
           {chatted && (
@@ -1330,6 +1284,52 @@ export function CharacterProfilePage() {
             开始聊天
           </button>
         </div>
+
+        {/* 关于TA card — truncated intro */}
+        {profile && (profile.tagline || profile.intro) && (
+          <div className="mt-5 rounded-[20px] bg-[var(--color-glass-75)] border border-[var(--color-border-glass)] p-4">
+            <div className="flex items-center gap-2 text-[13px] font-semibold" style={{ color: theme.accent }}>
+              <span className="inline-block w-[3px] h-[14px] rounded-full" style={{ background: theme.accent }} />
+              关于TA
+            </div>
+            {profile.tagline && (
+              <p className="mt-3 text-[15px] leading-relaxed text-[var(--color-ink)]">{profile.tagline}</p>
+            )}
+            {profile.intro && (
+              <>
+                <p
+                  className={`mt-3 text-[14px] leading-relaxed text-[var(--color-text-secondary)] whitespace-pre-wrap ${
+                    !aboutExpanded && 'line-clamp-4'
+                  }`}
+                >
+                  {profile.intro}
+                </p>
+                {profile.intro.length > 120 && (
+                  <button
+                    onClick={() => setAboutExpanded((p) => !p)}
+                    className="mt-2 text-[13px] font-medium active:scale-[0.96] transition-transform"
+                    style={{ color: theme.accent }}
+                  >
+                    {aboutExpanded ? '收起' : '更多'}
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
+        {/* UGC 详情页自定义区 —— 有 custom_html 优先，否则渲染 profile_blocks（批 6 互斥） */}
+        {profile && profile.custom_html && profile.custom_html.trim() ? (
+          <div className="mt-6 rounded-[20px] overflow-hidden bg-[var(--color-glass-55)] border border-[var(--color-border-glass)] p-2">
+            <CustomHtmlRenderer html={profile.custom_html} chrome={chrome} />
+          </div>
+        ) : (
+          profile && profile.profile_blocks && profile.profile_blocks.length > 0 && (
+            <div className="mt-6 rounded-[20px] bg-[var(--color-glass-55)] border border-[var(--color-border-glass)] p-5">
+              <BlockRenderer blocks={profile.profile_blocks} chrome={chrome} />
+            </div>
+          )
+        )}
 
         {/* 关系路线 timeline — 6 nodes with current stage highlighted */}
         {chatted && companion && !isColdWar(companion.relationship_stage) && (
