@@ -214,8 +214,23 @@ export function ChatInboxPage() {
       <div className="relative z-10 flex h-full flex-col">
         <div style={{ height: 'var(--safe-top)' }} />
 
-        <header className="flex items-center justify-between px-5 py-3">
-          <h1 className="mt-1 text-[28px] font-semibold tracking-[-0.03em] text-[var(--color-ink)]">聊天列表</h1>
+        <header className="relative px-5 pt-4 pb-3">
+          <div className="flex items-center gap-3">
+            <div className="relative flex items-center justify-center w-10 h-10 rounded-[14px] bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-primary-600)] shadow-[0_4px_16px_rgba(255,143,171,0.35)]">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10Z" />
+              </svg>
+              <div className="absolute inset-0 rounded-[14px] bg-gradient-to-t from-white/20 to-transparent" />
+            </div>
+            <div className="flex-1">
+              <h1 className="text-[26px] font-bold tracking-[-0.04em] bg-gradient-to-r from-[var(--color-ink)] to-[var(--color-ink)]/70 bg-clip-text text-transparent">聊天列表</h1>
+              {totalUnreadCount > 0 && (
+                <p className="text-[13px] font-medium text-[var(--color-primary)]">
+                  {totalUnreadCount} 条未读消息
+                </p>
+              )}
+            </div>
+          </div>
         </header>
 
         <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 pb-[180px] pt-4">
