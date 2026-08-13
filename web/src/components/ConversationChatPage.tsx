@@ -24,6 +24,7 @@ import { VoiceRecordingOverlay } from './VoiceRecordingOverlay'
 import { TextTierSheet } from './TextTierSheet'
 import { ChatPlusMenu } from './ChatPlusMenu'
 import { VoiceChatSheet } from './VoiceChatSheet'
+import { VoicePickerSheet } from './VoicePickerSheet'
 import { TransferSheet } from './TransferSheet'
 import { PremiseCardBase } from './characterProfiles/PremiseCardBase'
 import { parseRichOpening } from '../utils/parseRichOpening'
@@ -184,6 +185,8 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
   const [voiceChatOpen, setVoiceChatOpen] = useState(false)
   const [transferOpen, setTransferOpen] = useState(false)
   const [transferSending, setTransferSending] = useState(false)
+  const [voicePickerOpen, setVoicePickerOpen] = useState(false)
+  const [characterGender, setCharacterGender] = useState<'male' | 'female' | undefined>(undefined)
 
   // Voice recording state
   const [isRecording, setIsRecording] = useState(false)
@@ -536,7 +539,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
     interrupt()
   }, [interrupt])
 
-  // 语音通话入口：先校验角色是否已配置音色。未配置 → 提示并跳配置页，不进通话页
+  // 语音通话入口：先校验角色是否已配置音色。未配置 → 弹出音色选择弹窗
   // （通话页无文字回退，进去只会一直失败）。校验用与语音聊天弹窗一致的 has_voice。
   const handleVoiceCall = useCallback(async () => {
     try {
@@ -544,7 +547,15 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
       const hasVoice = res.has_voice ?? res.clone_status === 'ready'
       if (!hasVoice) {
         useToastStore.getState().show('该角色暂未配置音色，请先选择一个音色', 'info')
-        navigate(`/characters/new?voice=${currentCharacterId}`)
+        // 获取角色性别信息用于音色筛选
+        try {
+          const { getCharacterDraft } = await import('../services/api')
+          const draft = await getCharacterDraft(currentCharacterId)
+          setCharacterGender(draft.gender)
+        } catch {
+          setCharacterGender(undefined)
+        }
+        setVoicePickerOpen(true)
         return
       }
     } catch {
@@ -613,6 +624,43 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
       setTransferSending(false)
     }
   }, [currentCharacterId, transferSending])
+
+  // 音色选择确认处理
+  const handleVoicePickerConfirm = useCallback(async (selection: { type: 'preset' | 'clone' | null; presetVoiceId?: string; presetName?: string; cloneFile?: File }) => {
+    try {
+      if (selection.type === 'preset' && selection.presetVoiceId) {
+        // 配置预设音色
+        const { setPresetVoice } = await import('../services/api')
+        await setPresetVoice(currentCharacterId, selection.presetVoiceId)
+        useToastStore.getState().show(`已配置音色：${selection.presetName || '预设音色'}`, 'success')
+      } else if (selection.type === 'clone' && selection.cloneFile) {
+        // 上传克隆音色
+        const { uploadVoiceClone } = await import('../services/api')
+        const { canPreprocess, preprocessForClone } = await import('../services/audioPreprocess')
+        let fileToUpload = selection.cloneFile
+        // 客户端预处理：视频提取音频，音频标准化
+        try {
+          if (canPreprocess()) {
+            const processed = await preprocessForClone(selection.cloneFile)
+            fileToUpload = processed.file
+          } else if (selection.cloneFile.size > 20 * 1024 * 1024) {
+            useToastStore.getState().show('文件过大（超过 20MB），请上传更短的录音', 'error')
+            return
+          }
+        } catch {
+          if (selection.cloneFile.size > 20 * 1024 * 1024) {
+            useToastStore.getState().show('无法处理该文件，请上传 10–30 秒的清晰录音', 'error')
+            return
+          }
+        }
+        await uploadVoiceClone(currentCharacterId, fileToUpload, 'fish')
+        useToastStore.getState().show('音色克隆已提交，处理中…', 'info')
+      }
+    } catch (err: any) {
+      const msg = err?.message || '音色配置失败，请重试'
+      useToastStore.getState().show(msg, 'error')
+    }
+  }, [currentCharacterId])
 
   const showToast = useCallback((msg: string) => {
     setRecordingToast(msg)
@@ -1344,6 +1392,12 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
         onClose={() => setVoiceChatOpen(false)}
         characterId={currentCharacterId as CharacterId}
         isDark={isDark}
+      />
+      <VoicePickerSheet
+        open={voicePickerOpen}
+        onClose={() => setVoicePickerOpen(false)}
+        gender={characterGender}
+        onConfirm={handleVoicePickerConfirm}
       />
 
       {/* Insufficient credits dialog */}
