@@ -283,7 +283,7 @@ export function LoginPage() {
           <img
             src="/assets/ui/wordmark.png"
             alt="yuoyuo"
-            className="mx-auto w-[220px] max-w-[68%] h-auto select-none"
+            className="mx-auto w-[180px] max-w-[68%] h-auto select-none"
             draggable={false}
           />
         </div>
