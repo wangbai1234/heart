@@ -392,12 +392,12 @@ export function CharacterPage() {
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   placeholder="搜索角色 / 标签"
-                  className="w-[132px] min-[380px]:w-[176px] h-[38px] px-4 rounded-full bg-gradient-to-br from-[var(--color-glass-75)] to-[var(--color-glass-65)] backdrop-blur-[16px] border border-white/40 text-[14px] text-[var(--color-ink)] placeholder:text-[var(--color-text-muted)] outline-none focus:border-[var(--color-primary)] focus:shadow-[0_0_20px_rgba(255,183,197,0.25)] transition-all"
+                  className="w-[132px] min-[380px]:w-[176px] h-[36px] px-4 rounded-full bg-white/60 dark:bg-black/20 backdrop-blur-[16px] border border-white/60 dark:border-white/10 text-[14px] text-[var(--color-ink)] placeholder:text-[var(--color-text-muted)] outline-none focus:border-[var(--color-primary)] focus:bg-white/80 dark:focus:bg-black/30 transition-all"
                 />
                 <button
                   onClick={() => { setShowSearch(false); setQuery('') }}
                   aria-label="关闭搜索"
-                  className="w-[38px] h-[38px] rounded-full bg-gradient-to-br from-white/20 to-white/5 backdrop-blur-[12px] border border-white/30 flex items-center justify-center text-[var(--color-text-secondary)] hover:text-[var(--color-ink)] active:scale-[0.92] hover:scale-105 transition-all duration-200"
+                  className="w-[36px] h-[36px] rounded-full bg-white/40 dark:bg-black/15 backdrop-blur-[12px] border border-white/40 dark:border-white/8 flex items-center justify-center text-[var(--color-text-secondary)] hover:bg-white/60 dark:hover:bg-black/25 hover:text-[var(--color-ink)] active:scale-95 transition-all"
                 >
                   <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                     <line x1="4" y1="4" x2="12" y2="12" />
@@ -410,10 +410,9 @@ export function CharacterPage() {
                 <button
                   onClick={() => setShowSearch(true)}
                   aria-label="搜索"
-                  className="relative group w-[38px] h-[38px] rounded-full bg-gradient-to-br from-[var(--color-primary)]/20 to-[var(--color-primary)]/5 backdrop-blur-[12px] border border-[var(--color-primary)]/30 flex items-center justify-center text-[var(--color-primary)] hover:shadow-[0_0_20px_rgba(255,183,197,0.4)] active:scale-[0.92] hover:scale-105 transition-all duration-200 overflow-hidden"
+                  className="w-[36px] h-[36px] rounded-full bg-white/40 dark:bg-black/15 backdrop-blur-[12px] border border-white/40 dark:border-white/8 flex items-center justify-center text-[var(--color-text-secondary)] hover:bg-white/60 dark:hover:bg-black/25 hover:text-[var(--color-ink)] active:scale-95 transition-all"
                 >
-                  <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                  <svg width="17" height="17" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" className="relative z-10">
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
                     <circle cx="7" cy="7" r="5" />
                     <line x1="11" y1="11" x2="15" y2="15" />
                   </svg>
@@ -421,10 +420,9 @@ export function CharacterPage() {
                 <button
                   onClick={() => { setLinkInput(''); setShowOpenLink(true) }}
                   aria-label="打开分享链接"
-                  className="relative group w-[38px] h-[38px] rounded-full bg-gradient-to-br from-[var(--color-primary)]/20 to-[var(--color-primary)]/5 backdrop-blur-[12px] border border-[var(--color-primary)]/30 flex items-center justify-center text-[var(--color-primary)] hover:shadow-[0_0_20px_rgba(255,183,197,0.4)] active:scale-[0.92] hover:scale-105 transition-all duration-200 overflow-hidden"
+                  className="w-[36px] h-[36px] rounded-full bg-white/40 dark:bg-black/15 backdrop-blur-[12px] border border-white/40 dark:border-white/8 flex items-center justify-center text-[var(--color-text-secondary)] hover:bg-white/60 dark:hover:bg-black/25 hover:text-[var(--color-ink)] active:scale-95 transition-all"
                 >
-                  <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="relative z-10">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
                     <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
                   </svg>
@@ -432,13 +430,16 @@ export function CharacterPage() {
                 <button
                   onClick={() => setShowAnnounce(true)}
                   aria-label="公告"
-                  className="relative group w-[38px] h-[38px] rounded-full bg-gradient-to-br from-[var(--color-primary)]/20 to-[var(--color-primary)]/5 backdrop-blur-[12px] border border-[var(--color-primary)]/30 flex items-center justify-center text-[var(--color-primary)] hover:shadow-[0_0_20px_rgba(255,183,197,0.4)] active:scale-[0.92] hover:scale-105 transition-all duration-200 overflow-hidden"
+                  className="relative w-[36px] h-[36px] rounded-full bg-white/40 dark:bg-black/15 backdrop-blur-[12px] border border-white/40 dark:border-white/8 flex items-center justify-center text-[var(--color-text-secondary)] hover:bg-white/60 dark:hover:bg-black/25 hover:text-[var(--color-ink)] active:scale-95 transition-all"
                 >
-                  <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                  <svg width="17" height="17" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="relative z-10">
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M8 2.5a3 3 0 0 0-3 3v.9A5.25 5.25 0 0 1 3.2 10.5L2 11.5v1.25h12v-1.25l-1.2-1a5.25 5.25 0 0 1-1.8-4.1v-.9a3 3 0 0 0-3-3Z" />
                     <path d="M6.5 14a1.5 1.5 0 0 0 3 0" />
                   </svg>
+                  {/* Red dot for new announcement - TODO: connect to actual state */}
+                  {false && (
+                    <span className="absolute top-0 right-0 w-2 h-2 bg-[#FF4D6D] rounded-full border border-white/80 dark:border-black/40" />
+                  )}
                 </button>
               </>
             )}

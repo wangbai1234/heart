@@ -130,10 +130,9 @@ export function TabBar() {
             <div className="absolute inset-[2px] rounded-full bg-gradient-to-t from-white/20 to-transparent" />
 
             {/* Icon with subtle animation */}
-            <div className="relative z-10 group-hover:rotate-90 transition-transform duration-300">
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth="2.5" strokeLinecap="round">
-                <line x1="12" y1="5" x2="12" y2="19" />
-                <line x1="5" y1="12" x2="19" y2="12" />
+            <div className="relative z-10 group-hover:rotate-12 transition-transform duration-300">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
               </svg>
             </div>
 
