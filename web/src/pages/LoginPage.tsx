@@ -281,7 +281,7 @@ export function LoginPage() {
         {/* Brand zone — logo art carries the wordmark + tagline */}
         <div className="text-center mb-4 mt-1">
           <img
-            src="/assets/ui/wordmark.webp"
+            src="/assets/ui/wordmark.png"
             alt="yuoyuo"
             className="mx-auto w-[220px] max-w-[68%] h-auto select-none"
             draggable={false}

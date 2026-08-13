@@ -44,41 +44,41 @@ export function NoticeDialog({
       />
       <div className="relative z-10 w-[88%] max-w-[360px] aspect-square animate-[dialog-enter_300ms_var(--ease-standard)]">
         <img
-          src="/assets/ui/notice-frame.webp"
+          src="/assets/ui/notice-frame.png"
           alt=""
           className="absolute inset-0 w-full h-full object-contain pointer-events-none select-none"
           draggable={false}
         />
 
-        {/* Close — top-right, inside the panel corner */}
+        {/* Close — top-right corner */}
         <button
           onClick={onClose}
           aria-label="关闭"
-          className="absolute w-[30px] h-[30px] flex items-center justify-center rounded-full text-[#9B7FB0] active:scale-90 transition-transform"
-          style={{ left: '78%', top: '23.5%' }}
+          className="absolute w-[32px] h-[32px] flex items-center justify-center rounded-full text-[#666] hover:text-[#333] active:scale-90 transition-all"
+          style={{ right: '5%', top: '5%' }}
         >
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
             <line x1="18" y1="6" x2="6" y2="18" />
             <line x1="6" y1="6" x2="18" y2="18" />
           </svg>
         </button>
 
-        {/* Content column — pinned to the panel's safe interior */}
+        {/* Content column — centered in the rounded frame */}
         <div
           className="absolute flex flex-col items-center"
-          style={{ left: '17%', right: '17%', top: '28%', bottom: '17%' }}
+          style={{ left: '10%', right: '10%', top: '18%', bottom: '10%' }}
         >
           {/* Scroll region. my-auto on the inner block centers the text when it
               fits but collapses on overflow so the FIRST line stays reachable
               (a plain justify-center clips the top when content is taller). */}
           <div className="flex-1 min-h-0 w-full overflow-y-auto flex flex-col">
-            <div className="my-auto flex flex-col items-center text-center">
+            <div className="my-auto flex flex-col items-center text-center px-2">
               {title && (
-                <h3 className="text-[18px] font-semibold text-[#2a2a38] leading-tight mb-2">
+                <h3 className="text-[20px] font-bold text-[#2a2a38] leading-tight mb-3">
                   {title}
                 </h3>
               )}
-              <div className="text-[13.5px] text-[#5a5a6a] leading-[1.55]">
+              <div className="text-[14px] text-[#5a5a6a] leading-[1.65]">
                 {children}
               </div>
             </div>
@@ -86,7 +86,7 @@ export function NoticeDialog({
 
           <button
             onClick={onAction ?? onClose}
-            className="shrink-0 mt-4 min-w-[132px] h-[42px] px-7 rounded-full bg-gradient-to-r from-[#FFB7C5] to-[#FF8FAB] text-white text-[15px] font-semibold shadow-[0_8px_20px_rgba(255,143,171,0.38)] active:scale-[0.97] transition-transform"
+            className="shrink-0 mt-5 min-w-[140px] h-[44px] px-8 rounded-full bg-gradient-to-r from-[#FFB7C5] to-[#FF8FAB] text-white text-[15px] font-semibold shadow-[0_8px_20px_rgba(255,143,171,0.38)] active:scale-[0.97] transition-transform"
           >
             {actionLabel}
           </button>
