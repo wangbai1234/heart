@@ -381,7 +381,7 @@ export function CharacterPage() {
           <img
             src="/assets/ui/wordmark.png"
             alt="yuoyuo"
-            className="shrink-0 h-[66px] w-auto select-none"
+            className="shrink-0 h-[52px] w-auto select-none"
             draggable={false}
           />
           <div className="flex items-center gap-2">
