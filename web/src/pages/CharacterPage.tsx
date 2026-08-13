@@ -546,7 +546,7 @@ export function CharacterPage() {
         </div>
 
         {/* Discovery grid */}
-        <div ref={scrollRef} className="relative z-10 flex-1 overflow-y-auto px-4 pt-1 pb-[80px]">
+        <div ref={scrollRef} className="relative z-10 flex-1 overflow-y-auto px-5 pt-1 pb-[80px]">
           {filtered.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-center gap-2 pb-20">
               <span className="text-[15px] text-[var(--color-text-secondary)]">
@@ -554,7 +554,7 @@ export function CharacterPage() {
               </span>
             </div>
           ) : (
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-4">
               {filtered.map((it) => (
                 <DiscoveryCard
                   key={it.id}
@@ -658,7 +658,7 @@ function DiscoveryCard({
   const displayTags = priorityTags.length > 0 ? priorityTags : tags.slice(0, 2)
 
   return (
-    <div className="group relative flex flex-col w-full rounded-[20px] overflow-hidden bg-[var(--color-glass-55)] backdrop-blur-[12px] border border-[var(--color-border-glass)] shadow-[var(--shadow-soft)]">
+    <div className="group relative flex flex-col w-full rounded-[14px] overflow-hidden bg-[var(--color-glass-55)] backdrop-blur-[12px] border border-[var(--color-border-glass)] shadow-[0_2px_8px_rgba(0,0,0,0.04),0_8px_24px_rgba(0,0,0,0.06)] transition-all duration-[var(--duration-normal)] ease-[var(--ease-standard)] hover:shadow-[0_4px_12px_rgba(0,0,0,0.06),0_12px_32px_rgba(0,0,0,0.08)] hover:-translate-y-1">
       <button
         onClick={onOpen}
         className="relative w-full aspect-[3/4] active:scale-[0.97] transition-transform text-left"
@@ -667,7 +667,7 @@ function DiscoveryCard({
         <CoverFill cover={profile.cover} alt={profile.name} />
 
         {/* bottom scrim for legibility */}
-        <div className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black/72 via-black/28 to-transparent" />
+        <div className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black/48 via-black/18 to-transparent" />
 
         {/* visibility badge for owned UGC characters */}
         {visInfo && (
@@ -683,27 +683,27 @@ function DiscoveryCard({
         <div className="absolute inset-x-0 bottom-0 p-2.5 space-y-1">
           <p className="text-[16px] font-bold leading-tight text-white line-clamp-1 text-left">{profile.name}</p>
           {hook && (
-            <p className="text-[12px] leading-[1.4] text-white/90 italic line-clamp-2 text-left">
-              "{hook}"
+            <p className="text-[12px] leading-[1.5] text-white/95 font-medium line-clamp-2 text-left">
+              {hook}
             </p>
           )}
           <div className="flex items-center justify-between gap-2">
             {/* Heat indicator (editorial overrides + virtual value, preserves real ranking) */}
             {virtualHeat !== undefined && (
               <div className="flex items-center gap-1">
-                <svg className="text-white/85" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z" />
+                <svg className="text-white/85" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 2c-1.5 4-4 6-7 7 1 5 3 8 7 11 4-3 6-6 7-11-3-1-5.5-3-7-7z" />
                 </svg>
                 <span className="text-[11px] text-white/85">{formatPlays(virtualHeat)}</span>
               </div>
             )}
             {/* Tags row — show only top 2 */}
             {displayTags.length > 0 && (
-              <div className="flex gap-1.5">
+              <div className="flex gap-2">
                 {displayTags.map((tag) => (
                   <span
                     key={tag}
-                    className="inline-flex items-center h-[18px] px-2 rounded-full bg-white/15 backdrop-blur-[2px] text-[10px] text-white/80"
+                    className="inline-flex items-center h-[20px] px-2 rounded-full bg-white/10 border border-white/20 backdrop-blur-[2px] text-[11px] text-white/80 transition-all duration-[var(--duration-fast)] hover:bg-white/20"
                   >
                     {tag}
                   </span>
@@ -738,7 +738,7 @@ function CoverFill({ cover, alt }: { cover?: string | null; alt: string }) {
       loading="lazy"
       decoding="async"
       onLoad={() => setLoaded(true)}
-      className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-300 ${
+      className={`absolute inset-0 w-full h-full object-cover filter brightness-[0.96] contrast-[0.92] transition-opacity duration-300 ${
         loaded ? 'opacity-100' : 'opacity-0'
       }`}
     />

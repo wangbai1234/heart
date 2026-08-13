@@ -224,7 +224,7 @@ export function ChatInboxPage() {
               <p className="text-[15px] text-[var(--color-text-muted)]">暂无聊天记录</p>
             </div>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-4">
               {conversations.map((conversation) => (
                 <SwipeableRow
                   key={conversation.characterId}
@@ -236,13 +236,13 @@ export function ChatInboxPage() {
                       setActiveCharacter(conversation.characterId)
                       navigate(`/chat/${conversation.characterId}`)
                     }}
-                    className={`w-full rounded-[24px] border px-4 py-4 text-left backdrop-blur-[16px] transition-transform active:scale-[0.985] ${
+                    className={`w-full rounded-[24px] border px-5 py-5 text-left backdrop-blur-[16px] transition-all duration-[var(--duration-fast)] active:scale-[0.985] ${
                       conversation.isSelected
-                        ? 'border-[rgba(255,183,197,0.38)] bg-[var(--color-glass-75)] shadow-[var(--shadow-card)]'
-                        : 'border-[var(--color-border-glass)] bg-[var(--color-glass-35)] shadow-[var(--shadow-soft)]'
+                        ? 'border-[var(--color-border-glass)] bg-[var(--color-glass-75)] shadow-[var(--shadow-sheet)] scale-[1.01]'
+                        : 'border-[var(--color-border-glass)] bg-[var(--color-glass-65)] shadow-[var(--shadow-soft)] hover:bg-[var(--color-glass-75)]'
                     }`}
                   >
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-4">
                       <Avatar src={conversation.profile.cover ?? conversation.profile.avatar} size={58} />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
@@ -250,7 +250,7 @@ export function ChatInboxPage() {
                             {conversation.profile.name}
                           </p>
                           <span
-                            className="inline-flex h-6 items-center rounded-full px-2.5 text-[11px] font-medium"
+                            className="inline-flex h-6 items-center rounded-md px-2.5 text-[11px] font-medium"
                             style={{
                               color: conversation.profile.tagColor,
                               backgroundColor: conversation.profile.tagBg,
@@ -262,32 +262,17 @@ export function ChatInboxPage() {
                         <p className="mt-1 text-[13px] text-[var(--color-text-secondary)]">
                           {conversation.profile.statusLabel}
                         </p>
-                      </div>
-                      <div className="flex shrink-0 items-start gap-1 text-right">
-                        <div>
-                          <p className="text-[12px] text-[var(--color-text-muted)]">{conversation.updatedAt}</p>
-                          {conversation.unreadCount > 0 ? (
-                            <span className="mt-2 inline-flex min-w-[24px] items-center justify-center rounded-full bg-[var(--color-unread-badge)] px-2 py-[2px] text-[11px] font-semibold text-white">
-                              {conversation.unreadCount}
-                            </span>
-                          ) : (
-                            <span className="mt-2 inline-flex rounded-full bg-[rgba(255,255,255,0.36)] px-2.5 py-[2px] text-[11px] text-[var(--color-text-muted)]">
-                              已读
-                            </span>
-                          )}
-                        </div>
-                        {/* More button hidden per design request */}
-                      </div>
-                    </div>
-
-                    <div className="mt-4 rounded-[18px] bg-[rgba(255,255,255,0.3)] px-3.5 py-3">
-                      <div className="flex items-center justify-between gap-3">
-                        <p className="truncate text-[14px] font-medium text-[var(--color-ink)]">
+                        <p className="mt-3 font-normal text-[14px] text-[var(--color-text-secondary)] line-clamp-2">
                           {conversation.preview}
                         </p>
-                        <span className="shrink-0 text-[12px] text-[var(--color-text-muted)]">
-                          {conversation.totalMessages} 条
-                        </span>
+                      </div>
+                      <div className="flex shrink-0 flex-col items-end gap-2">
+                        <p className="text-[12px] text-[var(--color-text-muted)]">{conversation.updatedAt}</p>
+                        {conversation.unreadCount > 0 && (
+                          <span className="inline-flex min-w-[24px] items-center justify-center rounded-full bg-[var(--color-unread-badge)] px-2 py-[2px] text-[11px] font-semibold text-white">
+                            {conversation.unreadCount}
+                          </span>
+                        )}
                       </div>
                     </div>
                   </button>
