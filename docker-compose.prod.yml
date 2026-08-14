@@ -18,7 +18,7 @@ services:
   postgres:
     image: pgvector/pgvector:pg15
     container_name: heart-postgres-prod
-    # Tuned for a 4GB VPS shared with redis + 2 app containers. shared_buffers is
+    # Tuned for an 8GB VPS shared with redis + 2 app containers. shared_buffers is
     # a hard allocation; effective_cache_size is only a planner hint. Adjust up if
     # you move to a bigger box.
     # Connection math: api(2 workers × pool 5+10) + encoder(1 × pool 5+10) = 45 max;
@@ -55,7 +55,7 @@ services:
   redis:
     image: redis:7-alpine
     container_name: heart-redis-prod
-    # maxmemory is an OOM backstop for the 4GB host (launch-scale traffic won't
+    # maxmemory is an OOM backstop for the 8GB host (launch-scale traffic won't
     # approach it). Policy = volatile-lru: only keys WITH a TTL are eligible for
     # eviction, so persistent state is never dropped, and among TTL keys the cold
     # ones go first — in practice the large TTS audio blobs (tts:*), not the hot
