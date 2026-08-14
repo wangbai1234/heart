@@ -28,8 +28,8 @@ class Settings(BaseSettings):
 
     # Database
     database_url: str = "postgresql+asyncpg://heart:heartdev@localhost:5432/heart"
-    database_pool_size: int = 10
-    database_max_overflow: int = 20
+    database_pool_size: int = 5
+    database_max_overflow: int = 10
 
     # Redis
     redis_url: str = "redis://localhost:6379/0"

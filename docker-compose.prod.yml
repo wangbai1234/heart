@@ -20,20 +20,21 @@ services:
     container_name: heart-postgres-prod
     # Tuned for a 4GB VPS shared with redis + 2 app containers. shared_buffers is
     # a hard allocation; effective_cache_size is only a planner hint. Adjust up if
-    # you move to a bigger box. max_connections=50 comfortably covers api(2 workers)
-    # + encoder-worker asyncpg pools.
+    # you move to a bigger box.
+    # Connection math: api(2 workers × pool 5+10) + encoder(1 × pool 5+10) = 45 max;
+    # steady-state ~15, burst ~45. max_connections=100 gives headroom for admin.
     command:
       - postgres
       - -c
-      - shared_buffers=384MB
+      - shared_buffers=256MB
       - -c
-      - effective_cache_size=1GB
+      - effective_cache_size=768MB
       - -c
-      - work_mem=16MB
+      - work_mem=8MB
       - -c
-      - maintenance_work_mem=96MB
+      - maintenance_work_mem=64MB
       - -c
-      - max_connections=50
+      - max_connections=100
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-heart}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
