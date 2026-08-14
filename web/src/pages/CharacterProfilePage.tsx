@@ -11,7 +11,7 @@ import { stageWithIntimacy, isColdWar, intimacyPercent, stageLabel, stageOrderIn
 import { buildShareLink } from '../utils/characterShare'
 import { useSafeBack } from '../hooks/useSafeBack'
 import { CHARACTER_UI_CONFIGS, type CharacterTheme } from '../data/characterUIConfig'
-import { JiYuProfile, LiShenProfile, ChengXuProfile, LilithProfile, GuBeichenProfile, QinXiaoProfile, JiangYuezeProfile, JiangYeProfile, GuXingzhouProfile, LiJueProfile, ShenYichenProfile, ShenYuchuanProfile, LuoFeiProfile, PeiTinglanProfile, FuMingxiuProfile, XizeProfile, JiangLiProfile, PeiJueProfile, HuoChengProfile, ZhouJinProfile, BaiQinghuanProfile, ChengZhiProfile, LuTingshengProfile, GuNanqiaoProfile, YunZhiProfile, SuWanProfile, LinXiaomanProfile, LuZhaoProfile, SuYueyaoProfile, HuoShiyuProfile, SuNianProfile, SuYunProfile, GuQingwanProfile, GuXingmianProfile, SongYeProfile, VitoRosettiProfile, XieCiProfile, ShenLiaoProfile, LuWenjingProfile, JiangRanProfile, GuYanliProfile, XuZhihanProfile, LinyuanManorProfile, FreeMuseProfile, QingyuBandProfile } from '../components/characterProfiles'
+import { JiYuProfile, LiShenProfile, ChengXuProfile, LilithProfile, GuBeichenProfile, QinXiaoProfile, JiangYuezeProfile, JiangYeProfile, GuXingzhouProfile, LiJueProfile, ShenYichenProfile, ShenYuchuanProfile, LuoFeiProfile, PeiTinglanProfile, FuMingxiuProfile, XizeProfile, JiangLiProfile, PeiJueProfile, HuoChengProfile, ZhouJinProfile, BaiQinghuanProfile, ChengZhiProfile, LuTingshengProfile, GuNanqiaoProfile, YunZhiProfile, SuWanProfile, LinXiaomanProfile, LuZhaoProfile, SuYueyaoProfile, HuoShiyuProfile, SuNianProfile, SuYunProfile, GuQingwanProfile, GuXingmianProfile, SongYeProfile, VitoRosettiProfile, XieCiProfile, ShenLiaoProfile, LuWenjingProfile, JiangRanProfile, GuYanliProfile, XuZhihanProfile, LinyuanManorProfile, FreeMuseProfile, QingyuBandProfile, GuiBaiProfile, YinCiProfile, HeZhuoProfile } from '../components/characterProfiles'
 import type { ComponentType } from 'react'
 import { BlockRenderer } from '../components/profileBlocks/BlockRenderer'
 import { CustomHtmlRenderer } from '../components/profileBlocks/CustomHtmlRenderer'
@@ -66,6 +66,9 @@ const BESPOKE_PROFILES: Record<string, ComponentType<{ profile: CharacterProfile
   linyuan_manor: LinyuanManorProfile,
   free_muse: FreeMuseProfile,
   qingyu_band: QingyuBandProfile,
+  gui_bai: GuiBaiProfile,
+  yin_ci: YinCiProfile,
+  he_zhuo: HeZhuoProfile,
 }
 
 /** Chrome 视觉调色盘 registry（React 外层chrome，非 iframe 内层） */
@@ -806,6 +809,54 @@ const CHROME_PALETTES: Record<string, ChromePalette> = {
     chipInactiveText: '#9aa6b3',
     ctaGradient: 'linear-gradient(135deg, #8FA5B8, #E0A96D)',
     ctaShadow: '0 4px 14px rgba(224,169,109,0.3)',
+  },
+  gui_bai: {
+    bg: '#0c1012',
+    coverBg: '#141a1c',
+    scrimGradient: 'linear-gradient(to top,#0c1012 6%,rgba(12,16,18,.4) 40%,transparent 100%)',
+    nameColor: '#e8e0d4',
+    ageColor: '#a0a898',
+    taglineColor: '#c4b898',
+    chipActiveBg: 'rgba(168,176,152,.1)',
+    chipActiveBorder: 'rgba(168,176,152,.34)',
+    chipActiveText: '#c4b898',
+    chipInactiveBg: 'rgba(255,255,255,.05)',
+    chipInactiveBorder: 'rgba(255,255,255,.1)',
+    chipInactiveText: '#a0a898',
+    ctaGradient: 'linear-gradient(105deg,#a8b098,#8a9880)',
+    ctaShadow: '0 10px 26px rgba(168,176,152,0.32)',
+  },
+  yin_ci: {
+    bg: '#0b0909',
+    coverBg: '#161010',
+    scrimGradient: 'linear-gradient(to top,#0b0909 6%,rgba(11,9,9,.4) 40%,transparent 100%)',
+    nameColor: '#e0d4d0',
+    ageColor: '#908480',
+    taglineColor: '#c84040',
+    chipActiveBg: 'rgba(184,48,48,.1)',
+    chipActiveBorder: 'rgba(184,48,48,.34)',
+    chipActiveText: '#d85050',
+    chipInactiveBg: 'rgba(255,255,255,.05)',
+    chipInactiveBorder: 'rgba(255,255,255,.1)',
+    chipInactiveText: '#908480',
+    ctaGradient: 'linear-gradient(105deg,#b83030,#8a2020)',
+    ctaShadow: '0 10px 26px rgba(184,48,48,0.38)',
+  },
+  he_zhuo: {
+    bg: '#11100e',
+    coverBg: '#1a1816',
+    scrimGradient: 'linear-gradient(to top,#11100e 6%,rgba(17,16,14,.4) 40%,transparent 100%)',
+    nameColor: '#ede4d8',
+    ageColor: '#8a8078',
+    taglineColor: '#c49448',
+    chipActiveBg: 'rgba(196,148,72,.1)',
+    chipActiveBorder: 'rgba(196,148,72,.34)',
+    chipActiveText: '#d4a458',
+    chipInactiveBg: 'rgba(255,255,255,.05)',
+    chipInactiveBorder: 'rgba(255,255,255,.1)',
+    chipInactiveText: '#8a8078',
+    ctaGradient: 'linear-gradient(105deg,#c49448,#a07830)',
+    ctaShadow: '0 10px 26px rgba(196,148,72,0.34)',
   },
 }
 
