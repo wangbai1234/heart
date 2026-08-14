@@ -693,23 +693,24 @@ function DiscoveryCard({
               {hook}
             </p>
           )}
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center justify-between gap-2 min-w-0">
             {/* Heat indicator (editorial overrides + virtual value, preserves real ranking) */}
             {virtualHeat !== undefined && (
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1 flex-shrink-0">
                 <svg className="text-white/85" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M12 2c-1.5 4-4 6-7 7 1 5 3 8 7 11 4-3 6-6 7-11-3-1-5.5-3-7-7z" />
                 </svg>
-                <span className="text-[11px] text-white/85">{formatPlays(virtualHeat)}</span>
+                <span className="text-[11px] text-white/85 whitespace-nowrap">{formatPlays(virtualHeat)}</span>
               </div>
             )}
             {/* Tags row — show only top 2 */}
             {displayTags.length > 0 && (
-              <div className="flex gap-2">
+              <div className="flex gap-2 min-w-0 flex-shrink">
                 {displayTags.map((tag) => (
                   <span
                     key={tag}
-                    className="inline-flex items-center h-[20px] px-2 rounded-full bg-white/10 border border-white/20 backdrop-blur-[2px] text-[11px] text-white/80 transition-all duration-[var(--duration-fast)] hover:bg-white/20"
+                    className="inline-flex items-center h-[20px] px-2 rounded-full bg-white/10 border border-white/20 backdrop-blur-[2px] text-[11px] text-white/80 transition-all duration-[var(--duration-fast)] hover:bg-white/20 truncate max-w-[72px]"
+                    title={tag}
                   >
                     {tag}
                   </span>
