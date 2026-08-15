@@ -91,3 +91,6 @@ covers_src/
 
 # Batch4 临时封面目录（同 covers_src，rsync 到生产，never commit）
 covers_batch4/
+
+# Batch5 临时封面目录（同上，rsync 到生产，never commit）
+covers_batch5/
