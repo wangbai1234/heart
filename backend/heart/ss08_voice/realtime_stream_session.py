@@ -59,6 +59,7 @@ class RealtimeStreamSession:
         speed: float = 1.0,
         chunk_length: int = 200,
         latency: str = "balanced",
+        tts_model: str = "s2.1-pro",
         session_factory: Optional[SessionFactory] = None,
     ) -> None:
         self._send = ws_send_audio
@@ -69,6 +70,7 @@ class RealtimeStreamSession:
         self._speed = speed
         self._chunk_length = chunk_length
         self._latency = latency
+        self._tts_model = tts_model
         self._session_factory = session_factory or self._default_session_factory
 
         self._session: Optional[FishRealtimeSession] = None
@@ -91,6 +93,7 @@ class RealtimeStreamSession:
             speed=self._speed,
             chunk_length=self._chunk_length,
             latency=self._latency,
+            tts_model=self._tts_model,
         )
 
     # ── public surface (matches StreamSession) ──────────────────────────────

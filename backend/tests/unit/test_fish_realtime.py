@@ -65,11 +65,10 @@ def _factory_for(ws: FakeWs):
 
 class TestMsgpackRoundtrip:
     def test_pack_unpack(self):
-        obj = {"event": "start", "request": {"model_id": "v-uuid", "format": "mp3"}}
+        obj = {"event": "start", "request": {"voiceId": "v-uuid", "format": "mp3"}}
         assert _unpack(_pack(obj)) == obj
 
     def test_unpack_str_frame(self):
-        # A str frame is encoded before unpacking (defensive).
         assert _unpack(_pack({"event": "flush"})) == {"event": "flush"}
 
 
@@ -83,8 +82,10 @@ class TestFishRealtimeSession:
         )
         await sess.open()
         start = next(f for f in ws.sent if f.get("event") == "start")
-        assert start["request"]["model_id"] == "voice-123"
+        assert start["request"]["voiceId"] == "voice-123"
+        assert start["request"]["modelId"] == "s2.1-pro"
         assert start["request"]["format"] == "mp3"
+        assert start["mode"] == "simple"
 
     @pytest.mark.asyncio
     async def test_open_raises_on_error_frame(self):
@@ -94,27 +95,28 @@ class TestFishRealtimeSession:
         )
         with pytest.raises(TTSProviderError):
             await sess.open()
-        assert ws.closed  # cleaned up on failure
+        assert ws.closed
 
     @pytest.mark.asyncio
-    async def test_send_text_emits_text_then_flush(self):
+    async def test_send_text_emits_input_with_commit(self):
         ws = FakeWs([{"event": "ready"}])
         sess = FishRealtimeSession(
             api_key="k", url="wss://x", model_id="v", ws_factory=_factory_for(ws)
         )
         await sess.open()
         await sess.send_text("你好")
-        events = [f["event"] for f in ws.sent]
-        assert events[-2:] == ["text", "flush"]
-        assert any(f.get("text") == "你好" for f in ws.sent)
+        input_evt = next(f for f in ws.sent if f.get("event") == "input")
+        assert input_evt["text"] == "你好"
+        assert input_evt["commit"] is True
+        assert "eventId" in input_evt
 
     @pytest.mark.asyncio
     async def test_audio_events_yields_then_finishes(self):
         ws = FakeWs(
             [
                 {"event": "ready"},
-                {"event": "audio", "data": b"AAA", "audio_sequence": 0},
-                {"event": "audio", "data": b"BBB", "audio_sequence": 1},
+                {"event": "audio", "audio": b"AAA"},
+                {"event": "audio", "audio": b"BBB"},
                 {"event": "finish", "reason": "stop"},
             ]
         )
@@ -137,8 +139,7 @@ class TestFishRealtimeSession:
 
     @pytest.mark.asyncio
     async def test_audio_events_ends_cleanly_on_close(self):
-        # No 'finish' frame — the connection just closes; iterator ends, no raise.
-        ws = FakeWs([{"event": "ready"}, {"event": "audio", "data": b"AAA"}])
+        ws = FakeWs([{"event": "ready"}, {"event": "audio", "audio": b"AAA"}])
         sess = FishRealtimeSession(
             api_key="k", url="wss://x", model_id="v", ws_factory=_factory_for(ws)
         )
@@ -159,11 +160,10 @@ class TestFishRealtimeSession:
 
     @pytest.mark.asyncio
     async def test_captures_sample_rate_from_audio_frame(self):
-        # If ready lacked it, the first audio frame carries it (docs say both do).
         ws = FakeWs(
             [
                 {"event": "ready"},
-                {"event": "audio", "data": b"AAA", "sample_rate": 24000},
+                {"event": "audio", "audio": b"AAA", "sampleRate": 24000},
                 {"event": "finish"},
             ]
         )
@@ -176,12 +176,11 @@ class TestFishRealtimeSession:
         assert sess.sample_rate == 24000
 
     @pytest.mark.asyncio
-    async def test_accepts_audio_payload_under_audio_key(self):
-        # Docs list the binary key as `audio`; this build sends `data`. Accept both.
+    async def test_accepts_audio_payload_under_data_key(self):
         ws = FakeWs(
             [
                 {"event": "ready"},
-                {"event": "audio", "audio": b"XYZ"},
+                {"event": "audio", "data": b"XYZ"},
                 {"event": "finish"},
             ]
         )
@@ -476,6 +475,7 @@ class TestCreateStreamSessionSelection:
         monkeypatch.setattr(settings, "fish_realtime_enabled", True)
         monkeypatch.setattr(settings, "fish_api_key", "k")
         monkeypatch.setattr(settings, "fish_realtime_url", "wss://x")
+        monkeypatch.setattr(settings, "fish_realtime_model", "s2.1-pro")
         sess = m._create_stream_session(
             self._voice_service(), self._ws(),
             preferred_provider_name="fish", character_id="rin",
@@ -502,6 +502,7 @@ class TestCreateStreamSessionSelection:
         monkeypatch.setattr(settings, "fish_realtime_enabled", True)
         monkeypatch.setattr(settings, "fish_api_key", "k")
         monkeypatch.setattr(settings, "fish_realtime_url", "wss://x")
+        monkeypatch.setattr(settings, "fish_realtime_model", "s2.1-pro")
         call = m._create_stream_session(
             self._voice_service(), self._ws(),
             preferred_provider_name="fish", character_id="rin", channel="call",
@@ -510,13 +511,10 @@ class TestCreateStreamSessionSelection:
             self._voice_service(), self._ws(),
             preferred_provider_name="fish", character_id="rin", channel="chat",
         )
-        assert call._fmt == "wav"  # call needs per-frame decodable linear PCM
-        assert chat._fmt == "mp3"  # chat concatenates + plays once at turn_end
-        # Call optimises for time-to-first-audio: normal latency (v1's lower-
-        # latency option; v1 has only normal/balanced) + small chunks.
+        assert call._fmt == "wav"
+        assert chat._fmt == "mp3"
         assert call._latency == "normal"
         assert call._chunk_length == 100
-        # Chat keeps the smoother balanced/larger-chunk profile.
         assert chat._latency == "balanced"
         assert chat._chunk_length == 200
 
@@ -528,6 +526,7 @@ class TestCreateStreamSessionSelection:
         monkeypatch.setattr(settings, "fish_realtime_enabled", True)
         monkeypatch.setattr(settings, "fish_api_key", "k")
         monkeypatch.setattr(settings, "fish_realtime_url", "wss://x")
+        monkeypatch.setattr(settings, "fish_realtime_model", "s2.1-pro")
         sess = m._create_stream_session(
             self._voice_service(), self._ws(),
             preferred_provider_name="fish", character_id="rin",

@@ -185,8 +185,7 @@ def _create_stream_session(
             # A live call optimises for time-to-first-audio: latency="normal" +
             # a small chunk_length makes Fish emit the opening audio sooner (at a
             # slight quality cost that a phone-call register tolerates). Chat keeps
-            # the smoother balanced/larger-chunk profile. (v1 API only has normal/
-            # balanced; normal is the lower-latency option.)
+            # the smoother balanced/larger-chunk profile.
             is_call = channel == "call"
             return RealtimeStreamSession(
                 send_audio,
@@ -196,6 +195,7 @@ def _create_stream_session(
                 fmt=realtime_fmt,
                 chunk_length=100 if is_call else 200,
                 latency="normal" if is_call else "balanced",
+                tts_model=settings.fish_realtime_model,
             )
         except Exception as e:
             logger.warning("fish_realtime_session_init_failed", error=str(e))
