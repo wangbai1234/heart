@@ -59,7 +59,7 @@ class RealtimeStreamSession:
         speed: float = 1.0,
         chunk_length: int = 200,
         latency: str = "balanced",
-        tts_model: str = "s2.1-pro",
+        tts_model: str = "fishaudio-s21pro-flash",
         session_factory: Optional[SessionFactory] = None,
     ) -> None:
         self._send = ws_send_audio

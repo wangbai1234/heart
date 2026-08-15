@@ -296,7 +296,7 @@ class Settings(BaseSettings):
     # enabling this never hard-fails a turn — worst case it degrades to REST synth.
     fish_realtime_enabled: bool = True
     fish_realtime_url: str = "wss://realtime.fishaudio.org/v3/tts/live"
-    fish_realtime_model: str = "s2.1-pro"
+    fish_realtime_model: str = "fishaudio-s21pro-flash"
     # Emotion-control syntax injected into TTS text. Fish backbones each parse a
     # DIFFERENT scheme, and using the wrong one makes the marker get read ALOUD:
     #   "s2"  → [中文自然语言指令], e.g. [低声说] — for the S2.1 family

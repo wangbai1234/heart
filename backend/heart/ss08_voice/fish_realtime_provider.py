@@ -17,7 +17,7 @@ Protocol (docs.fishaudio.org/.../realtime), MessagePack binary frames, v3:
     An ``error`` event closes the connection.
 
 ``voiceId`` is the Fish voice UUID (our stored clone ID).
-``modelId`` is the Fish TTS model (e.g. "s2.1-pro").
+``modelId`` is the Fish TTS model (e.g. "fishaudio-s21pro-flash").
 
 This module owns ONE session; it does not touch StreamSession, so it can be
 unit-tested against a fake in-memory socket via ``ws_factory`` / no live key.
@@ -82,7 +82,7 @@ class FishRealtimeSession:
         speed: float = 1.0,
         chunk_length: int = 200,
         latency: str = "balanced",
-        tts_model: str = "s2.1-pro",
+        tts_model: str = "fishaudio-s21pro-flash",
         ws_factory: Optional[WsFactory] = None,
     ) -> None:
         self._api_key = api_key

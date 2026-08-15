@@ -83,7 +83,7 @@ class TestFishRealtimeSession:
         await sess.open()
         start = next(f for f in ws.sent if f.get("event") == "start")
         assert start["request"]["voiceId"] == "voice-123"
-        assert start["request"]["modelId"] == "s2.1-pro"
+        assert start["request"]["modelId"] == "fishaudio-s21pro-flash"
         assert start["request"]["format"] == "mp3"
         assert start["mode"] == "simple"
 
@@ -475,7 +475,7 @@ class TestCreateStreamSessionSelection:
         monkeypatch.setattr(settings, "fish_realtime_enabled", True)
         monkeypatch.setattr(settings, "fish_api_key", "k")
         monkeypatch.setattr(settings, "fish_realtime_url", "wss://x")
-        monkeypatch.setattr(settings, "fish_realtime_model", "s2.1-pro")
+        monkeypatch.setattr(settings, "fish_realtime_model", "fishaudio-s21pro-flash")
         sess = m._create_stream_session(
             self._voice_service(), self._ws(),
             preferred_provider_name="fish", character_id="rin",
@@ -502,7 +502,7 @@ class TestCreateStreamSessionSelection:
         monkeypatch.setattr(settings, "fish_realtime_enabled", True)
         monkeypatch.setattr(settings, "fish_api_key", "k")
         monkeypatch.setattr(settings, "fish_realtime_url", "wss://x")
-        monkeypatch.setattr(settings, "fish_realtime_model", "s2.1-pro")
+        monkeypatch.setattr(settings, "fish_realtime_model", "fishaudio-s21pro-flash")
         call = m._create_stream_session(
             self._voice_service(), self._ws(),
             preferred_provider_name="fish", character_id="rin", channel="call",
@@ -526,7 +526,7 @@ class TestCreateStreamSessionSelection:
         monkeypatch.setattr(settings, "fish_realtime_enabled", True)
         monkeypatch.setattr(settings, "fish_api_key", "k")
         monkeypatch.setattr(settings, "fish_realtime_url", "wss://x")
-        monkeypatch.setattr(settings, "fish_realtime_model", "s2.1-pro")
+        monkeypatch.setattr(settings, "fish_realtime_model", "fishaudio-s21pro-flash")
         sess = m._create_stream_session(
             self._voice_service(), self._ws(),
             preferred_provider_name="fish", character_id="rin",
