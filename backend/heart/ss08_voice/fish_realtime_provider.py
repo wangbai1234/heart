@@ -131,7 +131,11 @@ class FishRealtimeSession:
             {
                 "event": "start",
                 "eventId": _evt_id(),
-                "mode": "simple",
+                # reliable mode: client controls segmentation via a single
+                # `flush` after buffering all sentences (input commit:false).
+                # simple mode rejects `flush` with invalid_state, which dropped
+                # every sentence after the first.
+                "mode": "reliable",
                 "request": request,
             }
         )

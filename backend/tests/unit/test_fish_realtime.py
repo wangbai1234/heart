@@ -85,7 +85,7 @@ class TestFishRealtimeSession:
         assert start["request"]["voiceId"] == "voice-123"
         assert start["request"]["modelId"] == "fishaudio-s21pro-flash"
         assert start["request"]["format"] == "mp3"
-        assert start["mode"] == "simple"
+        assert start["mode"] == "reliable"
 
     @pytest.mark.asyncio
     async def test_open_raises_on_error_frame(self):
