@@ -215,16 +215,25 @@ class FishRealtimeSession:
         """
         if self._ws is None:
             raise TTSProviderError("fish realtime: socket not open")
+        frame_count = 0
         while True:
             try:
                 frame = await self._ws.recv()
             except Exception as e:
                 name = type(e).__name__
                 if "ConnectionClosed" in name or "Cancelled" in name:
+                    logger.info("fish_realtime_conn_closed", frames_received=frame_count)
                     return
                 raise TTSProviderError(f"fish realtime recv error: {e}") from e
             evt = _unpack(frame)
             etype = evt.get("event")
+            if frame_count == 0:
+                logger.info(
+                    "fish_realtime_first_event",
+                    event_type=etype,
+                    keys=list(evt.keys()),
+                )
+            frame_count += 1
             if etype == "audio":
                 payload = self._extract_audio_bytes(evt)
                 if payload:

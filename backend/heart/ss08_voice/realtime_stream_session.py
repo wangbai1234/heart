@@ -116,37 +116,45 @@ class RealtimeStreamSession:
         """
         from heart.ss08_voice.voice_catalog import get_voice_id
 
-        # The Fish clone voiceId registered by resolve_effective_voice.
         model_id = get_voice_id(self._character_id)
-        # Apply a per-voice speed override (see _REALTIME_SPEED_OVERRIDES). Only
-        # narrows the default 1.0 for the few presets whose realtime render is
-        # faster than their preview; unknown voice_ids are untouched.
         override = _REALTIME_SPEED_OVERRIDES.get(model_id)
         if override is not None:
             self._speed = override
+        logger.info(
+            "fish_realtime_session_start",
+            character_id=self._character_id,
+            voice_id=model_id,
+            fmt=self._fmt,
+            tts_model=self._tts_model,
+            url=self._url,
+        )
         self._session = self._session_factory(model_id)
         await self._session.open()
         self._reader_task = asyncio.create_task(self._pump_audio())
 
     async def _pump_audio(self) -> None:
         assert self._session is not None
+        chunk_count = 0
         try:
             async for data in self._session.audio_events():
                 if self._cancelled:
                     break
+                chunk_count += 1
+                if chunk_count == 1:
+                    logger.info(
+                        "fish_realtime_first_audio",
+                        chunk_size=len(data),
+                        first_bytes=data[:16].hex() if data else "",
+                        fmt=self._fmt,
+                    )
                 self._all_audio_chunks.append(data)
                 self.audio_produced = True
                 self.tts_provider_name = "fish"
                 if self._turn_id is not None:
-                    # sample_rate is None for mp3 (chat) and only set once Fish
-                    # reports it on pcm/wav (call) — passed through so the client
-                    # builds AudioBuffers at the true rate instead of guessing.
                     sr = self._session.sample_rate if self._session else None
                     await self._send(self._turn_id, self._global_seq, data, False, self._fmt, sr)
                     self._global_seq += 1
         except Exception as e:
-            # Mid-stream failure: end audio here. Whatever arrived already
-            # played; the turn still terminates normally above this layer.
             self._pump_error = e
             logger.warning("fish_realtime_pump_error", error=str(e))
 
