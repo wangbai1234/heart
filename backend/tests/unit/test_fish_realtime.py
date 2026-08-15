@@ -334,6 +334,9 @@ class TestRealtimeStreamSession:
         assert session.full_audio == b"onetwo"
         assert session.audio_produced is True
         assert session.tts_provider_name == "fish"
+        # audio_format must match the chunk format so _upload_turn_audio persists
+        # mp3 as mp3 (not wrapped as PCM16 WAV → the "杂音" replay bug).
+        assert session.audio_format == "mp3"
         assert fake.finished and fake.closed
 
     @pytest.mark.asyncio

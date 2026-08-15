@@ -135,7 +135,7 @@ class FishRealtimeSession:
                 evt = _unpack(frame)
                 etype = evt.get("event")
                 if etype == "ready":
-                    sr = evt.get("sample_rate")
+                    sr = evt.get("sample_rate") or evt.get("sampleRate")
                     if isinstance(sr, int) and sr > 0:
                         self._sample_rate = sr
                     return

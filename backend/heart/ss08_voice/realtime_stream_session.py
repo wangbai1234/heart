@@ -83,6 +83,13 @@ class RealtimeStreamSession:
 
         self.audio_produced = False
         self.tts_provider_name = ""
+        # The format of every audio chunk this session emits (mp3 for chat, wav
+        # for calls). Callers persisting full_audio MUST consult this: the REST
+        # StreamSession exposes the same attribute, and _upload_turn_audio keys
+        # off it to pick the right container + content-type. Without it the
+        # getattr(..., "audio_format", "") default was "" → mp3 bytes got wrapped
+        # as PCM16 WAV and replayed as electrical noise (the "杂音" bug).
+        self.audio_format = fmt
 
     def _default_session_factory(self, model_id: str) -> FishRealtimeSession:
         return FishRealtimeSession(
@@ -146,6 +153,7 @@ class RealtimeStreamSession:
                         chunk_size=len(data),
                         first_bytes=data[:16].hex() if data else "",
                         fmt=self._fmt,
+                        sample_rate=(self._session.sample_rate if self._session else None),
                     )
                 self._all_audio_chunks.append(data)
                 self.audio_produced = True
