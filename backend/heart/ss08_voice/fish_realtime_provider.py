@@ -26,6 +26,7 @@ unit-tested against a fake in-memory socket via ``ws_factory`` / no live key.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import uuid
 from typing import Any, AsyncIterator, Awaitable, Callable, Optional
 
@@ -40,9 +41,6 @@ _SUBPROTOCOL = "realtime.tts.msgpack.v3"
 _READY_TIMEOUT_S = 10.0
 _OPEN_MAX_ATTEMPTS = 3
 _OPEN_RETRY_DELAY_S = 0.25
-# Max time finish() waits for all committed segments to finish synthesizing
-# before sending stop. Bounds a stalled server so a turn can't hang forever.
-_SEGMENTS_TIMEOUT_S = 30.0
 
 WsFactory = Callable[[str, str], Awaitable[Any]]
 
@@ -101,18 +99,12 @@ class FishRealtimeSession:
         self._closed = False
         self._retryable = False
         self._sample_rate: Optional[int] = None
-        # v3 emits a per-segment "finish" after each committed input's audio, and
-        # (per docs) also a session-level "finish" after "stop". Treating the FIRST
-        # finish as terminal ends the reader after sentence #1 → only the first
-        # sentence ever plays. We only stop the reader on finish once we have
-        # actually sent "stop"; before that, finish is a segment boundary → keep
-        # reading so later sentences' audio still arrives.
+        # Streaming lifecycle: sentences are appended with commit=false (see
+        # send_text), finalized by a single flush in finish(), then the session
+        # is closed with stop. These flags track that progression.
+        self._sent_text = False
+        self._flush_sent = False
         self._stop_sent = False
-        # Count committed segments vs completed ones so finish() can wait for all
-        # audio before sending stop (stop truncates un-synthesized segments).
-        self._segments_committed = 0
-        self._segments_completed = 0
-        self._segment_done_evt = asyncio.Event()
 
     @property
     def sample_rate(self) -> Optional[int]:
@@ -197,14 +189,24 @@ class FishRealtimeSession:
             raise last_exc
 
     async def send_text(self, text: str) -> None:
-        """Send a sentence with commit=true so generation starts promptly."""
-        self._segments_committed += 1
+        """Append a sentence to the buffer WITHOUT finalizing the segment.
+
+        v3 ``commit: true`` means "append AND finalize/trigger this segment now",
+        which CLOSES the segment — the server then emits segment_completed +
+        finish and DROPS every later input. Streaming a reply sentence-by-sentence
+        with commit=true therefore only ever synthesizes the first sentence (the
+        "只播第一句" bug). We append with commit=false and finalize the whole
+        buffer once with a single ``flush`` in finish(). The server still
+        auto-synthesizes incrementally as the buffer crosses chunkLength, so
+        time-to-first-audio is unchanged.
+        """
+        self._sent_text = True
         await self._send_event(
             {
                 "event": "input",
                 "eventId": _evt_id(),
                 "text": text,
-                "commit": True,
+                "commit": False,
             }
         )
 
@@ -273,63 +275,58 @@ class FishRealtimeSession:
     def _handle_control_event(self, etype: Optional[str], frame_count: int) -> bool:
         """Process a non-audio event. Returns True when the reader should stop.
 
-        Raises TTSProviderError on an ``error`` frame. ``segment_completed``
-        drives the finish() gate; a pre-stop ``finish`` also releases it.
-        Other control frames (segment_accepted/usage/pong/input_ack/warning)
-        carry no audio and are ignored.
+        Raises TTSProviderError on an ``error`` frame. ``finish`` ends the reader.
+        Other control frames (segment_accepted/segment_completed/usage/pong/
+        input_ack/warning) carry no audio and are ignored.
         """
         if etype == "error":
             raise TTSProviderError("fish realtime error frame")
-        if etype == "segment_completed":
-            self._segments_completed += 1
-            if self._segments_completed >= self._segments_committed:
-                self._segment_done_evt.set()
-            return False
         if etype == "finish":
-            # Only a finish AFTER we've sent "stop" ends the whole session. A
-            # finish before that means no more audio is coming for now — release
-            # any finish() wait so it doesn't block the full _SEGMENTS_TIMEOUT_S.
+            # After we flush(), the server synthesizes the whole buffer, streams
+            # the remaining audio, then emits finish — that is the real end of the
+            # reply, so terminate the reader. A finish BEFORE flush would mean the
+            # server closed the segment early; nothing more is coming either, so
+            # end then too. (We only ever flush once, at end-of-text.)
             logger.info(
-                "fish_realtime_finish_terminal"
-                if self._stop_sent
-                else "fish_realtime_segment_finish",
+                "fish_realtime_finish",
                 frames=frame_count,
-                committed=self._segments_committed,
-                completed=self._segments_completed,
+                flush_sent=self._flush_sent,
             )
-            self._segment_done_evt.set()
-            return self._stop_sent
+            return True
         return False
 
     async def finish(self) -> None:
-        """Tell the server no more text is coming.
+        """Finalize the buffered text, then end the session.
 
-        v3 truncates any committed segment whose audio has not finished
-        synthesizing when it receives ``stop``. So before sending stop we wait
-        (bounded) for a ``segment_completed`` for every committed segment. Only
-        then is it safe to end the session without dropping later sentences.
+        All sentences were appended with ``commit: false`` (see send_text), so
+        the buffer is not yet finalized. ``flush`` forces synthesis of the whole
+        remaining buffer WITHOUT closing the connection; the server then streams
+        the tail audio and emits ``finish``. We send ``stop`` after flush to end
+        the session. Skipping flush would drop any un-synthesized tail — never
+        rely on ``stop`` alone to flush.
         """
         if self._ws is None or self._closed:
             return
-        if self._segments_completed < self._segments_committed:
+        # Only flush here. The reader then drains the flushed tail audio until the
+        # server emits finish; stop is sent in close() afterwards so it can never
+        # race ahead and truncate audio the server is still streaming.
+        if self._sent_text:
+            self._flush_sent = True
             try:
-                await asyncio.wait_for(self._segment_done_evt.wait(), timeout=_SEGMENTS_TIMEOUT_S)
-            except asyncio.TimeoutError:
-                logger.warning(
-                    "fish_realtime_segments_timeout",
-                    committed=self._segments_committed,
-                    completed=self._segments_completed,
-                )
-        self._stop_sent = True
-        try:
-            await self._send_event({"event": "stop", "eventId": _evt_id()})
-        except Exception as e:
-            logger.warning("fish_realtime_stop_failed", error=str(e))
+                await self._send_event({"event": "flush", "eventId": _evt_id()})
+            except Exception as e:
+                logger.warning("fish_realtime_flush_failed", error=str(e))
 
     async def close(self) -> None:
         if self._ws is None or self._closed:
             self._closed = True
             return
+        # Best-effort session end. By now the reader has consumed all flushed
+        # audio (it returns on the server finish), so stop is pure cleanup.
+        if not self._stop_sent:
+            self._stop_sent = True
+            with contextlib.suppress(Exception):
+                await self._send_event({"event": "stop", "eventId": _evt_id()})
         self._closed = True
         try:
             await self._ws.close()

@@ -98,7 +98,9 @@ class TestFishRealtimeSession:
         assert ws.closed
 
     @pytest.mark.asyncio
-    async def test_send_text_emits_input_with_commit(self):
+    async def test_send_text_appends_without_commit(self):
+        # commit=false: append to the buffer without finalizing the segment, so
+        # subsequent sentences are not dropped (commit=true would close it).
         ws = FakeWs([{"event": "ready"}])
         sess = FishRealtimeSession(
             api_key="k", url="wss://x", model_id="v", ws_factory=_factory_for(ws)
@@ -107,8 +109,36 @@ class TestFishRealtimeSession:
         await sess.send_text("你好")
         input_evt = next(f for f in ws.sent if f.get("event") == "input")
         assert input_evt["text"] == "你好"
-        assert input_evt["commit"] is True
+        assert input_evt["commit"] is False
         assert "eventId" in input_evt
+
+    @pytest.mark.asyncio
+    async def test_finish_flushes_before_stop(self):
+        # All sentences append with commit=false; finish() must flush to finalize
+        # the buffer (close() then sends stop). No flush → tail audio is dropped.
+        ws = FakeWs([{"event": "ready"}])
+        sess = FishRealtimeSession(
+            api_key="k", url="wss://x", model_id="v", ws_factory=_factory_for(ws)
+        )
+        await sess.open()
+        await sess.send_text("你好")
+        await sess.finish()
+        events = [f.get("event") for f in ws.sent]
+        assert "flush" in events
+        # stop is deferred to close(), not sent by finish()
+        assert "stop" not in events
+        await sess.close()
+        assert [f.get("event") for f in ws.sent].count("stop") == 1
+
+    @pytest.mark.asyncio
+    async def test_finish_without_text_does_not_flush(self):
+        ws = FakeWs([{"event": "ready"}])
+        sess = FishRealtimeSession(
+            api_key="k", url="wss://x", model_id="v", ws_factory=_factory_for(ws)
+        )
+        await sess.open()
+        await sess.finish()
+        assert "flush" not in [f.get("event") for f in ws.sent]
 
     @pytest.mark.asyncio
     async def test_audio_events_yields_then_finishes(self):
@@ -128,17 +158,17 @@ class TestFishRealtimeSession:
         assert chunks == [b"AAA", b"BBB"]
 
     @pytest.mark.asyncio
-    async def test_per_segment_finish_does_not_drop_later_audio(self):
-        # v3 emits a "finish" after each committed segment. Before "stop" is sent,
-        # that finish must be treated as a segment boundary, not session end —
-        # otherwise only the first sentence's audio ever reaches the caller.
+    async def test_multi_sentence_buffer_streams_all_audio(self):
+        # The real fix: append N sentences with commit=false, flush once; the
+        # server streams all audio for the whole buffer then emits a single
+        # finish. All chunks (across all sentences) must reach the caller.
         ws = FakeWs(
             [
                 {"event": "ready"},
-                {"event": "audio", "audio": b"AAA"},
-                {"event": "finish"},  # end of sentence #1
-                {"event": "audio", "audio": b"BBB"},
-                {"event": "finish"},  # end of sentence #2
+                {"event": "audio", "audio": b"AAA"},  # sentence 1
+                {"event": "audio", "audio": b"BBB"},  # sentence 2
+                {"event": "audio", "audio": b"CCC"},  # sentence 3
+                {"event": "finish"},  # single session-level finish after flush
             ]
         )
         sess = FishRealtimeSession(
@@ -146,7 +176,7 @@ class TestFishRealtimeSession:
         )
         await sess.open()
         chunks = [c async for c in sess.audio_events()]
-        assert chunks == [b"AAA", b"BBB"]
+        assert chunks == [b"AAA", b"BBB", b"CCC"]
 
     @pytest.mark.asyncio
     async def test_audio_events_raises_on_error(self):
