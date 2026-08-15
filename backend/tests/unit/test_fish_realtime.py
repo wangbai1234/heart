@@ -128,6 +128,27 @@ class TestFishRealtimeSession:
         assert chunks == [b"AAA", b"BBB"]
 
     @pytest.mark.asyncio
+    async def test_per_segment_finish_does_not_drop_later_audio(self):
+        # v3 emits a "finish" after each committed segment. Before "stop" is sent,
+        # that finish must be treated as a segment boundary, not session end —
+        # otherwise only the first sentence's audio ever reaches the caller.
+        ws = FakeWs(
+            [
+                {"event": "ready"},
+                {"event": "audio", "audio": b"AAA"},
+                {"event": "finish"},  # end of sentence #1
+                {"event": "audio", "audio": b"BBB"},
+                {"event": "finish"},  # end of sentence #2
+            ]
+        )
+        sess = FishRealtimeSession(
+            api_key="k", url="wss://x", model_id="v", ws_factory=_factory_for(ws)
+        )
+        await sess.open()
+        chunks = [c async for c in sess.audio_events()]
+        assert chunks == [b"AAA", b"BBB"]
+
+    @pytest.mark.asyncio
     async def test_audio_events_raises_on_error(self):
         ws = FakeWs([{"event": "ready"}, {"event": "error", "message": "boom"}])
         sess = FishRealtimeSession(

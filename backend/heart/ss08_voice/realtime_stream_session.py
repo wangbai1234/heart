@@ -80,6 +80,7 @@ class RealtimeStreamSession:
         self._turn_id: Optional[str] = None
         self._all_audio_chunks: list[bytes] = []
         self._pump_error: Optional[Exception] = None
+        self._sentences_submitted = 0
 
         self.audio_produced = False
         self.tts_provider_name = ""
@@ -165,6 +166,13 @@ class RealtimeStreamSession:
         except Exception as e:
             self._pump_error = e
             logger.warning("fish_realtime_pump_error", error=str(e))
+        finally:
+            logger.info(
+                "fish_realtime_pump_done",
+                chunks=chunk_count,
+                total_bytes=sum(len(c) for c in self._all_audio_chunks),
+                sentences_submitted=self._sentences_submitted,
+            )
 
     async def submit(
         self,
@@ -184,6 +192,12 @@ class RealtimeStreamSession:
         cleaned = _strip_tts_stage_directions(sentence).strip()
         if not cleaned:
             return
+        self._sentences_submitted += 1
+        logger.info(
+            "fish_realtime_submit",
+            n=self._sentences_submitted,
+            chars=len(cleaned),
+        )
         try:
             await self._session.send_text(cleaned)
         except Exception as e:

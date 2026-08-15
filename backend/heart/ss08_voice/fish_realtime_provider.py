@@ -98,6 +98,13 @@ class FishRealtimeSession:
         self._closed = False
         self._retryable = False
         self._sample_rate: Optional[int] = None
+        # v3 emits a per-segment "finish" after each committed input's audio, and
+        # (per docs) also a session-level "finish" after "stop". Treating the FIRST
+        # finish as terminal ends the reader after sentence #1 → only the first
+        # sentence ever plays. We only stop the reader on finish once we have
+        # actually sent "stop"; before that, finish is a segment boundary → keep
+        # reading so later sentences' audio still arrives.
+        self._stop_sent = False
 
     @property
     def sample_rate(self) -> Optional[int]:
@@ -207,6 +214,25 @@ class FishRealtimeSession:
             return None
         return bytes(data)
 
+    async def _recv_event(self, frame_count: int) -> Optional[dict[str, Any]]:
+        """Receive+unpack one frame. Returns None on a clean connection close."""
+        try:
+            frame = await self._ws.recv()
+        except Exception as e:
+            name = type(e).__name__
+            if "ConnectionClosed" in name or "Cancelled" in name:
+                logger.info("fish_realtime_conn_closed", frames_received=frame_count)
+                return None
+            raise TTSProviderError(f"fish realtime recv error: {e}") from e
+        evt = _unpack(frame)
+        if frame_count == 0:
+            logger.info(
+                "fish_realtime_first_event",
+                event_type=evt.get("event"),
+                keys=list(evt.keys()),
+            )
+        return evt
+
     async def audio_events(self) -> AsyncIterator[bytes]:
         """Yield raw audio bytes as ``audio`` frames arrive; ends on ``finish``.
 
@@ -217,38 +243,36 @@ class FishRealtimeSession:
             raise TTSProviderError("fish realtime: socket not open")
         frame_count = 0
         while True:
-            try:
-                frame = await self._ws.recv()
-            except Exception as e:
-                name = type(e).__name__
-                if "ConnectionClosed" in name or "Cancelled" in name:
-                    logger.info("fish_realtime_conn_closed", frames_received=frame_count)
-                    return
-                raise TTSProviderError(f"fish realtime recv error: {e}") from e
-            evt = _unpack(frame)
+            evt = await self._recv_event(frame_count)
+            if evt is None:
+                return
             etype = evt.get("event")
-            if frame_count == 0:
-                logger.info(
-                    "fish_realtime_first_event",
-                    event_type=etype,
-                    keys=list(evt.keys()),
-                )
             frame_count += 1
             if etype == "audio":
                 payload = self._extract_audio_bytes(evt)
                 if payload:
                     yield payload
-            elif etype == "finish":
-                return
             elif etype == "error":
                 raise TTSProviderError(f"fish realtime error: {evt.get('message') or evt}")
+            elif etype == "finish":
+                # Only a finish AFTER we've sent "stop" ends the whole session.
+                # A finish before that is a per-segment boundary in v3 — keep
+                # reading so subsequent sentences' audio is not dropped.
+                if self._stop_sent:
+                    logger.info("fish_realtime_finish_terminal", frames=frame_count)
+                    return
+                logger.info("fish_realtime_segment_finish", frames=frame_count)
+            # All other events (segment_accepted/segment_completed/usage/
+            # request_status/pong/input_ack/warning) carry no audio payload for
+            # this simple-mode reader — loop and keep receiving.
 
     async def finish(self) -> None:
         """Tell the server no more text is coming."""
         if self._ws is None or self._closed:
             return
+        self._stop_sent = True
         try:
-            await self._send_event({"event": "stop"})
+            await self._send_event({"event": "stop", "eventId": _evt_id()})
         except Exception as e:
             logger.warning("fish_realtime_stop_failed", error=str(e))
 
