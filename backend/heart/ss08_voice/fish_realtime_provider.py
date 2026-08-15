@@ -240,7 +240,9 @@ class FishRealtimeSession:
         # TEMP diagnostic: log every non-audio control event with its frame index
         # so we can see the exact v3 event sequence (segment_completed vs finish
         # vs stop timing) driving the "only first sentence plays" truncation.
-        if etype != "audio":
+        if etype == "error" or etype == "warning":
+            logger.info("fish_realtime_event", event_type=etype, frame=frame_count, detail=evt)
+        elif etype != "audio":
             logger.info("fish_realtime_event", event_type=etype, frame=frame_count)
         elif frame_count == 0:
             logger.info(
@@ -269,10 +271,12 @@ class FishRealtimeSession:
                 payload = self._extract_audio_bytes(evt)
                 if payload:
                     yield payload
-            elif self._handle_control_event(etype, frame_count):
+            elif self._handle_control_event(evt, etype, frame_count):
                 return
 
-    def _handle_control_event(self, etype: Optional[str], frame_count: int) -> bool:
+    def _handle_control_event(
+        self, evt: dict[str, Any], etype: Optional[str], frame_count: int
+    ) -> bool:
         """Process a non-audio event. Returns True when the reader should stop.
 
         Raises TTSProviderError on an ``error`` frame. ``finish`` ends the reader.
@@ -280,7 +284,13 @@ class FishRealtimeSession:
         input_ack/warning) carry no audio and are ignored.
         """
         if etype == "error":
-            raise TTSProviderError("fish realtime error frame")
+            logger.warning(
+                "fish_realtime_error_frame",
+                frame=frame_count,
+                flush_sent=self._flush_sent,
+                detail=evt,
+            )
+            raise TTSProviderError(f"fish realtime error: {evt.get('message') or evt}")
         if etype == "finish":
             # After we flush(), the server synthesizes the whole buffer, streams
             # the remaining audio, then emits finish — that is the real end of the
