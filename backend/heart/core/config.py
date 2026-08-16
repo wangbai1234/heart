@@ -188,31 +188,33 @@ class Settings(BaseSettings):
     # Empty map → frontend falls back to afdian_sponsor_url + manual remark (legacy).
     afdian_checkout_urls: str = "{}"
 
-    # Per-action pricing (display coins; ×100 = fen internally)
-    deepseek_cost_credits: int = (
+    # Per-action pricing (display coins; ×100 = fen internally).
+    # Fields are float so fractional coin prices work (e.g. DEEPSEEK_COST_CREDITS=0.5);
+    # pricing.py rounds coins×100 to integer fen at the billing boundary.
+    deepseek_cost_credits: float = (
         1  # 100 fen per LLM turn (普通交流; only charged on tiers where deepseek is not free)
     )
-    grok_cost_credits: int = 3  # 300 fen per LLM turn (私密陪伴)
-    claude_cost_credits: int = (
+    grok_cost_credits: float = 3  # 300 fen per LLM turn (私密陪伴)
+    claude_cost_credits: float = (
         12  # 1200 fen per LLM turn (legacy; claude removed from tiers/failover)
     )
-    mimo_tts_cost_credits: int = 5  # 500 fen per TTS bubble
-    fish_tts_cost_credits: int = 8  # 800 fen per TTS bubble
-    clone_mimo_cost_credits: int = 50  # 5000 fen per clone
-    clone_fish_cost_credits: int = 100  # 10000 fen per clone
+    mimo_tts_cost_credits: float = 5  # 500 fen per TTS bubble
+    fish_tts_cost_credits: float = 8  # 800 fen per TTS bubble
+    clone_mimo_cost_credits: float = 50  # 5000 fen per clone
+    clone_fish_cost_credits: float = 100  # 10000 fen per clone
 
     # Story mode (SS09) pricing + tier gating
-    story_unlock_cost_coins: int = (
+    story_unlock_cost_coins: float = (
         40  # 4000 fen, permanent per-scenario unlock (all users can unlock all scenarios)
     )
-    story_minute_cost_coins: int = 1  # 100 fen per full minute of play (PR C2)
+    story_minute_cost_coins: float = 1  # 100 fen per full minute of play (PR C2)
 
     # Voice call (语音通话) pricing + monthly free-minute allowance per tier.
     # Billed per full minute via a client heartbeat (like story playtime). Each
     # tier gets a monthly free allowance; minutes beyond it are charged
     # voice_call_minute_cost_coins per minute. Allowance resets every calendar
     # month (Asia/Shanghai month_key), tracked in user_voice_call_quotas.
-    voice_call_minute_cost_coins: int = 20  # 2000 fen per full minute (1min = 20币)
+    voice_call_minute_cost_coins: float = 20  # 2000 fen per full minute (1min = 20币)
     # Free monthly minutes by tier (JSON, overridable via VOICE_CALL_FREE_MINUTES env var).
     # free: 0 (pay from minute 1); plus: 10; immersive: 60.
     voice_call_free_minutes_config: str = '{"free":0,"plus":10,"immersive":60}'

@@ -53,6 +53,27 @@ class TestLlmCostFen:
         assert llm_cost_fen("unknown-future-model") == 0
         assert llm_cost_fen("unknown-future-model", "immersive") == 0
 
+    def test_fractional_coin_price_rounds_to_int_fen(self, monkeypatch):
+        # DEEPSEEK_COST_CREDITS=0.5 → 50 fen, exact and integer-typed so it
+        # flows cleanly into deduct_credits / the integer credits_balance column.
+        from heart.core.config import settings
+        from heart.billing.pricing import llm_cost_fen
+
+        monkeypatch.setattr(settings, "deepseek_cost_credits", 0.5)
+        fen = llm_cost_fen("deepseek")
+        assert fen == 50
+        assert isinstance(fen, int)
+
+    def test_fractional_coin_price_no_float_noise(self, monkeypatch):
+        # 0.1 * 100 == 10.000000000000002 in binary float; round() keeps it 10.
+        from heart.core.config import settings
+        from heart.billing.pricing import llm_cost_fen
+
+        monkeypatch.setattr(settings, "grok_cost_credits", 0.1)
+        fen = llm_cost_fen("grok")
+        assert fen == 10
+        assert isinstance(fen, int)
+
 
 class TestTtsCostFen:
     def test_mimo_costs_500_fen_on_free(self):

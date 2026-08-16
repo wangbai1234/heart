@@ -14,6 +14,16 @@ from heart.core.config import settings
 from heart.membership import is_free_for_tier
 
 
+def _fen(coins: float) -> int:
+    """Convert display coins to integer fen (1 coin = 100 fen).
+
+    Cost config fields are float (so fractional prices like 0.5 coin work), but
+    all downstream billing — ``deduct_credits`` and the ``credits_balance``
+    column — is integer fen. ``round`` keeps 0.5→50, 0.1→10 exact despite
+    binary-float noise (0.1*100 == 10.000000000000002)."""
+    return round(coins * 100)
+
+
 def llm_cost_fen(model: str, tier: str = "free") -> int:
     """Return LLM cost in fen for one turn of the given model slug on *tier*.
 
@@ -22,11 +32,11 @@ def llm_cost_fen(model: str, tier: str = "free") -> int:
     Unknown models default to 0 (safe for future providers with no pricing yet).
     """
     _map = {
-        "deepseek": ("deepseek", settings.deepseek_cost_credits * 100),
-        "deepseek-chat": ("deepseek", settings.deepseek_cost_credits * 100),
-        "deepseek-reasoner": ("deepseek", settings.deepseek_cost_credits * 100),
-        "grok": ("grok", settings.grok_cost_credits * 100),
-        "claude": ("claude", settings.claude_cost_credits * 100),
+        "deepseek": ("deepseek", _fen(settings.deepseek_cost_credits)),
+        "deepseek-chat": ("deepseek", _fen(settings.deepseek_cost_credits)),
+        "deepseek-reasoner": ("deepseek", _fen(settings.deepseek_cost_credits)),
+        "grok": ("grok", _fen(settings.grok_cost_credits)),
+        "claude": ("claude", _fen(settings.claude_cost_credits)),
     }
     item, cost = _map.get(model, ("", 0))
     if not item or is_free_for_tier(tier, item):
@@ -43,8 +53,8 @@ def tts_cost_fen(provider: str, tier: str = "free") -> int:
     if is_free_for_tier(tier, "tts"):
         return 0
     _map = {
-        "mimo": settings.mimo_tts_cost_credits * 100,
-        "fish": settings.fish_tts_cost_credits * 100,
+        "mimo": _fen(settings.mimo_tts_cost_credits),
+        "fish": _fen(settings.fish_tts_cost_credits),
         "minimax": 0,
     }
     return _map.get(provider, 0)
@@ -57,7 +67,7 @@ def story_unlock_cost_fen(tier: str = "free") -> int:
     """
     if is_free_for_tier(tier, "story_unlock"):
         return 0
-    return settings.story_unlock_cost_coins * 100
+    return _fen(settings.story_unlock_cost_coins)
 
 
 def story_minute_cost_fen(tier: str = "free") -> int:
@@ -67,7 +77,7 @@ def story_minute_cost_fen(tier: str = "free") -> int:
     """
     if is_free_for_tier(tier, "story_chat"):
         return 0
-    return settings.story_minute_cost_coins * 100
+    return _fen(settings.story_minute_cost_coins)
 
 
 def voice_call_minute_cost_fen() -> int:
@@ -78,7 +88,7 @@ def voice_call_minute_cost_fen() -> int:
     ``heart.membership.voice_call_free_minutes``). Once free minutes are spent,
     every tier pays the same per-minute rate.
     """
-    return settings.voice_call_minute_cost_coins * 100
+    return _fen(settings.voice_call_minute_cost_coins)
 
 
 def action_cost_fen(action: str, tier: str = "free") -> int:
@@ -89,7 +99,7 @@ def action_cost_fen(action: str, tier: str = "free") -> int:
     if action.startswith("clone") and is_free_for_tier(tier, "clone"):
         return 0
     _map = {
-        "clone_mimo": settings.clone_mimo_cost_credits * 100,
-        "clone_fish": settings.clone_fish_cost_credits * 100,
+        "clone_mimo": _fen(settings.clone_mimo_cost_credits),
+        "clone_fish": _fen(settings.clone_fish_cost_credits),
     }
     return _map.get(action, 0)
