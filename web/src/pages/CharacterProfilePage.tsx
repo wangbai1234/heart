@@ -11,7 +11,7 @@ import { stageWithIntimacy, isColdWar, intimacyPercent, stageLabel, stageOrderIn
 import { buildShareLink } from '../utils/characterShare'
 import { useSafeBack } from '../hooks/useSafeBack'
 import { CHARACTER_UI_CONFIGS, type CharacterTheme } from '../data/characterUIConfig'
-import { JiYuProfile, LiShenProfile, ChengXuProfile, LilithProfile, GuBeichenProfile, QinXiaoProfile, JiangYuezeProfile, JiangYeProfile, GuXingzhouProfile, LiJueProfile, ShenYichenProfile, ShenYuchuanProfile, LuoFeiProfile, PeiTinglanProfile, FuMingxiuProfile, XizeProfile, JiangLiProfile, PeiJueProfile, HuoChengProfile, ZhouJinProfile, BaiQinghuanProfile, ChengZhiProfile, LuTingshengProfile, GuNanqiaoProfile, YunZhiProfile, SuWanProfile, LinXiaomanProfile, LuZhaoProfile, SuYueyaoProfile, HuoShiyuProfile, SuNianProfile, SuYunProfile, GuQingwanProfile, GuXingmianProfile, SongYeProfile, VitoRosettiProfile, XieCiProfile, ShenLiaoProfile, LuWenjingProfile, JiangRanProfile, GuYanliProfile, XuZhihanProfile, LinyuanManorProfile, FreeMuseProfile, QingyuBandProfile, GuiBaiProfile, YinCiProfile, HeZhuoProfile, WenYiningProfile, WeiHengProfile, QiFeiProfile } from '../components/characterProfiles'
+import { JiYuProfile, LiShenProfile, ChengXuProfile, LilithProfile, GuBeichenProfile, QinXiaoProfile, JiangYuezeProfile, JiangYeProfile, GuXingzhouProfile, LiJueProfile, ShenYichenProfile, ShenYuchuanProfile, LuoFeiProfile, PeiTinglanProfile, FuMingxiuProfile, XizeProfile, JiangLiProfile, PeiJueProfile, HuoChengProfile, ZhouJinProfile, BaiQinghuanProfile, ChengZhiProfile, LuTingshengProfile, GuNanqiaoProfile, YunZhiProfile, SuWanProfile, LinXiaomanProfile, LuZhaoProfile, SuYueyaoProfile, HuoShiyuProfile, SuNianProfile, SuYunProfile, GuQingwanProfile, GuXingmianProfile, SongYeProfile, VitoRosettiProfile, XieCiProfile, ShenLiaoProfile, LuWenjingProfile, JiangRanProfile, GuYanliProfile, XuZhihanProfile, LinyuanManorProfile, FreeMuseProfile, QingyuBandProfile, GuiBaiProfile, YinCiProfile, HeZhuoProfile, WenYiningProfile, WeiHengProfile, QiFeiProfile, ShiyanProfile, ChuRanProfile } from '../components/characterProfiles'
 import type { ComponentType } from 'react'
 import { BlockRenderer } from '../components/profileBlocks/BlockRenderer'
 import { CustomHtmlRenderer } from '../components/profileBlocks/CustomHtmlRenderer'
@@ -72,6 +72,8 @@ const BESPOKE_PROFILES: Record<string, ComponentType<{ profile: CharacterProfile
   wenyining: WenYiningProfile,
   wei_heng: WeiHengProfile,
   qi_fei: QiFeiProfile,
+  shiyan: ShiyanProfile,
+  churan: ChuRanProfile,
 }
 
 /** Chrome 视觉调色盘 registry（React 外层chrome，非 iframe 内层） */
@@ -908,6 +910,38 @@ const CHROME_PALETTES: Record<string, ChromePalette> = {
     chipInactiveText: '#9a7a7c',
     ctaGradient: 'linear-gradient(105deg,#d8404a,#a02830)',
     ctaShadow: '0 10px 26px rgba(216,64,72,0.4)',
+  },
+  shiyan: {
+    bg: '#0c1420',
+    coverBg: '#111c2c',
+    scrimGradient: 'linear-gradient(to top,#0c1420 6%,rgba(12,20,32,.4) 40%,transparent 100%)',
+    nameColor: '#eef2f6',
+    ageColor: '#7e93a8',
+    taglineColor: '#e6d3a6',
+    chipActiveBg: 'rgba(224,196,140,.12)',
+    chipActiveBorder: 'rgba(224,196,140,.36)',
+    chipActiveText: '#f0dcac',
+    chipInactiveBg: 'rgba(255,255,255,.05)',
+    chipInactiveBorder: 'rgba(255,255,255,.1)',
+    chipInactiveText: '#7e93a8',
+    ctaGradient: 'linear-gradient(105deg,#6f8db0,#3f5a7a)',
+    ctaShadow: '0 10px 26px rgba(120,150,185,0.4)',
+  },
+  churan: {
+    bg: '#0a0a0c',
+    coverBg: '#150f11',
+    scrimGradient: 'linear-gradient(to top,#0a0a0c 6%,rgba(10,10,12,.4) 40%,transparent 100%)',
+    nameColor: '#ece6ea',
+    ageColor: '#9a7a80',
+    taglineColor: '#e4485a',
+    chipActiveBg: 'rgba(228,56,64,.12)',
+    chipActiveBorder: 'rgba(228,56,64,.36)',
+    chipActiveText: '#ff6a70',
+    chipInactiveBg: 'rgba(255,255,255,.05)',
+    chipInactiveBorder: 'rgba(255,255,255,.1)',
+    chipInactiveText: '#9a7a80',
+    ctaGradient: 'linear-gradient(105deg,#d83440,#901c26)',
+    ctaShadow: '0 10px 26px rgba(228,56,64,0.42)',
   },
 }
 

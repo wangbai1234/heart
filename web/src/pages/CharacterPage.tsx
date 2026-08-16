@@ -39,13 +39,15 @@ const DISCOVERY_RECOMMENDED = '推荐'
 
 /** Secondary tag chips (fixed order) shown under the mode tabs. `全部` = no tag filter. */
 const TAG_ALL = '全部'
-const PINNED_TAGS = ['女性向', '男性向', '校园', '病娇', '反差', '霸总'] as const
-/** Extra fine-grained tags surfaced only through the「筛选」popup. */
+const PINNED_TAGS = ['女性向', '男性向', '校园', '都市', '古风', '模拟器', '病娇', '反差', '霸总'] as const
+/**
+ * 「筛选」popup 里展示的标签 —— 固定写死、固定顺序（产品指定）。
+ * 每行 4 个（见 popup 的 grid-cols-4），做屏幕自适应。
+ */
 const EXTRA_FILTER_TAGS = [
-  '全性向', '纯爱', '年上', '同人', '骨科', '纯洁',
-  '恋爱', '治愈', '御姐', '元气', '温柔', '清冷',
-  '奇幻', '古风', '职场', '日常', '悬疑', '搞笑',
-  '都市', '仙侠', '末世', '民国', '娱乐圈', '强制爱', '电竞', '群像',
+  '年上', '偏执', '纯爱', '占有欲',
+  '治愈', '限左', '强制爱', 'GL',
+  '忠犬', '高自由', 'BG', '纯洁',
 ] as const
 
 /**
@@ -90,6 +92,9 @@ function isDiscoverable(it: GridItem): boolean {
 const FEATURED_CHARACTER_ORDER = ['li_shen', 'ji_yu', 'cheng_xu', 'gu_beichen', 'qin_xiao', 'li_jue', 'jiang_yueze', 'gu_xingzhou', 'jiang_ye'] as const
 const FEATURED_CHARACTER_INDEX = new Map<string, number>(FEATURED_CHARACTER_ORDER.map((id, index) => [id, index]))
 const DISCOVERY_TAG_PRIORITY = [
+  // 取向标签优先：带「全性向 / 限左」的角色，封面固定展示这两个
+  '全性向',
+  '限左',
   ...CHARACTER_ROLE_TAGS,
   ...CHARACTER_STYLE_TAGS,
   'GL',
@@ -266,16 +271,8 @@ export function CharacterPage() {
   // Pinned tags row — fixed order (全部 + 女性向/男性向/.../霸总), always shown.
   const pinnedTagChips = useMemo(() => [TAG_ALL, ...PINNED_TAGS], [])
 
-  // Extra fine-grained tags — only shown in the「筛选」popup if present in data.
-  const extraFilterChips = useMemo(() => {
-    const present = new Set<string>()
-    for (const it of rankedItems) {
-      for (const t of it.profile.tags ?? []) {
-        if (t && EXTRA_FILTER_TAGS.includes(t as any)) present.add(t)
-      }
-    }
-    return EXTRA_FILTER_TAGS.filter((t) => present.has(t))
-  }, [rankedItems])
+  // Extra tags for the「筛选」popup — fixed, hardcoded list (see EXTRA_FILTER_TAGS).
+  const extraFilterChips = useMemo(() => [...EXTRA_FILTER_TAGS], [])
 
   // Editorial heat mapping: featured characters are fixed at the front, the
   // remainder follow a stable pseudo-random order.
@@ -378,11 +375,11 @@ export function CharacterPage() {
         <div style={{ height: 'calc(var(--safe-top) + 4px)' }} />
 
         {/* Navigation bar — brand logo (login-page style) + search / announcement. */}
-        <div className="relative z-20 flex items-center justify-between gap-2.5 px-5 h-[70px] shrink-0">
+        <div className="relative z-20 flex items-center justify-between gap-2.5 px-5 h-[58px] shrink-0">
           <img
             src="/assets/ui/wordmark.png"
             alt="yuoyuo"
-            className="shrink-0 h-[52px] w-auto select-none"
+            className="shrink-0 h-[44px] w-auto select-none"
             draggable={false}
           />
           <div className="flex items-center gap-1.5">
@@ -393,12 +390,12 @@ export function CharacterPage() {
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   placeholder="搜索角色 / 标签"
-                  className="w-[132px] min-[380px]:w-[176px] h-[40px] px-4 rounded-full bg-black/8 dark:bg-white/8 backdrop-blur-[16px] border border-black/6 dark:border-white/6 text-[14px] text-[var(--color-ink)] placeholder:text-[var(--color-text-muted)] outline-none focus:border-[var(--color-primary)]/40 focus:bg-black/12 dark:focus:bg-white/12 transition-all"
+                  className="w-[132px] min-[380px]:w-[176px] h-[44px] px-4 rounded-full bg-black/8 dark:bg-white/8 backdrop-blur-[16px] border border-black/6 dark:border-white/6 text-[14px] text-[var(--color-ink)] placeholder:text-[var(--color-text-muted)] outline-none focus:border-[var(--color-primary)]/40 focus:bg-black/12 dark:focus:bg-white/12 transition-all"
                 />
                 <button
                   onClick={() => { setShowSearch(false); setQuery('') }}
                   aria-label="关闭搜索"
-                  className="w-[40px] h-[40px] rounded-full bg-black/8 dark:bg-white/8 backdrop-blur-[12px] border border-black/6 dark:border-white/6 flex items-center justify-center text-[var(--color-text-secondary)] hover:bg-black/12 dark:hover:bg-white/12 hover:text-[var(--color-ink)] active:scale-95 transition-all"
+                  className="w-[44px] h-[44px] rounded-full bg-black/8 dark:bg-white/8 backdrop-blur-[12px] border border-black/6 dark:border-white/6 flex items-center justify-center text-[var(--color-text-secondary)] hover:bg-black/12 dark:hover:bg-white/12 hover:text-[var(--color-ink)] active:scale-95 transition-all"
                 >
                   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                     <line x1="4" y1="4" x2="12" y2="12" />
@@ -411,7 +408,7 @@ export function CharacterPage() {
                 <button
                   onClick={() => setShowSearch(true)}
                   aria-label="搜索"
-                  className="w-[40px] h-[40px] rounded-full bg-black/8 dark:bg-white/8 backdrop-blur-[12px] border border-black/6 dark:border-white/6 flex items-center justify-center text-[var(--color-text-secondary)] hover:bg-black/12 dark:hover:bg-white/12 hover:text-[var(--color-ink)] active:scale-95 transition-all"
+                  className="w-[44px] h-[44px] rounded-full bg-black/8 dark:bg-white/8 backdrop-blur-[12px] border border-black/6 dark:border-white/6 flex items-center justify-center text-[var(--color-text-secondary)] hover:bg-black/12 dark:hover:bg-white/12 hover:text-[var(--color-ink)] active:scale-95 transition-all"
                 >
                   <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
                     <circle cx="7" cy="7" r="5" />
@@ -421,7 +418,7 @@ export function CharacterPage() {
                 <button
                   onClick={() => { setLinkInput(''); setShowOpenLink(true) }}
                   aria-label="打开分享链接"
-                  className="w-[40px] h-[40px] rounded-full bg-black/8 dark:bg-white/8 backdrop-blur-[12px] border border-black/6 dark:border-white/6 flex items-center justify-center text-[var(--color-text-secondary)] hover:bg-black/12 dark:hover:bg-white/12 hover:text-[var(--color-ink)] active:scale-95 transition-all"
+                  className="w-[44px] h-[44px] rounded-full bg-black/8 dark:bg-white/8 backdrop-blur-[12px] border border-black/6 dark:border-white/6 flex items-center justify-center text-[var(--color-text-secondary)] hover:bg-black/12 dark:hover:bg-white/12 hover:text-[var(--color-ink)] active:scale-95 transition-all"
                 >
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
@@ -431,7 +428,7 @@ export function CharacterPage() {
                 <button
                   onClick={() => setShowAnnounce(true)}
                   aria-label="公告"
-                  className="relative w-[40px] h-[40px] rounded-full bg-black/8 dark:bg-white/8 backdrop-blur-[12px] border border-black/6 dark:border-white/6 flex items-center justify-center text-[var(--color-text-secondary)] hover:bg-black/12 dark:hover:bg-white/12 hover:text-[var(--color-ink)] active:scale-95 transition-all"
+                  className="relative w-[44px] h-[44px] rounded-full bg-black/8 dark:bg-white/8 backdrop-blur-[12px] border border-black/6 dark:border-white/6 flex items-center justify-center text-[var(--color-text-secondary)] hover:bg-black/12 dark:hover:bg-white/12 hover:text-[var(--color-ink)] active:scale-95 transition-all"
                 >
                   <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M8 2.5a3 3 0 0 0-3 3v.9A5.25 5.25 0 0 1 3.2 10.5L2 11.5v1.25h12v-1.25l-1.2-1a5.25 5.25 0 0 1-1.8-4.1v-.9a3 3 0 0 0-3-3Z" />
@@ -448,12 +445,12 @@ export function CharacterPage() {
         </div>
 
         {/* Primary mode tabs (推荐 / 新角色 / 收藏 / 我的) — large, underline-active. */}
-        <div className="relative z-20 shrink-0 flex items-center gap-7 px-5 pt-2 pb-2 overflow-x-auto no-scrollbar">
+        <div className="relative z-20 shrink-0 flex items-center gap-7 px-5 pt-1 pb-1.5 overflow-x-auto no-scrollbar">
           {DISCOVERY_MODES.map((mode) => (
             <button
               key={mode}
               onClick={() => setActiveMode(mode)}
-              className={`relative shrink-0 pb-2 text-[18px] transition-colors ${
+              className={`relative shrink-0 pb-1.5 text-[18px] transition-colors ${
                 activeMode === mode
                   ? `font-bold ${activeModeText}`
                   : `font-semibold ${inactiveModeText}`
@@ -461,21 +458,21 @@ export function CharacterPage() {
             >
               {mode}
               {activeMode === mode && (
-                <span className="absolute left-1/2 -translate-x-1/2 bottom-0 h-[4px] w-[28px] rounded-full bg-[var(--color-primary)] shadow-[0_0_12px_rgba(255,183,197,0.48)]" />
+                <span className="absolute left-1/2 -translate-x-1/2 bottom-0 h-[3px] w-[24px] rounded-full bg-[var(--color-primary)] shadow-[0_0_12px_rgba(255,183,197,0.48)]" />
               )}
             </button>
           ))}
         </div>
 
         {/* Secondary tag chips (scrollable) + funnel filter button (right, fixed) */}
-        <div className="relative z-30 shrink-0 px-3 pb-3">
-          <div className="flex min-h-[42px] items-center gap-1.5">
+        <div className="relative z-30 shrink-0 px-3 pb-2">
+          <div className="flex min-h-[40px] items-center gap-1.5">
             <div className="flex-1 min-w-0 flex gap-1.5 overflow-x-auto overflow-y-hidden touch-pan-x no-scrollbar">
               {pinnedTagChips.map((tag) => (
                 <button
                   key={tag}
                   onClick={() => setActiveTag(tag)}
-                  className={`relative shrink-0 h-[34px] px-3.5 rounded-full text-[15px] border transition-colors ${
+                  className={`relative shrink-0 h-[36px] px-3.5 rounded-full text-[16px] border transition-colors ${
                     activeTag === tag
                       ? 'bg-[var(--color-primary)] text-white border-transparent font-bold shadow-[0_8px_18px_rgba(255,143,171,0.22)]'
                       : `bg-transparent ${inactiveTagText} border-transparent font-semibold`
@@ -537,11 +534,12 @@ export function CharacterPage() {
                     <button
                       key={tag}
                       onClick={() => { setActiveTag(tag); setShowFilter(false) }}
-                      className={`min-w-0 h-[38px] rounded-[13px] text-[14px] border transition-colors ${
+                      className={`min-w-0 h-[38px] px-1 rounded-[13px] text-[14px] leading-none border transition-colors truncate ${
                         activeTag === tag
                           ? 'bg-[var(--color-primary)] text-white border-transparent font-bold'
                           : `${filterChipIdle} font-semibold`
                       }`}
+                      title={tag}
                     >
                       {tag}
                     </button>
