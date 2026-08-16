@@ -240,6 +240,7 @@ class ModelRouter:
         # object has __anext__/aclose.
         t_candidate = time.perf_counter()
         yielded_content = False
+        saw_finish = False
         agen = cast("AsyncGenerator[StreamChunk, None]", provider.stream(request))
         try:
             while True:
@@ -252,6 +253,23 @@ class ModelRouter:
                     chunk = await self._anext_with_ttft(agen, budget_s=budget)
                 except StopAsyncIteration:
                     break
+                except Exception:
+                    # A relay/transport error AFTER the model already signalled
+                    # completion (finish_reason chunk) is teardown noise on a
+                    # WHOLE reply — some relays (micu) close the SSE stream with a
+                    # spurious error frame once the answer is done. The content is
+                    # complete, so end cleanly instead of re-raising, which would
+                    # otherwise make the WS route show a bogus STREAM_INTERRUPTED
+                    # "宇宙偏离轨道" toast on a perfectly good reply. A genuine
+                    # mid-reply drop (no finish_reason yet) still re-raises below.
+                    if saw_finish:
+                        logger.debug(
+                            "stream_post_finish_error", from_model=candidate, requested=requested
+                        )
+                        break
+                    raise
+                if chunk.finish_reason:
+                    saw_finish = True
                 if not chunk.content:
                     continue
                 if not yielded_content:

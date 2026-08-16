@@ -346,3 +346,41 @@ def test_partial_bracket_expanded_vocab():
     result = split_response("（微笑）你好。肩膀微微放松 那就这样吧。")
     actions = [s for s in result if s["kind"] == "action"]
     assert any("肩膀" in a["content"] for a in actions)
+
+
+# ── Markdown *action* normalisation (Gemini asterisk convention) ──────────────
+
+
+def test_markdown_single_asterisk_action_becomes_pill():
+    """Gemini often marks actions with *…* instead of （）. It must split as a
+    grey action pill, and the raw `*` must not leak into any bubble."""
+    result = split_response("*他猛地抬起头，猩红的眸子紧紧盯着你* 你终于来了。")
+    actions = [s for s in result if s["kind"] == "action"]
+    texts = [s for s in result if s["kind"] == "text"]
+    assert any("猛地抬起头" in a["content"] for a in actions)
+    assert any("你终于来了" in t["content"] for t in texts)
+    assert all("*" not in s["content"] for s in result)
+
+
+def test_markdown_double_asterisk_action_becomes_pill():
+    result = split_response("**她轻轻笑了** 你怎么才来？")
+    actions = [s for s in result if s["kind"] == "action"]
+    assert any("轻轻笑了" in a["content"] for a in actions)
+    assert all("*" not in s["content"] for s in result)
+
+
+def test_markdown_interleaved_asterisk_actions():
+    result = split_response("*停下脚步* 好久不见。*唇角微微扬起* 最近过得怎么样？")
+    actions = [s for s in result if s["kind"] == "action"]
+    texts = [s for s in result if s["kind"] == "text"]
+    assert any("停下脚步" in a["content"] for a in actions)
+    assert any("唇角" in a["content"] for a in actions)
+    assert any("好久不见" in t["content"] for t in texts)
+
+
+def test_lone_asterisk_not_treated_as_action():
+    """A single `*` with no closing delimiter (e.g. maths) is left untouched —
+    no phantom action pill, `*` stays in the text."""
+    result = split_response("2 * 3 = 6，这就是答案。")
+    assert all(s["kind"] == "text" for s in result)
+    assert any("2 * 3" in s["content"] for s in result)

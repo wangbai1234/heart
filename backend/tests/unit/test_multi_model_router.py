@@ -472,6 +472,49 @@ async def test_stream_for_midstream_error_after_content_raises_not_failover():
     assert deepseek.calls == 0
 
 
+class PostFinishFailProvider:
+    """Streams a complete reply (content + finish_reason), then throws on
+    teardown — mimicking a relay (micu) that closes the SSE stream with a
+    spurious error frame AFTER the answer is done."""
+
+    def __init__(self, content: str):
+        self._content = content
+        self.calls = 0
+
+    async def stream(self, request: LLMRequest) -> AsyncIterator[StreamChunk]:
+        self.calls += 1
+        yield StreamChunk(content=self._content)
+        yield StreamChunk(content="", finish_reason="stop")
+        raise ProviderError(
+            "relay error frame after completion",
+            provider="grok",
+            model="grok",
+            retriable=True,
+        )
+
+
+@pytest.mark.asyncio
+async def test_stream_for_post_finish_error_is_swallowed_not_raised():
+    # A teardown error after finish_reason must NOT raise (the reply is whole),
+    # otherwise the WS route shows a bogus STREAM_INTERRUPTED toast on good text.
+    prov = PostFinishFailProvider(content="完整的回复内容")
+    deepseek = FakeProvider(content="should not append")
+    reg = _make_registry(
+        ("grok", prov, ["grok"]),
+        ("deepseek", deepseek, ["deepseek"]),
+    )
+    router = _router(reg)
+
+    chunks = []
+    # No exception propagates — the stream ends cleanly.
+    async for chunk in router.stream_for("grok", _messages(), failover=["deepseek"]):
+        chunks.append(chunk)
+
+    assert "完整的回复内容" in "".join(chunks)
+    # Fallback NOT invoked (content already complete).
+    assert deepseek.calls == 0
+
+
 # ---------------------------------------------------------------------------
 # _get_failover_chain — deduplication
 # ---------------------------------------------------------------------------

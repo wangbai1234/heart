@@ -30,6 +30,25 @@ from typing import Literal, TypedDict
 # `（指尖轻抬，...嘲讽\n急着走？）俯身...` split into two orphan text bubbles).
 _ACTION_RE = re.compile(r"[（(【\[]([^（()【\[\]）)】]*)[）)】\]]")
 
+# Markdown-style action emphasis: *…* or **…** (and the full-width ＊ variant).
+# Some models (notably Gemini) were trained on RP corpora that mark actions with
+# asterisks instead of （）, so they ignore the "wrap actions in （）" contract
+# and emit `*他猛地抬起头* 你来了`. Left as-is the `*` leaks into the bubble AND
+# the action never becomes a grey pill. We normalise these spans to （）before
+# splitting. Non-greedy, single-line: an unmatched lone `*` (e.g. a maths
+# expression) is left untouched because it has no closing delimiter on the line.
+_MD_ACTION_RE = re.compile(r"(?<!\w)\*{1,2}\s*([^*\n]+?)\s*\*{1,2}(?!\w)")
+
+
+def _normalize_markdown_actions(text: str) -> str:
+    """Rewrite ``*action*`` / ``**action**`` spans to full-width ``（action）``.
+
+    Runs before bracket extraction so asterisk-marked actions become grey pills
+    like their （）-wrapped equivalents, and the raw `*` never reaches a bubble.
+    """
+    return _MD_ACTION_RE.sub(lambda m: f"（{m.group(1).strip()}）", text)
+
+
 # Chinese/English sentence terminators (kept attached to the preceding text).
 _TERM_RE = re.compile(r"([。！？…!?]+)")
 
@@ -334,6 +353,10 @@ def split_response(text: str) -> list[Segment]:
     text = (text or "").strip()
     if not text:
         return []
+
+    # 0. Normalise markdown-style *action* spans to （）so asterisk-marking
+    #    models (Gemini) split the same as （）-marking ones.
+    text = _normalize_markdown_actions(text)
 
     # 1. Extract explicitly bracketed actions from the raw text.
     interleaved = _split_actions_and_dialog(text)
