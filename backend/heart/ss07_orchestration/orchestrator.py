@@ -400,6 +400,10 @@ class Orchestrator:
             "path": "normal",
             "served_model": stream_meta.get("served_model", getattr(req, "model", "deepseek")),
             "degraded_to": stream_meta.get("degraded_to"),
+            # True when the LLM stream broke mid-way (e.g. relay dropped the
+            # connection after some content). Lets the WS route surface a retry
+            # error even though full_text is non-empty (partial reply).
+            "stream_error": stream_meta.get("stream_error", False),
         }
 
     async def _stream_compose(
@@ -466,6 +470,12 @@ class Orchestrator:
             # raw error string). But keep the full traceback — otherwise the
             # cause of a blank reply ("空气泡") is invisible in prod logs.
             logger.error("compose_stream_failed", error=str(exc), exc_info=True)
+            # Signal the mid-stream break so the caller can surface a retry
+            # error even when a PARTIAL reply was already streamed. Without this
+            # a truncated bubble (e.g. failover's 2nd hop dropped mid-stream)
+            # reads as a successful turn and the user is stuck with half a
+            # sentence and no way to know it failed.
+            _meta["stream_error"] = True
 
         for ev in self._flush_events(stripper, splitter, emit):
             yield ev

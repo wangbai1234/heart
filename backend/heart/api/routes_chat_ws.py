@@ -829,11 +829,15 @@ async def _run_orchestrator(
     character_id: str,
     active_turns: dict[str, Any],
     db_session: AsyncSession,
-) -> tuple[bool, bool, bool, list[str], str, Optional[str]]:
+) -> tuple[bool, bool, bool, list[str], str, Optional[str], bool]:
     """Run orchestrator stream.
 
     Returns (turn_completed, safety_blocked, audio_produced, collected_text,
-             served_model, degraded_to).
+             served_model, degraded_to, stream_error).
+
+    ``stream_error`` is True when the LLM stream broke mid-way (relay dropped
+    the connection after partial content). The caller surfaces a retry error
+    even though collected_text is non-empty.
     """
     turn_completed = False
     safety_blocked = False
@@ -841,6 +845,7 @@ async def _run_orchestrator(
     turn_path = "normal"
     served_model: str = getattr(req, "model", "deepseek")
     degraded_to: Optional[str] = None
+    stream_error = False
 
     if stream_session:
         active_turns[turn_id] = stream_session
@@ -858,6 +863,7 @@ async def _run_orchestrator(
                 turn_path = event.get("path", "normal")
                 served_model = event.get("served_model", served_model)
                 degraded_to = event.get("degraded_to")
+                stream_error = event.get("stream_error", False)
                 if turn_path in ("care", "reject", "fallback"):
                     safety_blocked = True
 
@@ -883,7 +889,15 @@ async def _run_orchestrator(
         active_turns.pop(turn_id, None)
 
     audio_produced = stream_session.audio_produced if stream_session else False
-    return turn_completed, safety_blocked, audio_produced, collected_text, served_model, degraded_to
+    return (
+        turn_completed,
+        safety_blocked,
+        audio_produced,
+        collected_text,
+        served_model,
+        degraded_to,
+        stream_error,
+    )
 
 
 async def _handle_chat_message(
@@ -1032,6 +1046,7 @@ async def _handle_chat_message(
     collected_text: list[str] = []
     served_model = model
     degraded_to: Optional[str] = None
+    stream_error = False
     _terminal_sent = False
     try:
         async with AsyncSession(_get_engine(), expire_on_commit=False) as db:
@@ -1084,6 +1099,7 @@ async def _handle_chat_message(
                     collected_text,
                     served_model,
                     degraded_to,
+                    stream_error,
                 ) = await asyncio.wait_for(
                     _run_orchestrator(
                         ws,
@@ -1116,14 +1132,25 @@ async def _handle_chat_message(
 
         # ── 3. Post-turn: charge + persist ──
         _full_text_empty = not "".join(collected_text).strip()
-        if turn_completed and _full_text_empty:
+        # A mid-stream break that produced SOME text still needs a user-facing
+        # error: otherwise the client is left with a truncated half-sentence
+        # bubble that looks like a complete (but nonsensical) reply. Surface
+        # STREAM_INTERRUPTED (distinct from EMPTY_RESPONSE, which means nothing
+        # was generated at all), skip billing, and don't persist the truncated
+        # text — so it vanishes on reload and the retry produces a clean reply.
+        # Skip when the turn was safety-blocked (that path intentionally emits a
+        # short care/reject reply).
+        _turn_failed = _full_text_empty or (stream_error and not turn_safety_blocked)
+        if turn_completed and _turn_failed:
+            _code = "EMPTY_RESPONSE" if _full_text_empty else "STREAM_INTERRUPTED"
+            _msg = "生成失败，请重试" if _full_text_empty else "回复中断了，请重试"
             await ws.send_json(
                 {
                     "type": "error",
-                    "code": "EMPTY_RESPONSE",
+                    "code": _code,
                     "turn_id": turn_id,
                     "character_id": character_id,
-                    "msg": "生成失败，请重试",
+                    "msg": _msg,
                 }
             )
             await ws.send_json(
