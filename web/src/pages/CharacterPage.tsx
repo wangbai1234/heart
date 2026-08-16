@@ -92,6 +92,7 @@ const FEATURED_CHARACTER_INDEX = new Map<string, number>(FEATURED_CHARACTER_ORDE
 const DISCOVERY_TAG_PRIORITY = [
   ...CHARACTER_ROLE_TAGS,
   ...CHARACTER_STYLE_TAGS,
+  'GL',
   '都市',
   '夜色',
   '职场',

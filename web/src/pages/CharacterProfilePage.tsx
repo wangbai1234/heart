@@ -11,7 +11,7 @@ import { stageWithIntimacy, isColdWar, intimacyPercent, stageLabel, stageOrderIn
 import { buildShareLink } from '../utils/characterShare'
 import { useSafeBack } from '../hooks/useSafeBack'
 import { CHARACTER_UI_CONFIGS, type CharacterTheme } from '../data/characterUIConfig'
-import { JiYuProfile, LiShenProfile, ChengXuProfile, LilithProfile, GuBeichenProfile, QinXiaoProfile, JiangYuezeProfile, JiangYeProfile, GuXingzhouProfile, LiJueProfile, ShenYichenProfile, ShenYuchuanProfile, LuoFeiProfile, PeiTinglanProfile, FuMingxiuProfile, XizeProfile, JiangLiProfile, PeiJueProfile, HuoChengProfile, ZhouJinProfile, BaiQinghuanProfile, ChengZhiProfile, LuTingshengProfile, GuNanqiaoProfile, YunZhiProfile, SuWanProfile, LinXiaomanProfile, LuZhaoProfile, SuYueyaoProfile, HuoShiyuProfile, SuNianProfile, SuYunProfile, GuQingwanProfile, GuXingmianProfile, SongYeProfile, VitoRosettiProfile, XieCiProfile, ShenLiaoProfile, LuWenjingProfile, JiangRanProfile, GuYanliProfile, XuZhihanProfile, LinyuanManorProfile, FreeMuseProfile, QingyuBandProfile, GuiBaiProfile, YinCiProfile, HeZhuoProfile } from '../components/characterProfiles'
+import { JiYuProfile, LiShenProfile, ChengXuProfile, LilithProfile, GuBeichenProfile, QinXiaoProfile, JiangYuezeProfile, JiangYeProfile, GuXingzhouProfile, LiJueProfile, ShenYichenProfile, ShenYuchuanProfile, LuoFeiProfile, PeiTinglanProfile, FuMingxiuProfile, XizeProfile, JiangLiProfile, PeiJueProfile, HuoChengProfile, ZhouJinProfile, BaiQinghuanProfile, ChengZhiProfile, LuTingshengProfile, GuNanqiaoProfile, YunZhiProfile, SuWanProfile, LinXiaomanProfile, LuZhaoProfile, SuYueyaoProfile, HuoShiyuProfile, SuNianProfile, SuYunProfile, GuQingwanProfile, GuXingmianProfile, SongYeProfile, VitoRosettiProfile, XieCiProfile, ShenLiaoProfile, LuWenjingProfile, JiangRanProfile, GuYanliProfile, XuZhihanProfile, LinyuanManorProfile, FreeMuseProfile, QingyuBandProfile, GuiBaiProfile, YinCiProfile, HeZhuoProfile, WenYiningProfile, WeiHengProfile, QiFeiProfile } from '../components/characterProfiles'
 import type { ComponentType } from 'react'
 import { BlockRenderer } from '../components/profileBlocks/BlockRenderer'
 import { CustomHtmlRenderer } from '../components/profileBlocks/CustomHtmlRenderer'
@@ -69,6 +69,9 @@ const BESPOKE_PROFILES: Record<string, ComponentType<{ profile: CharacterProfile
   gui_bai: GuiBaiProfile,
   yin_ci: YinCiProfile,
   he_zhuo: HeZhuoProfile,
+  wenyining: WenYiningProfile,
+  wei_heng: WeiHengProfile,
+  qi_fei: QiFeiProfile,
 }
 
 /** Chrome 视觉调色盘 registry（React 外层chrome，非 iframe 内层） */
@@ -857,6 +860,54 @@ const CHROME_PALETTES: Record<string, ChromePalette> = {
     chipInactiveText: '#8a8078',
     ctaGradient: 'linear-gradient(105deg,#c49448,#a07830)',
     ctaShadow: '0 10px 26px rgba(196,148,72,0.34)',
+  },
+  wenyining: {
+    bg: '#fbf4f6',
+    coverBg: '#f3e6ee',
+    scrimGradient: 'linear-gradient(to top,#fbf4f6 6%,rgba(251,244,246,.4) 40%,transparent 100%)',
+    nameColor: '#7a3f68',
+    ageColor: '#a88098',
+    taglineColor: '#b06898',
+    chipActiveBg: 'rgba(196,138,180,.18)',
+    chipActiveBorder: 'rgba(176,104,152,.36)',
+    chipActiveText: '#8a4f78',
+    chipInactiveBg: 'rgba(176,104,152,.07)',
+    chipInactiveBorder: 'rgba(176,104,152,.16)',
+    chipInactiveText: '#a06890',
+    ctaGradient: 'linear-gradient(105deg,#c48ab4,#9a5586)',
+    ctaShadow: '0 10px 26px rgba(154,85,134,0.28)',
+  },
+  wei_heng: {
+    bg: '#0e1319',
+    coverBg: '#161e28',
+    scrimGradient: 'linear-gradient(to top,#0e1319 6%,rgba(14,19,25,.4) 40%,transparent 100%)',
+    nameColor: '#dce6f0',
+    ageColor: '#7a8ea0',
+    taglineColor: '#8fb4d8',
+    chipActiveBg: 'rgba(122,158,196,.12)',
+    chipActiveBorder: 'rgba(122,158,196,.36)',
+    chipActiveText: '#9fc0dc',
+    chipInactiveBg: 'rgba(255,255,255,.05)',
+    chipInactiveBorder: 'rgba(255,255,255,.1)',
+    chipInactiveText: '#7a8ea0',
+    ctaGradient: 'linear-gradient(105deg,#5b7fa3,#3f5c78)',
+    ctaShadow: '0 10px 26px rgba(91,127,163,0.36)',
+  },
+  qi_fei: {
+    bg: '#0b0808',
+    coverBg: '#170e0f',
+    scrimGradient: 'linear-gradient(to top,#0b0808 6%,rgba(11,8,8,.4) 40%,transparent 100%)',
+    nameColor: '#f0e0dc',
+    ageColor: '#9a7a7c',
+    taglineColor: '#e04850',
+    chipActiveBg: 'rgba(216,64,72,.12)',
+    chipActiveBorder: 'rgba(216,64,72,.36)',
+    chipActiveText: '#f0686e',
+    chipInactiveBg: 'rgba(255,255,255,.05)',
+    chipInactiveBorder: 'rgba(255,255,255,.1)',
+    chipInactiveText: '#9a7a7c',
+    ctaGradient: 'linear-gradient(105deg,#d8404a,#a02830)',
+    ctaShadow: '0 10px 26px rgba(216,64,72,0.4)',
   },
 }
 

@@ -76,6 +76,9 @@ import { QingyuBandPremiseCard } from './characterProfiles/QingyuBandPremiseCard
 import { GuiBaiPremiseCard } from './characterProfiles/GuiBaiPremiseCard'
 import { YinCiPremiseCard } from './characterProfiles/YinCiPremiseCard'
 import { HeZhuoPremiseCard } from './characterProfiles/HeZhuoPremiseCard'
+import { WenYiningPremiseCard } from './characterProfiles/WenYiningPremiseCard'
+import { WeiHengPremiseCard } from './characterProfiles/WeiHengPremiseCard'
+import { QiFeiPremiseCard } from './characterProfiles/QiFeiPremiseCard'
 import { getCharacterSettings } from '../services/api'
 
 const EMPTY_MESSAGES: Message[] = []
@@ -130,6 +133,9 @@ const PREMISE_CARDS: Record<string, ComponentType> = {
   gui_bai: GuiBaiPremiseCard,
   yin_ci: YinCiPremiseCard,
   he_zhuo: HeZhuoPremiseCard,
+  wenyining: WenYiningPremiseCard,
+  wei_heng: WeiHengPremiseCard,
+  qi_fei: QiFeiPremiseCard,
 }
 
 /** 引导回复气泡：首聊时出现在消息区底部，点击直接发送（帮用户破冰）。
