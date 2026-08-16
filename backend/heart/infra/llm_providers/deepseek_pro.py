@@ -178,6 +178,44 @@ class DeepSeekV4ProProvider(LLMProvider):
                 retriable=False,
             ) from e
 
+    @staticmethod
+    def _parse_sse_data(data_str: str) -> list[StreamChunk]:
+        """Parse one SSE ``data:`` payload into 0-2 StreamChunks.
+
+        Relays (micu) append a trailing usage/fingerprint frame with an EMPTY
+        choices array before ``[DONE]``. ``choices[0]`` on it raised IndexError
+        and killed the stream mid-flight (only-first-sentence bug); a choiceless
+        frame now yields nothing.
+        """
+        try:
+            data = json.loads(data_str)
+        except json.JSONDecodeError:
+            return []
+        choices = data.get("choices") or []
+        if not choices:
+            return []
+        choice = choices[0]
+        out: list[StreamChunk] = []
+        content = choice.get("delta", {}).get("content", "")
+        if content:
+            out.append(StreamChunk(content=content))
+        if choice.get("finish_reason"):
+            usage = data.get("usage")
+            out.append(
+                StreamChunk(
+                    content="",
+                    finish_reason=choice["finish_reason"],
+                    usage={
+                        "prompt_tokens": usage.get("prompt_tokens", 0) if usage else 0,
+                        "completion_tokens": usage.get("completion_tokens", 0) if usage else 0,
+                        "total_tokens": usage.get("total_tokens", 0) if usage else 0,
+                    }
+                    if usage
+                    else None,
+                )
+            )
+        return out
+
     async def stream(self, request: LLMRequest) -> AsyncIterator[StreamChunk]:
         """
         Streaming call to DeepSeek V4-pro.
@@ -213,35 +251,8 @@ class DeepSeekV4ProProvider(LLMProvider):
                     if data_str == "[DONE]":
                         break
 
-                    try:
-                        data = json.loads(data_str)
-                        choice = data["choices"][0]
-
-                        # Yield content chunk
-                        delta = choice.get("delta", {})
-                        content = delta.get("content", "")
-
-                        if content:
-                            yield StreamChunk(content=content)
-
-                        # Final chunk with finish reason and usage
-                        if choice.get("finish_reason"):
-                            usage = data.get("usage")
-                            yield StreamChunk(
-                                content="",
-                                finish_reason=choice["finish_reason"],
-                                usage={
-                                    "prompt_tokens": usage.get("prompt_tokens", 0) if usage else 0,
-                                    "completion_tokens": usage.get("completion_tokens", 0)
-                                    if usage
-                                    else 0,
-                                    "total_tokens": usage.get("total_tokens", 0) if usage else 0,
-                                }
-                                if usage
-                                else None,
-                            )
-                    except json.JSONDecodeError:
-                        continue
+                    for chunk in self._parse_sse_data(data_str):
+                        yield chunk
 
             # Record success
             self.circuit_breaker.record_success(self.provider_name, request.model)

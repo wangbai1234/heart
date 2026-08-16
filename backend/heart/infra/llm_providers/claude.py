@@ -341,7 +341,14 @@ class ClaudeProvider(LLMProvider):
                         break
                     try:
                         data = json.loads(data_str)
-                        choice = data["choices"][0]
+                        choices = data.get("choices") or []
+                        # Relays (micu) append a trailing usage/fingerprint frame
+                        # with an EMPTY choices array before [DONE]. `choices[0]`
+                        # there raised IndexError and killed the stream mid-flight
+                        # (only-first-sentence bug). Skip choiceless frames.
+                        if not choices:
+                            continue
+                        choice = choices[0]
                         delta = choice.get("delta", {})
                         content = delta.get("content", "")
                         if content:

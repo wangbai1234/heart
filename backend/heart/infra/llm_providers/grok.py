@@ -92,7 +92,16 @@ class GrokProvider(LLMProvider):
                 break
             try:
                 data = json.loads(data_str)
-                choice = data["choices"][0]
+                choices = data.get("choices") or []
+                # micu appends a trailing usage/fingerprint frame with an EMPTY
+                # choices array (`"choices": []`) just before [DONE] on Gemini
+                # streams. `choices[0]` on that frame raised IndexError, killing
+                # the stream mid-flight — with the first sentence already on the
+                # wire the router could not fail over, so the user was stuck with
+                # only that first sentence. Skip any frame that carries no choice.
+                if not choices:
+                    continue
+                choice = choices[0]
                 delta = choice.get("delta", {})
                 content = delta.get("content", "")
                 if content:
