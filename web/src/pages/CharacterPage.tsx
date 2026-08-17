@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useThemeStore } from '../stores/themeStore'
 import { useScrollRestore } from '../hooks/useScrollRestore'
+import { usePullToRefresh } from '../hooks/usePullToRefresh'
 import { TabBar } from '../components/ui/TabBar'
 import { NoticeDialog } from '../components/ui/NoticeDialog'
 import { Dialog } from '../components/ui/Dialog'
@@ -130,6 +131,23 @@ export function CharacterPage() {
   const [linkInput, setLinkInput] = useState('')
   const [query, setQuery] = useState('')
   const scrollRef = useScrollRestore()
+
+  // Pull-to-refresh: dragging down at the top of the grid force-refreshes the
+  // catalog + companions. This is the explicit manual gesture that replaces
+  // nagging the user with an "刷新角色页" prompt for newly-approved characters.
+  const { bind: pullRef, pull, refreshing, threshold } = usePullToRefresh(async () => {
+    await Promise.all([loadCharacters(true), loadCompanions(true)])
+  })
+
+  // Fan one callback ref out to both the scroll-restore and pull-to-refresh
+  // hooks (they each want the same scrollable element).
+  const gridRef = useCallback(
+    (el: HTMLDivElement | null) => {
+      ;(scrollRef as React.MutableRefObject<HTMLDivElement | null>).current = el
+      pullRef.current = el
+    },
+    [scrollRef, pullRef],
+  )
 
   async function handlePasteLink() {
     try {
@@ -536,7 +554,24 @@ export function CharacterPage() {
         </div>
 
         {/* Discovery grid */}
-        <div ref={scrollRef} className="relative z-10 flex-1 overflow-y-auto px-5 pt-1 pb-[80px]">
+        <div ref={gridRef} className="relative z-10 flex-1 overflow-y-auto overscroll-y-contain px-5 pt-1 pb-[80px]">
+          {/* Pull-to-refresh indicator — height tracks finger pull, snaps to a
+              spinner while refreshing. */}
+          {(pull > 0 || refreshing) && (
+            <div
+              className="flex items-center justify-center overflow-hidden text-[var(--color-text-secondary)]"
+              style={{ height: refreshing ? threshold : pull, transition: refreshing ? 'height 0.2s' : undefined }}
+            >
+              <svg
+                className={refreshing ? 'animate-spin' : ''}
+                width="20" height="20" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                style={refreshing ? undefined : { transform: `rotate(${Math.min(pull / threshold, 1) * 270}deg)` }}
+              >
+                <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+              </svg>
+            </div>
+          )}
           {filtered.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-center gap-2 pb-20">
               <span className="text-[15px] text-[var(--color-text-secondary)]">

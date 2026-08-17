@@ -55,6 +55,7 @@ export const CHARACTER_STYLE_TAGS = [
  * tags beyond this list. `推荐` is NOT here — it's an editorial filter.
  */
 export const CHARACTER_ROLE_TAGS = [
+  '全性向',
   '女性向',
   '男性向',
   '校园',
