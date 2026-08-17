@@ -48,20 +48,34 @@ export const CHARACTER_STYLE_TAGS = [
 
 /**
  * Canonical 角色标签 (role tags) offered as presets in the UGC create form's
- * tag modal, and used to order the discovery filter chips. Creators may also add
- * custom tags beyond this list. `推荐` is NOT here — it's an editorial filter.
+ * tag modal (CreateCharacterPage + workshop) and used to order the discovery
+ * filter chips. Kept in sync with the tags actually surfaced on the discovery
+ * page (CharacterPage 的 PINNED_TAGS + EXTRA_FILTER_TAGS) so a creator只从当前
+ * 角色页真实存在的标签里选，而不是一套历史旧标签。Creators may also add custom
+ * tags beyond this list. `推荐` is NOT here — it's an editorial filter.
  */
 export const CHARACTER_ROLE_TAGS = [
   '女性向',
-  '全性向',
-  '纯爱',
-  '年上',
-  '同人',
-  '骨科',
-  '病娇',
-  '纯洁',
-  '反差',
   '男性向',
+  '校园',
+  '都市',
+  '古风',
+  '模拟器',
+  '病娇',
+  '反差',
+  '霸总',
+  '年上',
+  '偏执',
+  '纯爱',
+  '占有欲',
+  '治愈',
+  '限左',
+  '强制爱',
+  'GL',
+  '忠犬',
+  '高自由',
+  'BG',
+  '洁',
 ] as const
 
 /** Age brackets a creator picks in the UGC form (required, single-select). */
