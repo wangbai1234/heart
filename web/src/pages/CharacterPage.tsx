@@ -287,10 +287,18 @@ export function CharacterPage() {
     let base: GridItem[] = []
 
     // **TIER-1: MODE** — base set per mode
+    const hasQuery = q.length > 0
+    const hasTagFilter = activeTag !== TAG_ALL
     if (activeMode === MODE_RECOMMENDED) {
-      // 推荐 = built-ins + own UGC + public+approved with「推荐」tag (editorial curation)
+      // 推荐 landing (无搜索/无标签筛选) = 编辑精选：built-ins + own UGC +
+      //「推荐」tag 的 public+approved 角色。
+      //
+      // 但一旦用户搜索或点了标签 chip，就是在浏览整个目录了——此时必须放开到
+      // 全部可发现角色（public+approved + built-ins + own），否则别的用户公开且
+      // 审核通过的角色被编辑精选门永远挡在筛选/搜索的候选集之外，搜不到也筛不到。
       base = rankedItems.filter((it) => {
         if (!isDiscoverable(it)) return false
+        if (hasQuery || hasTagFilter) return true
         return it.isOwner || it.isBuiltin || (it.profile.tags ?? []).includes(DISCOVERY_RECOMMENDED)
       })
     } else if (activeMode === MODE_NEWEST) {
