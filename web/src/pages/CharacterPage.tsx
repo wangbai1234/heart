@@ -32,12 +32,9 @@ const MODE_FAVORITES = '收藏'
 const MODE_MINE = '我的'
 const DISCOVERY_MODES = [MODE_RECOMMENDED, MODE_NEWEST, MODE_FAVORITES, MODE_MINE] as const
 
-/** Editorial「推荐」tag (for filtering public catalog). */
-const DISCOVERY_RECOMMENDED = '推荐'
-
 /** Secondary tag chips (fixed order) shown under the mode tabs. `全部` = no tag filter. */
 const TAG_ALL = '全部'
-const PINNED_TAGS = ['女性向', '男性向', '校园', '都市', '古风', '模拟器', '病娇', '反差', '霸总'] as const
+const PINNED_TAGS = ['全性向', '女性向', '男性向', '校园', '都市', '古风', '模拟器', '病娇', '反差', '霸总'] as const
 /**
  * 「筛选」popup 里展示的标签 —— 固定写死、固定顺序（产品指定）。
  * 每行 4 个（见 popup 的 grid-cols-4），做屏幕自适应。
@@ -287,20 +284,11 @@ export function CharacterPage() {
     let base: GridItem[] = []
 
     // **TIER-1: MODE** — base set per mode
-    const hasQuery = q.length > 0
-    const hasTagFilter = activeTag !== TAG_ALL
     if (activeMode === MODE_RECOMMENDED) {
-      // 推荐 landing (无搜索/无标签筛选) = 编辑精选：built-ins + own UGC +
-      //「推荐」tag 的 public+approved 角色。
-      //
-      // 但一旦用户搜索或点了标签 chip，就是在浏览整个目录了——此时必须放开到
-      // 全部可发现角色（public+approved + built-ins + own），否则别的用户公开且
-      // 审核通过的角色被编辑精选门永远挡在筛选/搜索的候选集之外，搜不到也筛不到。
-      base = rankedItems.filter((it) => {
-        if (!isDiscoverable(it)) return false
-        if (hasQuery || hasTagFilter) return true
-        return it.isOwner || it.isBuiltin || (it.profile.tags ?? []).includes(DISCOVERY_RECOMMENDED)
-      })
+      // 推荐 = 全部可发现角色（public+approved + built-ins + own）。编辑精选只作为
+      //「排序」体现（featured 置顶 + 女性向优先，见下方 SORT），不再作为「过滤」把
+      // 别的用户公开+审核通过的角色挡在外面——否则 推荐+全部 下这些角色永远不出现。
+      base = rankedItems.filter(isDiscoverable)
     } else if (activeMode === MODE_NEWEST) {
       // 新角色 = 所有可见角色（内置+UGC）按 created_at DESC
       base = rankedItems.filter((it) => isDiscoverable(it))
