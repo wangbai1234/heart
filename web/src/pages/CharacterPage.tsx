@@ -10,8 +10,6 @@ import { useToastStore } from '../stores/toastStore'
 import { parseCharacterId } from '../utils/characterShare'
 import {
   resolveCharacterProfile,
-  CHARACTER_STYLE_TAGS,
-  CHARACTER_ROLE_TAGS,
   DEFAULT_COVER,
   type CharacterProfile,
 } from '../data/uiContent'
@@ -47,7 +45,7 @@ const PINNED_TAGS = ['女性向', '男性向', '校园', '都市', '古风', '�
 const EXTRA_FILTER_TAGS = [
   '年上', '偏执', '纯爱', '占有欲',
   '治愈', '限左', '强制爱', 'GL',
-  '忠犬', '高自由', 'BG', '纯洁',
+  '忠犬', '高自由', 'BG', '洁',
 ] as const
 
 /**
@@ -91,34 +89,6 @@ function isDiscoverable(it: GridItem): boolean {
 
 const FEATURED_CHARACTER_ORDER = ['li_shen', 'ji_yu', 'cheng_xu', 'gu_beichen', 'qin_xiao', 'li_jue', 'jiang_yueze', 'gu_xingzhou', 'jiang_ye'] as const
 const FEATURED_CHARACTER_INDEX = new Map<string, number>(FEATURED_CHARACTER_ORDER.map((id, index) => [id, index]))
-const DISCOVERY_TAG_PRIORITY = [
-  // 取向标签优先：带「全性向 / 限左」的角色，封面固定展示这两个
-  '全性向',
-  '限左',
-  ...CHARACTER_ROLE_TAGS,
-  ...CHARACTER_STYLE_TAGS,
-  'GL',
-  '都市',
-  '夜色',
-  '职场',
-  '异国',
-  '欧风',
-  '拳手',
-  '管家',
-  '血族',
-  '血仆',
-  '调酒师',
-  '赌王',
-  '学霸',
-  '贵公子',
-  '危险关系',
-  '救赎',
-  '占有欲',
-  '克制',
-  '忠犬',
-  '暗恋',
-  '博弈',
-] as const
 const EDITORIAL_HEAT_OVERRIDES = new Map<string, number>([
   ['zhou_jin', 5867],
   ['song_ye', 4218],
@@ -202,6 +172,25 @@ export function CharacterPage() {
   useEffect(() => {
     void loadCharacters()
     void loadCompanions()
+  }, [loadCharacters, loadCompanions])
+
+  // PWA users keep the app open for days, so a one-time mount load means a
+  // character approved after they last opened the app never appears (the store
+  // is already `loaded`, so a plain load() no-ops). Force-refresh the catalog
+  // whenever the discovery page regains visibility / focus so freshly-approved
+  // characters surface without a hard reload. (Same pattern as ConversationChatPage.)
+  useEffect(() => {
+    const refresh = () => {
+      if (document.hidden) return
+      void loadCharacters(true)
+      void loadCompanions(true)
+    }
+    document.addEventListener('visibilitychange', refresh)
+    window.addEventListener('focus', refresh)
+    return () => {
+      document.removeEventListener('visibilitychange', refresh)
+      window.removeEventListener('focus', refresh)
+    }
   }, [loadCharacters, loadCompanions])
 
   // companion lookup by character_id → overlays intimacy / unread onto catalog rows.
@@ -658,9 +647,9 @@ function DiscoveryCard({
   // Visibility badge for owned UGC characters
   const visInfo = isOwner ? VIS_BADGE[visibility ?? 'private'] ?? VIS_BADGE.private : null
 
-  // Show only the top 2 tags that are in the priority list, or the first 2 if none match
-  const priorityTags = tags.filter((t) => DISCOVERY_TAG_PRIORITY.includes(t as any)).slice(0, 2)
-  const displayTags = priorityTags.length > 0 ? priorityTags : tags.slice(0, 2)
+  // Cover shows the character's first two tags (as authored/ordered), not a
+  // priority-reordered subset — product direction 2026-08-17.
+  const displayTags = tags.slice(0, 2)
 
   return (
     <div className="group relative flex flex-col w-full rounded-[14px] overflow-hidden bg-[var(--color-glass-55)] backdrop-blur-[12px] border border-[var(--color-border-glass)] shadow-[0_2px_8px_rgba(0,0,0,0.04),0_8px_24px_rgba(0,0,0,0.06)] transition-all duration-[var(--duration-normal)] ease-[var(--ease-standard)] hover:shadow-[0_4px_12px_rgba(0,0,0,0.06),0_12px_32px_rgba(0,0,0,0.08)] hover:-translate-y-1">
