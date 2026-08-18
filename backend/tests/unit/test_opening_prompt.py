@@ -80,3 +80,37 @@ def test_split_opening_plain_text_only():
 
 def test_split_opening_empty():
     assert split_opening("   ") == []
+
+
+def test_split_opening_strips_wrapping_curly_quotes():
+    # 用户习惯把整段对白用中文双引号包裹 —— 气泡本身已表示"这是说话"，剥掉冗余外层。
+    bubbles = split_opening("“你终于来了。”")
+    assert len(bubbles) == 1
+    assert bubbles[0].kind == "text"
+    assert bubbles[0].content == "你终于来了。"
+
+
+def test_split_opening_strips_wrapping_straight_quotes():
+    bubbles = split_opening('"坐吧，我等你很久了。"')
+    assert bubbles[0].content == "坐吧，我等你很久了。"
+
+
+def test_split_opening_strips_quotes_per_dialogue_segment():
+    raw = "（他倚在门框上）“来得比我想的早。”"
+    bubbles = split_opening(raw)
+    assert [b.kind for b in bubbles] == ["action", "text"]
+    assert bubbles[0].content == "他倚在门框上"
+    assert bubbles[1].content == "来得比我想的早。"
+
+
+def test_split_opening_keeps_inner_quotation():
+    # 段落中间真正引用别人的话 —— 不是整段包裹，保持原样不误伤。
+    raw = "他说“别走”，然后转身离开。"
+    bubbles = split_opening(raw)
+    assert bubbles[0].content == raw
+
+
+def test_split_opening_leaves_unbalanced_quote():
+    # 只有开引号、没有闭引号 —— 保守不动。
+    bubbles = split_opening("“你来了")
+    assert bubbles[0].content == "“你来了"

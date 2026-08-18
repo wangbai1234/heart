@@ -1236,6 +1236,11 @@ export function CharacterProfilePage() {
     )
   }
 
+  // 高级 HTML 模式：创作者已自排详情页，系统不再叠加模板化的「关于TA / 叙引」
+  // 内容块（职责重叠会视觉割裂）。「关系路线」是玩法组件（聊过才出现、承载关系
+  // 进度），与 HTML 排版不冲突，保留。
+  const hasCustomHtml = !!(profile && profile.custom_html && profile.custom_html.trim())
+
   return (
     <div
       className="relative w-full h-full overflow-y-auto bg-[var(--color-bg-page)]"
@@ -1421,8 +1426,8 @@ export function CharacterProfilePage() {
           </button>
         </div>
 
-        {/* 关于TA card — truncated intro */}
-        {profile && (profile.tagline || profile.intro) && (
+        {/* 关于TA card — truncated intro（高级 HTML 模式下隐藏，交给创作者自排） */}
+        {!hasCustomHtml && profile && (profile.tagline || profile.intro) && (
           <div className="mt-5 rounded-[20px] bg-[var(--color-glass-75)] border border-[var(--color-border-glass)] p-4">
             <div className="flex items-center gap-2 text-[13px] font-semibold" style={{ color: theme.accent }}>
               <span className="inline-block w-[3px] h-[14px] rounded-full" style={{ background: theme.accent }} />
@@ -1520,8 +1525,8 @@ export function CharacterProfilePage() {
         )}
       </div>
 
-      {/* ── 叙引 dossier card (premium dark) ── */}
-      {profile && (profile.one_liner || profile.archetype_label || profile.age_range || profile.tags.length > 0) && (
+      {/* ── 叙引 dossier card (premium dark)（高级 HTML 模式下隐藏，交给创作者自排） ── */}
+      {!hasCustomHtml && profile && (profile.one_liner || profile.archetype_label || profile.age_range || profile.tags.length > 0) && (
         <div
           className="mx-4 mb-4 rounded-[22px] border p-6 relative overflow-hidden"
           style={{

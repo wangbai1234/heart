@@ -349,12 +349,12 @@ export function Step6({
       <SectionHeading title="开场设计" hint="用户点进来看到的第一幕" />
       <FieldCard
         label="开场白"
-        hint="首次对话逐字播放，不走实时生成"
+        hint="用户第一次进入聊天时逐字播放，不走实时生成。用（）包裹动作和场景，其余作为对白直接显示——对白不用加引号。"
       >
         <textarea
           value={state.opening}
           onChange={(e) => updateField('opening', e.target.value.slice(0, 1500))}
-          placeholder="Ta 对用户说的第一段话，或第一幕场景。"
+          placeholder="示例：（他倚在门框上，目光落过来）来得比我想的早。坐吧，我等你很久了。"
           rows={5}
           className="w-full px-4 py-3 rounded-[14px] text-[15px] leading-[1.7] resize-none bg-[var(--color-glass-55)] border border-[var(--color-border-glass)] text-[var(--color-ink)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-primary)] transition-colors"
         />
@@ -530,7 +530,7 @@ export function Step7({
       </button>
 
       <SectionHeading index="" title="高级模式" hint="会写 HTML？直接自定义详情页" />
-      <FieldCard label="自定义 HTML" hint="开启后区块编辑器内容不再显示">
+      <FieldCard label="自定义 HTML" hint="开启后详情页只展示你的 HTML，「关于TA / 叙引」等模板区块不再显示。注意：HTML 只负责详情页外观，不会发给 AI，角色人设必须写进第 2 步「人设」里 AI 才读得到。">
         <label className="flex items-center gap-2 text-[14px] text-[var(--color-ink)] mb-3">
           <input
             type="checkbox"
