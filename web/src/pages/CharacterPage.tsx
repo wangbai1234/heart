@@ -85,7 +85,7 @@ function isDiscoverable(it: GridItem): boolean {
   return !!it.companion && it.companion.companion_status !== 'locked'
 }
 
-const FEATURED_CHARACTER_ORDER = ['li_shen', 'ji_yu', 'cheng_xu', 'gu_beichen', 'qin_xiao', 'li_jue', 'jiang_yueze', 'gu_xingzhou', 'jiang_ye'] as const
+const FEATURED_CHARACTER_ORDER = ['char_b8ed4c9b', 'char_ae43cbad', 'li_shen', 'ji_yu', 'cheng_xu', 'gu_beichen', 'qin_xiao', 'li_jue', 'jiang_yueze', 'gu_xingzhou', 'jiang_ye'] as const
 const FEATURED_CHARACTER_INDEX = new Map<string, number>(FEATURED_CHARACTER_ORDER.map((id, index) => [id, index]))
 const EDITORIAL_HEAT_OVERRIDES = new Map<string, number>([
   ['zhou_jin', 5867],
@@ -342,8 +342,15 @@ export function CharacterPage() {
         return bTime - aTime
       })
     } else if (activeMode === MODE_RECOMMENDED && !q) {
-      // 推荐: prioritize「女性向」characters
+      // 推荐: 精选置顶优先级最高（不受性向影响），其余角色再按「女性向」靠前。
       base.sort((a, b) => {
+        const aFeatured = FEATURED_CHARACTER_INDEX.get(a.id)
+        const bFeatured = FEATURED_CHARACTER_INDEX.get(b.id)
+        if (aFeatured !== undefined || bFeatured !== undefined) {
+          if (aFeatured === undefined) return 1
+          if (bFeatured === undefined) return -1
+          return aFeatured - bFeatured
+        }
         const aFem = (a.profile.tags ?? []).includes('女性向') ? 0 : 1
         const bFem = (b.profile.tags ?? []).includes('女性向') ? 0 : 1
         return aFem - bFem
