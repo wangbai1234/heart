@@ -251,6 +251,11 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
 
   const messages = useChatStore((s) => s.messages[currentCharacterId as CharacterId] ?? EMPTY_MESSAGES)
   const isCleared = useChatStore((s) => s.clearedCharacters.has(currentCharacterId as CharacterId))
+  // Row swiped away on the inbox (persisted, survives reload). While hidden the
+  // chat page shows a blank state instead of re-fetching server history — the
+  // records/memory stay intact server-side, but this device presents the
+  // conversation as cleared until new activity un-hides it (send / restart).
+  const isHidden = useChatStore((s) => s.inboxHidden.includes(currentCharacterId as CharacterId))
   const isStreaming = useChatStore((s) => s.isStreaming[currentCharacterId as CharacterId] ?? false)
   const currentTurnId = useChatStore((s) => s.currentTurnId)
   const pendingAssistantTurnId = useChatStore((s) => s.pendingAssistantTurnId)
@@ -412,7 +417,10 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
       setHistoryLoaded(true)
       return
     }
-    if (isCleared) {
+    if (isCleared || isHidden) {
+      // Swiped-away (persisted) or in-session cleared: present a blank page and
+      // do NOT fetch history / regenerate the opening. Sending a message (or
+      // 重新开始) un-hides the character via the store and resumes normal load.
       setHistoryLoaded(true)
       return
     }
@@ -462,7 +470,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
       .catch(() => {
         setHistoryLoaded(true)
       })
-  }, [currentCharacterId, isAuthenticated, isCleared])
+  }, [currentCharacterId, isAuthenticated, isCleared, isHidden])
 
   // Resolve voice bubbles that were still synthesising when the user left the
   // page. The turn keeps generating server-side (background) and is persisted;
@@ -693,13 +701,17 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
     try {
       await restartChat(cid)
       setRestartConfirmOpen(false)
+      // Backend restart deletes relationship_states (→ STRANGER / intimacy 0).
+      // Force-refresh the cached companions store so the relationship bar drops
+      // back to 0 instead of showing the stale pre-restart stage.
+      await loadCompanions(true)
       await reloadHistoryFresh(cid)
     } catch {
       useToastStore.getState().show('重新开始失败，请稍后重试', 'error')
     } finally {
       setRestarting(false)
     }
-  }, [currentCharacterId, restarting, reloadHistoryFresh])
+  }, [currentCharacterId, restarting, reloadHistoryFresh, loadCompanions])
 
   // 时光回溯（撤回）：把对话回滚到某一轮之前，软删该轮及之后的消息并回滚记忆。
   // 窗口守卫在服务端（最近 10 条 & 3 分钟内）；超窗返回 409，前端提示后重载刷新按钮态。
