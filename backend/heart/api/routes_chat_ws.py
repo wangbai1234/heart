@@ -1328,32 +1328,30 @@ async def get_chat_history(
     has_next = len(rows) > limit
     items = rows[:limit]
 
-    # Which turns can the frontend offer 撤回 (rewind) on? A turn is eligible
-    # iff it is among the last REWIND_MAX_MESSAGES live bubbles AND started
-    # within REWIND_MAX_AGE — the same guard POST /api/chat/rewind enforces.
-    # Rows are newest-first, so a turn's OLDEST bubble sits at its highest
-    # index; count(created_at >= turn_start) == that index + 1. We only bother
-    # on the first page (no cursor): rewind is only ever surfaced on the most
-    # recent exchange, and REWIND_MAX_MESSAGES < the default page size, so the
-    # first page always contains every candidate turn.
+    # Which turns can the frontend offer 撤回 (rewind) on? Rewind is surfaced
+    # ONLY under USER bubbles, so we count USER bubbles (rows are newest-first):
+    # a turn is rewindable iff its user bubble is among the last
+    # REWIND_MAX_USER_MSGS user bubbles AND was sent within REWIND_MAX_AGE — the
+    # same guard POST /api/chat/rewind enforces. We only bother on the first
+    # page (no cursor): rewind is only ever offered on the most recent messages,
+    # which always fit inside the first page.
     rewindable_turns: set[str] = set()
     if not cursor:
         now = datetime.now(timezone.utc)
-        # turn_id → (highest index seen, earliest created_at seen)
-        turn_scan: dict[str, tuple[int, datetime]] = {}
-        for i, r in enumerate(rows):
+        user_seen = 0
+        for r in rows:  # newest → oldest
+            if r["role"] != "user":
+                continue
+            if user_seen >= REWIND_MAX_USER_MSGS:
+                break
+            user_seen += 1
             tid = r["turn_id"]
             ca = r["created_at"]
             if tid is None or ca is None:
                 continue
-            key = str(tid)
-            prev = turn_scan.get(key)
-            earliest = ca if prev is None else min(prev[1], ca)
-            turn_scan[key] = (i, earliest)
-        for key, (max_idx, earliest) in turn_scan.items():
-            ts = earliest if earliest.tzinfo else earliest.replace(tzinfo=timezone.utc)
-            if max_idx < REWIND_MAX_MESSAGES and (now - ts) <= REWIND_MAX_AGE:
-                rewindable_turns.add(key)
+            ts = ca if ca.tzinfo else ca.replace(tzinfo=timezone.utc)
+            if (now - ts) <= REWIND_MAX_AGE:
+                rewindable_turns.add(str(tid))
 
     return {
         "items": [
@@ -1399,9 +1397,14 @@ async def get_chat_history(
 #
 # Neither physically deletes user chat rows (AGENTS.md: logical delete only).
 
-# Recall window (product-confirmed): a turn is rewindable only if it is among
-# the last REWIND_MAX_MESSAGES live bubbles AND started within REWIND_MAX_AGE.
-REWIND_MAX_MESSAGES = 10
+# Recall window (product-confirmed). Rewind is offered ONLY on USER-sent
+# bubbles (a user message is a single bubble, unlike an assistant reply which
+# fans out into many dialogue + action segments), so we count USER bubbles: a
+# turn is rewindable iff its user bubble is among the last REWIND_MAX_USER_MSGS
+# user bubbles AND was sent within REWIND_MAX_AGE. Tapping 撤回 under a user
+# bubble rolls the thread back to just-before that message (the user bubble is
+# the earliest row of its turn, so cut_ts = the turn start).
+REWIND_MAX_USER_MSGS = 10
 REWIND_MAX_AGE = timedelta(minutes=3)
 
 
@@ -1607,10 +1610,10 @@ async def rewind_chat(
 ) -> dict:
     """时光回溯 — undo the chosen turn and everything after it (short window).
 
-    Eligibility (both must hold): the turn is among the last
-    REWIND_MAX_MESSAGES live bubbles for this character AND it started within
-    REWIND_MAX_AGE. Outside the window → 409 (the frontend hides the button
-    there anyway; this is the server-side guard).
+    Eligibility (both must hold): the undone user message is among the last
+    REWIND_MAX_USER_MSGS live user bubbles for this character AND it was sent
+    within REWIND_MAX_AGE. Outside the window → 409 (the frontend hides the
+    button there anyway; this is the server-side guard).
 
     Effects (all inside one transaction):
       1. Soft-delete every live chat row with created_at >= the turn's start
@@ -1653,21 +1656,22 @@ async def rewind_chat(
     if now - ts > REWIND_MAX_AGE:
         raise HTTPException(status_code=409, detail="超出撤回时限")
 
-    # Window guard 2: within the last REWIND_MAX_MESSAGES live bubbles. Count
-    # live bubbles at/after the cut; if it exceeds the window the turn is too
-    # far back to undo.
+    # Window guard 2: the undone user message must be among the last
+    # REWIND_MAX_USER_MSGS live user bubbles. Count live USER bubbles at/after
+    # the cut; if that exceeds the window the message is too far back to undo.
     cnt = await db.execute(
         sql_text(
             """
             SELECT COUNT(*) FROM chat_messages
             WHERE user_id = :uid AND character_id = :cid
               AND rewound_at IS NULL AND channel <> 'call'
+              AND role = 'user'
               AND created_at >= :cut
             """
         ),
         {"uid": uid, "cid": body.character_id, "cut": turn_start},
     )
-    if int(cnt.scalar() or 0) > REWIND_MAX_MESSAGES:
+    if int(cnt.scalar() or 0) > REWIND_MAX_USER_MSGS:
         raise HTTPException(status_code=409, detail="超出撤回范围")
 
     try:

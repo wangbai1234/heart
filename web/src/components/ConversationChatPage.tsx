@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback, type ComponentType } from 'react'
+import { useEffect, useRef, useState, useCallback, useMemo, type ComponentType } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useAppStore } from '../stores/appStore'
 import { useChatStore, type Message } from '../stores/chatStore'
@@ -206,6 +206,10 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
   const [restarting, setRestarting] = useState(false)
   // Turn currently being rolled back (撤回) — disables its button while in flight.
   const [rewindingTurnId, setRewindingTurnId] = useState<string | null>(null)
+  // Ticking clock (updated every 15s) so the 撤回 button auto-disappears once a
+  // message leaves the rewind window (>3min), without any history reload — PWA
+  // users can't refresh. See rewindableTurnIds below.
+  const [nowTick, setNowTick] = useState(() => Date.now())
   const [transferSending, setTransferSending] = useState(false)
   const [voicePickerOpen, setVoicePickerOpen] = useState(false)
   const [characterGender, setCharacterGender] = useState<'male' | 'female' | undefined>(undefined)
@@ -248,6 +252,8 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
   const messages = useChatStore((s) => s.messages[currentCharacterId as CharacterId] ?? EMPTY_MESSAGES)
   const isCleared = useChatStore((s) => s.clearedCharacters.has(currentCharacterId as CharacterId))
   const isStreaming = useChatStore((s) => s.isStreaming[currentCharacterId as CharacterId] ?? false)
+  const currentTurnId = useChatStore((s) => s.currentTurnId)
+  const pendingAssistantTurnId = useChatStore((s) => s.pendingAssistantTurnId)
   const isPlaying = useChatStore((s) => s.isPlaying)
   const addMessage = useChatStore((s) => s.addMessage)
   const reconcileHistory = useChatStore((s) => s.reconcileHistory)
@@ -718,6 +724,55 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
     }
   }, [currentCharacterId, rewindingTurnId, reloadHistoryFresh])
 
+  // 撤回窗口客户端实时判定：每 15s tick 一次，让超窗（>3min）的撤回按钮自动消失，
+  // 无需刷新历史（PWA 用户无法刷新）。仅在页面聚焦时空转，隐藏页面停 tick。
+  useEffect(() => {
+    let timer: ReturnType<typeof setInterval> | null = null
+    const start = () => {
+      if (timer) return
+      timer = setInterval(() => setNowTick(Date.now()), 15000)
+    }
+    const stop = () => {
+      if (timer) { clearInterval(timer); timer = null }
+    }
+    const onVisibility = () => {
+      if (document.hidden) stop()
+      else { setNowTick(Date.now()); start() }
+    }
+    if (!document.hidden) start()
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => { stop(); document.removeEventListener('visibilitychange', onVisibility) }
+  }, [])
+
+  // 客户端权威地重算「可撤回」的 turn 集合，替代 msg.rewindable 静态标记：
+  //   1) 只有最近 REWIND_MAX_USER_MSGS 条用户气泡，且
+  //   2) 距今在 REWIND_MAX_AGE 内，且
+  //   3) 不是仍在流式生成/尚未落库的当前轮（否则撤回会打到未提交的行 → 404 "撤回失败"）。
+  // 与后端 get_chat_history 的窗口口径一致（10 条 & 3min）。nowTick 驱动过期自动收起。
+  const REWIND_MAX_USER_MSGS = 10
+  const REWIND_MAX_AGE_MS = 3 * 60 * 1000
+  const rewindableTurnIds = useMemo(() => {
+    const result = new Set<string>()
+    // 最近的用户气泡（按时间倒序取前 N 条），跳过在途未落库的当前轮。
+    const userMsgs: Message[] = []
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i]
+      if (m.role !== 'user' || !m.turnId) continue
+      userMsgs.push(m)
+      if (userMsgs.length >= REWIND_MAX_USER_MSGS) break
+    }
+    for (const m of userMsgs) {
+      const tid = m.turnId as string
+      // 仍在流式生成的当前轮：用户消息行要到 turn_end 才 commit（_charge_and_persist），
+      // 此刻撤回会打到未落库的行 → 后端 404 → "撤回失败"。pendingAssistantTurnId 覆盖
+      // 发送→turn_start 的空档，currentTurnId 覆盖 turn_start→turn_end；两者接力覆盖整个在途窗口。
+      if (isStreaming && (tid === currentTurnId || tid === pendingAssistantTurnId)) continue
+      if (nowTick - m.timestamp > REWIND_MAX_AGE_MS) continue
+      result.add(tid)
+    }
+    return result
+  }, [messages, nowTick, isStreaming, currentTurnId, pendingAssistantTurnId])
+
   // 音色选择确认处理
   const handleVoicePickerConfirm = useCallback(async (selection: { type: 'preset' | 'clone' | null; presetVoiceId?: string; presetName?: string; cloneFile?: File }) => {
     try {
@@ -929,6 +984,26 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
     const isAI = msg.role === 'assistant'
     const avatar = isAI ? profile.avatar : userAvatar
 
+    // 时光回溯：撤回按钮只挂在用户发送的气泡（文字 + 语音）下方，且仅在撤回窗口内
+    // （后端标记 rewindable：最近 10 条用户消息且 3min 内）。点按把对话回滚到这条
+    // 消息之前。无长按、无 emoji。
+    const canRewind = !isAI && !!msg.turnId && rewindableTurnIds.has(msg.turnId)
+    const rewindButton = canRewind ? (
+      <button
+        onClick={() => { void handleRewind(msg.turnId as string) }}
+        disabled={rewindingTurnId !== null}
+        className={`mt-1 inline-flex items-center gap-1 px-2 py-0.5 text-[12px] disabled:opacity-50 ${
+          isDark ? 'text-[rgba(243,185,200,0.9)]' : 'text-[#FF7DA1]'
+        }`}
+      >
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
+          <path d="M3 3v5h5" />
+        </svg>
+        <span>{rewindingTurnId === msg.turnId ? '撤回中…' : '撤回'}</span>
+      </button>
+    ) : null
+
     // While generating (streaming + waiting for message_bubble), always show typing dots
     if (isAI && isLastAndGenerating) {
       return (
@@ -1137,6 +1212,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
           ) : (
             <div className="w-[40px] shrink-0" />
           )}
+          <div className={`flex flex-col ${isAI ? 'items-start' : 'items-end'}`}>
           <div className="max-w-[348px]">
             <div className="flex items-end gap-2">
               <div className="flex-1">
@@ -1178,6 +1254,8 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
               </div>
             )}
           </div>
+          {rewindButton}
+          </div>
         </div>
       )
     }
@@ -1208,23 +1286,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
                 : msg.content}
             </p>
           </div>
-          {/* 时光回溯：仅在撤回窗口内（后端标记 rewindable）显示可见按钮，
-              点按把对话回滚到这一轮之前。无长按、无 emoji。 */}
-          {msg.rewindable && msg.turnId && (
-            <button
-              onClick={() => { void handleRewind(msg.turnId) }}
-              disabled={rewindingTurnId !== null}
-              className={`mt-1 inline-flex items-center gap-1 px-2 py-0.5 text-[12px] disabled:opacity-50 ${
-                isDark ? 'text-[rgba(243,185,200,0.9)]' : 'text-[#FF7DA1]'
-              }`}
-            >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
-                <path d="M3 3v5h5" />
-              </svg>
-              <span>{rewindingTurnId === msg.turnId ? '撤回中…' : '撤回'}</span>
-            </button>
-          )}
+          {rewindButton}
         </div>
       </div>
     )
@@ -1412,7 +1474,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
             ? 'bg-[rgba(26,26,46,0.7)] border-[rgba(255,255,255,0.08)] shadow-[var(--shadow-sheet)]'
             : 'bg-[var(--color-glass-75)] border-[var(--color-border-glass)] shadow-[var(--shadow-sheet)]'
         }`}
-        style={{ marginBottom: 'calc(16px + var(--safe-bottom))' }}
+        style={{ marginBottom: plusMenuOpen ? 8 : 'calc(16px + var(--safe-bottom))' }}
       >
         {/* Interrupt button when streaming, add button otherwise */}
         {isStreaming ? (
@@ -1443,6 +1505,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
+          onFocus={() => setPlusMenuOpen(false)}
           onKeyDown={(e) => e.key === 'Enter' && handleSend()}
           placeholder={isStreaming ? '正在回复中…' : `想和${profile.shortName}说点什么…`}
           disabled={isStreaming}
@@ -1464,18 +1527,33 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
         {/* + 菜单：语音聊天 / 语音通话。可见圆与发送键同尺寸，
             用中性表面色区分主次，不与发送键的粉色渐变撞色。 */}
         <button
-          onClick={() => setPlusMenuOpen(true)}
+          onClick={() => setPlusMenuOpen((v) => !v)}
           aria-label="更多"
           className={`w-[40px] h-[40px] rounded-full flex items-center justify-center shrink-0 active:scale-90 transition-transform ${
             isDark ? 'bg-[rgba(255,255,255,0.08)]' : 'bg-[rgba(47,54,74,0.06)]'
           }`}
         >
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={isDark ? '#B9B9C0' : '#6B7280'} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+          <svg
+            width="22" height="22" viewBox="0 0 24 24" fill="none"
+            stroke={isDark ? '#B9B9C0' : '#6B7280'} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"
+            className="transition-transform duration-200"
+            style={{ transform: plusMenuOpen ? 'rotate(45deg)' : 'none' }}
+          >
             <line x1="12" y1="6" x2="12" y2="18" />
             <line x1="6" y1="12" x2="18" y2="12" />
           </svg>
         </button>
       </div>
+
+      {/* + 号宫格面板：内联在输入框下方，展开时输入框上移、始终可见（微信样式）。 */}
+      <ChatPlusMenu
+        open={plusMenuOpen}
+        isDark={isDark}
+        onVoiceChat={() => { setPlusMenuOpen(false); setVoiceChatOpen(true) }}
+        onVoiceCall={() => { setPlusMenuOpen(false); handleVoiceCall() }}
+        onTransfer={() => { setPlusMenuOpen(false); setTransferOpen(true) }}
+        onRestart={() => { setPlusMenuOpen(false); setRestartConfirmOpen(true) }}
+      />
 
       {/* 输入区弹窗（文字档位 / +菜单 / 语音聊天开关） */}
       <TextTierSheet
@@ -1483,15 +1561,6 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
         onClose={() => setTextTierOpen(false)}
         characterId={currentCharacterId as CharacterId}
         isDark={isDark}
-      />
-      <ChatPlusMenu
-        open={plusMenuOpen}
-        onClose={() => setPlusMenuOpen(false)}
-        isDark={isDark}
-        onVoiceChat={() => setVoiceChatOpen(true)}
-        onVoiceCall={handleVoiceCall}
-        onTransfer={() => setTransferOpen(true)}
-        onRestart={() => setRestartConfirmOpen(true)}
       />
       <TransferSheet
         open={transferOpen}

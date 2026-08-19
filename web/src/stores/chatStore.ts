@@ -25,9 +25,11 @@ export interface Message {
   // Durable server pointer (/api/chat/audio/...). Persisted, so a voice message
   // can still be replayed after a page refresh once audioData is discarded.
   audioUrl?: string
-  // True only for turns still inside the rewind window (last 10 msgs & 3min),
-  // as reported by GET /chat/history. Frontend shows the 撤回 action on these.
-  // Live (just-sent) turns are not marked; the flag refreshes on next history load.
+  // Server hint (GET /chat/history) that a turn was inside the rewind window at
+  // fetch time. NOTE: the UI no longer gates the 撤回 button on this — it derives
+  // rewindability live from the message list against a ticking clock so the button
+  // appears/disappears without a reload (see rewindableTurnIds in
+  // ConversationChatPage). Kept for back-compat / debugging only.
   rewindable?: boolean
 }
 

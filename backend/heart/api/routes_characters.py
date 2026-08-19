@@ -489,7 +489,16 @@ async def clear_character_conversations(
     current_user: TokenData = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
-    """Clear persisted chat messages for one character only."""
+    """Hide a character's conversation from the inbox (left-swipe delete).
+
+    LOGICAL delete only: the chat_messages rows are marked ``rewound_at`` /
+    ``hidden_reason='list_delete'`` so they drop out of every read path (inbox,
+    history, prompt context) but stay on disk. Crucially this endpoint does NOT
+    touch memory / emotion / relationship — the character still "remembers" the
+    user. That side-effect separation is the whole contract: only /rewind and
+    /restart roll memory back; list-delete never does. See AGENTS.md
+    ("No hard deletes on user data — use logical delete").
+    """
     await _require_known_character(character_id, db)
     uid = uuid.UUID(current_user.user_id)
 
@@ -497,8 +506,10 @@ async def clear_character_conversations(
         await db.execute(
             text(
                 """
-                DELETE FROM chat_messages
+                UPDATE chat_messages
+                SET rewound_at = NOW(), hidden_reason = 'list_delete'
                 WHERE user_id = :uid AND character_id = :cid
+                  AND rewound_at IS NULL
                 """
             ),
             {"uid": uid, "cid": character_id},

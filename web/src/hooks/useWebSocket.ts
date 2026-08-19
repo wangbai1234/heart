@@ -527,6 +527,10 @@ export function useWebSocket() {
         role: 'user',
         content: text,
         timestamp: Date.now(),
+        // Just-sent → by definition the most recent user message and within the
+        // 3-min window, so surface 撤回 immediately without waiting for a history
+        // reload. The server re-computes this authoritatively on next GET.
+        rewindable: true,
         ...(vb
           ? {
               kind: 'voice',
