@@ -10,12 +10,13 @@ import { useCompanionsStore } from '../stores/companionsStore'
 import { stageLabel, stageWithIntimacy, stageOrderIndex } from '../utils/relationship'
 import { useWebSocket } from '../hooks/useWebSocket'
 import { useProactiveStore } from '../stores/proactiveStore'
-import { getChatHistory, generateOpening, ackProactive, markCharacterRead, transcribeAudio, getCharacterVoice, sendTransfer, getCharacterProfile, type CharacterProfileDTO } from '../services/api'
+import { getChatHistory, generateOpening, ackProactive, markCharacterRead, transcribeAudio, getCharacterVoice, sendTransfer, getCharacterProfile, rewindChat, restartChat, type CharacterProfileDTO } from '../services/api'
 import { useToastStore } from '../stores/toastStore'
 // DISABLED 2026-07-24: 角色↔剧情关联功能暂停，见下方渲染块注释
 // import { StoryInviteCard, isHookOnCooldown } from './StoryInviteCard'
 import { BreathingDots } from './ui/BreathingDots'
 import { NoticeDialog } from './ui/NoticeDialog'
+import { Dialog } from './ui/Dialog'
 import { Avatar } from './ui/Avatar'
 import VoiceMessageBubble from './VoiceMessageBubble'
 import { useSwipeNavigation } from '../hooks/useSwipeNavigation'
@@ -177,6 +178,7 @@ function historyItemToMessage(item: HistoryItem): Message {
     audioUrl: isVoice && item.audio_url ? `/api/chat/audio/${item.id}` : undefined,
     audioDuration: item.audio_duration_ms ?? undefined,
     audioFormat: isVoice ? 'wav' : undefined,
+    rewindable: item.rewindable ?? false,
   }
 }
 
@@ -200,6 +202,10 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
   const [plusMenuOpen, setPlusMenuOpen] = useState(false)
   const [voiceChatOpen, setVoiceChatOpen] = useState(false)
   const [transferOpen, setTransferOpen] = useState(false)
+  const [restartConfirmOpen, setRestartConfirmOpen] = useState(false)
+  const [restarting, setRestarting] = useState(false)
+  // Turn currently being rolled back (撤回) — disables its button while in flight.
+  const [rewindingTurnId, setRewindingTurnId] = useState<string | null>(null)
   const [transferSending, setTransferSending] = useState(false)
   const [voicePickerOpen, setVoicePickerOpen] = useState(false)
   const [characterGender, setCharacterGender] = useState<'male' | 'female' | undefined>(undefined)
@@ -247,6 +253,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
   const reconcileHistory = useChatStore((s) => s.reconcileHistory)
   const setCharacterId = useChatStore((s) => s.setCharacterId)
   const appendMessage = useChatStore((s) => s.appendMessage)
+  const clearMessages = useChatStore((s) => s.clearMessages)
   const setLastFetchedAt = useChatStore((s) => s.setLastFetchedAt)
   const setMessageAudioUrl = useChatStore((s) => s.setMessageAudioUrl)
   const isGenerating = useChatStore((s) => s.isGenerating[currentCharacterId as CharacterId] ?? false)
@@ -640,6 +647,76 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
       setTransferSending(false)
     }
   }, [currentCharacterId, transferSending])
+
+  // 撤回 / 重新开始 后重载历史：先清空本地气泡再拉服务端。
+  // reconcileHistory 只做合并（保留服务端不再返回的本地气泡），软删掉的消息
+  // 若不先清空会残留在屏幕上，所以这里必须 clearMessages 后重新 reconcile。
+  // 空历史（重新开始删掉 opening_history 后）→ 重新生成开场。
+  const reloadHistoryFresh = useCallback(async (cid: CharacterId) => {
+    clearMessages(cid)
+    try {
+      const data = await getChatHistory(cid, undefined, 50)
+      const reversed = [...data.items].reverse()
+      if (reversed.length === 0) {
+        setGeneratingOpening(true)
+        try {
+          const result = await generateOpening(cid)
+          if (!result.already_exists && result.messages.length > 0) {
+            reconcileHistory(cid, result.messages.map(m =>
+              historyItemToMessage({ ...m, created_at: m.created_at ?? new Date().toISOString() } as HistoryItem)
+            ))
+          }
+        } finally {
+          setGeneratingOpening(false)
+        }
+      } else {
+        reconcileHistory(cid, reversed.map(historyItemToMessage))
+      }
+      setLastFetchedAt(cid, Date.now())
+    } catch {
+      // 保底：即使重载失败也已清空本地陈旧气泡，下次进页面会重新拉取
+    }
+  }, [clearMessages, reconcileHistory, setLastFetchedAt])
+
+  // 重新开始：二次确认后全量重置（记忆/情绪/关系 + 删除 opening_history），
+  // 回到开场剧情钩子。后端软删本轮 chat_messages，不做物理删除。
+  const handleRestart = useCallback(async () => {
+    if (restarting) return
+    const cid = currentCharacterId as CharacterId
+    setRestarting(true)
+    try {
+      await restartChat(cid)
+      setRestartConfirmOpen(false)
+      await reloadHistoryFresh(cid)
+    } catch {
+      useToastStore.getState().show('重新开始失败，请稍后重试', 'error')
+    } finally {
+      setRestarting(false)
+    }
+  }, [currentCharacterId, restarting, reloadHistoryFresh])
+
+  // 时光回溯（撤回）：把对话回滚到某一轮之前，软删该轮及之后的消息并回滚记忆。
+  // 窗口守卫在服务端（最近 10 条 & 3 分钟内）；超窗返回 409，前端提示后重载刷新按钮态。
+  const handleRewind = useCallback(async (turnId: string | undefined) => {
+    if (!turnId || rewindingTurnId) return
+    const cid = currentCharacterId as CharacterId
+    setRewindingTurnId(turnId)
+    try {
+      await rewindChat(cid, turnId)
+      await reloadHistoryFresh(cid)
+    } catch (err) {
+      const status = (err as { status?: number })?.status
+      if (status === 409) {
+        useToastStore.getState().show('该消息已超出撤回范围', 'info')
+        // 刷新历史以清掉过期的撤回按钮
+        await reloadHistoryFresh(cid)
+      } else {
+        useToastStore.getState().show('撤回失败，请稍后重试', 'error')
+      }
+    } finally {
+      setRewindingTurnId(null)
+    }
+  }, [currentCharacterId, rewindingTurnId, reloadHistoryFresh])
 
   // 音色选择确认处理
   const handleVoicePickerConfirm = useCallback(async (selection: { type: 'preset' | 'clone' | null; presetVoiceId?: string; presetName?: string; cloneFile?: File }) => {
@@ -1113,22 +1190,41 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
         ) : (
           <div className="w-[40px] shrink-0" />
         )}
-        <div
-          className={`max-w-[calc(18em+2rem)] px-4 py-[14px] ${
-            isAI
-              ? isDark
-                ? 'bg-[rgba(255,255,255,0.06)] backdrop-blur-[16px] rounded-[20px_20px_20px_6px] text-[#EFE7DD] border border-[rgba(255,255,255,0.06)]'
-                : 'bg-[var(--color-glass-75)] backdrop-blur-[16px] rounded-[20px_20px_20px_6px] text-[var(--color-ink)] border border-[var(--color-border-glass)]'
-              : isDark
-                ? 'bg-gradient-to-br from-[#4A5B8F] to-[#6C7DB5] rounded-[6px_20px_20px_20px] text-[#EFE7DD] min-w-[48px]'
-                : 'bg-gradient-to-br from-[#A7C7E7] to-[#BFD7EE] rounded-[6px_20px_20px_20px] text-white min-w-[48px]'
-          }`}
-        >
-          <p className="text-[16px] leading-[1.6] whitespace-pre-wrap break-words">
-            {isAI && messages[0]?.id === msg.id && fullProfile?.opening_format === 'rich'
-              ? parseRichOpening(msg.content)
-              : msg.content}
-          </p>
+        <div className={`flex flex-col ${isAI ? 'items-start' : 'items-end'}`}>
+          <div
+            className={`max-w-[calc(18em+2rem)] px-4 py-[14px] ${
+              isAI
+                ? isDark
+                  ? 'bg-[rgba(255,255,255,0.06)] backdrop-blur-[16px] rounded-[20px_20px_20px_6px] text-[#EFE7DD] border border-[rgba(255,255,255,0.06)]'
+                  : 'bg-[var(--color-glass-75)] backdrop-blur-[16px] rounded-[20px_20px_20px_6px] text-[var(--color-ink)] border border-[var(--color-border-glass)]'
+                : isDark
+                  ? 'bg-gradient-to-br from-[#4A5B8F] to-[#6C7DB5] rounded-[6px_20px_20px_20px] text-[#EFE7DD] min-w-[48px]'
+                  : 'bg-gradient-to-br from-[#A7C7E7] to-[#BFD7EE] rounded-[6px_20px_20px_20px] text-white min-w-[48px]'
+            }`}
+          >
+            <p className="text-[16px] leading-[1.6] whitespace-pre-wrap break-words">
+              {isAI && messages[0]?.id === msg.id && fullProfile?.opening_format === 'rich'
+                ? parseRichOpening(msg.content)
+                : msg.content}
+            </p>
+          </div>
+          {/* 时光回溯：仅在撤回窗口内（后端标记 rewindable）显示可见按钮，
+              点按把对话回滚到这一轮之前。无长按、无 emoji。 */}
+          {msg.rewindable && msg.turnId && (
+            <button
+              onClick={() => { void handleRewind(msg.turnId) }}
+              disabled={rewindingTurnId !== null}
+              className={`mt-1 inline-flex items-center gap-1 px-2 py-0.5 text-[12px] disabled:opacity-50 ${
+                isDark ? 'text-[rgba(243,185,200,0.9)]' : 'text-[#FF7DA1]'
+              }`}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
+                <path d="M3 3v5h5" />
+              </svg>
+              <span>{rewindingTurnId === msg.turnId ? '撤回中…' : '撤回'}</span>
+            </button>
+          )}
         </div>
       </div>
     )
@@ -1395,6 +1491,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
         onVoiceChat={() => setVoiceChatOpen(true)}
         onVoiceCall={handleVoiceCall}
         onTransfer={() => setTransferOpen(true)}
+        onRestart={() => setRestartConfirmOpen(true)}
       />
       <TransferSheet
         open={transferOpen}
@@ -1415,6 +1512,37 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
         gender={characterGender}
         onConfirm={handleVoicePickerConfirm}
       />
+
+      {/* 重新开始二次确认 */}
+      <Dialog
+        open={restartConfirmOpen}
+        onClose={() => { if (!restarting) setRestartConfirmOpen(false) }}
+        title="重新开始这段关系？"
+        actions={
+          <>
+            <button
+              onClick={() => setRestartConfirmOpen(false)}
+              disabled={restarting}
+              className={`flex-1 rounded-full px-4 py-3 text-[15px] font-medium disabled:opacity-50 ${
+                isDark
+                  ? 'bg-[rgba(255,255,255,0.06)] text-[#ECE9F4]'
+                  : 'bg-[rgba(255,255,255,0.75)] text-[#30344A]'
+              }`}
+            >
+              取消
+            </button>
+            <button
+              onClick={() => { void handleRestart() }}
+              disabled={restarting}
+              className="flex-1 rounded-full bg-[#FF5A5A] px-4 py-3 text-[15px] font-semibold text-white disabled:opacity-60"
+            >
+              {restarting ? '正在重置…' : '重新开始'}
+            </button>
+          </>
+        }
+      >
+        将清空与{profile.shortName}的全部记忆、情绪和关系进度，回到最初的相遇。此操作无法撤销。
+      </Dialog>
 
       {/* Insufficient credits dialog */}
       <NoticeDialog

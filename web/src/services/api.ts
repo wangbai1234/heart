@@ -626,6 +626,10 @@ export async function getChatHistory(
     /** 'action' grey pill, 'text' dialog, 'voice' audio, 'call_summary' 通话时长条,
      *  'transfer' 转账气泡(用户), 'transfer_receipt' 收款气泡(角色). */
     kind: 'text' | 'action' | 'voice' | 'call_summary' | 'transfer' | 'transfer_receipt' | null
+    /** True only for turns still inside the rewind window (last 10 msgs & 3min).
+     *  Frontend shows the 撤回 action only on these bubbles. Only ever true on
+     *  the first page (no cursor). */
+    rewindable?: boolean
   }>
   next_cursor: string | null
 }> {
@@ -633,6 +637,34 @@ export async function getChatHistory(
   if (cursor) params.set('cursor', cursor)
   params.set('limit', String(limit))
   return request(`/chat/history?${params}`)
+}
+
+/**
+ * 时光回溯 — undo the given turn and everything after it. Rolls back the
+ * associated memory + emotion/relationship state. Only valid inside the
+ * server-enforced window (last 10 live messages AND within 3 minutes);
+ * outside it the server returns 409.
+ */
+export async function rewindChat(
+  characterId: string,
+  turnId: string,
+): Promise<{ ok: boolean; cut_at: string }> {
+  return request('/chat/rewind', {
+    method: 'POST',
+    body: JSON.stringify({ character_id: characterId, turn_id: turnId }),
+  })
+}
+
+/**
+ * 重新开始 — full reset back to the opening premise. Hides all messages,
+ * forgets all memory, resets emotion/relationship, and replays the opening.
+ * Confirmation-gated on the caller side.
+ */
+export async function restartChat(characterId: string): Promise<{ ok: boolean }> {
+  return request('/chat/restart', {
+    method: 'POST',
+    body: JSON.stringify({ character_id: characterId }),
+  })
 }
 
 /**

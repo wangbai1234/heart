@@ -25,6 +25,10 @@ export interface Message {
   // Durable server pointer (/api/chat/audio/...). Persisted, so a voice message
   // can still be replayed after a page refresh once audioData is discarded.
   audioUrl?: string
+  // True only for turns still inside the rewind window (last 10 msgs & 3min),
+  // as reported by GET /chat/history. Frontend shows the 撤回 action on these.
+  // Live (just-sent) turns are not marked; the flag refreshes on next history load.
+  rewindable?: boolean
 }
 
 export interface VadState {
