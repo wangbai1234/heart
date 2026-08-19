@@ -198,6 +198,7 @@ class InnerLoopWorker:
                         "(SELECT MAX(cm.created_at) FROM chat_messages cm "
                         " WHERE cm.user_id = s.user_id "
                         "   AND cm.character_id = s.character_id "
+                        "   AND cm.rewound_at IS NULL "
                         "   AND cm.role = 'user') AS last_user_message_at "
                         "FROM sessions s "
                         "LEFT JOIN relationship_states r "

@@ -11,6 +11,7 @@ import contextlib
 import json
 import random
 import uuid
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional, cast
 from urllib.parse import urlparse
 
@@ -81,6 +82,7 @@ async def _load_recent_conversation_history(
             SELECT role, content, kind
             FROM chat_messages
             WHERE user_id = :uid AND character_id = :cid
+              AND rewound_at IS NULL
               AND kind IS DISTINCT FROM 'call_summary'
             ORDER BY created_at DESC
             LIMIT :limit
@@ -1300,6 +1302,7 @@ async def get_chat_history(
                        credits_charged, turn_id, created_at, kind
                 FROM chat_messages
                 WHERE user_id = :uid AND character_id = :cid AND created_at < :cursor
+                  AND rewound_at IS NULL
                   AND channel <> 'call'
                 ORDER BY created_at DESC, sequence_id DESC
                 LIMIT :limit
@@ -1313,6 +1316,7 @@ async def get_chat_history(
                        credits_charged, turn_id, created_at, kind
                 FROM chat_messages
                 WHERE user_id = :uid AND character_id = :cid
+                  AND rewound_at IS NULL
                   AND channel <> 'call'
                 ORDER BY created_at DESC, sequence_id DESC
                 LIMIT :limit
@@ -1323,6 +1327,31 @@ async def get_chat_history(
     rows = result.mappings().all()
     has_next = len(rows) > limit
     items = rows[:limit]
+
+    # Which turns can the frontend offer 撤回 (rewind) on? Rewind is surfaced
+    # ONLY under USER bubbles, so we count USER bubbles (rows are newest-first):
+    # a turn is rewindable iff its user bubble is among the last
+    # REWIND_MAX_USER_MSGS user bubbles AND was sent within REWIND_MAX_AGE — the
+    # same guard POST /api/chat/rewind enforces. We only bother on the first
+    # page (no cursor): rewind is only ever offered on the most recent messages,
+    # which always fit inside the first page.
+    rewindable_turns: set[str] = set()
+    if not cursor:
+        now = datetime.now(timezone.utc)
+        user_seen = 0
+        for r in rows:  # newest → oldest
+            if r["role"] != "user":
+                continue
+            if user_seen >= REWIND_MAX_USER_MSGS:
+                break
+            user_seen += 1
+            tid = r["turn_id"]
+            ca = r["created_at"]
+            if tid is None or ca is None:
+                continue
+            ts = ca if ca.tzinfo else ca.replace(tzinfo=timezone.utc)
+            if (now - ts) <= REWIND_MAX_AGE:
+                rewindable_turns.add(str(tid))
 
     return {
         "items": [
@@ -1341,11 +1370,409 @@ async def get_chat_history(
                 # kinds and rendered action messages as plain text on history
                 # load (TEST_REPORT_20260712 BUG-5).
                 "kind": r["kind"] or "text",
+                # True only for turns still inside the rewind window; the
+                # frontend shows the 撤回 action on these bubbles.
+                "rewindable": (str(r["turn_id"]) in rewindable_turns if r["turn_id"] else False),
             }
             for r in items
         ],
         "next_cursor": items[-1]["created_at"].isoformat() if has_next and items else None,
     }
+
+
+# ── REST: Rewind (时光回溯) & Restart (重新开始) ──────────────────────
+#
+# Two features share ONE visibility marker on chat_messages (rewound_at /
+# hidden_reason) but keep their side effects strictly separate:
+#
+#   rewind  — short-window "undo": hides the chosen turn + everything after it,
+#             and rolls the associated memory / emotion / relationship state back
+#             to just-before that turn. Eligible only inside a tight window
+#             (last 10 live messages AND within 3 minutes) so the rolled-back
+#             span never crosses the L4 promoter tick or nightly consolidation,
+#             keeping the operation cheaply reversible.
+#   restart — full reset back to the opening premise: hides ALL live messages,
+#             forgets all memory, resets emotion/relationship to defaults, and
+#             deletes the opening_history guard so the opening replays.
+#
+# Neither physically deletes user chat rows (AGENTS.md: logical delete only).
+
+# Recall window (product-confirmed). Rewind is offered ONLY on USER-sent
+# bubbles (a user message is a single bubble, unlike an assistant reply which
+# fans out into many dialogue + action segments), so we count USER bubbles: a
+# turn is rewindable iff its user bubble is among the last REWIND_MAX_USER_MSGS
+# user bubbles AND was sent within REWIND_MAX_AGE. Tapping 撤回 under a user
+# bubble rolls the thread back to just-before that message (the user bubble is
+# the earliest row of its turn, so cut_ts = the turn start).
+REWIND_MAX_USER_MSGS = 10
+REWIND_MAX_AGE = timedelta(minutes=3)
+
+
+async def _clear_l1_working_memory(user_id: uuid.UUID, character_id: str) -> None:
+    """Delete the L1 Redis working-memory key for one (user, character) pair.
+
+    The real key layout is ``l1:{uid}:{cid}:latest`` (see ss02_memory/service.py).
+    NOTE: routes_account.py / the purge worker use a ``memory:l1:`` prefix that
+    does NOT match this layout — do not copy it.
+    """
+    try:
+        import redis.asyncio as aioredis
+
+        from heart.core.config import settings
+
+        r = aioredis.from_url(settings.redis_url)
+        try:
+            await r.delete(f"l1:{user_id}:{character_id}:latest")
+        finally:
+            await r.aclose()
+    except Exception as exc:
+        # L1 is a 300s-TTL cache; a stale entry self-heals. Never fail the
+        # rollback on a Redis hiccup, but do surface it.
+        logger.warning(
+            "rewind_l1_clear_failed",
+            user_id=str(user_id),
+            character_id=character_id,
+            error=str(exc),
+        )
+
+
+async def _rollback_memory_and_state(
+    db: AsyncSession,
+    user_id: uuid.UUID,
+    character_id: str,
+    cut_ts: datetime | None,
+) -> None:
+    """Roll memory + emotion/relationship back to the state at ``cut_ts``.
+
+    Shared by /rewind (cut_ts = start of the undone turn) and /restart
+    (cut_ts = None → forget everything, reset states to defaults).
+
+    Memory (SS02):
+      - L2 episodic + L3 fact: set ``do_not_recall=true`` (M-1, no physical
+        delete). Every retriever already filters ``do_not_recall=false``.
+      - L4 identity: set ``user_initiated_forget=true`` (its own forget flag;
+        L4 has no do_not_recall column).
+    Async encode queue: cancel not-yet-encoded rows so a pending job can't
+      re-materialise a memory we just hid (created_at is naive-UTC there).
+    Emotion (SS03) / Relationship (SS04): single mutable rows reconstructed
+      from the append-only event snapshots (see below), or reset to default.
+    """
+    full_reset = cut_ts is None
+    params: dict[str, Any] = {"uid": user_id, "cid": character_id}
+    ge = ""  # created_at cutoff clause, empty for full reset
+    if not full_reset:
+        params["cut"] = cut_ts
+        ge = " AND created_at >= :cut"
+
+    # L2 + L3: do_not_recall (idempotent; already-hidden rows stay hidden).
+    await db.execute(
+        sql_text(
+            f"UPDATE episodic_memories SET do_not_recall = true "
+            f"WHERE user_id = :uid AND character_id = :cid{ge} "
+            f"AND do_not_recall = false"
+        ),
+        params,
+    )
+    await db.execute(
+        sql_text(
+            f"UPDATE fact_nodes SET do_not_recall = true "
+            f"WHERE user_id = :uid AND character_id = :cid{ge} "
+            f"AND do_not_recall = false"
+        ),
+        params,
+    )
+    # L4: identity memories use their own forget flag.
+    await db.execute(
+        sql_text(
+            f"UPDATE identity_memories "
+            f"SET user_initiated_forget = true, forget_requested_at = NOW() "
+            f"WHERE user_id = :uid AND character_id = :cid{ge} "
+            f"AND user_initiated_forget = false"
+        ),
+        params,
+    )
+    # Async encode queue: cancel rows not yet promoted into L2/L3 so the
+    # encoder can't re-create a memory we just hid. Its created_at is naive
+    # UTC (timezone=False), so compare with a naive cut.
+    enc_params: dict[str, Any] = {"uid": user_id, "cid": character_id}
+    enc_ge = ""
+    if not full_reset:
+        enc_params["cut"] = cut_ts.astimezone(timezone.utc).replace(tzinfo=None)
+        enc_ge = " AND created_at >= :cut"
+    await db.execute(
+        sql_text(
+            f"UPDATE memory_encoding_events SET status = 'cancelled' "
+            f"WHERE user_id = :uid AND character_id = :cid{enc_ge} "
+            f"AND status IN ('llm_pending', 'failed')"
+        ),
+        enc_params,
+    )
+
+    # Emotion (SS03): rebuild the single mutable state row from the earliest
+    # emotion_event AT/AFTER the cut — its vad_before snapshot is exactly the
+    # pre-cut emotional state. Full reset (or no snapshot) → delete the row so
+    # the service recreates the neutral default on next turn.
+    emo_before: dict | None = None
+    if not full_reset:
+        row = await db.execute(
+            sql_text(
+                "SELECT vad_before FROM emotion_events "
+                "WHERE user_id = :uid AND character_id = :cid AND created_at >= :cut "
+                "ORDER BY created_at ASC LIMIT 1"
+            ),
+            {"uid": user_id, "cid": character_id, "cut": cut_ts},
+        )
+        r = row.first()
+        emo_before = r[0] if r and r[0] else None
+
+    if emo_before:
+        await db.execute(
+            sql_text(
+                "UPDATE emotion_states SET "
+                "vad_valence = :v, vad_arousal = :a, vad_dominance = :d, "
+                "vad_target_valence = :v, vad_target_arousal = :a, "
+                "vad_target_dominance = :d, updated_at = NOW() "
+                "WHERE user_id = :uid AND character_id = :cid"
+            ),
+            {
+                "uid": user_id,
+                "cid": character_id,
+                "v": float(emo_before.get("valence", 0.0)),
+                "a": float(emo_before.get("arousal", 0.3)),
+                "d": float(emo_before.get("dominance", 0.5)),
+            },
+        )
+    else:
+        # No pre-cut snapshot (or full reset): drop the state; SS03 recreates
+        # the neutral default (valence 0 / arousal 0.3 / dominance 0.5) lazily.
+        await db.execute(
+            sql_text("DELETE FROM emotion_states WHERE user_id = :uid AND character_id = :cid"),
+            {"uid": user_id, "cid": character_id},
+        )
+
+    # Relationship (SS04): relationship_events fire only on STAGE TRANSITIONS,
+    # not per-turn (intimacy drift within a stage is not evented). So we can
+    # only faithfully roll back to a transition boundary: if a transition
+    # happened at/after the cut, restore its state_before snapshot. If none did,
+    # no stage change occurred inside the (≤10 msg / ≤3 min) window, so the
+    # stage is already correct and we leave intimacy as-is (sub-window drift is
+    # negligible and has no snapshot to revert to). Full reset → delete row.
+    if full_reset:
+        await db.execute(
+            sql_text(
+                "DELETE FROM relationship_states WHERE user_id = :uid AND character_id = :cid"
+            ),
+            {"uid": user_id, "cid": character_id},
+        )
+    else:
+        row = await db.execute(
+            sql_text(
+                "SELECT state_before FROM relationship_events "
+                "WHERE user_id = :uid AND character_id = :cid AND created_at >= :cut "
+                "ORDER BY created_at ASC LIMIT 1"
+            ),
+            {"uid": user_id, "cid": character_id, "cut": cut_ts},
+        )
+        r = row.first()
+        rel_before = r[0] if r and r[0] else None
+        if rel_before:
+            await db.execute(
+                sql_text(
+                    "UPDATE relationship_states SET "
+                    "current_stage = :stage, intimacy_level = :intimacy, "
+                    "trust_score = :trust, attachment_strength = :attachment, "
+                    "updated_at = NOW() "
+                    "WHERE user_id = :uid AND character_id = :cid"
+                ),
+                {
+                    "uid": user_id,
+                    "cid": character_id,
+                    "stage": rel_before.get("stage", "STRANGER"),
+                    "intimacy": float(rel_before.get("intimacy", 0.0)),
+                    "trust": float(rel_before.get("trust", 0.0)),
+                    "attachment": float(rel_before.get("attachment", 0.0)),
+                },
+            )
+
+
+class RewindBody(BaseModel):
+    character_id: str
+    # The turn to undo: everything from this turn onward is rolled back. The
+    # frontend passes the turn_id of the bubble under which the user tapped 撤回.
+    turn_id: str
+
+
+@router.post("/api/chat/rewind")
+async def rewind_chat(
+    body: RewindBody,
+    current_user: TokenData = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """时光回溯 — undo the chosen turn and everything after it (short window).
+
+    Eligibility (both must hold): the undone user message is among the last
+    REWIND_MAX_USER_MSGS live user bubbles for this character AND it was sent
+    within REWIND_MAX_AGE. Outside the window → 409 (the frontend hides the
+    button there anyway; this is the server-side guard).
+
+    Effects (all inside one transaction):
+      1. Soft-delete every live chat row with created_at >= the turn's start
+         (hidden_reason='rewind'), so the thread returns to just-before it.
+      2. Roll memory (do_not_recall / forget) + emotion/relationship state back
+         to that instant.
+      3. Clear the L1 working-memory cache.
+    """
+    uid = uuid.UUID(current_user.user_id)
+    try:
+        turn_uuid = uuid.UUID(body.turn_id)
+    except (ValueError, AttributeError) as exc:
+        raise HTTPException(status_code=400, detail="无效的 turn_id") from exc
+
+    # Serialize concurrent rollbacks for this (user, character) so two taps
+    # can't interleave the multi-table update. Transaction-scoped lock.
+    lock_key = (uid.int ^ hash(body.character_id)) & 0x7FFFFFFFFFFFFFFF
+    await db.execute(sql_text("SELECT pg_advisory_xact_lock(:k)"), {"k": lock_key})
+
+    # Resolve the turn's start timestamp (earliest bubble of the turn), and
+    # verify it is still live and within the recall window.
+    turn_row = await db.execute(
+        sql_text(
+            """
+            SELECT MIN(created_at) AS turn_start
+            FROM chat_messages
+            WHERE user_id = :uid AND character_id = :cid
+              AND turn_id = :tid AND rewound_at IS NULL
+            """
+        ),
+        {"uid": uid, "cid": body.character_id, "tid": turn_uuid},
+    )
+    turn_start = turn_row.scalar()
+    if turn_start is None:
+        raise HTTPException(status_code=404, detail="该消息不存在或已撤回")
+
+    # Window guard 1: age.
+    now = datetime.now(timezone.utc)
+    ts = turn_start if turn_start.tzinfo else turn_start.replace(tzinfo=timezone.utc)
+    if now - ts > REWIND_MAX_AGE:
+        raise HTTPException(status_code=409, detail="超出撤回时限")
+
+    # Window guard 2: the undone user message must be among the last
+    # REWIND_MAX_USER_MSGS live user bubbles. Count live USER bubbles at/after
+    # the cut; if that exceeds the window the message is too far back to undo.
+    cnt = await db.execute(
+        sql_text(
+            """
+            SELECT COUNT(*) FROM chat_messages
+            WHERE user_id = :uid AND character_id = :cid
+              AND rewound_at IS NULL AND channel <> 'call'
+              AND role = 'user'
+              AND created_at >= :cut
+            """
+        ),
+        {"uid": uid, "cid": body.character_id, "cut": turn_start},
+    )
+    if int(cnt.scalar() or 0) > REWIND_MAX_USER_MSGS:
+        raise HTTPException(status_code=409, detail="超出撤回范围")
+
+    try:
+        # 1. Hide the turn and everything after it.
+        await db.execute(
+            sql_text(
+                """
+                UPDATE chat_messages
+                SET rewound_at = NOW(), hidden_reason = 'rewind'
+                WHERE user_id = :uid AND character_id = :cid
+                  AND rewound_at IS NULL AND created_at >= :cut
+                """
+            ),
+            {"uid": uid, "cid": body.character_id, "cut": turn_start},
+        )
+        # 2. Roll back memory + emotion/relationship to the cut instant.
+        await _rollback_memory_and_state(db, uid, body.character_id, turn_start)
+    except Exception as exc:
+        await db.rollback()
+        logger.exception(
+            "chat_rewind_failed",
+            user_id=str(uid),
+            character_id=body.character_id,
+            turn_id=body.turn_id,
+        )
+        raise HTTPException(status_code=500, detail="撤回失败，请重试") from exc
+
+    await db.commit()
+    # 3. Clear L1 (after commit; cache, best-effort).
+    await _clear_l1_working_memory(uid, body.character_id)
+    logger.info(
+        "chat_rewound",
+        user_id=str(uid),
+        character_id=body.character_id,
+        turn_id=body.turn_id,
+        cut_at=turn_start.isoformat(),
+    )
+    return {"ok": True, "cut_at": turn_start.isoformat()}
+
+
+class RestartBody(BaseModel):
+    character_id: str
+
+
+@router.post("/api/chat/restart")
+async def restart_chat(
+    body: RestartBody,
+    current_user: TokenData = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """重新开始 — full reset back to the opening premise (confirmation-gated).
+
+    Hides ALL live chat rows (hidden_reason='restart'), forgets all memory,
+    resets emotion/relationship to defaults, deletes the opening_history guard
+    so the opening replays, and clears L1. The frontend re-fetches the opening
+    after this returns.
+    """
+    uid = uuid.UUID(current_user.user_id)
+    await ensure_character_loaded(body.character_id, db)
+
+    lock_key = (uid.int ^ hash(body.character_id)) & 0x7FFFFFFFFFFFFFFF
+    await db.execute(sql_text("SELECT pg_advisory_xact_lock(:k)"), {"k": lock_key})
+
+    try:
+        await db.execute(
+            sql_text(
+                """
+                UPDATE chat_messages
+                SET rewound_at = NOW(), hidden_reason = 'restart'
+                WHERE user_id = :uid AND character_id = :cid AND rewound_at IS NULL
+                """
+            ),
+            {"uid": uid, "cid": body.character_id},
+        )
+        # Full reset: cut_ts=None forgets all memory + resets states to default.
+        await _rollback_memory_and_state(db, uid, body.character_id, None)
+        # Drop the idempotency guard so /opening replays the premise.
+        await db.execute(
+            sql_text("DELETE FROM opening_history WHERE user_id = :uid AND character_id = :cid"),
+            {"uid": uid, "cid": body.character_id},
+        )
+    except Exception as exc:
+        await db.rollback()
+        logger.exception(
+            "chat_restart_failed",
+            user_id=str(uid),
+            character_id=body.character_id,
+        )
+        raise HTTPException(status_code=500, detail="重新开始失败，请重试") from exc
+
+    await db.commit()
+    await _clear_l1_working_memory(uid, body.character_id)
+    logger.info(
+        "chat_restarted",
+        user_id=str(uid),
+        character_id=body.character_id,
+    )
+    return {"ok": True}
+
+
+# ── REST: Chat History (cont.) ──────────────────────────────────────
 
 
 class CallSummaryBody(BaseModel):
@@ -1626,6 +2053,7 @@ async def generate_chat_opening(
             SELECT EXISTS(
                 SELECT 1 FROM chat_messages
                 WHERE user_id = :uid AND character_id = :cid
+                  AND rewound_at IS NULL
             )
         """),
         {"uid": uid, "cid": character_id},
@@ -1699,6 +2127,7 @@ async def get_inbox_summary(
                     WHERE cm.user_id    = :uid
                       AND cm.character_id = m.character_id
                       AND cm.role         = 'assistant'
+                      AND cm.rewound_at IS NULL
                       AND cm.created_at   > COALESCE(rs.last_read_at, '-infinity'::timestamptz)
                 ) AS unread_count
             FROM (
@@ -1706,6 +2135,7 @@ async def get_inbox_summary(
                     character_id, content, modality, created_at
                 FROM chat_messages
                 WHERE user_id = :uid
+                  AND rewound_at IS NULL
                 ORDER BY character_id, created_at DESC
             ) m
             JOIN characters c
@@ -1816,6 +2246,7 @@ async def get_chat_audio_by_turn(
             SELECT audio_url
             FROM chat_messages
             WHERE turn_id = :tid AND user_id = :uid AND role = :role
+              AND rewound_at IS NULL
               AND modality = 'voice' AND audio_url IS NOT NULL
             ORDER BY created_at ASC
             LIMIT 1
@@ -1841,6 +2272,7 @@ async def get_chat_audio(
             SELECT audio_url
             FROM chat_messages
             WHERE id = :mid AND user_id = :uid AND modality = 'voice'
+              AND rewound_at IS NULL
             LIMIT 1
             """
         ),

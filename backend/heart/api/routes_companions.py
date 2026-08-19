@@ -206,6 +206,7 @@ async def list_companions(
                     WHERE cm.user_id      = :uid
                       AND cm.character_id = m.character_id
                       AND cm.role         = 'assistant'
+                      AND cm.rewound_at IS NULL
                       AND cm.created_at   > COALESCE(rs.last_read_at, '-infinity'::timestamptz)
                 ) AS unread_count
             FROM (
@@ -213,6 +214,7 @@ async def list_companions(
                     character_id, content, modality, created_at
                 FROM chat_messages
                 WHERE user_id = :uid
+                  AND rewound_at IS NULL
                 ORDER BY character_id, created_at DESC
             ) m
             LEFT JOIN user_character_read_state rs
