@@ -906,6 +906,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
   // 叩问式引导回复（挂在 AI 开场消息末尾，缩进对齐消息列，不是浮在输入框上的控制栏）。
   // 有 starterBranches → 先选切入角度再展开台词；否则平铺 starterPrompts。
   const renderStarterGuide = () => {
+    if (isHidden || isCleared) return null
     if (!(historyLoaded && !isStreaming && messages.every((m) => m.role !== 'user'))) return null
     const branches = CHARACTER_UI_CONFIGS[currentCharacterId]?.starterBranches
     const chipCls = isDark
@@ -1393,8 +1394,12 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
 
       {/* Messages */}
       <div ref={scrollRef} className="relative z-10 flex-1 overflow-y-auto px-4 py-3 flex flex-col gap-3">
-        {/* 角色专属前情提要卡：首聊、无用户消息时出现在开场之上 */}
+        {/* 角色专属前情提要卡：首聊、无用户消息时出现在开场之上。
+            左滑删除（isHidden）或本轮清空（isCleared）后不再展示开场剧情，
+            保持空白页，直到用户发消息 / 重新开始重新激活。 */}
         {historyLoaded &&
+          !isHidden &&
+          !isCleared &&
           messages.every((m) => m.role !== 'user') &&
           (() => {
             // Three-level chain: builtin component → UGC premise_card → none
