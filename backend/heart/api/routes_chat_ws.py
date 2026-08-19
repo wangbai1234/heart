@@ -1458,10 +1458,25 @@ async def _rollback_memory_and_state(
       from the append-only event snapshots (see below), or reset to default.
     """
     full_reset = cut_ts is None
+    # Every memory / emotion / relationship table below stores created_at as a
+    # naive `timestamp` (timezone=False in the DB, even though some ORM columns
+    # mark timezone=True). cut_ts comes from chat_messages.created_at which IS
+    # tz-aware, so binding it directly makes asyncpg pick the naive-timestamp
+    # codec and blow up with "can't subtract offset-naive and offset-aware
+    # datetimes". Normalise once to naive-UTC and reuse for every cutoff bind.
+    cut_naive = (
+        None
+        if cut_ts is None
+        else (
+            cut_ts.astimezone(timezone.utc).replace(tzinfo=None)
+            if cut_ts.tzinfo is not None
+            else cut_ts
+        )
+    )
     params: dict[str, Any] = {"uid": user_id, "cid": character_id}
     ge = ""  # created_at cutoff clause, empty for full reset
     if not full_reset:
-        params["cut"] = cut_ts
+        params["cut"] = cut_naive
         ge = " AND created_at >= :cut"
 
     # L2 + L3: do_not_recall (idempotent; already-hidden rows stay hidden).
@@ -1497,7 +1512,7 @@ async def _rollback_memory_and_state(
     enc_params: dict[str, Any] = {"uid": user_id, "cid": character_id}
     enc_ge = ""
     if not full_reset:
-        enc_params["cut"] = cut_ts.astimezone(timezone.utc).replace(tzinfo=None)
+        enc_params["cut"] = cut_naive
         enc_ge = " AND created_at >= :cut"
     await db.execute(
         sql_text(
@@ -1520,7 +1535,7 @@ async def _rollback_memory_and_state(
                 "WHERE user_id = :uid AND character_id = :cid AND created_at >= :cut "
                 "ORDER BY created_at ASC LIMIT 1"
             ),
-            {"uid": user_id, "cid": character_id, "cut": cut_ts},
+            {"uid": user_id, "cid": character_id, "cut": cut_naive},
         )
         r = row.first()
         emo_before = r[0] if r and r[0] else None
@@ -1571,7 +1586,7 @@ async def _rollback_memory_and_state(
                 "WHERE user_id = :uid AND character_id = :cid AND created_at >= :cut "
                 "ORDER BY created_at ASC LIMIT 1"
             ),
-            {"uid": user_id, "cid": character_id, "cut": cut_ts},
+            {"uid": user_id, "cid": character_id, "cut": cut_naive},
         )
         r = row.first()
         rel_before = r[0] if r and r[0] else None
