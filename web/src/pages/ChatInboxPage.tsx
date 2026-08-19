@@ -9,8 +9,7 @@ import { useAppStore } from '../stores/appStore'
 import { useChatStore } from '../stores/chatStore'
 import { useProactiveStore } from '../stores/proactiveStore'
 import { useCharactersStore } from '../stores/charactersStore'
-import { getInboxSummary, clearCharacterConversations } from '../services/api'
-import { useToastStore } from '../stores/toastStore'
+import { getInboxSummary } from '../services/api'
 import {
   CHARACTER_PROFILES,
   formatConversationTime,
@@ -93,6 +92,8 @@ export function ChatInboxPage() {
   const setActiveCharacter = useChatStore((s) => s.setActiveCharacter)
   const clearThread = useChatStore((s) => s.clearThread)
   const clearMessages = useChatStore((s) => s.clearMessages)
+  const hideInbox = useChatStore((s) => s.hideInbox)
+  const inboxHidden = useChatStore((s) => s.inboxHidden)
   const serverCharacters = useCharactersStore((s) => s.characters)
   const setInboxUnreadTotal = useAppStore((s) => s.setInboxUnreadTotal)
   const scrollRef = useScrollRestore()
@@ -175,9 +176,11 @@ export function ChatInboxPage() {
     }
   })
 
-  // Filter out characters with no history at all, then sort newest-first
+  // Filter out characters with no history at all AND rows the user swiped away
+  // on this device (local-only hide), then sort newest-first. Swiped rows are
+  // un-hidden by the store as soon as the character sees new activity.
   const conversations = allConversations
-    .filter((c) => c.totalMessages > 0)
+    .filter((c) => c.totalMessages > 0 && !inboxHidden.includes(c.characterId))
     .sort((a, b) => b.lastTimestamp - a.lastTimestamp)
 
   const totalUnreadCount = conversations.reduce((sum, c) => sum + c.unreadCount, 0)
@@ -188,14 +191,14 @@ export function ChatInboxPage() {
     setInboxUnreadTotal(totalUnreadCount)
   }, [totalUnreadCount, setInboxUnreadTotal])
 
-  const handleDelete = async (characterId: CharacterId) => {
-    try {
-      await clearCharacterConversations(characterId)
-    } catch {
-      useToastStore.getState().show('清空失败，请重试', 'error')
-      setDeleteTarget(null)
-      return
-    }
+  // Swipe-away is a LOCAL, presentation-only hide: it removes the row from THIS
+  // device's inbox and nothing else. No server call — the conversation history
+  // and the character's memory stay fully intact (reopening the character, or a
+  // new proactive message, brings the row straight back via the store's un-hide
+  // on addMessage/reconcileHistory). Persisted to localStorage so the row stays
+  // hidden across reloads on this device; a cache clear / new device shows it again.
+  const handleDelete = (characterId: CharacterId) => {
+    hideInbox(characterId)
     clearThread(characterId)
     clearMessages(characterId)
     drainProactive(characterId)
@@ -313,7 +316,7 @@ export function ChatInboxPage() {
             <button
               onClick={() => {
                 if (deleteTarget) {
-                  void handleDelete(deleteTarget)
+                  handleDelete(deleteTarget)
                 }
               }}
               className="flex-1 rounded-full bg-[#FF5A5A] px-4 py-3 text-[15px] font-semibold text-white"

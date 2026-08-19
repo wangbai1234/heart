@@ -63,6 +63,13 @@ interface ChatState {
   insufficientCredits: { needed: number; balance: number } | null
   modelForbidden: { model: string; tier: string } | null
   clearedCharacters: Set<CharacterId>
+  // Inbox rows the user swiped away. LOCAL-ONLY + persisted to localStorage:
+  // left-swipe "删除" hides the row on THIS device but never touches the server
+  // (chat records + memory stay intact). Cleared for a character as soon as new
+  // activity arrives for it (send / reconcile history / reopen), so re-entering
+  // the conversation brings the row back. Survives reload; wiped on cache clear
+  // / new device (by design — purely a per-device presentation preference).
+  inboxHidden: CharacterId[]
 
   isGenerating: Record<string, boolean>
 
@@ -117,6 +124,10 @@ interface ChatState {
   clearModelForbidden: () => void
   clear: () => void
   clearMessages: (characterId: CharacterId) => void
+  // Swipe-away on the inbox: mark this character's row hidden on THIS device.
+  // Purely presentational — no server call, no chat/memory mutation. Auto-cleared
+  // by addMessage/appendMessage/reconcileHistory when the character sees activity.
+  hideInbox: (characterId: CharacterId) => void
   // Hard reset for logout / user switch: wipe every per-user field back to its
   // initial value so the next account on this browser can never rehydrate the
   // previous user's messages / threads / openings. The persisted localStorage
@@ -153,6 +164,7 @@ export const useChatStore = create<ChatState>()(
   insufficientCredits: null,
   modelForbidden: null,
   clearedCharacters: new Set<CharacterId>(),
+  inboxHidden: [],
 
   setLastFetchedAt: (characterId, ts) =>
     set((s) => ({ lastFetchedAt: { ...s.lastFetchedAt, [characterId]: ts } })),
@@ -171,6 +183,7 @@ export const useChatStore = create<ChatState>()(
           [characterId]: [...(state.threads[characterId] ?? []), message],
         },
         clearedCharacters: cleared,
+        inboxHidden: state.inboxHidden.filter((id) => id !== characterId),
       }
     }),
   clearThread: (characterId) =>
@@ -192,6 +205,7 @@ export const useChatStore = create<ChatState>()(
           [characterId]: [...(s.messages[characterId] ?? []), msg],
         },
         clearedCharacters: cleared,
+        inboxHidden: s.inboxHidden.filter((id) => id !== characterId),
       }
     }),
   updateMessage: (characterId, id, patch) =>
@@ -266,6 +280,7 @@ export const useChatStore = create<ChatState>()(
       return {
         messages: { ...s.messages, [characterId]: merged },
         clearedCharacters: cleared,
+        inboxHidden: s.inboxHidden.filter((id) => id !== characterId),
       }
     }),
   appendToLast: (characterId, delta) =>
@@ -362,6 +377,12 @@ export const useChatStore = create<ChatState>()(
         insufficientCredits: null,
       }
     }),
+  hideInbox: (characterId) =>
+    set((s) =>
+      s.inboxHidden.includes(characterId)
+        ? {}
+        : { inboxHidden: [...s.inboxHidden, characterId] },
+    ),
   resetUserState: () =>
     set({
       threads: cloneThreads(),
@@ -378,6 +399,7 @@ export const useChatStore = create<ChatState>()(
       insufficientCredits: null,
       modelForbidden: null,
       clearedCharacters: new Set<CharacterId>(),
+      inboxHidden: [],
     }),
   }),
   {
@@ -391,6 +413,7 @@ export const useChatStore = create<ChatState>()(
       ),
       threads: state.threads,
       lastFetchedAt: state.lastFetchedAt,
+      inboxHidden: state.inboxHidden,
     }),
   }
 ))
