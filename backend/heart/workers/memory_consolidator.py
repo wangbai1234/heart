@@ -835,8 +835,13 @@ class ConsolidationWorker:
         Returns:
             List of pending events
         """
-        # Fetch events from yesterday (simplified)
-        yesterday = datetime.now(timezone.utc) - timedelta(days=1)
+        # Fetch events from yesterday (simplified).
+        # MemoryEncodingEvent.created_at is naive UTC (DateTime(timezone=False)),
+        # so the bound comparison value MUST also be naive UTC — binding a
+        # tz-aware datetime against a naive timestamp column makes asyncpg raise
+        # "can't subtract offset-naive and offset-aware datetimes" (DataError),
+        # which previously failed 100% of consolidation jobs.
+        yesterday = (datetime.now(timezone.utc) - timedelta(days=1)).replace(tzinfo=None)
 
         stmt = (
             select(MemoryEncodingEvent)
@@ -1084,7 +1089,11 @@ class ConsolidationWorker:
             session: Database session
             retention_days: Retention period in days (default 7)
         """
-        cutoff_time = datetime.now(timezone.utc) - timedelta(days=retention_days)
+        # created_at is naive UTC (DateTime(timezone=False)); the bound value
+        # must be naive UTC too, or asyncpg raises DataError on the comparison.
+        cutoff_time = (datetime.now(timezone.utc) - timedelta(days=retention_days)).replace(
+            tzinfo=None
+        )
 
         stmt = select(MemoryEncodingEvent).where(
             and_(
