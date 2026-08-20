@@ -467,7 +467,7 @@ class StoryService:
             messages = gm_prompt.build_memory_update_messages(
                 scenario, run.summary, run.story_memory, to_fold
             )
-            raw = (await self._router.call_cheap(messages, agent_name="story_summary")).strip()
+            raw = (await self._router.call_background(messages, agent_name="story_summary")).strip()
             if not raw:
                 return
 

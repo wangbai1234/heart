@@ -655,7 +655,7 @@ class MemoryEncoderWorker:
 
         try:
             response = await asyncio.wait_for(
-                router.call_cheap(
+                router.call_background(
                     messages=messages,
                     temperature=0.0,  # Deterministic for fact extraction
                     max_tokens=2000,

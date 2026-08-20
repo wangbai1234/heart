@@ -1,7 +1,8 @@
 """ModelRouter — facade over ProviderRegistry.
 
-Provides call_main(), call_cheap(), stream_main() for legacy callers, and
-stream_for() / call_for() for multi-model failover.
+Provides call_main(), call_cheap(), stream_main() for legacy callers,
+call_background() for internal tasks, and stream_for() / call_for() for
+explicit per-model routing with failover.
 """
 
 import asyncio
@@ -11,6 +12,7 @@ from typing import AsyncGenerator, Optional, cast
 import structlog
 
 from heart.infra.llm_providers.base import (
+    CostEstimate,
     LLMRequest,
     LLMResponse,
     Message,
@@ -24,9 +26,10 @@ from heart.infra.model_health import record_model_result
 
 logger = structlog.get_logger()
 
-# Default failover chain: highest quality → cheapest (DeepSeek is the free base).
-# claude (情感陪伴) removed 2026-08 — no longer a selectable model or failover target.
+# Legacy fallback for unknown model slugs. Catalog models define their own chain.
 DEFAULT_FAILOVER = ["grok", "deepseek"]
+DEFAULT_BACKGROUND_MODEL = "claude-haiku-4.5"
+DEFAULT_BACKGROUND_FAILOVER = ["deepseek-v4-flash", "gemini-3.1"]
 
 # Time-to-first-token deadline for the streaming path. If a candidate model does
 # not produce its first *content* byte within this window, we abort it and fail
@@ -43,14 +46,27 @@ class ModelRouter:
     """LLM facade — delegates to ProviderRegistry internally.
 
     Legacy methods (call_main, stream_main, call_cheap) remain unchanged.
-    New methods stream_for / call_for support per-request model selection
-    with automatic failover.
+    call_background uses an independent low-cost model chain for internal
+    tasks. stream_for / call_for support explicit per-request model selection.
     """
 
-    def __init__(self, registry: ProviderRegistry, main_model: str, cheap_model: str):
+    def __init__(
+        self,
+        registry: ProviderRegistry,
+        main_model: str,
+        cheap_model: str,
+        background_model: str = DEFAULT_BACKGROUND_MODEL,
+        background_failover: Optional[list[str]] = None,
+    ):
         self._registry = registry
         self._main_model = main_model
         self._cheap_model = cheap_model
+        self._background_model = background_model
+        self._background_failover = (
+            list(background_failover)
+            if background_failover is not None
+            else list(DEFAULT_BACKGROUND_FAILOVER)
+        )
 
     # ------------------------------------------------------------------
     # Legacy helpers (unchanged)
@@ -104,6 +120,39 @@ class ModelRouter:
         response = await provider.call(request)
         return response.content
 
+    async def call_background(
+        self,
+        messages: list[dict],
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+        json_mode: bool = False,
+        agent_name: str = "unknown",
+        meta: Optional[dict] = None,
+    ) -> str:
+        """Call the independent low-cost chain used by internal tasks."""
+        content, _served_model = await self.call_for(
+            self._background_model,
+            messages,
+            failover=self._background_failover,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            json_mode=json_mode,
+            agent_name=agent_name,
+            meta=meta,
+        )
+        return content
+
+    def estimate_cost(
+        self,
+        model: str,
+        prompt_tokens: int,
+        completion_tokens: int,
+    ) -> CostEstimate:
+        """Estimate cost using the provider that served a routed response."""
+        provider = self._registry.get_provider_for_model(model)
+        api_model = self._registry.get_canonical_model(model)
+        return provider.estimate_cost(prompt_tokens, completion_tokens, api_model)
+
     # ------------------------------------------------------------------
     # Per-request model selection with failover
     # ------------------------------------------------------------------
@@ -125,12 +174,16 @@ class ModelRouter:
         failover: Optional[list[str]] = None,
         temperature: Optional[float] = None,
         max_tokens: Optional[int] = None,
+        json_mode: bool = False,
         agent_name: str = "unknown",
+        meta: Optional[dict] = None,
     ) -> tuple[str, str]:
         """Call the specified model with automatic failover.
 
         Returns (content, served_model) where served_model is the model that
         actually produced the response (may differ from requested model if failover occurred).
+        When ``meta`` is provided, it also receives ``served_model``,
+        ``degraded_to``, and the provider's token ``usage``.
         """
         spec = get_model_spec(model)
         fallback = list(spec.failover) if spec else DEFAULT_FAILOVER
@@ -150,7 +203,13 @@ class ModelRouter:
             # the canonical model name (e.g. "deepseek-chat"). served_model stays
             # the slug for billing/label purposes.
             api_model = self._registry.get_canonical_model(candidate)
-            request = self._build_request(messages, api_model, temperature, max_tokens)
+            request = self._build_request(
+                messages,
+                api_model,
+                temperature,
+                max_tokens,
+                json_mode=json_mode,
+            )
             try:
                 logger.info(
                     "call_for_attempt",
@@ -185,8 +244,12 @@ class ModelRouter:
                     )
                 duration_ms = (time.perf_counter() - candidate_started) * 1000
                 record_model_result(candidate, success=True, duration_ms=duration_ms)
+                if meta is not None:
+                    meta["served_model"] = candidate
+                    meta["degraded_to"] = candidate if candidate != model else None
+                    meta["usage"] = dict(response.usage)
                 return response.content, candidate
-            except ProviderError as e:
+            except Exception as e:
                 record_model_result(
                     candidate,
                     success=False,
@@ -196,7 +259,7 @@ class ModelRouter:
                     "call_for_failover",
                     from_model=candidate,
                     error=str(e),
-                    retriable=e.retriable if hasattr(e, "retriable") else True,
+                    retriable=getattr(e, "retriable", True),
                 )
                 last_error = e
                 continue

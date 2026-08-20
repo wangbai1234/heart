@@ -52,9 +52,11 @@ class FakeProvider:
         self._content = content
         self._raises = raises
         self.calls: int = 0
+        self.last_request: LLMRequest | None = None
 
     async def call(self, request: LLMRequest) -> LLMResponse:
         self.calls += 1
+        self.last_request = request
         if self._raises:
             raise self._raises
         return LLMResponse(
@@ -87,10 +89,16 @@ async def test_call_for_returns_content_and_served_model_when_first_succeeds():
     fake = FakeProvider(content="hello world")
     reg = _make_registry(("deepseek", fake, ["deepseek"]))
     router = _router(reg)
+    meta = {}
 
-    content, served = await router.call_for("deepseek", _messages(), failover=[])
+    content, served = await router.call_for("deepseek", _messages(), failover=[], meta=meta)
     assert content == "hello world"
     assert served == "deepseek"
+    assert meta == {
+        "served_model": "deepseek",
+        "degraded_to": None,
+        "usage": {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2},
+    }
     assert fake.calls == 1
 
 
@@ -172,6 +180,91 @@ async def test_call_for_no_degradation_when_first_succeeds():
 
     _, served = await router.call_for("grok", _messages(), failover=[])
     assert served == "grok"
+
+
+# ---------------------------------------------------------------------------
+# call_background — independent internal-task routing
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_call_background_does_not_use_legacy_main_or_cheap_slots():
+    legacy = FakeProvider(content="legacy")
+    background = FakeProvider(content="background")
+    reg = _make_registry(
+        ("legacy", legacy, ["legacy-main", "legacy-cheap"]),
+        ("haiku", background, ["claude-haiku-4.5"]),
+    )
+    router = ModelRouter(
+        reg,
+        main_model="legacy-main",
+        cheap_model="legacy-cheap",
+        background_model="claude-haiku-4.5",
+        background_failover=[],
+    )
+
+    content = await router.call_background(_messages(), agent_name="memory")
+
+    assert content == "background"
+    assert background.calls == 1
+    assert legacy.calls == 0
+
+
+@pytest.mark.asyncio
+async def test_call_background_fails_over_in_its_configured_order():
+    haiku = FakeProvider(raises=RuntimeError("relay unavailable"))
+    gemini = FakeProvider(content="stable fallback")
+    reg = _make_registry(
+        ("haiku", haiku, ["claude-haiku-4.5"]),
+        ("gemini", gemini, ["gemini-3.1"]),
+    )
+    router = ModelRouter(
+        reg,
+        main_model="unregistered-main",
+        cheap_model="unregistered-cheap",
+        background_model="claude-haiku-4.5",
+        background_failover=["missing-model", "gemini-3.1"],
+    )
+
+    content = await router.call_background(_messages(), agent_name="safety")
+
+    assert content == "stable fallback"
+    assert haiku.calls == 1
+    assert gemini.calls == 1
+
+
+@pytest.mark.asyncio
+async def test_call_background_forwards_json_mode():
+    background = FakeProvider(content='{"ok": true}')
+    reg = _make_registry(("haiku", background, ["claude-haiku-4.5"]))
+    router = ModelRouter(
+        reg,
+        main_model="main",
+        cheap_model="cheap",
+        background_model="claude-haiku-4.5",
+        background_failover=[],
+    )
+
+    await router.call_background(_messages(), json_mode=True)
+
+    assert background.last_request is not None
+    assert background.last_request.json_mode is True
+
+
+@pytest.mark.asyncio
+async def test_call_for_raw_error_fails_over_for_non_streaming_call():
+    primary = FakeProvider(raises=RuntimeError("raw relay error"))
+    fallback = FakeProvider(content="fallback")
+    reg = _make_registry(
+        ("primary", primary, ["primary"]),
+        ("fallback", fallback, ["fallback"]),
+    )
+    router = _router(reg)
+
+    content, served = await router.call_for("primary", _messages(), failover=["fallback"])
+
+    assert content == "fallback"
+    assert served == "fallback"
 
 
 # ---------------------------------------------------------------------------
@@ -649,6 +742,24 @@ def test_config_has_claude_fields():
     assert s.claude_model == "claude-sonnet-4-5"
     assert s.claude_api_style == "anthropic"
     assert s.claude_cost_credits == 12
+
+
+def test_config_has_independent_background_chain():
+    from heart.core.config import Settings
+
+    s = Settings(
+        background_llm_model="claude-haiku-4.5",
+        background_llm_failover="deepseek-v4-flash,gemini-3.1",
+        main_llm_model="legacy-main",
+        cheap_llm_model="legacy-cheap",
+        jwt_algorithm="HS256",
+        jwt_secret_key="a" * 32,
+        deepseek_api_key="fake",
+    )
+
+    assert s.background_llm_model == "claude-haiku-4.5"
+    assert s.background_llm_failover == "deepseek-v4-flash,gemini-3.1"
+    assert s.background_llm_model not in {s.main_llm_model, s.cheap_llm_model}
 
 
 def test_config_membership_pricing_defaults():

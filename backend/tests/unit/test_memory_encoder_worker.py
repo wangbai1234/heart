@@ -411,9 +411,7 @@ class TestFactEmbeddingOnWrite:
         fake_embedder.embed_query = AsyncMock(return_value=[0.1] * 1024)
 
         with patch("heart.api.wiring.get_embedding_service", return_value=fake_embedder):
-            await write_facts_to_l3(
-                mock_db_session, sample_encoding_event, valid_extraction_output
-            )
+            await write_facts_to_l3(mock_db_session, sample_encoding_event, valid_extraction_output)
 
         added = [c.args[0] for c in mock_db_session.add.call_args_list]
         assert added, "no facts were added"
@@ -430,9 +428,7 @@ class TestFactEmbeddingOnWrite:
         mock_db_session.execute = AsyncMock(return_value=mock_result)
 
         with patch("heart.api.wiring.get_embedding_service", return_value=None):
-            await write_facts_to_l3(
-                mock_db_session, sample_encoding_event, valid_extraction_output
-            )
+            await write_facts_to_l3(mock_db_session, sample_encoding_event, valid_extraction_output)
 
         added = [c.args[0] for c in mock_db_session.add.call_args_list]
         assert added
@@ -470,9 +466,7 @@ class TestFactEmbeddingOnWrite:
         fake_embedder.embed_query = AsyncMock(return_value=[0.2] * 1024)
 
         with patch("heart.api.wiring.get_embedding_service", return_value=fake_embedder):
-            await write_facts_to_l3(
-                mock_db_session, sample_encoding_event, valid_extraction_output
-            )
+            await write_facts_to_l3(mock_db_session, sample_encoding_event, valid_extraction_output)
 
         assert existing_fact.semantic_vector == [0.2] * 1024
 
@@ -512,7 +506,7 @@ class TestMemoryEncoderWorker:
 
         # Mock LLM call
         with patch("heart.workers.memory_encoder.get_model_router") as mock_router:
-            mock_router.return_value.call_cheap = AsyncMock(
+            mock_router.return_value.call_background = AsyncMock(
                 return_value=json.dumps(valid_extraction_output)
             )
 
@@ -557,7 +551,7 @@ class TestMemoryEncoderWorker:
 
         # Mock LLM failure
         with patch("heart.workers.memory_encoder.get_model_router") as mock_router:
-            mock_router.return_value.call_cheap = AsyncMock(side_effect=Exception("LLM error"))
+            mock_router.return_value.call_background = AsyncMock(side_effect=Exception("LLM error"))
 
             with pytest.raises(Exception, match="LLM error"):
                 await worker._process_event(sample_encoding_event)
@@ -585,7 +579,7 @@ class TestMemoryEncoderWorker:
 
         # Mock LLM failure
         with patch("heart.workers.memory_encoder.get_model_router") as mock_router:
-            mock_router.return_value.call_cheap = AsyncMock(side_effect=Exception("LLM error"))
+            mock_router.return_value.call_background = AsyncMock(side_effect=Exception("LLM error"))
 
             with pytest.raises(Exception, match="LLM error"):
                 await worker._process_event(sample_encoding_event)
@@ -610,7 +604,7 @@ class TestMemoryEncoderWorker:
 
         # Mock LLM returning invalid JSON
         with patch("heart.workers.memory_encoder.get_model_router") as mock_router:
-            mock_router.return_value.call_cheap = AsyncMock(return_value="not valid json")
+            mock_router.return_value.call_background = AsyncMock(return_value="not valid json")
 
             with pytest.raises(ValueError, match="Invalid JSON"):
                 await worker._process_event(sample_encoding_event)
@@ -637,7 +631,9 @@ class TestMemoryEncoderWorker:
         }
 
         with patch("heart.workers.memory_encoder.get_model_router") as mock_router:
-            mock_router.return_value.call_cheap = AsyncMock(return_value=json.dumps(invalid_output))
+            mock_router.return_value.call_background = AsyncMock(
+                return_value=json.dumps(invalid_output)
+            )
 
             with pytest.raises(ValueError, match="Invalid extraction schema"):
                 await worker._process_event(sample_encoding_event)
@@ -661,7 +657,7 @@ class TestMemoryEncoderWorker:
             await asyncio.sleep(20)  # Longer than timeout
 
         with patch("heart.workers.memory_encoder.get_model_router") as mock_router:
-            mock_router.return_value.call_cheap = slow_llm
+            mock_router.return_value.call_background = slow_llm
 
             with pytest.raises(TimeoutError, match="timed out"):
                 await worker._process_event(sample_encoding_event)
@@ -727,18 +723,16 @@ class TestBatchExtraction:
         fact_result = MagicMock()
         fact_result.scalar_one_or_none = MagicMock(return_value=None)
         # reload + one query per extracted fact (2 facts in the fixture)
-        mock_db_session.execute = AsyncMock(
-            side_effect=[reload_result, fact_result, fact_result]
-        )
+        mock_db_session.execute = AsyncMock(side_effect=[reload_result, fact_result, fact_result])
 
         with patch("heart.workers.memory_encoder.get_model_router") as mock_router:
-            call_cheap = AsyncMock(return_value=json.dumps(valid_extraction_output))
-            mock_router.return_value.call_cheap = call_cheap
+            call_background = AsyncMock(return_value=json.dumps(valid_extraction_output))
+            mock_router.return_value.call_background = call_background
 
             await worker._process_event_group([e1, e2])
 
         # Two turns → exactly ONE extraction LLM call.
-        assert call_cheap.await_count == 1
+        assert call_background.await_count == 1
         assert e1.status == "llm_done"
         assert e2.status == "llm_done"
         assert e1.llm_extraction == valid_extraction_output
@@ -754,17 +748,15 @@ class TestBatchExtraction:
         reload_result.scalar_one_or_none = MagicMock(return_value=e1)
         fact_result = MagicMock()
         fact_result.scalar_one_or_none = MagicMock(return_value=None)
-        mock_db_session.execute = AsyncMock(
-            side_effect=[reload_result, fact_result, fact_result]
-        )
+        mock_db_session.execute = AsyncMock(side_effect=[reload_result, fact_result, fact_result])
 
         with patch("heart.workers.memory_encoder.get_model_router") as mock_router:
-            call_cheap = AsyncMock(return_value=json.dumps(valid_extraction_output))
-            mock_router.return_value.call_cheap = call_cheap
+            call_background = AsyncMock(return_value=json.dumps(valid_extraction_output))
+            mock_router.return_value.call_background = call_background
 
             await worker._process_event_group([e1])
 
-        assert call_cheap.await_count == 1
+        assert call_background.await_count == 1
         assert e1.status == "llm_done"
 
 
@@ -882,9 +874,7 @@ class TestChineseEmbeddingText:
     """CREATE and REINFORCE must embed Chinese-gloss text, not raw literal_text."""
 
     @pytest.mark.asyncio
-    async def test_create_embeds_chinese_text(
-        self, mock_db_session, sample_encoding_event
-    ):
+    async def test_create_embeds_chinese_text(self, mock_db_session, sample_encoding_event):
         """Embedder receives build_embedding_text output (contains Chinese gloss)."""
         extraction = {
             "facts": [
@@ -1022,9 +1012,7 @@ class TestL4PromotionCounters:
         mock_db_session.execute = AsyncMock(side_effect=[mock_result_1, mock_result_2])
 
         with patch("heart.api.wiring.get_embedding_service", return_value=None):
-            await write_facts_to_l3(
-                mock_db_session, sample_encoding_event, valid_extraction_output
-            )
+            await write_facts_to_l3(mock_db_session, sample_encoding_event, valid_extraction_output)
 
         # First fact (has_pet, confidence 0.95) reinforces the existing row.
         # mention_count 2 → 3 crosses the K1=3 promotion gate.
@@ -1068,9 +1056,7 @@ class TestL4PromotionCounters:
         mock_db_session.execute = AsyncMock(side_effect=[mock_result_1, mock_result_2])
 
         with patch("heart.api.wiring.get_embedding_service", return_value=None):
-            await write_facts_to_l3(
-                mock_db_session, sample_encoding_event, valid_extraction_output
-            )
+            await write_facts_to_l3(mock_db_session, sample_encoding_event, valid_extraction_output)
 
         assert existing_fact.mention_count == 2  # None → 1 → +1
         # None EWMA falls back to 0.5: 0.7*0.5 + 0.3*0.95 = 0.635
@@ -1087,9 +1073,7 @@ class TestL4PromotionCounters:
         mock_db_session.execute = AsyncMock(return_value=mock_result)
 
         with patch("heart.api.wiring.get_embedding_service", return_value=None):
-            await write_facts_to_l3(
-                mock_db_session, sample_encoding_event, valid_extraction_output
-            )
+            await write_facts_to_l3(mock_db_session, sample_encoding_event, valid_extraction_output)
 
         added = [c.args[0] for c in mock_db_session.add.call_args_list]
         assert len(added) == 2

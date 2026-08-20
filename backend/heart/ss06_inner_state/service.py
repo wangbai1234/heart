@@ -18,6 +18,7 @@ import structlog
 from prometheus_client import Counter, Histogram
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from heart.infra.model_catalog import DEFAULT_CHAT_MODEL
 from heart.ss01_soul.character_content import (
     get_proactive_persona,
     get_proactive_templates,
@@ -96,6 +97,7 @@ class InnerStateService:
         recent_context: str = "",
         user_facts: str = "",
         db: Optional[AsyncSession] = None,
+        model: str = DEFAULT_CHAT_MODEL,
     ) -> Optional[ProactiveMessage]:
         """Execute one inner-loop tick for a (user, character) pair.
 
@@ -208,6 +210,7 @@ class InnerStateService:
             days_since_last_interaction=days_since_last_interaction,
             recent_context=recent_context,
             user_facts=user_facts,
+            model=model,
         )
 
         # Gate I-8: content dedup. If we've already sent this exact string for
@@ -235,6 +238,7 @@ class InnerStateService:
                     days_since_last_interaction=days_since_last_interaction,
                     recent_context=recent_context,
                     user_facts=user_facts,
+                    model=model,
                 )
             else:
                 logger.info(
@@ -288,6 +292,7 @@ class InnerStateService:
         recent_context: str,
         user_facts: str,
         local_time_context: Optional[dict] = None,
+        model: str = DEFAULT_CHAT_MODEL,
     ) -> str:
         """Return LLM-generated content, falling back to a template on any failure."""
         from heart.core.config import settings
@@ -304,6 +309,7 @@ class InnerStateService:
                 recent_context=recent_context,
                 user_facts=user_facts,
                 local_time_context=local_time_context,
+                model=model,
             )
         except Exception as e:
             logger.warning("proactive_llm_failed", character_id=character_id, error=str(e))
@@ -363,8 +369,9 @@ class InnerStateService:
         recent_context: str,
         user_facts: str,
         local_time_context: Optional[dict] = None,
+        model: str = DEFAULT_CHAT_MODEL,
     ) -> Optional[str]:
-        """Generate a personalized proactive message via the cheap LLM.
+        """Generate a personalized proactive message via the user's chat model.
 
         Returns the trimmed content, or None if the model returns nothing usable.
         Raised exceptions propagate to the caller, which falls back to templates.
@@ -383,7 +390,8 @@ class InnerStateService:
             local_time_context=local_time_context,
         )
         router = await get_model_router()
-        raw = await router.call_cheap(
+        raw, _served_model = await router.call_for(
+            model,
             messages=[{"role": "user", "content": prompt}],
             temperature=0.85,
             max_tokens=settings.proactive_llm_max_tokens,

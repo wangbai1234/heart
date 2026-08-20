@@ -32,7 +32,7 @@ class _FakeRouter:
                 raise RuntimeError("boom")
             yield d
 
-    async def call_cheap(self, messages, agent_name="unknown", **kw):
+    async def call_background(self, messages, agent_name="unknown", **kw):
         self.cheap_calls.append(messages)
         return "前情提要：主控推门进入。"
 

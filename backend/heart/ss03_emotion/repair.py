@@ -6,7 +6,7 @@ Implements three-layer cascade:
 - Layer B: Vulnerability detector (heuristic + optional LLM)
 - Layer C: Cheap LLM sincerity check (boundary cases only)
 
-All LLM calls via heart.infra.llm.get_model_router().call_cheap()
+All LLM calls via heart.infra.llm.get_model_router().call_background()
 Cost cap: max 5 repair-LLM calls per user per day
 
 Author: 心屿团队
@@ -516,7 +516,7 @@ class RepairEngine:
             router = await get_model_router()
 
             # Make LLM call with timeout
-            response = await router.call_cheap(
+            response = await router.call_background(
                 messages=messages,
                 temperature=0.0,
                 max_tokens=100,

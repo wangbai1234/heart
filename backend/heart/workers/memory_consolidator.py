@@ -199,7 +199,7 @@ class EpisodeSummarizer:
 
         try:
             response = await asyncio.wait_for(
-                router.call_cheap(
+                router.call_background(
                     messages=messages,
                     temperature=0.0,
                     max_tokens=1000,

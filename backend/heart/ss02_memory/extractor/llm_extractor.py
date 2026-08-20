@@ -398,35 +398,28 @@ class LLMExtractor:
         Returns:
             Tuple of (envelope, input_tokens, output_tokens, cost_usd).
         """
-        # Build request with tool use
-        from heart.infra.llm_providers.base import LLMRequest, Message, MessageRole
-
-        typed_messages = [
-            Message(role=MessageRole(m["role"]), content=m["content"]) for m in messages
-        ]
-
-        request = LLMRequest(
-            messages=typed_messages,
-            model=item.model,
+        route_meta: dict[str, Any] = {}
+        content = await self._router.call_background(
+            messages=messages,
             temperature=0.0,
             max_tokens=1024,
-            json_mode=False,
+            json_mode=True,
+            agent_name="memory_extractor",
+            meta=route_meta,
         )
-
-        provider = self._router._registry.get_provider_for_model(item.model)
-        response = await provider.call(request)
-
-        # Extract content
-        content = response.content
-        input_tokens = response.usage.get("prompt_tokens", 0)
-        output_tokens = response.usage.get("completion_tokens", 0)
+        usage = route_meta.get("usage", {})
+        input_tokens = int(usage.get("prompt_tokens", 0))
+        output_tokens = int(usage.get("completion_tokens", 0))
+        served_model = str(route_meta.get("served_model") or item.model)
 
         # Estimate cost
-        cost_estimate = provider.estimate_cost(input_tokens, output_tokens, item.model)
+        cost_estimate = self._router.estimate_cost(served_model, input_tokens, output_tokens)
         cost_usd = cost_estimate.total_cost_usd
 
         # Parse JSON from response (handle tool-call wrapper if present)
         parsed = self._parse_llm_response(content)
+        # The model is execution metadata, not an instruction the LLM may invent.
+        parsed["model"] = served_model
 
         # Sanitize dropped_signals.reason — map unknown enum values to "other"
         from .types import DroppedReason

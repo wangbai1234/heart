@@ -1,7 +1,7 @@
 """LLM-as-Judge for Voice Drift Regression.
 
 Per docs/design/soul_drift_regression.md §3.5.
-Uses ModelRouter.cheap tier + strict JSON mode.
+Uses ModelRouter's independent background chain + strict JSON mode.
 """
 
 from __future__ import annotations
@@ -36,7 +36,7 @@ class VoiceJudgment:
 class VoiceJudge:
     """LLM-as-Judge: evaluates a candidate response against an established voice profile.
 
-    Uses ModelRouter.cheap tier to minimize cost (~$0.005 per judgment).
+    Uses ModelRouter's independent background chain to minimize cost.
     """
 
     def __init__(self, model_router):
@@ -150,7 +150,7 @@ Output ONLY valid JSON, no prose, no markdown fences:
         ]
 
         try:
-            raw = await self._router.call_cheap(
+            raw = await self._router.call_background(
                 messages=messages,
                 temperature=0.0,
                 max_tokens=1024,

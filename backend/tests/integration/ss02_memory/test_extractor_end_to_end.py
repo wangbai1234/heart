@@ -64,17 +64,19 @@ class FakeProvider:
         return len(text) // 2
 
 
-class FakeRegistry:
+class FakeRouter:
     def __init__(self, provider: FakeProvider):
         self._provider = provider
 
-    def get_provider_for_model(self, model: str) -> FakeProvider:
-        return self._provider
+    async def call_background(self, messages, meta=None, **kwargs):
+        response = await self._provider.call(None)
+        if meta is not None:
+            meta["served_model"] = response.model
+            meta["usage"] = dict(response.usage)
+        return response.content
 
-
-class FakeRouter:
-    def __init__(self, provider: FakeProvider):
-        self._registry = FakeRegistry(provider)
+    def estimate_cost(self, model, prompt_tokens, completion_tokens):
+        return self._provider.estimate_cost(prompt_tokens, completion_tokens, model)
 
 
 # ── End-to-End Test ───────────────────────────────────────────

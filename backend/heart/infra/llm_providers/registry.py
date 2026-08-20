@@ -292,7 +292,8 @@ def initialize_registry(
     - Existing DeepSeek/Grok/Claude provider settings
     - New Gemini/GPT provider settings
     - One explicit upstream model ID for every selectable product model
-    - MAIN_LLM_MODEL/CHEAP_LLM_MODEL for unchanged legacy internal callers
+    - Legacy MAIN_LLM_MODEL/CHEAP_LLM_MODEL aliases
+    - BACKGROUND_LLM_MODEL/BACKGROUND_LLM_FAILOVER are consumed by ModelRouter
 
     Args:
         circuit_breaker: Optional circuit breaker

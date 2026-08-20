@@ -7,6 +7,7 @@ SS05 Composer - 示例使用 Model Router
 from typing import AsyncGenerator
 
 from heart.infra.llm import get_model_router
+from heart.infra.model_catalog import DEFAULT_CHAT_MODEL
 
 # ============================================================================
 # 示例 1: 主响应 (SS05 - Composer)
@@ -19,6 +20,7 @@ async def generate_response(
     user_message: str,
     character_context: str,
     conversation_history: list[dict],
+    model: str = DEFAULT_CHAT_MODEL,
 ) -> str:
     """
     生成角色响应 (同步模式)
@@ -42,8 +44,8 @@ async def generate_response(
         {"role": "user", "content": user_message},
     ]
 
-    # 调用主模型 - 会自动使用 deepseek-reasoner
-    response = await router.call_main(
+    response, _served_model = await router.call_for(
+        model,
         messages=messages,
         temperature=0.7,  # 适度创意
         max_tokens=2000,
@@ -57,6 +59,7 @@ async def stream_response(
     user_message: str,
     character_context: str,
     conversation_history: list[dict],
+    model: str = DEFAULT_CHAT_MODEL,
 ) -> AsyncGenerator[str, None]:
     """
     流式生成角色响应 (流式模式)
@@ -77,8 +80,8 @@ async def stream_response(
         {"role": "user", "content": user_message},
     ]
 
-    # 调用主模型（流式）
-    async for chunk in router.stream_main(
+    async for chunk in router.stream_for(
+        model,
         messages=messages,
         temperature=0.7,
         max_tokens=2000,
@@ -88,7 +91,7 @@ async def stream_response(
 
 
 # ============================================================================
-# 示例 2: 便宜操作 (SS02 Memory - 记忆编码)
+# 示例 2: 后台操作 (SS02 Memory - 记忆编码)
 # 用于: 编码对话内容为记忆向量
 # 模型: deepseek-chat (便宜快速)
 # ============================================================================
@@ -119,8 +122,7 @@ async def encode_memory_entry(
         {"role": "user", "content": conversation_text},
     ]
 
-    # 调用便宜模型，强制 JSON 输出
-    response = await router.call_cheap(
+    response = await router.call_background(
         messages=messages,
         temperature=0.1,  # 低温度保证一致的输出
         max_tokens=1000,
@@ -134,7 +136,7 @@ async def encode_memory_entry(
 
 
 # ============================================================================
-# 示例 3: 便宜操作 (SS07 Safety - 安全分类)
+# 示例 3: 后台操作 (SS07 Safety - 安全分类)
 # 用于: 检测不安全内容
 # 模型: deepseek-chat (便宜快速)
 # ============================================================================
@@ -164,7 +166,7 @@ async def safety_check(message: str) -> dict:
         {"role": "user", "content": message},
     ]
 
-    response = await router.call_cheap(
+    response = await router.call_background(
         messages=messages,
         temperature=0.1,
         max_tokens=500,
@@ -184,11 +186,11 @@ async def safety_check(message: str) -> dict:
 """
 ✅ 所有 LLM 调用必须通过 Model Router:
    - ❌ 不要直接导入 OpenAI/Anthropic SDK
-   - ✅ 只调用 get_model_router() -> call_main() / call_cheap()
+   - ✅ 只调用 get_model_router() -> call_for() / call_background()
 
-✅ 两层模型选择:
-   - main: deepseek-reasoner    → 高质量响应 (SS05 Composer)
-   - cheap: deepseek-chat        → 快速低成本 (SS02/03/07)
+✅ 两条独立路由:
+   - call_for(user_model)         → 用户选择的聊天模型
+   - call_background()            → 独立低成本后台模型链
 
 ✅ 调用参数:
    - agent_name: 标记调用来源（用于日志和监控）
@@ -196,8 +198,8 @@ async def safety_check(message: str) -> dict:
    - temperature: 低值(0.1)用于分类，高值(0.7)用于创意
 
 ✅ 成本优化:
-   - 编码、分类、检查 → call_cheap()
-   - 主响应、创意写作 → call_main()
+   - 编码、分类、检查 → call_background()
+   - 用户聊天、主动消息 → call_for(user_model)
    - 避免不必要的大模型调用
 
 ✅ 后续迁移到其他模型很容易:
