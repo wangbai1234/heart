@@ -89,8 +89,16 @@ def get_soul_registry():
 @lru_cache
 def get_model_router():
     """Process singleton: ModelRouter (LLM client). Returns None if no API key."""
-    if not settings.deepseek_api_key:
-        logger.warning("wiring_no_llm_api_key", hint="Set DEEPSEEK_API_KEY in .env")
+    if not any(
+        (
+            settings.deepseek_api_key,
+            settings.grok_api_key,
+            settings.claude_api_key,
+            settings.gemini_api_key,
+            settings.gpt_api_key,
+        )
+    ):
+        logger.warning("wiring_no_llm_api_key", hint="Set an LLM provider API key in .env")
         return None
     try:
         import os
@@ -99,11 +107,34 @@ def get_model_router():
 
         # Bridge settings → env (registry.initialize_registry reads os.getenv).
         # setdefault means an explicitly-exported env var still wins.
-        os.environ.setdefault("DEEPSEEK_API_KEY", settings.deepseek_api_key)
-        if settings.deepseek_api_keys:
-            os.environ.setdefault("DEEPSEEK_API_KEYS", settings.deepseek_api_keys)
-        if settings.deepseek_base_url:
-            os.environ.setdefault("DEEPSEEK_BASE_URL", settings.deepseek_base_url)
+        for name, value in {
+            "DEEPSEEK_API_KEY": settings.deepseek_api_key,
+            "DEEPSEEK_API_KEYS": settings.deepseek_api_keys,
+            "DEEPSEEK_BASE_URL": settings.deepseek_base_url,
+            "DEEPSEEK_V4_FLASH_MODEL": settings.deepseek_v4_flash_model,
+            "DEEPSEEK_V4_PRO_MODEL": settings.deepseek_v4_pro_model,
+            "GROK_API_KEY": settings.grok_api_key,
+            "GROK_BASE_URL": settings.grok_base_url,
+            "GROK_MODEL": settings.grok_model,
+            "GROK_46_MODEL": settings.grok_46_model,
+            "CLAUDE_API_KEY": settings.claude_api_key,
+            "CLAUDE_BASE_URL": settings.claude_base_url,
+            "CLAUDE_MODEL": settings.claude_model,
+            "CLAUDE_HAIKU_MODEL": settings.claude_haiku_model,
+            "CLAUDE_OPUS_46_MODEL": settings.claude_opus_46_model,
+            "CLAUDE_OPUS_5_MODEL": settings.claude_opus_5_model,
+            "CLAUDE_API_STYLE": settings.claude_api_style,
+            "GEMINI_API_KEY": settings.gemini_api_key,
+            "GEMINI_BASE_URL": settings.gemini_base_url,
+            "GEMINI_MODEL": settings.gemini_model,
+            "GPT_API_KEY": settings.gpt_api_key,
+            "GPT_BASE_URL": settings.gpt_base_url,
+            "GPT_MODEL": settings.gpt_model,
+            "GPT_LUNA_MODEL": settings.gpt_luna_model,
+            "GPT_SOL_MODEL": settings.gpt_sol_model,
+        }.items():
+            if value:
+                os.environ.setdefault(name, value)
         # Make config.py the source of truth for model + concurrency defaults.
         os.environ.setdefault("MAIN_LLM_MODEL", settings.main_llm_model)
         os.environ.setdefault("CHEAP_LLM_MODEL", settings.cheap_llm_model)

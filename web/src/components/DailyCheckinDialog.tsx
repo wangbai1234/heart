@@ -26,7 +26,7 @@ export function DailyCheckinDialog({
     <NoticeDialog open={open} onClose={onClose} title="签到成功">
       今日签到已到账
       <br />
-      获得 {coins} yuoyuo币
+      获得 {coins} yuoyuo币，永久有效
     </NoticeDialog>
   )
 }

@@ -41,6 +41,23 @@ class Settings(BaseSettings):
     # Empty → fall back to the single deepseek_api_key (single-key behavior unchanged).
     deepseek_api_keys: str = ""
     deepseek_base_url: str = "https://api.deepseek.com"
+    # Actual upstream model IDs for the two selectable DeepSeek product entries.
+    # These are separate from MAIN_LLM_MODEL/CHEAP_LLM_MODEL, which legacy
+    # background tasks continue to use until their own routing PR lands.
+    deepseek_v4_flash_model: str = "deepseek-chat"
+    deepseek_v4_pro_model: str = "deepseek-reasoner"
+
+    # LLM Providers - Gemini (MICU OpenAI-compatible relay)
+    gemini_api_key: str = ""
+    gemini_base_url: str = "https://api-slb.micuapi.ai"
+    gemini_model: str = "gemini-3.1-flash-lite-preview"
+
+    # LLM Providers - GPT (MICU Responses-compatible relay)
+    gpt_api_key: str = ""
+    gpt_base_url: str = "https://api-slb.micuapi.ai"
+    gpt_model: str = "gpt-5.5"
+    gpt_luna_model: str = "gpt-5.6-luna"
+    gpt_sol_model: str = "gpt-5.6-sol"
 
     # Outbound LLM concurrency / failover (process-global; see llm_providers/pool.py)
     llm_max_concurrency: int = 8
@@ -223,13 +240,12 @@ class Settings(BaseSettings):
     # Each tier maps to: models (allowed LLM slugs), tts (allowed TTS providers),
     # clone (allowed clone providers), monthly_grant (coins per 30-day cycle),
     # free (items complimentary on this tier — everything else is charged per use).
-    # free item slugs: "deepseek" | "grok" | "tts" | "clone" | "asr" | "story_unlock" | "story_chat".
-    # Access is universal (all tiers may use deepseek/grok/tts/clone); tiers differ only
-    # in *which items are free* vs charged. claude removed (情感陪伴 下线).
+    # Access is universal. Only immersive waives selectable text-model costs;
+    # plus receives a larger permanent daily grant instead of free text turns.
     membership_tiers_config: str = (
-        '{"free":{"models":["deepseek","grok"],"tts":["mimo","fish"],"clone":["fish"],"monthly_grant":0,"free":[]},'
-        '"plus":{"models":["deepseek","grok"],"tts":["mimo","fish"],"clone":["fish"],"monthly_grant":300,"free":["deepseek","tts","asr","story_unlock"]},'
-        '"immersive":{"models":["deepseek","grok"],"tts":["mimo","fish"],"clone":["fish"],"monthly_grant":700,"free":["deepseek","grok","tts","clone","asr","story_unlock","story_chat"]}}'
+        '{"free":{"models":["gemini-3.1","deepseek-v4-flash","deepseek-v4-pro","claude-haiku-4.5","claude-sonnet-4.6","claude-opus-4.6","claude-opus-5","grok-4.5","grok-4.6","gpt-5.6-luna","gpt-5.5","gpt-5.6-sol"],"tts":["mimo","fish"],"clone":["fish"],"monthly_grant":0,"free":[]},'
+        '"plus":{"models":["gemini-3.1","deepseek-v4-flash","deepseek-v4-pro","claude-haiku-4.5","claude-sonnet-4.6","claude-opus-4.6","claude-opus-5","grok-4.5","grok-4.6","gpt-5.6-luna","gpt-5.5","gpt-5.6-sol"],"tts":["mimo","fish"],"clone":["fish"],"monthly_grant":0,"free":["tts","asr","story_unlock"]},'
+        '"immersive":{"models":["gemini-3.1","deepseek-v4-flash","deepseek-v4-pro","claude-haiku-4.5","claude-sonnet-4.6","claude-opus-4.6","claude-opus-5","grok-4.5","grok-4.6","gpt-5.6-luna","gpt-5.5","gpt-5.6-sol"],"tts":["mimo","fish"],"clone":["fish"],"monthly_grant":0,"free":["all_llm","deepseek","grok","tts","clone","asr","story_unlock","story_chat"]}}'
     )
 
     # Membership subscription prices (CNY/month, for pricing endpoint display only)
@@ -247,6 +263,8 @@ class Settings(BaseSettings):
 
     # Daily check-in reward (display coins; ×100 = fen internally)
     daily_checkin_coins: int = 20  # granted once per calendar day (Asia/Shanghai)
+    plus_daily_checkin_coins: int = 80
+    immersive_daily_checkin_coins: int = 80
 
     # Push Notifications (V1)
     fcm_credentials_path: str = ""
@@ -275,11 +293,15 @@ class Settings(BaseSettings):
     grok_api_key: str = ""
     grok_base_url: str = "https://api.x.ai"
     grok_model: str = "grok-3-mini-fast"
+    grok_46_model: str = "grok-4.6"
 
     # LLM Providers - Claude (Anthropic) — optional; leave empty to disable
     claude_api_key: str = ""
     claude_base_url: str = "https://api.anthropic.com"
     claude_model: str = "claude-sonnet-4-5"
+    claude_haiku_model: str = "claude-haiku-4-5"
+    claude_opus_46_model: str = "claude-opus-4-6"
+    claude_opus_5_model: str = "claude-opus-5"
     # "anthropic" for native /v1/messages; "openai-compat" for proxy
     claude_api_style: str = "anthropic"
 

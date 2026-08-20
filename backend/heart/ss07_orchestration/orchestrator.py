@@ -398,7 +398,7 @@ class Orchestrator:
             "type": "turn_end",
             "full_text": full_text,
             "path": "normal",
-            "served_model": stream_meta.get("served_model", getattr(req, "model", "deepseek")),
+            "served_model": stream_meta.get("served_model", getattr(req, "model", "gemini-3.1")),
             "degraded_to": stream_meta.get("degraded_to"),
             # True when the LLM stream broke mid-way (e.g. relay dropped the
             # connection after some content). Lets the WS route surface a retry
@@ -437,7 +437,7 @@ class Orchestrator:
             session_id=session_id,
             user_message=req.user_message,
             max_tokens=2000,
-            model=getattr(req, "model", "deepseek"),
+            model=getattr(req, "model", "gemini-3.1"),
             stream_meta=_meta,
             voice_enabled=voice_enabled,
         )

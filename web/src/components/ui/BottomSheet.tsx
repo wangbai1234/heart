@@ -5,9 +5,19 @@ interface BottomSheetProps {
   open: boolean
   onClose: () => void
   children: ReactNode
+  sheetClassName?: string
+  handleClassName?: string
+  contentClassName?: string
 }
 
-export function BottomSheet({ open, onClose, children }: BottomSheetProps) {
+export function BottomSheet({
+  open,
+  onClose,
+  children,
+  sheetClassName = 'bg-[var(--color-surface)]',
+  handleClassName = 'bg-[var(--color-divider)]',
+  contentClassName = 'px-5 pb-4',
+}: BottomSheetProps) {
   useEffect(() => {
     if (open) {
       document.body.style.overflow = 'hidden'
@@ -25,11 +35,11 @@ export function BottomSheet({ open, onClose, children }: BottomSheetProps) {
         className="absolute inset-0 bg-black/32 animate-[fade-in_360ms_var(--ease-standard)]"
         onClick={onClose}
       />
-      <div className="absolute bottom-0 left-0 right-0 bg-[var(--color-surface)] rounded-t-[var(--radius-2xl)] shadow-[var(--shadow-sheet)] animate-[slide-up-bottom_360ms_var(--ease-standard)] pb-[var(--safe-bottom)]">
+      <div className={`absolute bottom-0 left-0 right-0 rounded-t-[var(--radius-2xl)] shadow-[var(--shadow-sheet)] animate-[slide-up-bottom_360ms_var(--ease-standard)] pb-[var(--safe-bottom)] ${sheetClassName}`}>
         <div className="flex justify-center pt-3 pb-2">
-          <div className="w-10 h-1 rounded-full bg-[var(--color-divider)]" />
+          <div className={`w-10 h-1 rounded-full ${handleClassName}`} />
         </div>
-        <div className="px-5 pb-4">{children}</div>
+        <div className={contentClassName}>{children}</div>
       </div>
     </div>
   )

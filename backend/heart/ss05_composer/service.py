@@ -188,8 +188,8 @@ class CompositionContext:
     # None = regular chat turn.
     proactive_hint: Optional[str] = None
 
-    # Multi-model: which LLM model to use for this turn.  Empty / "deepseek" = default.
-    model: str = "deepseek"
+    # Multi-model: which LLM model to use for this turn.
+    model: str = "gemini-3.1"
     # Populated by compose_stream with served_model / degraded_to after streaming.
     stream_meta: Dict[str, Any] = field(default_factory=dict)
 
@@ -553,15 +553,12 @@ class ComposerService:
         temperature: float,
     ) -> AsyncGenerator[str, None]:
         """Route streaming to stream_for (multi-model) or legacy stream_main."""
-        _model = ctx.model if ctx.model else "deepseek"
+        _model = ctx.model if ctx.model else "gemini-3.1"
         _has_stream_for = hasattr(self._model_router, "stream_for")
         if _model and _has_stream_for:
-            from heart.infra.llm_providers.router import DEFAULT_FAILOVER
-
             async for chunk in self._model_router.stream_for(  # type: ignore[attr-defined]
                 _model,
                 messages,
-                failover=DEFAULT_FAILOVER,
                 temperature=temperature,
                 max_tokens=ctx.max_tokens,
                 agent_name=f"Composer.{ctx.character_id}",
@@ -569,7 +566,9 @@ class ComposerService:
             ):
                 yield chunk
         else:
-            ctx.stream_meta["served_model"] = getattr(self._model_router, "_main_model", "deepseek")
+            ctx.stream_meta["served_model"] = getattr(
+                self._model_router, "_main_model", "gemini-3.1"
+            )
             ctx.stream_meta["degraded_to"] = None
             async for chunk in self._model_router.stream_main(
                 messages=messages,

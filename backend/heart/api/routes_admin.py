@@ -253,7 +253,7 @@ async def admin_grant_membership(
     - 传 user_id 或 email（二选一，同时传以 user_id 为准）
     - tier：`plus`（进阶版）或 `immersive`（沉浸版）
     - days：开通/延长天数，默认 30。已有同档会员则从当前到期时间顺延
-    - 升级同时按档位发放对应的每月赠币（进阶版 400 / 沉浸版 800）
+    - 升级当日按当前档位补足每日签到币（当天已领 20 币时只补 60 币）
     """
     tier = body.tier.strip().lower()
     if tier not in _GRANTABLE_TIERS:
@@ -265,9 +265,8 @@ async def admin_grant_membership(
     user = await _resolve_user(db, body.user_id, body.email)
     uid = user["id"]
 
-    # Fresh UUID per call: activate_or_extend derives the monthly-grant
-    # idempotency key from granted_by, so a static key would suppress the coin
-    # grant on every renewal. Each admin action is a distinct, intentional grant.
+    # Each admin action is distinct. Activation itself handles the idempotent
+    # daily grant/top-up for the current Shanghai calendar day.
     new_expires = await activate_or_extend(
         db, uid, tier, body.days, granted_by=f"admin:{uuid.uuid4()}"
     )

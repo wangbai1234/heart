@@ -7,6 +7,7 @@ import { CHARACTER_PROFILES, resolveCharacterProfile, shouldShowTimestamp, forma
 import { CHARACTER_UI_CONFIGS } from '../data/characterUIConfig'
 import { useCharactersStore } from '../stores/charactersStore'
 import { useCompanionsStore } from '../stores/companionsStore'
+import { useModelsStore } from '../stores/modelsStore'
 import { stageLabel, stageWithIntimacy, stageOrderIndex } from '../utils/relationship'
 import { useWebSocket } from '../hooks/useWebSocket'
 import { useProactiveStore } from '../stores/proactiveStore'
@@ -22,7 +23,7 @@ import VoiceMessageBubble from './VoiceMessageBubble'
 import { useSwipeNavigation } from '../hooks/useSwipeNavigation'
 import { useVoiceRecorder } from '../hooks/useVoiceRecorder'
 import { VoiceRecordingOverlay } from './VoiceRecordingOverlay'
-import { TextTierSheet } from './TextTierSheet'
+import { ModelSelectorSheet } from './ModelSelectorSheet'
 import { ChatPlusMenu } from './ChatPlusMenu'
 import { VoiceChatSheet } from './VoiceChatSheet'
 import { VoicePickerSheet } from './VoicePickerSheet'
@@ -270,15 +271,15 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
   const isGenerating = useChatStore((s) => s.isGenerating[currentCharacterId as CharacterId] ?? false)
   const insufficientCredits = useChatStore((s) => s.insufficientCredits)
   const clearInsufficientCredits = useChatStore((s) => s.clearInsufficientCredits)
-  const modelForbidden = useChatStore((s) => s.modelForbidden)
-  const clearModelForbidden = useChatStore((s) => s.clearModelForbidden)
-
   const { sendMessage, interrupt } = useWebSocket()
 
-  // Current text tier (deepseek/grok) for the input-bar entry label.
-  const chatModel = useAppStore((s) => s.chatModel[currentCharacterId as CharacterId] ?? 'deepseek')
+  const chatModel = useAppStore((s) => s.chatModel[currentCharacterId as CharacterId] ?? 'gemini-3.1')
   const setVoiceChatEnabled = useAppStore((s) => s.setVoiceChatEnabled)
-  const textTierLabel = chatModel === 'grok' ? '私密陪伴' : '普通交流'
+  const modelCatalog = useModelsStore((s) => s.models)
+  const currentModel = modelCatalog.find((model) => model.id === chatModel)
+  const textTierLabel = currentModel
+    ? `${currentModel.label} · ${currentModel.included ? '会员免费' : `${currentModel.cost_coins}币`}`
+    : '双子座 3.1 · 0.5币'
 
   // Sync server-side voice_enabled once on mount (previously done by the
   // backstage page). Keeps the +菜单/语音聊天 toggle honest without opening it.
@@ -1464,7 +1465,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
         {/* Streaming indicator - avatar is already in the bubble via renderMessage */}
       </div>
 
-      {/* 文字聊天档位入口（输入框左上角） */}
+      {/* 对话模型入口（输入框左上角） */}
       <div className="relative z-20 mx-4 mb-1.5 flex items-center">
         <button
           onClick={() => setTextTierOpen(true)}
@@ -1572,12 +1573,11 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
         onRestart={() => { setPlusMenuOpen(false); setRestartConfirmOpen(true) }}
       />
 
-      {/* 输入区弹窗（文字档位 / +菜单 / 语音聊天开关） */}
-      <TextTierSheet
+      {/* 输入区弹窗（模型选择 / +菜单 / 语音聊天开关） */}
+      <ModelSelectorSheet
         open={textTierOpen}
         onClose={() => setTextTierOpen(false)}
         characterId={currentCharacterId as CharacterId}
-        isDark={isDark}
       />
       <TransferSheet
         open={transferOpen}
@@ -1641,19 +1641,6 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
         你的 yuoyuo币不足以继续对话
         <br />
         前往钱包充值后继续
-      </NoticeDialog>
-
-      {/* Model requires higher tier */}
-      <NoticeDialog
-        open={!!modelForbidden}
-        onClose={clearModelForbidden}
-        title="该模型需会员"
-        actionLabel="去升级"
-        onAction={() => { clearModelForbidden(); navigate('/membership') }}
-      >
-        当前等级暂不能使用该模型
-        <br />
-        升级会员即可解锁更强的对话模型
       </NoticeDialog>
 
       {/* Voice recording overlay (WeChat-style) */}

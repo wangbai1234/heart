@@ -19,6 +19,8 @@ from heart.infra.llm_providers.base import (
     StreamChunk,
 )
 from heart.infra.llm_providers.registry import ProviderRegistry
+from heart.infra.model_catalog import get_model_spec
+from heart.infra.model_health import record_model_result
 
 logger = structlog.get_logger()
 
@@ -130,7 +132,9 @@ class ModelRouter:
         Returns (content, served_model) where served_model is the model that
         actually produced the response (may differ from requested model if failover occurred).
         """
-        chain = self._get_failover_chain(model, failover or DEFAULT_FAILOVER)
+        spec = get_model_spec(model)
+        fallback = list(spec.failover) if spec else DEFAULT_FAILOVER
+        chain = self._get_failover_chain(model, failover if failover is not None else fallback)
         # Narrow to candidates with a registered provider so we know which
         # attempt is genuinely last (empty-response failover must not "continue"
         # past the final usable provider).
@@ -140,6 +144,7 @@ class ModelRouter:
         for i, candidate in enumerate(usable):
             provider = self._registry.get_provider_for_model(candidate)
             is_last = i == len(usable) - 1
+            candidate_started = time.perf_counter()
 
             # candidate is a routing slug (e.g. "deepseek"); the vendor API needs
             # the canonical model name (e.g. "deepseek-chat"). served_model stays
@@ -178,8 +183,15 @@ class ModelRouter:
                         to_model=candidate,
                         agent_name=agent_name,
                     )
+                duration_ms = (time.perf_counter() - candidate_started) * 1000
+                record_model_result(candidate, success=True, duration_ms=duration_ms)
                 return response.content, candidate
             except ProviderError as e:
+                record_model_result(
+                    candidate,
+                    success=False,
+                    duration_ms=(time.perf_counter() - candidate_started) * 1000,
+                )
                 logger.warning(
                     "call_for_failover",
                     from_model=candidate,
@@ -379,7 +391,9 @@ class ModelRouter:
         TTFT_FAILOVER_S first-token deadline. Once real content has been yielded,
         a mid-stream error propagates as-is (we cannot un-send bytes).
         """
-        chain = self._get_failover_chain(model, failover or DEFAULT_FAILOVER)
+        spec = get_model_spec(model)
+        fallback = list(spec.failover) if spec else DEFAULT_FAILOVER
+        chain = self._get_failover_chain(model, failover if failover is not None else fallback)
         # Narrow to candidates with a registered provider so we know which
         # attempt is genuinely last (empty-response failover must not "continue"
         # past the final usable provider).
@@ -395,6 +409,7 @@ class ModelRouter:
         for i, candidate in enumerate(usable):
             provider = self._registry.get_provider_for_model(candidate)
             is_last = i == len(usable) - 1
+            candidate_started = time.perf_counter()
             # candidate is a routing slug (e.g. "deepseek"); the vendor API needs
             # the canonical model name (e.g. "deepseek-chat"). served_model stays
             # the slug for billing/label purposes.
@@ -419,9 +434,20 @@ class ModelRouter:
                     got_content = True
                     yield content
                 if got_content:
+                    record_model_result(
+                        candidate,
+                        success=True,
+                        duration_ms=(time.perf_counter() - candidate_started) * 1000,
+                        ttft_ms=(meta or {}).get("ttft_ms"),
+                    )
                     return
                 # Stream finished without any content.
                 if not is_last:
+                    record_model_result(
+                        candidate,
+                        success=False,
+                        duration_ms=(time.perf_counter() - candidate_started) * 1000,
+                    )
                     logger.warning(
                         "stream_for_empty_failover", from_model=candidate, requested=model
                     )
@@ -437,8 +463,18 @@ class ModelRouter:
                 if meta is not None:
                     meta["served_model"] = candidate
                     meta["degraded_to"] = candidate if i > 0 else None
+                record_model_result(
+                    candidate,
+                    success=False,
+                    duration_ms=(time.perf_counter() - candidate_started) * 1000,
+                )
                 return
             except Exception as exc:
+                record_model_result(
+                    candidate,
+                    success=False,
+                    duration_ms=(time.perf_counter() - candidate_started) * 1000,
+                )
                 # One handler for TTFT timeout, ProviderError, and any raw
                 # (unwrapped) relay/transport error. _failover_error_or_raise
                 # decides: record-and-continue before the first byte, re-raise

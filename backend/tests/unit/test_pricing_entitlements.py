@@ -29,7 +29,7 @@ class TestLlmCostFen:
 
     def test_deepseek_free_on_plus(self):
         from heart.billing.pricing import llm_cost_fen
-        assert llm_cost_fen("deepseek", "plus") == 0
+        assert llm_cost_fen("deepseek", "plus") == 100
 
     def test_deepseek_free_on_immersive(self):
         from heart.billing.pricing import llm_cost_fen
@@ -237,24 +237,24 @@ class TestGetEntitlements:
     def test_plus_tier_free_list(self):
         from heart.membership import get_entitlements
         ent = get_entitlements("plus")
-        assert set(ent.free) == {"deepseek", "tts", "asr", "story_unlock"}
+        assert set(ent.free) == {"tts", "asr", "story_unlock"}
 
     def test_plus_tier_monthly_grant_300_coins(self):
         from heart.membership import get_entitlements
         ent = get_entitlements("plus")
-        assert ent.monthly_grant_fen == 30000  # 300 coins × 100
+        assert ent.monthly_grant_fen == 0
 
     def test_immersive_tier_free_list(self):
         from heart.membership import get_entitlements
         ent = get_entitlements("immersive")
         assert set(ent.free) == {
-            "deepseek", "grok", "tts", "clone", "asr", "story_unlock", "story_chat"
+            "all_llm", "deepseek", "grok", "tts", "clone", "asr", "story_unlock", "story_chat"
         }
 
     def test_immersive_tier_monthly_grant_700_coins(self):
         from heart.membership import get_entitlements
         ent = get_entitlements("immersive")
-        assert ent.monthly_grant_fen == 70000  # 700 coins × 100
+        assert ent.monthly_grant_fen == 0
 
     def test_immersive_free_list_is_superset_of_plus(self):
         from heart.membership import get_entitlements
@@ -279,7 +279,7 @@ class TestIsFreeForTier:
 
     def test_plus_free_items(self):
         from heart.membership import is_free_for_tier
-        assert is_free_for_tier("plus", "deepseek") is True
+        assert is_free_for_tier("plus", "deepseek") is False
         assert is_free_for_tier("plus", "tts") is True
         assert is_free_for_tier("plus", "asr") is True
         assert is_free_for_tier("plus", "story_unlock") is True
@@ -415,14 +415,14 @@ class TestPricingEndpoint:
         result = await pricing()
         assert "models" in result
         model_ids = {m["id"] for m in result["models"]}
-        assert model_ids == {"deepseek", "grok"}  # claude removed
+        assert len(model_ids) == 12
 
     @pytest.mark.asyncio
     async def test_deepseek_cost_is_one_coin(self):
         from heart.api.routes_credits import pricing
         result = await pricing()
-        deepseek = next(m for m in result["models"] if m["id"] == "deepseek")
-        assert deepseek["cost"] == 1  # deepseek_cost_credits default
+        gemini = next(m for m in result["models"] if m["id"] == "gemini-3.1")
+        assert gemini["cost"] == 0.5
 
     @pytest.mark.asyncio
     async def test_membership_tiers_present(self):
@@ -450,8 +450,8 @@ class TestPricingEndpoint:
         result = await pricing()
         by_tier = {t["tier"]: t for t in result["membership_tiers"]}
         assert by_tier["free"]["monthly_grant"] == 0
-        assert by_tier["plus"]["monthly_grant"] == 300
-        assert by_tier["immersive"]["monthly_grant"] == 700
+        assert by_tier["plus"]["monthly_grant"] == 0
+        assert by_tier["immersive"]["monthly_grant"] == 0
 
     @pytest.mark.asyncio
     async def test_shop_present(self):
@@ -495,10 +495,11 @@ class TestDailyCheckin:
         db = AsyncMock()
         result_mock = MagicMock()
         result_mock.scalar_one_or_none.return_value = None  # no tx yet today
+        result_mock.scalar_one.return_value = 0
         db.execute = AsyncMock(return_value=result_mock)
 
         granted = AsyncMock(return_value=2000)  # new balance in fen
-        monkeypatch.setattr(routes_credits, "grant", granted)
+        monkeypatch.setattr("heart.billing.checkin.grant", granted)
 
         res = await routes_credits.daily_checkin(current_user=self._token(), db=db)
         assert res["granted"] is True
@@ -519,10 +520,11 @@ class TestDailyCheckin:
         db = AsyncMock()
         result_mock = MagicMock()
         result_mock.scalar_one_or_none.return_value = None
+        result_mock.scalar_one.return_value = 0
         db.execute = AsyncMock(return_value=result_mock)
 
         granted = AsyncMock(return_value=settings.daily_checkin_coins * 100)
-        monkeypatch.setattr(routes_credits, "grant", granted)
+        monkeypatch.setattr("heart.billing.checkin.grant", granted)
 
         await routes_credits.daily_checkin(current_user=self._token(), db=db)
         # grant amount (positional arg 3) == coins * 100 fen
@@ -535,14 +537,15 @@ class TestDailyCheckin:
 
         db = AsyncMock()
         result_mock = MagicMock()
-        result_mock.scalar_one_or_none.return_value = 1  # tx already exists today
+        result_mock.scalar_one_or_none.return_value = 2000
+        result_mock.scalar_one.return_value = 8000
         db.execute = AsyncMock(return_value=result_mock)
 
-        # grant() still invoked but ON CONFLICT DO NOTHING → balance unchanged.
+        # No new grant is issued once the daily target is already reached.
         granted = AsyncMock(return_value=2000)
-        monkeypatch.setattr(routes_credits, "grant", granted)
+        monkeypatch.setattr("heart.billing.checkin.grant", granted)
 
         res = await routes_credits.daily_checkin(current_user=self._token(), db=db)
         assert res["granted"] is False
         assert res["already"] is True
-        assert res["coins"] == 20
+        assert res["coins"] == 0

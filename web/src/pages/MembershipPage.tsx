@@ -167,7 +167,12 @@ export function MembershipPage() {
                   {t.price > 0 && <span className="text-[13px] text-[var(--color-text-muted)]">/月</span>}
                 </div>
                 <ul className="space-y-2 mb-2">
-                  {t.benefits.map((b, i) => (
+                {[
+                  ...t.benefits,
+                  ...(t.tier === 'free' ? ['每日签到20币，永久有效'] : []),
+                  ...(t.tier === 'plus' ? ['每日签到80币，永久有效'] : []),
+                  ...(t.tier === 'immersive' ? ['每日签到80币，永久有效', '全部文字模型无限次'] : []),
+                ].filter((benefit, index, all) => all.indexOf(benefit) === index).map((b, i) => (
                     <li key={i} className="flex items-start gap-2 text-[14px] text-[var(--color-text-secondary)]">
                       <span className="mt-[6px] w-[5px] h-[5px] rounded-full shrink-0" style={{ backgroundColor: accent }} />
                       {b}

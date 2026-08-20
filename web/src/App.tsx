@@ -44,6 +44,7 @@ import { useThemeStore } from './stores/themeStore'
 import { useAppStore } from './stores/appStore'
 import { useAuthStore } from './stores/authStore'
 import { useCharactersStore } from './stores/charactersStore'
+import { useModelsStore } from './stores/modelsStore'
 import { useAppBadge } from './hooks/useAppBadge'
 import { useInboxBadgeSync } from './hooks/useInboxBadgeSync'
 import { useSwipeNavigation } from './hooks/useSwipeNavigation'
@@ -85,6 +86,8 @@ export function App() {
   // priority=1 handler (HomePage blocks, ConversationChatPage overrides target).
   useSwipeNavigation({ priority: 0 })
   const loadCharacters = useCharactersStore((s) => s.load)
+  const refreshModels = useModelsStore((s) => s.refresh)
+  const mergeChatModels = useAppStore((s) => s.mergeChatModels)
   const navigate = useNavigate()
   const location = useLocation()
   const [checkinOpen, setCheckinOpen] = useState(false)
@@ -123,6 +126,19 @@ export function App() {
     if (accessToken) void loadCharacters()
   }, [accessToken, loadCharacters])
 
+  // Hydrate the server catalog and cross-device per-character selections.
+  // An empty server map leaves migrated local choices intact; characters with
+  // no choice naturally use Gemini 3.1.
+  useEffect(() => {
+    if (!accessToken) return
+    void refreshModels().catch(() => {})
+    void import('./services/api').then(({ getModelPreferences }) =>
+      getModelPreferences()
+        .then((result) => mergeChatModels(result.preferences))
+        .catch(() => {}),
+    )
+  }, [accessToken, mergeChatModels, refreshModels])
+
   // Capture ?invite=<code> from any entry URL (e.g. /login?invite=XXX) so it
   // survives the login redirect.
   useEffect(() => {
@@ -146,7 +162,12 @@ export function App() {
   // re-requesting on every route change within the same day.
   useEffect(() => {
     if (!accessToken) return
-    const day = new Date().toISOString().slice(0, 10)
+    const day = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Shanghai',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date())
     if (localStorage.getItem('yuoyuo-checkin-day') === day) return
     void import('./services/api').then(({ dailyCheckin }) =>
       dailyCheckin()

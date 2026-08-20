@@ -23,8 +23,8 @@ class TurnRequest:
     trace_id: UUID
     modality: str = "text"
     # Requested LLM model; orchestrator/composer will use stream_for with failover.
-    # Defaults to "deepseek" (free tier default).
-    model: str = "deepseek"
+    # Defaults to the product's Gemini 3.1 model.
+    model: str = "gemini-3.1"
     # True when the user has voice on for this turn (resolved after tier gating).
     # Drives the composer's per-sentence {E:情绪} sentinel prompt.
     voice_enabled: bool = False

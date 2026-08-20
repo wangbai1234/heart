@@ -341,9 +341,51 @@ export async function dailyCheckin(): Promise<{
   granted: boolean
   already: boolean
   coins: number
+  daily_total: number
+  tier: string
   balance: number
 }> {
   return request('/credits/checkin', { method: 'POST' })
+}
+
+// ── Selectable chat models ─────────────────────────────────────────
+
+export interface ChatModelInfo {
+  id: string
+  label: string
+  family: string
+  tags: [string, string]
+  description: string
+  cost_coins: number
+  failover: string[]
+  status: 'smooth' | 'slow' | 'available' | 'unavailable'
+  status_label: '流畅' | '稍慢' | '可用' | '暂不可用'
+  success_rate: number | null
+  avg_latency_ms: number | null
+  sample_count: number
+  congested: boolean
+  included: boolean
+}
+
+export async function getModels(): Promise<{ default_model: string; models: ChatModelInfo[] }> {
+  return request('/models')
+}
+
+export async function getModelPreferences(): Promise<{
+  default_model: string
+  preferences: Record<string, string>
+}> {
+  return request('/models/preferences')
+}
+
+export async function saveModelPreference(
+  characterId: string,
+  modelId: string,
+): Promise<{ character_id: string; model_id: string }> {
+  return request(`/models/preferences/${encodeURIComponent(characterId)}`, {
+    method: 'PUT',
+    body: JSON.stringify({ model_id: modelId }),
+  })
 }
 
 export async function getTransactions(cursor?: string, limit = 20): Promise<{
@@ -368,7 +410,7 @@ export async function redeemCode(code: string): Promise<{ ok: boolean; credited:
 // All amounts are display units (yuoyuo币, integer); backend already ÷100.
 
 export interface PricingModel {
-  id: string // 'deepseek' | 'grok' | 'claude'
+  id: string // selectable model slug from the server catalog
   label: string
   cost: number // 币 per LLM turn
   tiers_allowed: string[]
@@ -385,10 +427,13 @@ export interface MembershipTierInfo {
   label: string
   price: number // ¥ / month
   sku: string | null
+  daily_checkin_coins: number
+  daily_coins_permanent: boolean
   benefits: string[]
   models: string[]
   tts: string[]
   clone: string[]
+  /** Deprecated compatibility field; new plans grant daily permanent coins. */
   monthly_grant: number
   /** 爱发电 order/create 深链（未配置时为 null）；前端会追加 ?custom_order_id=<绑定码>。 */
   checkout_url?: string | null
@@ -421,8 +466,7 @@ export interface MembershipEntitlements {
   models: string[]
   tts: string[]
   clone: string[]
-  // Items complimentary on this tier (charged 0). Slugs: deepseek | grok | tts |
-  // clone | asr | story_unlock | story_chat. Everything else is charged per use.
+  // Items complimentary on this tier. "all_llm" means every selectable text model.
   free: string[]
 }
 
@@ -437,6 +481,8 @@ export interface Membership {
   tier: string
   expires_at: string | null // null for free
   monthly_grant: number
+  daily_checkin_coins?: number
+  daily_coins_permanent?: boolean
   entitlements: MembershipEntitlements
   voice_call: VoiceCallQuota
   binding_code: string

@@ -29,6 +29,7 @@ interface AppState {
   setMuteNever: (v: boolean) => void
   setVoiceChatEnabled: (id: CharacterId, enabled: boolean) => void
   setChatModel: (id: CharacterId, model: string) => void
+  mergeChatModels: (models: Record<CharacterId, string>) => void
   setPushEnabled: (v: boolean) => void
   setInboxUnreadTotal: (n: number) => void
   // Reset per-user fields on logout / account switch so the next account on
@@ -87,6 +88,8 @@ export const useAppStore = create<AppState>()(
             [id]: model,
           },
         })),
+      mergeChatModels: (models) =>
+        set((state) => ({ chatModel: { ...state.chatModel, ...models } })),
       setPushEnabled: (v) => set({ pushEnabled: v }),
       setInboxUnreadTotal: (n) => set({ inboxUnreadTotal: n }),
       resetUserState: () =>
@@ -100,7 +103,7 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: 'yuoyuo-app',
-      version: 2,
+      version: 3,
       migrate: (persisted: unknown, version: number) => {
         const state = persisted as Record<string, unknown>
         if (version < 2) {
@@ -112,6 +115,18 @@ export const useAppStore = create<AppState>()(
           if (vce && 'taolesi' in vce) {
             vce.dorothy = vce.taolesi
             delete vce.taolesi
+          }
+        }
+        if (version < 3) {
+          const models = (state.chatModel ?? {}) as Record<string, string>
+          for (const [characterId, model] of Object.entries(models)) {
+            if (model === 'deepseek' || model === 'deepseek-chat') {
+              models[characterId] = 'deepseek-v4-flash'
+            } else if (model === 'deepseek-reasoner') {
+              models[characterId] = 'deepseek-v4-pro'
+            } else if (model === 'grok') {
+              models[characterId] = 'grok-4.5'
+            }
           }
         }
         return state
