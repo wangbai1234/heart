@@ -1,7 +1,8 @@
-"""Authoritative user-selectable LLM catalog for yuoyuo.
+"""Authoritative user-selectable LLM product catalog for yuoyuo.
 
-Public slugs are stable product identifiers. MICU model IDs and credentials stay
-server-side so clients cannot bypass pricing or bind themselves to relay details.
+Public slugs are stable product identifiers. Deployment details such as upstream
+model IDs, credentials, endpoints, and protocols live in provider configuration,
+not in this user-facing catalog.
 """
 
 from __future__ import annotations
@@ -17,16 +18,10 @@ class ModelSpec:
     tags: tuple[str, str]
     description: str
     cost_coins: float
-    protocol: str
-    api_model: str
-    credential_group: str
     failover: tuple[str, ...]
 
     def public_dict(self) -> dict:
         value = asdict(self)
-        value.pop("protocol")
-        value.pop("api_model")
-        value.pop("credential_group")
         value["tags"] = list(self.tags)
         value["failover"] = list(self.failover)
         return value
@@ -42,9 +37,6 @@ MODEL_CATALOG: tuple[ModelSpec, ...] = (
         ("🚗高手", "粘人小狗"),
         "氛围一到就贴上来，甜和野都接得住",
         0.5,
-        "chat_completions",
-        "gemini-3.1",
-        "gemini",
         ("claude-haiku-4.5",),
     ),
     ModelSpec(
@@ -54,9 +46,6 @@ MODEL_CATALOG: tuple[ModelSpec, ...] = (
         ("嘴快小狗", "秒接梗"),
         "回复利落，适合轻松日常和快速斗嘴",
         1,
-        "chat_completions",
-        "deepseek-v4-flash",
-        "deepseek",
         ("deepseek-v4-pro", "gpt-5.5"),
     ),
     ModelSpec(
@@ -66,9 +55,6 @@ MODEL_CATALOG: tuple[ModelSpec, ...] = (
         ("高智商", "会接戏"),
         "听得懂潜台词，剧情推进更稳",
         1,
-        "chat_completions",
-        "deepseek-v4-pro",
-        "deepseek",
         ("deepseek-v4-flash", "gpt-5.5"),
     ),
     ModelSpec(
@@ -78,9 +64,6 @@ MODEL_CATALOG: tuple[ModelSpec, ...] = (
         ("活泼小狗", "嘴甜型"),
         "轻快会夸，日常陪聊没有压力",
         0.5,
-        "anthropic",
-        "claude-haiku-4-5",
-        "claude",
         ("gemini-3.1",),
     ),
     ModelSpec(
@@ -90,9 +73,6 @@ MODEL_CATALOG: tuple[ModelSpec, ...] = (
         ("细腻高手", "很会拉扯"),
         "情绪接得准，暧昧推进自然",
         2,
-        "anthropic",
-        "claude-sonnet-4-6",
-        "claude",
         ("gpt-5.6-luna", "gpt-5.6-sol"),
     ),
     ModelSpec(
@@ -102,9 +82,6 @@ MODEL_CATALOG: tuple[ModelSpec, ...] = (
         ("顶级男主", "戏感拉满"),
         "强情节、高张力场面更有代入感",
         3,
-        "anthropic",
-        "claude-opus-4-6",
-        "claude",
         ("claude-opus-5", "claude-sonnet-4.6"),
     ),
     ModelSpec(
@@ -114,9 +91,6 @@ MODEL_CATALOG: tuple[ModelSpec, ...] = (
         ("白月光", "后劲很大"),
         "克制深情，适合重要剧情和长线关系",
         3,
-        "anthropic",
-        "claude-opus-5",
-        "claude",
         ("claude-opus-4.6", "claude-sonnet-4.6"),
     ),
     ModelSpec(
@@ -126,9 +100,6 @@ MODEL_CATALOG: tuple[ModelSpec, ...] = (
         ("坏嘴男友", "越怼越亲"),
         "会接挑衅，适合欢喜冤家式互动",
         1,
-        "responses",
-        "grok-4.5",
-        "grok",
         ("grok-4.6", "gpt-5.5"),
     ),
     ModelSpec(
@@ -138,9 +109,6 @@ MODEL_CATALOG: tuple[ModelSpec, ...] = (
         ("疯批男主", "不按套路"),
         "反应出其不意，适合刺激型剧情",
         1,
-        "responses",
-        "grok-4.6",
-        "grok",
         ("grok-4.5", "gpt-5.5"),
     ),
     ModelSpec(
@@ -150,9 +118,6 @@ MODEL_CATALOG: tuple[ModelSpec, ...] = (
         ("温柔学长", "很会哄人"),
         "稳定温柔，低落时更有陪伴感",
         2,
-        "responses",
-        "gpt-5.6-luna",
-        "gpt",
         ("gpt-5.6-sol", "claude-sonnet-4.6"),
     ),
     ModelSpec(
@@ -162,9 +127,6 @@ MODEL_CATALOG: tuple[ModelSpec, ...] = (
         ("全能男友", "什么都能聊"),
         "日常、剧情、情绪都均衡",
         1,
-        "responses",
-        "gpt-5.5",
-        "gpt",
         ("deepseek-v4-pro", "grok-4.5"),
     ),
     ModelSpec(
@@ -174,9 +136,6 @@ MODEL_CATALOG: tuple[ModelSpec, ...] = (
         ("阳光小狗", "直球高手"),
         "热烈主动，不让暧昧一直卡住",
         2,
-        "responses",
-        "gpt-5.6-sol",
-        "gpt",
         ("gpt-5.6-luna", "claude-sonnet-4.6"),
     ),
 )

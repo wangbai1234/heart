@@ -41,15 +41,23 @@ class Settings(BaseSettings):
     # Empty → fall back to the single deepseek_api_key (single-key behavior unchanged).
     deepseek_api_keys: str = ""
     deepseek_base_url: str = "https://api.deepseek.com"
+    # Actual upstream model IDs for the two selectable DeepSeek product entries.
+    # These are separate from MAIN_LLM_MODEL/CHEAP_LLM_MODEL, which legacy
+    # background tasks continue to use until their own routing PR lands.
+    deepseek_v4_flash_model: str = "deepseek-chat"
+    deepseek_v4_pro_model: str = "deepseek-reasoner"
 
-    # MICU multi-model relay. Keys are separated by MICU token group; never
-    # reuse a key across groups unless the MICU account explicitly allows it.
-    micu_base_url: str = "https://www.micuapi.ai"
-    micu_gemini_api_key: str = ""
-    micu_deepseek_api_key: str = ""
-    micu_claude_api_key: str = ""
-    micu_grok_api_key: str = ""
-    micu_gpt_api_key: str = ""
+    # LLM Providers - Gemini (MICU OpenAI-compatible relay)
+    gemini_api_key: str = ""
+    gemini_base_url: str = "https://api-slb.micuapi.ai"
+    gemini_model: str = "gemini-3.1-flash-lite-preview"
+
+    # LLM Providers - GPT (MICU Responses-compatible relay)
+    gpt_api_key: str = ""
+    gpt_base_url: str = "https://api-slb.micuapi.ai"
+    gpt_model: str = "gpt-5.5"
+    gpt_luna_model: str = "gpt-5.6-luna"
+    gpt_sol_model: str = "gpt-5.6-sol"
 
     # Outbound LLM concurrency / failover (process-global; see llm_providers/pool.py)
     llm_max_concurrency: int = 8
@@ -285,11 +293,15 @@ class Settings(BaseSettings):
     grok_api_key: str = ""
     grok_base_url: str = "https://api.x.ai"
     grok_model: str = "grok-3-mini-fast"
+    grok_46_model: str = "grok-4.6"
 
     # LLM Providers - Claude (Anthropic) — optional; leave empty to disable
     claude_api_key: str = ""
     claude_base_url: str = "https://api.anthropic.com"
     claude_model: str = "claude-sonnet-4-5"
+    claude_haiku_model: str = "claude-haiku-4-5"
+    claude_opus_46_model: str = "claude-opus-4-6"
+    claude_opus_5_model: str = "claude-opus-5"
     # "anthropic" for native /v1/messages; "openai-compat" for proxy
     claude_api_style: str = "anthropic"
 

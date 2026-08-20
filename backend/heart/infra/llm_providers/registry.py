@@ -18,9 +18,8 @@ from heart.infra.llm_providers.deepseek_pro import DeepSeekV4ProProvider
 from heart.infra.llm_providers.grok import GrokProvider
 from heart.infra.llm_providers.micu import MicuProvider
 from heart.infra.llm_providers.pool import ConcurrencyGate, PooledLLMProvider
-from heart.infra.model_catalog import LEGACY_MODEL_ALIASES, MODEL_CATALOG
+from heart.infra.model_catalog import LEGACY_MODEL_ALIASES
 
-_CLAUDE_EXTERNAL_UA = "claude-cli/2.0.76 (external, cli)"
 _CODEX_EXTERNAL_UA = "codex_cli_rs/0.77.0 (Windows 10.0.26100; x86_64) WindowsTerminal"
 _BROWSER_EXTERNAL_UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:149.0) Gecko/20100101 Firefox/149.0"
@@ -42,6 +41,11 @@ def _parse_keys(primary: Optional[str], extra: Optional[str]) -> list[str]:
             seen.add(k)
             result.append(k)
     return result
+
+
+def _env_value(name: str, default: str) -> str:
+    """Read a non-empty environment value, otherwise use the declared default."""
+    return (os.getenv(name) or default).strip()
 
 
 class ProviderRegistry:
@@ -168,6 +172,17 @@ class ProviderRegistry:
         """
         return model in self._model_to_provider
 
+    def has_provider(self, provider_name: str) -> bool:
+        """True when a named provider instance has been registered."""
+        return provider_name in self._providers
+
+    def register_model_alias(self, model: str, provider_name: str, canonical: str) -> None:
+        """Route one public model slug to an existing provider and upstream model ID."""
+        if provider_name not in self._providers:
+            raise KeyError(f"Provider '{provider_name}' not registered")
+        self._model_to_provider[model] = provider_name
+        self._model_canonical[model] = canonical
+
     async def close_all(self) -> None:
         """Close all provider connections."""
         for provider in self._providers.values():
@@ -183,59 +198,87 @@ def _register_selectable_models(
     registry: ProviderRegistry,
     circuit_breaker: Optional[CircuitBreakerInterface],
 ) -> None:
-    """Register public model slugs against their configured MICU credentials."""
-    from heart.core.config import settings
+    """Attach product slugs to provider configs and env-defined upstream models.
 
-    grouped_keys = {
-        "gemini": settings.micu_gemini_api_key,
-        # Selectable product models are relayed through MICU exclusively.
-        # Legacy direct-provider keys below are reserved for internal tasks.
-        "deepseek": settings.micu_deepseek_api_key,
-        "claude": settings.micu_claude_api_key,
-        "grok": settings.micu_grok_api_key,
-        "gpt": settings.micu_gpt_api_key,
-    }
-    group_urls = {
-        "deepseek": settings.deepseek_base_url
-        if "micuapi.ai" in settings.deepseek_base_url
-        else settings.micu_base_url,
-        "claude": settings.claude_base_url
-        if "micuapi.ai" in settings.claude_base_url
-        else settings.micu_base_url,
-        "grok": settings.grok_base_url
-        if "micuapi.ai" in settings.grok_base_url
-        else settings.micu_base_url,
-        "gemini": settings.micu_base_url,
-        "gpt": settings.micu_base_url,
-    }
-    for spec in MODEL_CATALOG:
-        key = grouped_keys[spec.credential_group]
-        if not key:
-            continue
-        base_url = group_urls[spec.credential_group]
-        if spec.protocol == "anthropic":
-            provider: LLMProvider = ClaudeProvider(
-                api_key=key,
-                base_url=base_url,
-                circuit_breaker=circuit_breaker,
-                api_style="anthropic",
-                user_agent=_CLAUDE_EXTERNAL_UA,
-            )
-        else:
-            provider = MicuProvider(
-                api_key=key,
-                base_url=base_url,
-                protocol=spec.protocol,
-                provider_id=f"micu-{spec.id}",
-                user_agent=(
-                    _CODEX_EXTERNAL_UA if spec.protocol == "responses" else _BROWSER_EXTERNAL_UA
-                ),
-                circuit_breaker=circuit_breaker,
-            )
+    DeepSeek, Grok, and Claude reuse the existing provider instances above.
+    Gemini and GPT add only the two provider integrations that did not already
+    exist. Product labels never double as upstream model IDs.
+    """
+    if registry.has_provider("deepseek-v4-flash"):
+        registry.register_model_alias(
+            "deepseek-v4-flash",
+            "deepseek-v4-flash",
+            _env_value("DEEPSEEK_V4_FLASH_MODEL", "deepseek-chat"),
+        )
+    if registry.has_provider("deepseek-v4-pro"):
+        registry.register_model_alias(
+            "deepseek-v4-pro",
+            "deepseek-v4-pro",
+            _env_value("DEEPSEEK_V4_PRO_MODEL", "deepseek-reasoner"),
+        )
+
+    if registry.has_provider("grok"):
+        grok_model = _env_value("GROK_MODEL", "grok-3-mini-fast")
+        registry.register_model_alias("grok-4.5", "grok", grok_model)
+        registry.register_model_alias("grok-4.6", "grok", _env_value("GROK_46_MODEL", "grok-4.6"))
+
+    if registry.has_provider("claude"):
+        registry.register_model_alias(
+            "claude-haiku-4.5",
+            "claude",
+            _env_value("CLAUDE_HAIKU_MODEL", "claude-haiku-4-5"),
+        )
+        registry.register_model_alias(
+            "claude-sonnet-4.6",
+            "claude",
+            _env_value("CLAUDE_MODEL", "claude-sonnet-4-5"),
+        )
+        registry.register_model_alias(
+            "claude-opus-4.6",
+            "claude",
+            _env_value("CLAUDE_OPUS_46_MODEL", "claude-opus-4-6"),
+        )
+        registry.register_model_alias(
+            "claude-opus-5",
+            "claude",
+            _env_value("CLAUDE_OPUS_5_MODEL", "claude-opus-5"),
+        )
+
+    gemini_api_key = os.getenv("GEMINI_API_KEY")
+    if gemini_api_key:
+        gemini_model = _env_value("GEMINI_MODEL", "gemini-3.1-flash-lite-preview")
         registry.register_provider_instance(
-            provider_name=f"selectable-{spec.id}",
-            provider=provider,
-            models=[spec.api_model, spec.id],
+            provider_name="gemini",
+            provider=MicuProvider(
+                api_key=gemini_api_key,
+                base_url=_env_value("GEMINI_BASE_URL", "https://api-slb.micuapi.ai"),
+                protocol="chat_completions",
+                provider_id="gemini",
+                user_agent=_BROWSER_EXTERNAL_UA,
+                circuit_breaker=circuit_breaker,
+            ),
+            models=[gemini_model, "gemini-3.1"],
+        )
+
+    gpt_api_key = os.getenv("GPT_API_KEY")
+    if gpt_api_key:
+        registry.register_provider_instance(
+            provider_name="gpt",
+            provider=MicuProvider(
+                api_key=gpt_api_key,
+                base_url=_env_value("GPT_BASE_URL", "https://api-slb.micuapi.ai"),
+                protocol="responses",
+                provider_id="gpt",
+                user_agent=_CODEX_EXTERNAL_UA,
+                circuit_breaker=circuit_breaker,
+            ),
+        )
+        registry.register_model_alias("gpt-5.5", "gpt", _env_value("GPT_MODEL", "gpt-5.5"))
+        registry.register_model_alias(
+            "gpt-5.6-luna", "gpt", _env_value("GPT_LUNA_MODEL", "gpt-5.6-luna")
+        )
+        registry.register_model_alias(
+            "gpt-5.6-sol", "gpt", _env_value("GPT_SOL_MODEL", "gpt-5.6-sol")
         )
 
 
@@ -246,10 +289,10 @@ def initialize_registry(
     Initialize global provider registry with environment configuration.
 
     Reads from environment variables:
-    - DEEPSEEK_API_KEY
-    - DEEPSEEK_BASE_URL (optional)
-    - MAIN_LLM_MODEL (default: deepseek-reasoner)
-    - CHEAP_LLM_MODEL (default: deepseek-chat)
+    - Existing DeepSeek/Grok/Claude provider settings
+    - New Gemini/GPT provider settings
+    - One explicit upstream model ID for every selectable product model
+    - MAIN_LLM_MODEL/CHEAP_LLM_MODEL for unchanged legacy internal callers
 
     Args:
         circuit_breaker: Optional circuit breaker
@@ -344,8 +387,8 @@ def initialize_registry(
             models=[claude_model, "claude"],
         )
 
-    # User-selectable models all route through MICU. Keep the legacy providers
-    # above for internal cheap/main tasks; the product slugs below are distinct.
+    # Attach user-selectable product slugs without replacing the existing
+    # DeepSeek/Grok/Claude configs used by legacy and background callers.
     _register_selectable_models(registry, circuit_breaker)
 
     # Old clients remain functional during rollout, but are normalized to the

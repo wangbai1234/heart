@@ -27,6 +27,70 @@ def test_catalog_has_all_selectable_models_and_default() -> None:
         "gpt-5.5",
         "gpt-5.6-sol",
     }
+    assert all(not hasattr(model, "api_model") for model in MODEL_CATALOG)
+    assert all(not hasattr(model, "credential_group") for model in MODEL_CATALOG)
+
+
+def test_selectable_models_use_provider_env_and_explicit_upstream_ids() -> None:
+    """Product slugs must route through reusable provider configs, not hardcoded IDs."""
+    from heart.infra.llm_providers.registry import initialize_registry
+    from heart.infra.model_catalog import MODEL_CATALOG
+
+    env = {
+        "DEEPSEEK_API_KEY": "deepseek-test-key",
+        "DEEPSEEK_BASE_URL": "https://deepseek.test",
+        "MAIN_LLM_MODEL": "internal-main-model",
+        "CHEAP_LLM_MODEL": "internal-cheap-model",
+        "DEEPSEEK_V4_FLASH_MODEL": "chat-deepseek-flash",
+        "DEEPSEEK_V4_PRO_MODEL": "chat-deepseek-pro",
+        "GROK_API_KEY": "grok-test-key",
+        "GROK_BASE_URL": "https://grok.test",
+        "GROK_MODEL": "chat-grok-45",
+        "GROK_46_MODEL": "chat-grok-46",
+        "CLAUDE_API_KEY": "claude-test-key",
+        "CLAUDE_BASE_URL": "https://claude.test",
+        "CLAUDE_MODEL": "chat-claude-sonnet",
+        "CLAUDE_HAIKU_MODEL": "chat-claude-haiku",
+        "CLAUDE_OPUS_46_MODEL": "chat-claude-opus-46",
+        "CLAUDE_OPUS_5_MODEL": "chat-claude-opus-5",
+        "CLAUDE_API_STYLE": "anthropic",
+        "GEMINI_API_KEY": "gemini-test-key",
+        "GEMINI_BASE_URL": "https://gemini.test",
+        "GEMINI_MODEL": "chat-gemini-31",
+        "GPT_API_KEY": "gpt-test-key",
+        "GPT_BASE_URL": "https://gpt.test",
+        "GPT_MODEL": "chat-gpt-55",
+        "GPT_LUNA_MODEL": "chat-gpt-luna",
+        "GPT_SOL_MODEL": "chat-gpt-sol",
+    }
+
+    with patch.dict("os.environ", env, clear=True):
+        registry = initialize_registry()
+
+    assert all(registry.has_model(model.id) for model in MODEL_CATALOG)
+    assert registry.get_canonical_model("gemini-3.1") == "chat-gemini-31"
+    assert registry.get_canonical_model("deepseek-v4-flash") == "chat-deepseek-flash"
+    assert registry.get_canonical_model("deepseek-v4-pro") == "chat-deepseek-pro"
+    assert registry.get_canonical_model("claude-haiku-4.5") == "chat-claude-haiku"
+    assert registry.get_canonical_model("claude-sonnet-4.6") == "chat-claude-sonnet"
+    assert registry.get_canonical_model("claude-opus-4.6") == "chat-claude-opus-46"
+    assert registry.get_canonical_model("claude-opus-5") == "chat-claude-opus-5"
+    assert registry.get_canonical_model("grok-4.5") == "chat-grok-45"
+    assert registry.get_canonical_model("grok-4.6") == "chat-grok-46"
+    assert registry.get_canonical_model("gpt-5.5") == "chat-gpt-55"
+    assert registry.get_canonical_model("gpt-5.6-luna") == "chat-gpt-luna"
+    assert registry.get_canonical_model("gpt-5.6-sol") == "chat-gpt-sol"
+
+    # Existing provider instances are reused rather than shadowed by MICU_* groups.
+    assert registry.get_provider_for_model("grok-4.5") is registry.get_provider("grok")
+    assert registry.get_provider_for_model("claude-opus-5") is registry.get_provider("claude")
+    assert registry.get_provider_for_model("deepseek-v4-flash") is registry.get_provider(
+        "deepseek-v4-flash"
+    )
+
+    # Background routing remains on its original model settings in this PR.
+    assert registry.get_canonical_model("internal-main-model") == "internal-main-model"
+    assert registry.get_canonical_model("internal-cheap-model") == "internal-cheap-model"
 
 
 @pytest.mark.parametrize(
@@ -40,9 +104,9 @@ def test_new_model_prices_are_in_display_coins(model: str, coins: float) -> None
 
 
 def test_all_tiers_can_access_every_model_but_immersive_is_free() -> None:
+    from heart.billing.pricing import llm_cost_fen
     from heart.infra.model_catalog import MODEL_CATALOG
     from heart.membership import assert_model_allowed, get_entitlements
-    from heart.billing.pricing import llm_cost_fen
 
     for tier in ("free", "plus", "immersive"):
         entitlements = get_entitlements(tier)
