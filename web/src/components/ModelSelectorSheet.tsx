@@ -47,7 +47,7 @@ function ModelBrandIcon({ brand, size = 42 }: { brand: Brand; size?: number }) {
 
 function SignalBadge({ model }: { model: ChatModelInfo }) {
   const smooth = model.status === 'smooth' || model.status === 'available'
-  const color = model.status === 'unavailable' ? '#9B94A3' : model.status === 'slow' ? '#F0B46B' : '#56DCA0'
+  const color = model.status === 'unavailable' ? '#A79B9F' : model.status === 'slow' ? '#F0B46B' : '#56DCA0'
   return (
     <span
       className="inline-flex h-6 shrink-0 items-end gap-[2px] rounded-[5px] px-2 pb-[5px] pt-1 text-[11px] font-medium"
@@ -83,14 +83,14 @@ function ModelRow({
         unavailable ? 'cursor-not-allowed opacity-45' : 'active:scale-[0.99]'
       }`}
       style={{
-        borderColor: selected ? '#C09BFF' : 'rgba(255,255,255,0.1)',
-        backgroundColor: selected ? 'rgba(173,126,232,0.18)' : 'rgba(255,255,255,0.07)',
+        borderColor: selected ? '#FF94AC' : 'rgba(255,248,243,0.1)',
+        backgroundColor: selected ? 'rgba(255,148,172,0.15)' : 'rgba(255,248,243,0.07)',
         boxShadow: selected
-          ? 'inset 0 0 0 1px rgba(192,155,255,0.7), 0 8px 24px rgba(10,5,15,0.16)'
-          : '0 5px 18px rgba(10,5,15,0.1)',
+          ? 'inset 0 0 0 1px rgba(255,148,172,0.65), 0 8px 24px rgba(31,18,22,0.18)'
+          : '0 5px 18px rgba(31,18,22,0.12)',
       }}
     >
-      {selected && <span className="absolute inset-y-0 left-0 w-[3px] bg-[#D7B6FF]" aria-hidden="true" />}
+      {selected && <span className="absolute inset-y-0 left-0 w-[3px] bg-[#FFB7C5]" aria-hidden="true" />}
       <span className="flex min-w-0 items-start gap-2.5">
         <span className="min-w-0 flex-1">
           <span className="flex min-w-0 items-center gap-2">
@@ -101,7 +101,7 @@ function ModelRow({
             {model.tags.map((tag) => (
               <span
                 key={tag}
-                className="inline-flex h-6 items-center rounded-[5px] border border-white/8 bg-black/12 px-2 text-[11px] text-[#E8DDEB]"
+                className="inline-flex h-7 items-center rounded-[5px] border border-[#FFB7C5]/15 bg-black/12 px-2.5 text-[13px] font-medium text-[#FFF0F3]"
               >
                 {tag}
               </span>
@@ -115,7 +115,7 @@ function ModelRow({
           <span
             className={`flex h-5 w-5 items-center justify-center rounded-full border ${
               selected
-                ? 'border-[#D8BBFF] bg-[#D8BBFF] text-[#33263F]'
+                ? 'border-[#FFB7C5] bg-[#FFB7C5] text-[#3A262D]'
                 : 'border-white/25 text-transparent'
             }`}
             aria-hidden="true"
@@ -178,7 +178,7 @@ export function ModelSelectorSheet({ open, onClose, characterId }: ModelSelector
     <BottomSheet
       open={open}
       onClose={onClose}
-      sheetClassName="overflow-hidden bg-[linear-gradient(180deg,#4B3A58_0%,#2A2133_30%,#1C1722_100%)] shadow-[0_-18px_60px_rgba(12,7,18,0.42)]"
+      sheetClassName="overflow-hidden bg-[linear-gradient(180deg,#6A4652_0%,#33262B_30%,#211A1D_100%)] shadow-[0_-18px_60px_rgba(31,18,22,0.42)]"
       handleClassName="bg-white/28"
       contentClassName="px-4 pb-4 sm:px-5"
     >
@@ -189,7 +189,7 @@ export function ModelSelectorSheet({ open, onClose, characterId }: ModelSelector
             <h2 className="text-[21px] font-semibold tracking-[0] text-white">模型选择</h2>
             <span className="text-[13px] text-[#F3C6D7]" aria-hidden="true">✦</span>
           </div>
-          <p className="mt-1 text-[13px] text-[#CCBFCE]">今晚，想让谁陪你聊？</p>
+          <p className="mt-1 text-[13px] text-[#E6D7D5]">今晚，想让谁陪你聊？</p>
           <div className="mx-auto mt-3 grid h-9 w-full max-w-[238px] grid-cols-2 rounded-[8px] border border-white/8 bg-black/18 p-1">
             {([['recommended', '推荐'], ['all', '全部']] as const).map(([key, label]) => (
               <button
@@ -198,8 +198,8 @@ export function ModelSelectorSheet({ open, onClose, characterId }: ModelSelector
                 onClick={() => setTab(key)}
                 className={`rounded-[6px] text-[13px] font-medium transition-colors ${
                   tab === key
-                    ? 'bg-white/16 text-white shadow-[0_2px_10px_rgba(10,5,15,0.2)]'
-                    : 'text-[#BFB2C2]'
+                    ? 'bg-[#FFB7C5]/18 text-white shadow-[0_2px_10px_rgba(31,18,22,0.22)]'
+                    : 'text-[#D2C3C1]'
                 }`}
               >
                 {label}
@@ -210,10 +210,10 @@ export function ModelSelectorSheet({ open, onClose, characterId }: ModelSelector
 
         <div className="scrollbar-hide min-h-0 flex-1 overflow-y-auto px-0.5 pb-3">
           {loading && models.length === 0 && (
-            <p className="py-12 text-center text-[13px] text-[#BFB2C2]">正在查看模型状态…</p>
+            <p className="py-12 text-center text-[13px] text-[#D2C3C1]">正在查看模型状态…</p>
           )}
           {!loading && tab === 'recommended' && visibleModels.length === 0 && (
-            <p className="py-12 text-center text-[13px] leading-6 text-[#BFB2C2]">
+            <p className="py-12 text-center text-[13px] leading-6 text-[#D2C3C1]">
               暂无流畅模型<br />可前往“全部”选择当前可用模型
             </p>
           )}
@@ -242,11 +242,11 @@ export function ModelSelectorSheet({ open, onClose, characterId }: ModelSelector
                     <ModelBrandIcon brand={brand} />
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-[17px] font-semibold text-white">{meta.label}</span>
-                      <span className="mt-0.5 block text-[11px] text-[#BFB2C2]">
+                      <span className="mt-0.5 block text-[11px] text-[#D2C3C1]">
                         {brandModels.length} 个聊天风格
                       </span>
                     </span>
-                    <span className="inline-flex shrink-0 items-center gap-2 rounded-[7px] bg-black/20 px-2.5 py-2 text-[11px] text-[#DED2E0]">
+                    <span className="inline-flex shrink-0 items-center gap-2 rounded-[7px] bg-black/20 px-2.5 py-2 text-[11px] text-[#E6D7D5]">
                       <span
                         className={`h-2 w-2 rounded-full ${
                           selectableCount > 0
@@ -261,7 +261,7 @@ export function ModelSelectorSheet({ open, onClose, characterId }: ModelSelector
                       height="18"
                       viewBox="0 0 18 18"
                       fill="none"
-                      className={`shrink-0 text-[#D8CCDA] transition-transform ${isOpen ? 'rotate-180' : ''}`}
+                      className={`shrink-0 text-[#E6D7D5] transition-transform ${isOpen ? 'rotate-180' : ''}`}
                       aria-hidden="true"
                     >
                       <path d="m4.5 6.75 4.5 4.5 4.5-4.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
@@ -286,12 +286,12 @@ export function ModelSelectorSheet({ open, onClose, characterId }: ModelSelector
           </div>
         </div>
 
-        <div className="shrink-0 border-t border-white/10 bg-[#1C1722]/92 pt-3">
+        <div className="shrink-0 border-t border-white/10 bg-[#211A1D]/92 pt-3">
           <button
             type="button"
             disabled={!canConfirm || confirming}
             onClick={() => void confirm()}
-            className="h-12 w-full rounded-[8px] bg-[linear-gradient(100deg,#F1D8C9_0%,#E9AFC7_34%,#C878DE_67%,#A748F2_100%)] text-[15px] font-semibold text-white shadow-[0_8px_26px_rgba(193,88,221,0.3)] transition-transform active:scale-[0.99] disabled:opacity-40"
+            className="h-12 w-full rounded-[8px] bg-[linear-gradient(100deg,#F1D8C9_0%,#FFB7C5_34%,#FF94AC_67%,#FF6E8A_100%)] text-[15px] font-semibold text-white shadow-[0_8px_26px_rgba(232,85,119,0.3)] transition-transform active:scale-[0.99] disabled:opacity-40"
           >
             {confirming ? '确认中…' : '确认'}
           </button>
