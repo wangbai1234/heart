@@ -21,6 +21,7 @@ from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from heart.core.config import settings
+from heart.infra.model_catalog import LEGACY_MODEL_ALIASES, MODEL_CATALOG, normalize_model_id
 
 logger = structlog.get_logger(__name__)
 
@@ -34,7 +35,7 @@ class Entitlements:
     clone: list[str]
     monthly_grant_fen: int
     # Items complimentary on this tier (charged 0). Everything not listed is
-    # charged per use. Slugs: deepseek | grok | tts | clone | asr | story_unlock | story_chat.
+    # charged per use. "all_llm" waives every selectable text model.
     free: list[str]
 
 
@@ -52,8 +53,13 @@ def _parse_tiers() -> dict[str, Entitlements]:
         raise
     result: dict[str, Entitlements] = {}
     for tier_name, v in raw.items():
+        models = list(v.get("models", []))
+        # Keep legacy slugs in the entitlement payload during rollout. Billing
+        # normalizes them to the new catalog, while old clients can still read
+        # their previously stored model choice.
+        models.extend(alias for alias in LEGACY_MODEL_ALIASES if alias not in models)
         result[tier_name] = Entitlements(
-            models=list(v.get("models", [])),
+            models=models,
             tts=list(v.get("tts", [])),
             clone=list(v.get("clone", [])),
             monthly_grant_fen=int(v.get("monthly_grant", 0)) * 100,
@@ -74,6 +80,8 @@ def is_free_for_tier(tier: str, item: str) -> bool:
     *item* is a pricing slug: "deepseek" | "grok" | "tts" | "clone" | "asr" |
     "story_unlock" | "story_chat". Unknown tiers fall back to free (nothing free).
     """
+    if item == "all_llm":
+        return item in get_entitlements(tier).free or tier == "immersive"
     return item in get_entitlements(tier).free
 
 
@@ -155,7 +163,8 @@ class CloneForbiddenError(Exception):
 def assert_model_allowed(tier: str, model: str) -> None:
     """Raise ModelForbiddenError if *model* is not available on *tier*."""
     ent = get_entitlements(tier)
-    if model not in ent.models:
+    normalized = normalize_model_id(model)
+    if normalized not in ent.models and model not in ent.models:
         raise ModelForbiddenError(model=model, tier=tier)
 
 

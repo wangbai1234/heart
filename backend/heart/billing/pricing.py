@@ -11,6 +11,7 @@ Access is universal — tiers differ only in which items are free vs charged.
 from __future__ import annotations
 
 from heart.core.config import settings
+from heart.infra.model_catalog import get_model_spec
 from heart.membership import is_free_for_tier
 
 
@@ -27,21 +28,21 @@ def _fen(coins: float) -> int:
 def llm_cost_fen(model: str, tier: str = "free") -> int:
     """Return LLM cost in fen for one turn of the given model slug on *tier*.
 
-    DeepSeek (普通交流) costs ``deepseek_cost_credits`` unless free on this tier.
-    Grok (私密陪伴) costs ``grok_cost_credits`` unless free on this tier.
-    Unknown models default to 0 (safe for future providers with no pricing yet).
+    The authoritative product catalog owns prices, including fractional coins.
+    Immersive membership waives every selectable text-model cost.
     """
-    _map = {
-        "deepseek": ("deepseek", _fen(settings.deepseek_cost_credits)),
-        "deepseek-chat": ("deepseek", _fen(settings.deepseek_cost_credits)),
-        "deepseek-reasoner": ("deepseek", _fen(settings.deepseek_cost_credits)),
-        "grok": ("grok", _fen(settings.grok_cost_credits)),
-        "claude": ("claude", _fen(settings.claude_cost_credits)),
-    }
-    item, cost = _map.get(model, ("", 0))
-    if not item or is_free_for_tier(tier, item):
+    # Legacy aliases keep their historical pricing for migration callers;
+    # new product slugs always use MODEL_CATALOG prices.
+    if model in {"deepseek", "deepseek-chat", "deepseek-reasoner"}:
+        if tier == "immersive":
+            return 0
+        return _fen(settings.deepseek_cost_credits)
+    if model == "grok":
+        return 0 if is_free_for_tier(tier, "grok") else _fen(settings.grok_cost_credits)
+    spec = get_model_spec(model)
+    if spec is None or is_free_for_tier(tier, "all_llm"):
         return 0
-    return cost
+    return _fen(spec.cost_coins)
 
 
 def tts_cost_fen(provider: str, tier: str = "free") -> int:

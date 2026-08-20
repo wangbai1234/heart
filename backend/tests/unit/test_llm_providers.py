@@ -326,12 +326,10 @@ class TestProviderRegistry:
             assert isinstance(flash_provider._members[0], DeepSeekV4FlashProvider)
 
     def test_initialize_registry_without_api_key(self):
-        """Test registry initialization fails without API key."""
+        """MICU-only deployments can initialize without the legacy key."""
         with patch.dict("os.environ", {}, clear=True):
-            with pytest.raises(ValueError) as exc_info:
-                initialize_registry()
-
-            assert "DEEPSEEK_API_KEY" in str(exc_info.value)
+            registry = initialize_registry()
+            assert not registry.has_model("deepseek-v4-flash")
 
 
 # Integration-style tests

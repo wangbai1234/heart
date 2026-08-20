@@ -320,7 +320,7 @@ async def _precheck_billing(
     character_id: str,
     turn_id: str,
     ws: WebSocket,
-    model: str = "deepseek",
+    model: str = "gemini-3.1",
     force_voice: bool = False,
 ) -> tuple[bool, bool]:
     """Pre-check voice setting, membership entitlement, and balance.
@@ -638,7 +638,7 @@ async def _post_turn_billing(
     actual_modality: str,
     turn_safety_blocked: bool,
     stream_session: Any = None,
-    served_model: str = "deepseek",
+    served_model: str = "gemini-3.1",
     degraded_to: Optional[str] = None,
     tts_provider: str = "",
     user_audio_url: str = "",
@@ -816,6 +816,7 @@ async def _post_turn_billing(
                     "turn_id": turn_id,
                     "character_id": character_id,
                     "modality": actual_modality,
+                    "has_audio": bool(audio_url),
                     "credits_charged": 0,
                     "balance": 0,
                 }
@@ -845,7 +846,7 @@ async def _run_orchestrator(
     safety_blocked = False
     collected_text: list[str] = []
     turn_path = "normal"
-    served_model: str = getattr(req, "model", "deepseek")
+    served_model: str = getattr(req, "model", "gemini-3.1")
     degraded_to: Optional[str] = None
     stream_error = False
 
@@ -918,8 +919,11 @@ async def _handle_chat_message(
     user_text = msg.get("text", "")
     user_audio_url = (msg.get("audio_url") or "").strip()
     character_id = msg.get("character_id", "rin")
-    # Requested LLM model — default to deepseek (free, unlimited).
-    model = msg.get("model", "deepseek") or "deepseek"
+    from heart.infra.model_catalog import DEFAULT_CHAT_MODEL, get_model_spec, normalize_model_id
+
+    # Product model slugs are normalized server-side; vendor model IDs never
+    # cross this boundary.
+    model = normalize_model_id(msg.get("model") or DEFAULT_CHAT_MODEL)
     # 'chat' (default) or 'call'. Call turns are persisted (billing / audio /
     # memory all need the row) but hidden from chat history — replaced by a
     # single call-summary bubble on hang-up. Whitelist to keep the column clean.
@@ -930,7 +934,7 @@ async def _handle_chat_message(
     # to deepseek if grok is unavailable or stalls. Call is billed at 20 币/min,
     # covering grok's per-turn cost, so cost is not a concern here.
     if channel == "call":
-        model = "grok"
+        model = "grok-4.5"
     # Voice-call mode forces a spoken reply even if the user never toggled the
     # per-character voice switch (the call page verified a ready voice exists
     # before entering). Text chat sends its real toggle state, so OR'ing this
@@ -945,6 +949,19 @@ async def _handle_chat_message(
                 "turn_id": turn_id,
                 "character_id": character_id,
                 "msg": "Missing text",
+            }
+        )
+        return
+
+    spec = get_model_spec(model)
+    if spec is None:
+        await ws.send_json(
+            {
+                "type": "error",
+                "code": "UNKNOWN_MODEL",
+                "turn_id": turn_id,
+                "character_id": character_id,
+                "msg": "未知的对话模型",
             }
         )
         return

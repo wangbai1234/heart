@@ -11,7 +11,7 @@ from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from heart.billing import InsufficientCreditsError, get_balance, grant, redeem
+from heart.billing import InsufficientCreditsError, get_balance, redeem
 from heart.core.auth import TokenData, get_current_user
 from heart.core.config import settings
 
@@ -44,31 +44,12 @@ async def daily_checkin(
     day (Asia/Shanghai). Idempotent via ``checkin:{uid}:{YYYY-MM-DD}`` — a second
     call the same day returns ``granted=False, already=True`` without re-crediting.
     """
-    from datetime import datetime, timedelta, timezone
-
     uid = uuid.UUID(current_user.user_id)
-    # Anchor the "day" to Asia/Shanghai (UTC+8) so the reset lines up with the
-    # user's local midnight rather than UTC's.
-    today = (datetime.now(timezone.utc) + timedelta(hours=8)).strftime("%Y-%m-%d")
-    idem_key = f"checkin:{uid}:{today}"
+    from heart.billing.checkin import claim_daily_grant
+    from heart.membership import get_effective_tier
 
-    already = (
-        await db.execute(
-            text("SELECT 1 FROM credit_transactions WHERE idempotency_key = :k LIMIT 1"),
-            {"k": idem_key},
-        )
-    ).scalar_one_or_none() is not None
-
-    coins = settings.daily_checkin_coins
-    balance = await grant(
-        db, uid, coins * 100, idempotency_key=idem_key, type_str="grant", ref_type="checkin"
-    )
-    return {
-        "granted": not already,
-        "already": already,
-        "coins": coins,
-        "balance": balance / 100,
-    }
+    tier = await get_effective_tier(db, uid)
+    return await claim_daily_grant(db, uid, tier)
 
 
 @router.get("/transactions")
@@ -170,6 +151,7 @@ async def pricing() -> dict:
     without the user manually filling a remark. Null when unconfigured.
     """
     from heart.billing.pricing import action_cost_fen, tts_cost_fen
+    from heart.infra.model_catalog import MODEL_CATALOG
     from heart.membership import get_entitlements, voice_call_free_minutes
 
     free_ent = get_entitlements("free")
@@ -187,17 +169,12 @@ async def pricing() -> dict:
         # reads /api/membership entitlements.free to know what's complimentary.
         "models": [
             {
-                "id": "deepseek",
-                "label": "DeepSeek",
-                "cost": settings.deepseek_cost_credits,
+                "id": model.id,
+                "label": model.label,
+                "cost": model.cost_coins,
                 "tiers_allowed": ["free", "plus", "immersive"],
-            },
-            {
-                "id": "grok",
-                "label": "Grok",
-                "cost": settings.grok_cost_credits,
-                "tiers_allowed": ["free", "plus", "immersive"],
-            },
+            }
+            for model in MODEL_CATALOG
         ],
         # One-shot actions — includes TTS and clone (cost in display coins)
         "actions": [
@@ -224,7 +201,9 @@ async def pricing() -> dict:
                 "label": "体验版",
                 "price": 0,
                 "sku": None,
-                "benefits": ["支持体验游玩所有功能"],
+                "daily_checkin_coins": settings.daily_checkin_coins,
+                "daily_coins_permanent": True,
+                "benefits": ["全部文字模型均可使用", "每日签到领取20币", "签到币永久有效"],
                 "models": free_ent.models,
                 "tts": free_ent.tts,
                 "clone": free_ent.clone,
@@ -235,12 +214,15 @@ async def pricing() -> dict:
                 "label": "进阶版",
                 "price": settings.membership_plus_price_monthly,
                 "sku": "plan_plus",
+                "daily_checkin_coins": settings.plus_daily_checkin_coins,
+                "daily_coins_permanent": True,
                 "benefits": [
-                    "免费无限次文字聊天",
+                    "全部文字模型均可使用",
+                    "每日签到领取80币",
+                    "签到币永久有效，可存币使用",
                     "免费解锁所有剧情",
                     "免费无限次语音聊天",
                     f"每月{plus_call_min}分钟免费语音通话",
-                    "每月额外赠送300yuoyuo币",
                     "解锁长久记忆功能",
                 ],
                 "models": plus_ent.models,
@@ -253,14 +235,17 @@ async def pricing() -> dict:
                 "label": "沉浸版",
                 "price": settings.membership_immersive_price_monthly,
                 "sku": "plan_immersive",
+                "daily_checkin_coins": settings.immersive_daily_checkin_coins,
+                "daily_coins_permanent": True,
                 "benefits": [
-                    "免费无限次聊天，回复更快更聪明",
+                    "全部文字模型无限次使用",
+                    "每日签到领取80币",
+                    "签到币永久有效，可用于其他能力",
                     "免费解锁所有剧情",
                     "免费无限次语音克隆",
                     "免费无限次剧情聊天",
                     "免费无限次语音聊天",
                     f"每月{immersive_call_min}分钟免费语音通话",
-                    "每月额外赠送700yuoyuo币",
                     "解锁长久记忆功能",
                 ],
                 "models": immersive_ent.models,

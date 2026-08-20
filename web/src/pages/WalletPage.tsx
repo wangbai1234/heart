@@ -59,6 +59,7 @@ export function WalletPage() {
               兑换码充值
             </button>
           </div>
+          <p className="mt-3 text-[12px] text-white/70">签到币与购买币均永久有效</p>
         </div>
 
         {/* Shop */}

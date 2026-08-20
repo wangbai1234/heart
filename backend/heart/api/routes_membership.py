@@ -80,6 +80,7 @@ async def get_membership(
     binding_code = await _get_or_create_binding_code(db, uid)
 
     # Voice-call monthly free-minute allowance + this month's usage.
+    from heart.billing.checkin import daily_target_for_tier
     from heart.billing.voice_call import get_quota
 
     voice_call = await get_quota(db, uid)
@@ -88,6 +89,8 @@ async def get_membership(
         "tier": tier,
         "expires_at": expires_at,
         "monthly_grant": ent.monthly_grant_fen // 100,
+        "daily_checkin_coins": daily_target_for_tier(tier),
+        "daily_coins_permanent": True,
         "entitlements": {
             "models": ent.models,
             "tts": ent.tts,

@@ -16,7 +16,15 @@ from heart.infra.llm_providers.claude import ClaudeProvider
 from heart.infra.llm_providers.deepseek import DeepSeekV4FlashProvider
 from heart.infra.llm_providers.deepseek_pro import DeepSeekV4ProProvider
 from heart.infra.llm_providers.grok import GrokProvider
+from heart.infra.llm_providers.micu import MicuProvider
 from heart.infra.llm_providers.pool import ConcurrencyGate, PooledLLMProvider
+from heart.infra.model_catalog import LEGACY_MODEL_ALIASES, MODEL_CATALOG
+
+_CLAUDE_EXTERNAL_UA = "claude-cli/2.0.76 (external, cli)"
+_CODEX_EXTERNAL_UA = "codex_cli_rs/0.77.0 (Windows 10.0.26100; x86_64) WindowsTerminal"
+_BROWSER_EXTERNAL_UA = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:149.0) Gecko/20100101 Firefox/149.0"
+)
 
 
 def _parse_keys(primary: Optional[str], extra: Optional[str]) -> list[str]:
@@ -171,6 +179,66 @@ class ProviderRegistry:
 _global_registry: Optional[ProviderRegistry] = None
 
 
+def _register_selectable_models(
+    registry: ProviderRegistry,
+    circuit_breaker: Optional[CircuitBreakerInterface],
+) -> None:
+    """Register public model slugs against their configured MICU credentials."""
+    from heart.core.config import settings
+
+    grouped_keys = {
+        "gemini": settings.micu_gemini_api_key,
+        # Selectable product models are relayed through MICU exclusively.
+        # Legacy direct-provider keys below are reserved for internal tasks.
+        "deepseek": settings.micu_deepseek_api_key,
+        "claude": settings.micu_claude_api_key,
+        "grok": settings.micu_grok_api_key,
+        "gpt": settings.micu_gpt_api_key,
+    }
+    group_urls = {
+        "deepseek": settings.deepseek_base_url
+        if "micuapi.ai" in settings.deepseek_base_url
+        else settings.micu_base_url,
+        "claude": settings.claude_base_url
+        if "micuapi.ai" in settings.claude_base_url
+        else settings.micu_base_url,
+        "grok": settings.grok_base_url
+        if "micuapi.ai" in settings.grok_base_url
+        else settings.micu_base_url,
+        "gemini": settings.micu_base_url,
+        "gpt": settings.micu_base_url,
+    }
+    for spec in MODEL_CATALOG:
+        key = grouped_keys[spec.credential_group]
+        if not key:
+            continue
+        base_url = group_urls[spec.credential_group]
+        if spec.protocol == "anthropic":
+            provider: LLMProvider = ClaudeProvider(
+                api_key=key,
+                base_url=base_url,
+                circuit_breaker=circuit_breaker,
+                api_style="anthropic",
+                user_agent=_CLAUDE_EXTERNAL_UA,
+            )
+        else:
+            provider = MicuProvider(
+                api_key=key,
+                base_url=base_url,
+                protocol=spec.protocol,
+                provider_id=f"micu-{spec.id}",
+                user_agent=(
+                    _CODEX_EXTERNAL_UA if spec.protocol == "responses" else _BROWSER_EXTERNAL_UA
+                ),
+                circuit_breaker=circuit_breaker,
+            )
+        registry.register_provider_instance(
+            provider_name=f"selectable-{spec.id}",
+            provider=provider,
+            models=[spec.api_model, spec.id],
+        )
+
+
 def initialize_registry(
     circuit_breaker: Optional[CircuitBreakerInterface] = None,
 ) -> ProviderRegistry:
@@ -201,11 +269,6 @@ def initialize_registry(
     cheap_model = os.getenv("CHEAP_LLM_MODEL", "deepseek-chat")
 
     keys = _parse_keys(deepseek_api_key, deepseek_api_keys)
-    if not keys:
-        raise ValueError(
-            "DEEPSEEK_API_KEY environment variable not set. Please check your .env file."
-        )
-
     # Shared gate: one semaphore + per-key cooldown across BOTH model pools, because the
     # vendor concurrency limit is per-account (per-key), spanning models.
     try:
@@ -222,35 +285,32 @@ def initialize_registry(
         cooldown = 15.0
     gate = ConcurrencyGate(max_concurrency=max_concurrency, cooldown_seconds=cooldown)
 
-    # DeepSeek V4-pro (main model) — one underlying provider per key, wrapped in a pool.
-    pro_members: list[LLMProvider] = [
-        DeepSeekV4ProProvider(
-            api_key=k, base_url=deepseek_base_url, circuit_breaker=circuit_breaker
+    if keys:
+        # DeepSeek V4-pro (main model) — one underlying provider per key, wrapped in a pool.
+        pro_members: list[LLMProvider] = [
+            DeepSeekV4ProProvider(
+                api_key=k, base_url=deepseek_base_url, circuit_breaker=circuit_breaker
+            )
+            for k in keys
+        ]
+        registry.register_provider_instance(
+            provider_name="deepseek-v4-pro",
+            provider=PooledLLMProvider(pro_members, gate=gate, max_retries=max_retries),
+            models=[main_model, "deepseek-reasoner"],
         )
-        for k in keys
-    ]
-    registry.register_provider_instance(
-        provider_name="deepseek-v4-pro",
-        provider=PooledLLMProvider(pro_members, gate=gate, max_retries=max_retries),
-        models=[main_model, "deepseek-reasoner"],
-    )
 
-    # DeepSeek V4-flash (cheap model)
-    flash_members: list[LLMProvider] = [
-        DeepSeekV4FlashProvider(
-            api_key=k, base_url=deepseek_base_url, circuit_breaker=circuit_breaker
+        # DeepSeek V4-flash (cheap model)
+        flash_members: list[LLMProvider] = [
+            DeepSeekV4FlashProvider(
+                api_key=k, base_url=deepseek_base_url, circuit_breaker=circuit_breaker
+            )
+            for k in keys
+        ]
+        registry.register_provider_instance(
+            provider_name="deepseek-v4-flash",
+            provider=PooledLLMProvider(flash_members, gate=gate, max_retries=max_retries),
+            models=[cheap_model, "deepseek-chat", "deepseek"],
         )
-        for k in keys
-    ]
-    registry.register_provider_instance(
-        provider_name="deepseek-v4-flash",
-        provider=PooledLLMProvider(flash_members, gate=gate, max_retries=max_retries),
-        # "deepseek" is the bare default slug used across the stack
-        # (ss07_orchestration/models.py: model="deepseek") and the last link in the
-        # failover chain [claude, grok, deepseek]; register it so free-tier turns route
-        # to the cheap DeepSeek provider instead of raising KeyError.
-        models=[cheap_model, "deepseek-chat", "deepseek"],
-    )
 
     # Grok (xAI) — optional; registered only when GROK_API_KEY is configured
     grok_api_key = os.getenv("GROK_API_KEY")
@@ -283,6 +343,21 @@ def initialize_registry(
             ),
             models=[claude_model, "claude"],
         )
+
+    # User-selectable models all route through MICU. Keep the legacy providers
+    # above for internal cheap/main tasks; the product slugs below are distinct.
+    _register_selectable_models(registry, circuit_breaker)
+
+    # Old clients remain functional during rollout, but are normalized to the
+    # new public catalog before billing and persistence wherever possible.
+    for legacy, target in LEGACY_MODEL_ALIASES.items():
+        # Preserve an explicitly configured legacy provider (for example a
+        # direct DeepSeek key).  MICU selectable registrations must not
+        # silently replace that provider just because they expose the same
+        # public alias during the rollout.
+        if legacy not in registry._model_to_provider and registry.has_model(target):
+            registry._model_to_provider[legacy] = registry._model_to_provider[target]
+            registry._model_canonical[legacy] = registry._model_canonical[target]
 
     _global_registry = registry
     return registry

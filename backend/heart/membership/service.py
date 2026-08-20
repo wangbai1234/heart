@@ -9,8 +9,7 @@ import structlog
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from heart.billing import grant as grant_credits
-from heart.membership import get_entitlements
+from heart.billing.checkin import claim_daily_grant
 
 logger = structlog.get_logger(__name__)
 
@@ -81,6 +80,10 @@ async def activate_or_extend(
             },
         )
 
+    # Commit the membership row even when today's daily grant is already at the
+    # target and the idempotent grant helper has nothing to commit.
+    await db.commit()
+
     logger.info(
         "membership_activated",
         user_id=str(user_id),
@@ -90,14 +93,10 @@ async def activate_or_extend(
         granted_by=granted_by,
     )
 
-    ent = get_entitlements(tier)
-    if ent.monthly_grant_fen > 0:
-        await grant_credits(
-            db,
-            user_id,
-            ent.monthly_grant_fen,
-            idempotency_key=f"membership_grant:{granted_by}",
-            type_str="membership_grant",
-        )
+    # If the user already claimed the free 20 coins today, upgrading tops the
+    # same permanent balance up by 60. If they have not opened the app today,
+    # activation grants the full 80 immediately.
+    if tier in {"plus", "immersive"}:
+        await claim_daily_grant(db, user_id, tier)
 
     return new_expires

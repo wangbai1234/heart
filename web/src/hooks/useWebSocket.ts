@@ -41,9 +41,18 @@ interface WsMessage {
 }
 
 const MODEL_LABELS: Record<string, string> = {
-  deepseek: 'DeepSeek',
-  grok: 'Grok',
-  claude: 'Claude',
+  'gemini-3.1': 'Gemini 3.1',
+  'deepseek-v4-flash': 'DeepSeek V4 Flash',
+  'deepseek-v4-pro': 'DeepSeek V4 Pro',
+  'claude-haiku-4.5': 'Claude Haiku 4.5',
+  'claude-sonnet-4.6': 'Claude Sonnet 4.6',
+  'claude-opus-4.6': 'Claude Opus 4.6',
+  'claude-opus-5': 'Claude Opus 5',
+  'grok-4.5': 'Grok 4.5',
+  'grok-4.6': 'Grok 4.6',
+  'gpt-5.6-luna': 'GPT-5.6 Luna',
+  'gpt-5.5': 'GPT-5.5',
+  'gpt-5.6-sol': 'GPT-5.6 Sol',
 }
 function modelLabel(slug: string): string {
   return MODEL_LABELS[slug] ?? slug
@@ -425,6 +434,10 @@ export function useWebSocket() {
             errMsg = '角色加载中，请稍后重试'
           } else if (errCode === 'SERVICE_UNAVAILABLE') {
             errMsg = '服务暂时不可用，请稍后重试'
+          } else if (errCode === 'MODEL_UNAVAILABLE') {
+            errMsg = '这个模型暂时不可用，请选择其他模型'
+          } else if (errCode === 'UNKNOWN_MODEL') {
+            errMsg = '模型信息已更新，请重新选择'
           } else if (errCode === 'BILLING_CHECK_FAILED') {
             errMsg = '账户验证失败，请重试'
           } else if (errCode === 'VOICE_NOT_CONFIGURED') {
@@ -516,7 +529,7 @@ export function useWebSocket() {
       activeCharRef.current = characterId
       const { voiceChatEnabled, chatModel } = useAppStore.getState()
       const voiceEnabled = opts?.forceVoice || (voiceChatEnabled?.[characterId] ?? false)
-      const model = chatModel?.[characterId] ?? 'deepseek'
+      const model = chatModel?.[characterId] ?? 'gemini-3.1'
       pendingVoiceTurnRef.current = voiceEnabled
       const turnId = crypto.randomUUID()
 

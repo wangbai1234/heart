@@ -8,7 +8,6 @@ from unittest.mock import AsyncMock, MagicMock, call, patch
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # activate_or_extend
 # ---------------------------------------------------------------------------
@@ -28,7 +27,7 @@ class TestActivateOrExtend:
 
         user_id = uuid.uuid4()
         before = datetime.now(tz=timezone.utc)
-        with patch("heart.membership.service.grant_credits", new=AsyncMock(return_value=0)):
+        with patch("heart.membership.service.claim_daily_grant", new=AsyncMock()):
             expires = await activate_or_extend(db, user_id, "plus", 30)
         after = datetime.now(tz=timezone.utc)
 
@@ -48,7 +47,7 @@ class TestActivateOrExtend:
         db.execute = AsyncMock(side_effect=[select_result, update_result])
 
         user_id = uuid.uuid4()
-        with patch("heart.membership.service.grant_credits", new=AsyncMock(return_value=0)):
+        with patch("heart.membership.service.claim_daily_grant", new=AsyncMock()):
             expires = await activate_or_extend(db, user_id, "plus", 30)
 
         expected = existing_expires + timedelta(days=30)
@@ -69,8 +68,10 @@ class TestActivateOrExtend:
         db = AsyncMock()
         db.execute = tracking_execute
 
-        with patch("heart.membership.service.grant_credits", new=AsyncMock(return_value=0)):
-            await activate_or_extend(db, uuid.uuid4(), "immersive", 30, granted_by="afdian:order123")
+        with patch("heart.membership.service.claim_daily_grant", new=AsyncMock()):
+            await activate_or_extend(
+                db, uuid.uuid4(), "immersive", 30, granted_by="afdian:order123"
+            )
 
         # Second call is the INSERT with granted_by
         insert_params = calls[1]
@@ -86,12 +87,12 @@ class TestActivateOrExtend:
         select_result.scalar_one_or_none.return_value = None
         db.execute = AsyncMock(side_effect=[select_result, MagicMock()])
 
-        with patch("heart.membership.service.grant_credits", new=AsyncMock(return_value=0)):
+        with patch("heart.membership.service.claim_daily_grant", new=AsyncMock()):
             expires = await activate_or_extend(db, uuid.uuid4(), "plus", 7)
         assert expires.tzinfo is not None
 
     @pytest.mark.asyncio
-    async def test_monthly_grant_called_for_plus(self):
+    async def test_daily_grant_is_claimed_for_plus(self):
         from heart.membership.service import activate_or_extend
 
         db = AsyncMock()
@@ -99,14 +100,9 @@ class TestActivateOrExtend:
         select_result.scalar_one_or_none.return_value = None
         db.execute = AsyncMock(side_effect=[select_result, MagicMock()])
 
-        with patch("heart.membership.service.grant_credits", new_callable=AsyncMock) as mock_grant:
-            mock_grant.return_value = 0
+        with patch("heart.membership.service.claim_daily_grant", new=AsyncMock()) as claim:
             await activate_or_extend(db, uuid.uuid4(), "plus", 30, granted_by="afdian:order456")
-
-        mock_grant.assert_called_once()
-        call_kwargs = mock_grant.call_args.kwargs
-        assert call_kwargs.get("type_str") == "membership_grant"
-        assert call_kwargs.get("idempotency_key") == "membership_grant:afdian:order456"
+        claim.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_monthly_grant_not_called_for_free(self):
@@ -117,10 +113,9 @@ class TestActivateOrExtend:
         select_result.scalar_one_or_none.return_value = None
         db.execute = AsyncMock(side_effect=[select_result, MagicMock()])
 
-        with patch("heart.membership.service.grant_credits", new_callable=AsyncMock) as mock_grant:
+        with patch("heart.membership.service.claim_daily_grant", new=AsyncMock()) as claim:
             await activate_or_extend(db, uuid.uuid4(), "free", 30)
-
-        mock_grant.assert_not_called()
+        claim.assert_not_awaited()
 
 
 # ---------------------------------------------------------------------------
@@ -162,10 +157,11 @@ class TestGetMembershipEndpoint:
             "minute_cost_coins": 20,
             "month_key": "2026-08",
         }
-        with patch(
-            "heart.api.routes_membership.get_effective_tier", new=AsyncMock(return_value="plus")
-        ), patch(
-            "heart.billing.voice_call.get_quota", new=AsyncMock(return_value=mock_quota)
+        with (
+            patch(
+                "heart.api.routes_membership.get_effective_tier", new=AsyncMock(return_value="plus")
+            ),
+            patch("heart.billing.voice_call.get_quota", new=AsyncMock(return_value=mock_quota)),
         ):
             result = await get_membership(current_user=current_user, db=db)
 
@@ -174,9 +170,9 @@ class TestGetMembershipEndpoint:
         assert "claude" not in result["entitlements"]["models"]
         assert "fish" in result["entitlements"]["tts"]
         # plus free list waives deepseek/tts/asr/story_unlock (2026-08 overhaul)
-        assert "deepseek" in result["entitlements"]["free"]
+        assert "deepseek" not in result["entitlements"]["free"]
         assert "grok" not in result["entitlements"]["free"]
-        assert result["monthly_grant"] == 300
+        assert result["monthly_grant"] == 0
         assert result["voice_call"]["free_minutes"] == 10
         assert result["voice_call"]["remaining_minutes"] == 7
         assert result["voice_call"]["minute_cost_coins"] == 20
@@ -201,10 +197,11 @@ class TestGetMembershipEndpoint:
             "minute_cost_coins": 20,
             "month_key": "2026-08",
         }
-        with patch(
-            "heart.api.routes_membership.get_effective_tier", new=AsyncMock(return_value="free")
-        ), patch(
-            "heart.billing.voice_call.get_quota", new=AsyncMock(return_value=mock_quota)
+        with (
+            patch(
+                "heart.api.routes_membership.get_effective_tier", new=AsyncMock(return_value="free")
+            ),
+            patch("heart.billing.voice_call.get_quota", new=AsyncMock(return_value=mock_quota)),
         ):
             result = await get_membership(current_user=current_user, db=db)
 
@@ -235,20 +232,19 @@ class TestGetMembershipEndpoint:
             "minute_cost_coins": 20,
             "month_key": "2026-08",
         }
-        with patch(
-            "heart.api.routes_membership.get_effective_tier",
-            new=AsyncMock(return_value="immersive"),
-        ), patch(
-            "heart.billing.voice_call.get_quota", new=AsyncMock(return_value=mock_quota)
+        with (
+            patch(
+                "heart.api.routes_membership.get_effective_tier",
+                new=AsyncMock(return_value="immersive"),
+            ),
+            patch("heart.billing.voice_call.get_quota", new=AsyncMock(return_value=mock_quota)),
         ):
             result = await get_membership(current_user=current_user, db=db)
 
         # claude fully removed; immersive waives everything and grants 700 coins.
         assert "claude" not in result["entitlements"]["models"]
-        assert set(result["entitlements"]["free"]) == {
-            "deepseek", "grok", "tts", "clone", "asr", "story_unlock", "story_chat"
-        }
-        assert result["monthly_grant"] == 700
+        assert "all_llm" in result["entitlements"]["free"]
+        assert result["monthly_grant"] == 0
         assert result["voice_call"]["free_minutes"] == 60
 
     @pytest.mark.asyncio
@@ -269,10 +265,11 @@ class TestGetMembershipEndpoint:
             "minute_cost_coins": 20,
             "month_key": "2026-08",
         }
-        with patch(
-            "heart.api.routes_membership.get_effective_tier", new=AsyncMock(return_value="free")
-        ), patch(
-            "heart.billing.voice_call.get_quota", new=AsyncMock(return_value=mock_quota)
+        with (
+            patch(
+                "heart.api.routes_membership.get_effective_tier", new=AsyncMock(return_value="free")
+            ),
+            patch("heart.billing.voice_call.get_quota", new=AsyncMock(return_value=mock_quota)),
         ):
             result = await get_membership(current_user=current_user, db=db)
 

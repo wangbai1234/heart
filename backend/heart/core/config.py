@@ -42,6 +42,15 @@ class Settings(BaseSettings):
     deepseek_api_keys: str = ""
     deepseek_base_url: str = "https://api.deepseek.com"
 
+    # MICU multi-model relay. Keys are separated by MICU token group; never
+    # reuse a key across groups unless the MICU account explicitly allows it.
+    micu_base_url: str = "https://www.micuapi.ai"
+    micu_gemini_api_key: str = ""
+    micu_deepseek_api_key: str = ""
+    micu_claude_api_key: str = ""
+    micu_grok_api_key: str = ""
+    micu_gpt_api_key: str = ""
+
     # Outbound LLM concurrency / failover (process-global; see llm_providers/pool.py)
     llm_max_concurrency: int = 8
     llm_max_retries: int = 2
@@ -223,13 +232,12 @@ class Settings(BaseSettings):
     # Each tier maps to: models (allowed LLM slugs), tts (allowed TTS providers),
     # clone (allowed clone providers), monthly_grant (coins per 30-day cycle),
     # free (items complimentary on this tier — everything else is charged per use).
-    # free item slugs: "deepseek" | "grok" | "tts" | "clone" | "asr" | "story_unlock" | "story_chat".
-    # Access is universal (all tiers may use deepseek/grok/tts/clone); tiers differ only
-    # in *which items are free* vs charged. claude removed (情感陪伴 下线).
+    # Access is universal. Only immersive waives selectable text-model costs;
+    # plus receives a larger permanent daily grant instead of free text turns.
     membership_tiers_config: str = (
-        '{"free":{"models":["deepseek","grok"],"tts":["mimo","fish"],"clone":["fish"],"monthly_grant":0,"free":[]},'
-        '"plus":{"models":["deepseek","grok"],"tts":["mimo","fish"],"clone":["fish"],"monthly_grant":300,"free":["deepseek","tts","asr","story_unlock"]},'
-        '"immersive":{"models":["deepseek","grok"],"tts":["mimo","fish"],"clone":["fish"],"monthly_grant":700,"free":["deepseek","grok","tts","clone","asr","story_unlock","story_chat"]}}'
+        '{"free":{"models":["gemini-3.1","deepseek-v4-flash","deepseek-v4-pro","claude-haiku-4.5","claude-sonnet-4.6","claude-opus-4.6","claude-opus-5","grok-4.5","grok-4.6","gpt-5.6-luna","gpt-5.5","gpt-5.6-sol"],"tts":["mimo","fish"],"clone":["fish"],"monthly_grant":0,"free":[]},'
+        '"plus":{"models":["gemini-3.1","deepseek-v4-flash","deepseek-v4-pro","claude-haiku-4.5","claude-sonnet-4.6","claude-opus-4.6","claude-opus-5","grok-4.5","grok-4.6","gpt-5.6-luna","gpt-5.5","gpt-5.6-sol"],"tts":["mimo","fish"],"clone":["fish"],"monthly_grant":0,"free":["tts","asr","story_unlock"]},'
+        '"immersive":{"models":["gemini-3.1","deepseek-v4-flash","deepseek-v4-pro","claude-haiku-4.5","claude-sonnet-4.6","claude-opus-4.6","claude-opus-5","grok-4.5","grok-4.6","gpt-5.6-luna","gpt-5.5","gpt-5.6-sol"],"tts":["mimo","fish"],"clone":["fish"],"monthly_grant":0,"free":["all_llm","deepseek","grok","tts","clone","asr","story_unlock","story_chat"]}}'
     )
 
     # Membership subscription prices (CNY/month, for pricing endpoint display only)
@@ -247,6 +255,8 @@ class Settings(BaseSettings):
 
     # Daily check-in reward (display coins; ×100 = fen internally)
     daily_checkin_coins: int = 20  # granted once per calendar day (Asia/Shanghai)
+    plus_daily_checkin_coins: int = 80
+    immersive_daily_checkin_coins: int = 80
 
     # Push Notifications (V1)
     fcm_credentials_path: str = ""

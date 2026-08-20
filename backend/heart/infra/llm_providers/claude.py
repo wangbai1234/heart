@@ -56,6 +56,7 @@ class ClaudeProvider(LLMProvider):
         circuit_breaker: Optional[CircuitBreakerInterface] = None,
         timeout: float = 60.0,
         api_style: str = "anthropic",
+        user_agent: str | None = None,
     ):
         super().__init__(
             api_key=api_key,
@@ -64,6 +65,7 @@ class ClaudeProvider(LLMProvider):
         )
         self.timeout = timeout
         self.api_style = api_style  # "anthropic" | "openai-compat"
+        self.user_agent = user_agent
         self._client: Optional[httpx.AsyncClient] = None
 
     @property
@@ -86,6 +88,8 @@ class ClaudeProvider(LLMProvider):
                     "anthropic-version": self.ANTHROPIC_VERSION,
                     "Content-Type": "application/json",
                 }
+            if self.user_agent:
+                headers["User-Agent"] = self.user_agent
             self._client = make_async_client(
                 base_url=self.base_url,
                 headers=headers,

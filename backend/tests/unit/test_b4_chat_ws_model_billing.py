@@ -30,17 +30,17 @@ class TestChargeLlmCost:
         mock_deduct.assert_called_once_with(db, user_id, 100, f"turn:{turn_id}:llm", "consume_llm")
 
     @pytest.mark.asyncio
-    async def test_deepseek_free_on_plus_tier(self):
-        """普通交流 is complimentary on plus/immersive — no deduction."""
+    async def test_deepseek_is_charged_on_plus_tier(self):
+        """The 29 yuan tier uses its permanent daily balance for model calls."""
         from heart.api.routes_chat_ws import _charge_llm_cost
 
         db = AsyncMock()
-        cost, bal = await _charge_llm_cost(
-            db, uuid.uuid4(), str(uuid.uuid4()), "deepseek", tier="plus"
-        )
-        assert cost == 0
+        with patch("heart.billing.deduct_credits", new=AsyncMock(return_value=0)):
+            cost, bal = await _charge_llm_cost(
+                db, uuid.uuid4(), str(uuid.uuid4()), "deepseek", tier="plus"
+            )
+        assert cost == 100
         assert bal == 0
-        db.execute.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_grok_deducts_with_idempotency_key(self):
@@ -299,7 +299,7 @@ class TestPrecheckTtsGate:
 
 
 class TestTurnRequestModelField:
-    def test_default_model_is_deepseek(self):
+    def test_default_model_is_gemini(self):
         from heart.ss07_orchestration.models import TurnRequest
 
         req = TurnRequest(
@@ -309,7 +309,7 @@ class TestTurnRequestModelField:
             history=[],
             trace_id=uuid.uuid4(),
         )
-        assert req.model == "deepseek"
+        assert req.model == "gemini-3.1"
 
     def test_model_is_stored(self):
         from heart.ss07_orchestration.models import TurnRequest
@@ -331,7 +331,7 @@ class TestTurnRequestModelField:
 
 
 class TestCompositionContextModelFields:
-    def test_default_model_is_deepseek(self):
+    def test_default_model_is_gemini(self):
         from heart.ss05_composer.service import CompositionContext
 
         ctx = CompositionContext(
@@ -339,7 +339,7 @@ class TestCompositionContextModelFields:
             character_id="rin",
             turn_id=uuid.uuid4(),
         )
-        assert ctx.model == "deepseek"
+        assert ctx.model == "gemini-3.1"
         assert ctx.stream_meta == {}
 
     def test_model_can_be_set(self):

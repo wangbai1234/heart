@@ -89,7 +89,16 @@ def get_soul_registry():
 @lru_cache
 def get_model_router():
     """Process singleton: ModelRouter (LLM client). Returns None if no API key."""
-    if not settings.deepseek_api_key:
+    if not any(
+        (
+            settings.deepseek_api_key,
+            settings.micu_gemini_api_key,
+            settings.micu_deepseek_api_key,
+            settings.micu_claude_api_key,
+            settings.micu_grok_api_key,
+            settings.micu_gpt_api_key,
+        )
+    ):
         logger.warning("wiring_no_llm_api_key", hint="Set DEEPSEEK_API_KEY in .env")
         return None
     try:
@@ -104,6 +113,16 @@ def get_model_router():
             os.environ.setdefault("DEEPSEEK_API_KEYS", settings.deepseek_api_keys)
         if settings.deepseek_base_url:
             os.environ.setdefault("DEEPSEEK_BASE_URL", settings.deepseek_base_url)
+        for name, value in {
+            "MICU_BASE_URL": settings.micu_base_url,
+            "MICU_GEMINI_API_KEY": settings.micu_gemini_api_key,
+            "MICU_DEEPSEEK_API_KEY": settings.micu_deepseek_api_key,
+            "MICU_CLAUDE_API_KEY": settings.micu_claude_api_key,
+            "MICU_GROK_API_KEY": settings.micu_grok_api_key,
+            "MICU_GPT_API_KEY": settings.micu_gpt_api_key,
+        }.items():
+            if value:
+                os.environ.setdefault(name, value)
         # Make config.py the source of truth for model + concurrency defaults.
         os.environ.setdefault("MAIN_LLM_MODEL", settings.main_llm_model)
         os.environ.setdefault("CHEAP_LLM_MODEL", settings.cheap_llm_model)
