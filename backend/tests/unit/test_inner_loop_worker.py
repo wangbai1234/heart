@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import collections
 from datetime import datetime, timedelta, timezone
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
 import pytest
@@ -90,3 +90,99 @@ class TestSingleSessionQuery:
         assert source.count("SELECT s.user_id, s.character_id") == 1
         # Should NOT have per-user SELECT queries
         assert "WHERE user_id = :user_id AND character_id = :character_id" not in source
+        assert "user_character_model_preferences" in source
+
+    @pytest.mark.asyncio
+    async def test_v2_receives_selected_user_character_model(self):
+        from heart.core.config import settings
+        from heart.ss06_inner_state.inner_loop_worker import InnerLoopWorker
+
+        user_id = uuid4()
+        now = datetime.now(timezone.utc)
+        result = MagicMock()
+        result.fetchall.return_value = [
+            (
+                user_id,
+                "rin",
+                now - timedelta(days=2),
+                "FRIEND",
+                0.6,
+                "Asia/Shanghai",
+                now - timedelta(hours=25),
+                "grok-4.6",
+            )
+        ]
+        session = MagicMock()
+        session.execute = AsyncMock(return_value=result)
+
+        class _SessionContext:
+            async def __aenter__(self):
+                return session
+
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+
+        worker = InnerLoopWorker(
+            db_session_factory=lambda: _SessionContext(),
+            inner_state_service=MagicMock(),
+        )
+        worker._generate_v2_proactive_message = AsyncMock()
+
+        with (
+            patch.object(settings, "proactive_v2_enabled", True),
+            patch("heart.ss06_inner_state.inner_loop_worker.random.random", return_value=0.0),
+        ):
+            await worker._tick_all_active_users()
+
+        assert worker._generate_v2_proactive_message.await_args.kwargs["model"] == "grok-4.6"
+        assert session.execute.await_args.args[1] == {"default_model": "gemini-3.1"}
+
+    @pytest.mark.asyncio
+    async def test_v2_composition_context_keeps_selected_model(self, monkeypatch):
+        from heart.ss06_inner_state import proactive_repo
+        from heart.ss06_inner_state.inner_loop_worker import InnerLoopWorker
+
+        session = MagicMock()
+
+        class _SessionContext:
+            async def __aenter__(self):
+                return session
+
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+
+        composer = MagicMock()
+        composer.compose = AsyncMock(return_value=None)
+        monkeypatch.setattr(
+            "heart.api.wiring._get_session_factory",
+            lambda: lambda: _SessionContext(),
+        )
+        monkeypatch.setattr(
+            "heart.api.wiring.build_composer_service",
+            AsyncMock(return_value=composer),
+        )
+        monkeypatch.setattr(
+            proactive_repo,
+            "count_today_per_user",
+            AsyncMock(return_value=0),
+        )
+        monkeypatch.setattr(
+            proactive_repo,
+            "any_recent_across_characters",
+            AsyncMock(return_value=False),
+        )
+
+        worker = InnerLoopWorker(
+            db_session_factory=MagicMock(),
+            inner_state_service=MagicMock(),
+        )
+        await worker._generate_v2_proactive_message(
+            user_id=uuid4(),
+            character_id="rin",
+            hours_since=12,
+            user_timezone="Asia/Shanghai",
+            model="gpt-5.5",
+        )
+
+        ctx = composer.compose.await_args.kwargs["ctx"]
+        assert ctx.model == "gpt-5.5"

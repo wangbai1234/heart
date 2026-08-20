@@ -78,6 +78,7 @@ def _make_ctx():
 def _make_model_router():
     router = MagicMock()
     router.call_main = AsyncMock(return_value="こんにちは。何か用？")
+    router.call_for = AsyncMock(return_value=("こんにちは。何か用？", "gemini-3.1"))
     return router
 
 

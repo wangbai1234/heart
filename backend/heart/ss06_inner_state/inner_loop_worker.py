@@ -23,6 +23,11 @@ import structlog
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from heart.infra.model_catalog import (
+    DEFAULT_CHAT_MODEL,
+    get_model_spec,
+    normalize_model_id,
+)
 from heart.ss06_inner_state import proactive_repo
 from heart.ss06_inner_state.models import ProactiveMessage
 from heart.ss06_inner_state.service import InnerStateService
@@ -199,13 +204,17 @@ class InnerLoopWorker:
                         " WHERE cm.user_id = s.user_id "
                         "   AND cm.character_id = s.character_id "
                         "   AND cm.rewound_at IS NULL "
-                        "   AND cm.role = 'user') AS last_user_message_at "
+                        "   AND cm.role = 'user') AS last_user_message_at, "
+                        "COALESCE(mp.model_id, :default_model) AS selected_model "
                         "FROM sessions s "
                         "LEFT JOIN relationship_states r "
                         "  ON r.user_id = s.user_id AND r.character_id = s.character_id "
                         "LEFT JOIN users u ON u.id = s.user_id "
+                        "LEFT JOIN user_character_model_preferences mp "
+                        "  ON mp.user_id = s.user_id AND mp.character_id = s.character_id "
                         "WHERE s.last_activity_at > NOW() - INTERVAL '7 days'"
-                    )
+                    ),
+                    {"default_model": DEFAULT_CHAT_MODEL},
                 )
                 rows = result.fetchall()
 
@@ -219,6 +228,15 @@ class InnerLoopWorker:
                 intimacy = float(row[4] or 0.0)
                 user_timezone: str = row[5] or "Asia/Shanghai"
                 last_user_msg_at = row[6]
+                selected_model = normalize_model_id(row[7])
+                if get_model_spec(selected_model) is None:
+                    logger.warning(
+                        "proactive_unknown_model_preference",
+                        user_id=str(user_id),
+                        character_id=character_id,
+                        model=selected_model,
+                    )
+                    selected_model = DEFAULT_CHAT_MODEL
 
                 # Calculate days since last interaction
                 days_since_last = 0.0
@@ -252,6 +270,7 @@ class InnerLoopWorker:
                                 character_id=character_id,
                                 hours_since=hours_since_user_reply,
                                 user_timezone=user_timezone,
+                                model=selected_model,
                             )
                         except Exception as e:
                             logger.error(
@@ -296,6 +315,7 @@ class InnerLoopWorker:
                             recent_context=recent_context,
                             user_facts=user_facts,
                             db=tick_session,
+                            model=selected_model,
                         )
 
                     if msg is not None:
@@ -317,6 +337,7 @@ class InnerLoopWorker:
                             ritual_session,
                             user_timezone=user_timezone,
                             last_user_message_at=last_user_msg_at,
+                            model=selected_model,
                         )
                     if ritual_msg is not None:
                         await self._persist(ritual_msg)
@@ -448,6 +469,7 @@ class InnerLoopWorker:
         trigger_type: str,
         hours_since: float,
         ltc: dict,
+        model: str = DEFAULT_CHAT_MODEL,
     ) -> Optional[str]:
         """Retry the content once if it duplicates a recent send; else suppress.
 
@@ -472,6 +494,7 @@ class InnerLoopWorker:
                 recent_context="",
                 user_facts="",
                 local_time_context=ltc,
+                model=model,
             )
         logger.info(
             "ritual_suppressed_content_dedup",
@@ -489,6 +512,7 @@ class InnerLoopWorker:
         now: Optional[datetime] = None,
         user_timezone: str = "Asia/Shanghai",
         last_user_message_at: Optional[datetime] = None,
+        model: str = DEFAULT_CHAT_MODEL,
     ) -> Optional[ProactiveMessage]:
         """Check for proactive triggers using idle-time gate + local-time context.
 
@@ -562,6 +586,7 @@ class InnerLoopWorker:
             recent_context="",
             user_facts="",
             local_time_context=ltc,
+            model=model,
         )
 
         content = await self._dedup_or_none(
@@ -572,6 +597,7 @@ class InnerLoopWorker:
             trigger_type=trigger_type,
             hours_since=hours_since,
             ltc=ltc,
+            model=model,
         )
         if content is None:
             return None
@@ -600,6 +626,7 @@ class InnerLoopWorker:
         character_id: str,
         hours_since: float,
         user_timezone: str,
+        model: str = DEFAULT_CHAT_MODEL,
     ) -> None:
         """Proactive v2: generate via composer chain + store in chat_messages.
 
@@ -666,6 +693,7 @@ class InnerLoopWorker:
                 turn_id=turn_id,
                 user_message="",
                 proactive_hint=proactive_hint,
+                model=model,
             )
 
             try:

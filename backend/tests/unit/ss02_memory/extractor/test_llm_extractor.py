@@ -22,11 +22,7 @@ from uuid import uuid4
 
 import pytest
 
-from heart.infra.llm_providers.base import (
-    CostEstimate,
-    LLMResponse,
-    MessageRole,
-)
+from heart.infra.llm_providers.base import CostEstimate
 from heart.ss02_memory.extractor.cost_guard import CostCapExceeded, CostGuard
 from heart.ss02_memory.extractor.llm_extractor import LLMExtractor
 from heart.ss02_memory.extractor.types import QueueItem, TurnInput
@@ -113,21 +109,23 @@ class FakeProviderSequence:
         return len(text) // 2
 
 
-class FakeRegistry:
-    """Fake provider registry."""
-
-    def __init__(self, provider):
-        self._provider = provider
-
-    def get_provider_for_model(self, model: str):
-        return self._provider
-
-
 class FakeRouter:
     """Fake ModelRouter for testing."""
 
     def __init__(self, provider):
-        self._registry = FakeRegistry(provider)
+        self._provider = provider
+        self.background_call_count = 0
+
+    async def call_background(self, messages, meta=None, **kwargs):
+        self.background_call_count += 1
+        response = await self._provider.call(None)
+        if meta is not None:
+            meta["served_model"] = response.model
+            meta["usage"] = dict(response.usage)
+        return response.content
+
+    def estimate_cost(self, model, prompt_tokens, completion_tokens):
+        return self._provider.estimate_cost(prompt_tokens, completion_tokens, model)
 
 
 # ── Helper: build QueueItem ───────────────────────────────────
@@ -225,6 +223,10 @@ class TestCanonicalScenarios:
         results = await extractor.run([item])
         assert len(results) == 1
         assert not results[0].failed
+        assert router.background_call_count == 1
+        assert results[0].input_tokens == 3000
+        assert results[0].output_tokens == 200
+        assert results[0].cost_usd == pytest.approx(0.0011)
         assert len(results[0].envelope.candidates) == 2
         refs = {c.entity_ref for c in results[0].envelope.candidates}
         assert refs == {"cat#1"}

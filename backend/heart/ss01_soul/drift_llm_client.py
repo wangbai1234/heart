@@ -135,7 +135,7 @@ def _format_responses(responses: list[ReleasedResponse]) -> str:
 
 
 class DriftLLMClient:
-    """ModelRouter-based drift evaluation via DeepSeek cheap model.
+    """ModelRouter-based drift evaluation via the background model chain.
 
     Pre-compiles system prompts at __init__ for each (character, version).
     Uses json_mode for structured output (compatible with DeepSeek).
@@ -158,7 +158,7 @@ class DriftLLMClient:
         responses: list[ReleasedResponse],
         timeout_seconds: float = 3.0,
     ) -> LLMDriftResult:
-        """Evaluate drift via ModelRouter (DeepSeek cheap model).
+        """Evaluate drift via ModelRouter's independent background chain.
 
         Args:
             soul: Soul Spec
@@ -176,7 +176,7 @@ class DriftLLMClient:
         try:
             router = await get_model_router()
             response_text = await asyncio.wait_for(
-                router.call_cheap(
+                router.call_background(
                     messages=[
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_message},

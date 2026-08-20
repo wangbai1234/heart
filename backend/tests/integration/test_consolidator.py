@@ -294,7 +294,7 @@ class TestEpisodeSummarization:
         """Episode summarization should parse LLM response correctly."""
         # Mock LLM call
         mock_router_instance = AsyncMock()
-        mock_router_instance.call_cheap = AsyncMock(return_value=mock_llm_response)
+        mock_router_instance.call_background = AsyncMock(return_value=mock_llm_response)
         mock_router.return_value = mock_router_instance
 
         turn_ids = [uuid4(), uuid4(), uuid4()]
@@ -319,7 +319,7 @@ class TestEpisodeSummarization:
         """Invalid JSON from LLM should raise ValueError."""
         # Mock LLM call with invalid JSON
         mock_router_instance = AsyncMock()
-        mock_router_instance.call_cheap = AsyncMock(return_value="not json")
+        mock_router_instance.call_background = AsyncMock(return_value="not json")
         mock_router.return_value = mock_router_instance
 
         turn_ids = [uuid4()]
@@ -332,7 +332,7 @@ class TestEpisodeSummarization:
         """Missing required fields should raise ValueError."""
         # Mock LLM call with incomplete response
         mock_router_instance = AsyncMock()
-        mock_router_instance.call_cheap = AsyncMock(
+        mock_router_instance.call_background = AsyncMock(
             return_value=json.dumps({"episode_summary": "test"})
         )
         mock_router.return_value = mock_router_instance
@@ -708,7 +708,7 @@ class TestFullPipeline:
         """Full consolidation should complete all 8 steps."""
         # Mock LLM
         mock_router_instance = AsyncMock()
-        mock_router_instance.call_cheap = AsyncMock(return_value=mock_llm_response)
+        mock_router_instance.call_background = AsyncMock(return_value=mock_llm_response)
         mock_router.return_value = mock_router_instance
 
         # Run consolidation

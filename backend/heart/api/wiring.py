@@ -138,6 +138,8 @@ def get_model_router():
         # Make config.py the source of truth for model + concurrency defaults.
         os.environ.setdefault("MAIN_LLM_MODEL", settings.main_llm_model)
         os.environ.setdefault("CHEAP_LLM_MODEL", settings.cheap_llm_model)
+        os.environ.setdefault("BACKGROUND_LLM_MODEL", settings.background_llm_model)
+        os.environ.setdefault("BACKGROUND_LLM_FAILOVER", settings.background_llm_failover)
         os.environ.setdefault("LLM_MAX_CONCURRENCY", str(settings.llm_max_concurrency))
         os.environ.setdefault("LLM_MAX_RETRIES", str(settings.llm_max_retries))
         os.environ.setdefault("LLM_KEY_COOLDOWN_SECONDS", str(settings.llm_key_cooldown_seconds))
@@ -145,7 +147,21 @@ def get_model_router():
         registry = initialize_registry()
         main_model = os.getenv("MAIN_LLM_MODEL", "deepseek-chat")
         cheap_model = os.getenv("CHEAP_LLM_MODEL", "deepseek-chat")
-        router = ModelRouter(registry, main_model, cheap_model)
+        background_model = os.getenv("BACKGROUND_LLM_MODEL", "claude-haiku-4.5")
+        background_failover = [
+            model.strip()
+            for model in os.getenv("BACKGROUND_LLM_FAILOVER", "deepseek-v4-flash,gemini-3.1").split(
+                ","
+            )
+            if model.strip()
+        ]
+        router = ModelRouter(
+            registry,
+            main_model,
+            cheap_model,
+            background_model=background_model,
+            background_failover=background_failover,
+        )
         logger.info("wiring_model_router_initialized")
         return router
     except Exception as e:

@@ -111,7 +111,7 @@ def test_selectable_models_use_provider_env_and_explicit_upstream_ids() -> None:
         "deepseek-v4-flash"
     )
 
-    # Background routing remains on its original model settings in this PR.
+    # Legacy aliases remain available, but background routing no longer depends on them.
     assert registry.get_canonical_model("internal-main-model") == "internal-main-model"
     assert registry.get_canonical_model("internal-cheap-model") == "internal-cheap-model"
 

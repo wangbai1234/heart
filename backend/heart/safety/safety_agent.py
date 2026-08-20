@@ -617,7 +617,7 @@ class SafetyAgent:
         ]
 
         try:
-            raw = await model_router.call_cheap(
+            raw = await model_router.call_background(
                 messages=messages,
                 temperature=0.0,
                 max_tokens=64,

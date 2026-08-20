@@ -2,7 +2,7 @@
 Safety LLM Classifier — cheap-model semantic safety classification.
 
 Called only when heuristic flags MEDIUM+ (avoid unnecessary LLM cost).
-Uses ModelRouter.call_cheap() with strict JSON output for refined classification
+Uses ModelRouter.call_background() with strict JSON output for refined classification
 and reasoning trace.
 
 Spec: /runtime_specs/07_agent_orchestration.md §3.4.2, §5.2
@@ -121,7 +121,7 @@ class SafetyLLMClassifier:
     """Cheap-model semantic safety classifier.
 
     Called only when heuristic flags MEDIUM+ to avoid unnecessary LLM cost.
-    Uses ModelRouter.call_cheap() with json_mode=True for strict JSON output.
+    Uses ModelRouter.call_background() with json_mode=True for strict JSON output.
 
     Cost cap: max DAILY_CALL_LIMIT LLM calls per user per day.
     On cap exceeded or LLM failure, returns None (caller falls back to heuristic).
@@ -201,7 +201,7 @@ class SafetyLLMClassifier:
     # -------- LLM call --------
 
     async def _call_llm(self, user_message: str, user_id: str = "") -> str | None:
-        """Call cheap model via ModelRouter with json_mode=True.
+        """Call the background model chain via ModelRouter with json_mode=True.
 
         Args:
             user_message: User message to classify.
@@ -215,7 +215,7 @@ class SafetyLLMClassifier:
         try:
             router = await get_model_router()
             response_text = await asyncio.wait_for(
-                router.call_cheap(
+                router.call_background(
                     messages=[
                         {"role": "system", "content": _SAFETY_LLM_SYSTEM_PROMPT},
                         {

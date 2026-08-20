@@ -397,7 +397,7 @@ class CriticAgent:
         user_prompt: str,
         user_id: str = "unknown",
     ) -> Optional[str]:
-        """通过 ModelRouter 调用 cheap 模型，json_mode=True。
+        """通过 ModelRouter 调用独立后台模型链，json_mode=True。
 
         timeout 后返回 None（best-effort）。
 
@@ -414,7 +414,7 @@ class CriticAgent:
         try:
             router = await get_model_router()
             response_text = await asyncio.wait_for(
-                router.call_cheap(
+                router.call_background(
                     messages=[
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_prompt},

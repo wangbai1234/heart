@@ -4,13 +4,13 @@ Proactive Message Generator — SS06 Inner State & Behavior §3.7, §10.6
 Given an InitiativeDecision from the Decider, generates a proactive message by:
 1. Building a type-specific proactive directive
 2. Routing through SS05 Composer concepts (prompt assembly)
-3. Calling ModelRouter.call_main() for LLM generation
+3. Calling the user's selected chat model for LLM generation
 4. Applying Anti-Pattern Filter
 5. Returning a ProactiveMessage
 
 Key invariants:
   - I-8: All proactive messages through Persona Composer (not bypassed)
-  - I-11: Inner Loop does not call main LLM (Sonnet) → cheap model
+  - I-11: Inner Loop uses the user's selected model, independent of legacy slots
   - INV-I-1: Every proactive P is composed via Persona Composer + Anti-Pattern Filter
   - IMM-I-3: Each proactive must be Soul-flavored (Rin short, Dorothy bubbly)
   - IMM-I-6: Time jitter, content connected to context, not cron-like
@@ -31,6 +31,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
+from heart.infra.model_catalog import DEFAULT_CHAT_MODEL
 from heart.ss06_inner_state.composer import InnerState
 from heart.ss06_inner_state.initiative_decider import (
     InitiativeDecision,
@@ -231,7 +232,7 @@ class ProactiveMessageGenerator:
     Per §10.6:
       - Build proactive directive
       - Route through Persona Composer concepts
-      - Call ModelRouter.call_main() (or call_cheap())
+      - Call the explicitly selected user chat model
       - Apply Anti-Pattern Filter
       - Return ProactiveMessage
 
@@ -246,12 +247,10 @@ class ProactiveMessageGenerator:
     def __init__(
         self,
         model_router,  # ModelRouter instance (injected)
-        use_cheap: bool = True,
         max_retries: int = 1,  # One reroll on anti-pattern failure
         default_max_length: int = 50,
     ):
         self.model_router = model_router
-        self.use_cheap = use_cheap
         self.max_retries = max_retries
         self.default_max_length = default_max_length
 
@@ -263,6 +262,7 @@ class ProactiveMessageGenerator:
         inner_state: InnerState,
         character_id: str,
         soul: Optional[SoulSpec] = None,
+        model: str = DEFAULT_CHAT_MODEL,
     ) -> GenerateResult:
         """Generate a proactive message from an InitiativeDecision.
 
@@ -271,6 +271,7 @@ class ProactiveMessageGenerator:
             inner_state: Current InnerState snapshot for context.
             character_id: Character ID ("rin" | "dorothy").
             soul: Optional SoulSpec for flavor modulation.
+            model: Current model selected for this user and character.
 
         Returns:
             GenerateResult with message or error.
@@ -297,20 +298,13 @@ class ProactiveMessageGenerator:
 
         # Step 3: Call LLM
         try:
-            if self.use_cheap:
-                llm_response = await self.model_router.call_cheap(
-                    messages=messages,
-                    temperature=0.8,
-                    max_tokens=128,
-                    agent_name=f"proactive:{trigger_type}",
-                )
-            else:
-                llm_response = await self.model_router.call_main(
-                    messages=messages,
-                    temperature=0.8,
-                    max_tokens=128,
-                    agent_name=f"proactive:{trigger_type}",
-                )
+            llm_response, _served_model = await self.model_router.call_for(
+                model,
+                messages=messages,
+                temperature=0.8,
+                max_tokens=128,
+                agent_name=f"proactive:{trigger_type}",
+            )
         except Exception as exc:
             return GenerateResult(
                 message=None,
@@ -330,20 +324,13 @@ class ProactiveMessageGenerator:
             messages.append({"role": "assistant", "content": text})
             messages.append({"role": "user", "content": fix_instruction})
             try:
-                if self.use_cheap:
-                    text = await self.model_router.call_cheap(
-                        messages=messages,
-                        temperature=0.8,
-                        max_tokens=128,
-                        agent_name=f"proactive:fix:{trigger_type}",
-                    )
-                else:
-                    text = await self.model_router.call_main(
-                        messages=messages,
-                        temperature=0.8,
-                        max_tokens=128,
-                        agent_name=f"proactive:fix:{trigger_type}",
-                    )
+                text, _served_model = await self.model_router.call_for(
+                    model,
+                    messages=messages,
+                    temperature=0.8,
+                    max_tokens=128,
+                    agent_name=f"proactive:fix:{trigger_type}",
+                )
                 text = self._post_process(text, trigger_type)
             except Exception:
                 pass  # Keep original on reroll failure

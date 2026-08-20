@@ -11,7 +11,7 @@ Architecture:
     ComposerService
         └── compose(context_blocks, user_message) → response
             ├── build_system_prompt(soul, memory, emotion, relationship, inner_state)
-            ├── ModelRouter.call_main() / stream_main()
+            ├── ModelRouter.call_for() / stream_for()
             └── post_filter(response, anti_patterns) → validated response
 
 DI: ComposerService(soul_registry, memory_service, emotion_service, model_router)
@@ -28,6 +28,7 @@ import structlog
 from prometheus_client import Counter
 
 from heart.infra.invariants import Severity, invariant
+from heart.infra.model_catalog import DEFAULT_CHAT_MODEL
 
 import heart.infra.invariant_predicates  # noqa: F401, E402 isort:skip
 from heart.observability.turn_profiler import TurnProfiler
@@ -400,6 +401,19 @@ class ComposerService:
         with p.span("model_router"):
             if self._model_router is None:
                 response_text = self._fallback_response(ctx.character_id, user_message)
+            elif hasattr(self._model_router, "call_for"):
+                requested_model = ctx.model or DEFAULT_CHAT_MODEL
+                response_text, served_model = await self._model_router.call_for(
+                    requested_model,
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=ctx.max_tokens,
+                    agent_name=f"Composer.{ctx.character_id}",
+                )
+                ctx.stream_meta["served_model"] = served_model
+                ctx.stream_meta["degraded_to"] = (
+                    served_model if served_model != requested_model else None
+                )
             else:
                 response_text = await self._model_router.call_main(
                     messages=messages,

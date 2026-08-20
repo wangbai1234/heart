@@ -46,4 +46,16 @@ async def get_model_router() -> ModelRouter:
 
     main_model = os.getenv("MAIN_LLM_MODEL", "deepseek-reasoner")
     cheap_model = os.getenv("CHEAP_LLM_MODEL", "deepseek-chat")
-    return ModelRouter(registry, main_model, cheap_model)
+    background_model = os.getenv("BACKGROUND_LLM_MODEL", "claude-haiku-4.5")
+    background_failover = [
+        model.strip()
+        for model in os.getenv("BACKGROUND_LLM_FAILOVER", "deepseek-v4-flash,gemini-3.1").split(",")
+        if model.strip()
+    ]
+    return ModelRouter(
+        registry,
+        main_model,
+        cheap_model,
+        background_model=background_model,
+        background_failover=background_failover,
+    )
