@@ -6,6 +6,8 @@ explicit per-model routing with failover.
 """
 
 import asyncio
+import json
+import re
 import time
 from typing import AsyncGenerator, Optional, cast
 
@@ -40,6 +42,11 @@ DEFAULT_BACKGROUND_FAILOVER = ["deepseek-v4-flash", "gemini-3.1"]
 # <6s) still succeeds, while a genuine stall degrades fast. Only applied before
 # the first byte — once content flows we never interrupt a live stream.
 TTFT_FAILOVER_S = 6.0
+
+_JSON_FENCE_RE = re.compile(
+    r"^\s*```(?:json)?\s*(.*?)\s*```\s*$",
+    re.IGNORECASE | re.DOTALL,
+)
 
 
 class ModelRouter:
@@ -167,6 +174,38 @@ class ModelRouter:
                 chain.append(m)
         return chain
 
+    @staticmethod
+    def _normalize_json_content(content: str, model: str) -> str:
+        """Return parseable JSON, unwrapping a standard Markdown fence.
+
+        Some native providers ignore ``response_format`` and wrap otherwise
+        valid JSON in a Markdown code fence. Structured background callers expect
+        raw JSON, so normalize that provider-level formatting here. A response
+        that is still not valid JSON is a routing failure and must reach the
+        next model in the configured chain.
+        """
+        stripped = content.strip()
+        candidates = [stripped]
+        fence_match = _JSON_FENCE_RE.fullmatch(stripped)
+        if fence_match:
+            candidates.append(fence_match.group(1).strip())
+
+        for candidate in candidates:
+            try:
+                json.loads(candidate)
+            except (json.JSONDecodeError, TypeError):
+                continue
+            if candidate != stripped:
+                logger.info("call_for_json_fence_normalized", model=model)
+            return candidate
+
+        raise ProviderError(
+            f"invalid JSON response from {model}",
+            provider=model,
+            model=model,
+            retriable=True,
+        )
+
     async def call_for(
         self,
         model: str,
@@ -235,6 +274,9 @@ class ModelRouter:
                         retriable=True,
                     )
                     continue
+                content = response.content
+                if json_mode:
+                    content = self._normalize_json_content(content, candidate)
                 if candidate != model:
                     logger.info(
                         "call_for_degraded",
@@ -248,7 +290,7 @@ class ModelRouter:
                     meta["served_model"] = candidate
                     meta["degraded_to"] = candidate if candidate != model else None
                     meta["usage"] = dict(response.usage)
-                return response.content, candidate
+                return content, candidate
             except Exception as e:
                 record_model_result(
                     candidate,

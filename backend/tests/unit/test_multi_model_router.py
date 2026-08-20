@@ -252,6 +252,73 @@ async def test_call_background_forwards_json_mode():
 
 
 @pytest.mark.asyncio
+async def test_call_background_normalizes_fenced_json_from_native_provider():
+    haiku = FakeProvider(content='```json\n{"ok": true}\n```')
+    fallback = FakeProvider(content='{"fallback": true}')
+    reg = _make_registry(
+        ("haiku", haiku, ["claude-haiku-4.5"]),
+        ("fallback", fallback, ["gemini-3.1"]),
+    )
+    router = ModelRouter(
+        reg,
+        main_model="main",
+        cheap_model="cheap",
+        background_model="claude-haiku-4.5",
+        background_failover=["gemini-3.1"],
+    )
+
+    content = await router.call_background(_messages(), json_mode=True)
+
+    assert content == '{"ok": true}'
+    assert haiku.calls == 1
+    assert fallback.calls == 0
+
+
+@pytest.mark.asyncio
+async def test_call_background_invalid_json_fails_over():
+    haiku = FakeProvider(content="I could not produce JSON")
+    gemini = FakeProvider(content='{"ok": true}')
+    reg = _make_registry(
+        ("haiku", haiku, ["claude-haiku-4.5"]),
+        ("gemini", gemini, ["gemini-3.1"]),
+    )
+    router = ModelRouter(
+        reg,
+        main_model="main",
+        cheap_model="cheap",
+        background_model="claude-haiku-4.5",
+        background_failover=["gemini-3.1"],
+    )
+
+    meta: dict = {}
+    content = await router.call_background(_messages(), json_mode=True, meta=meta)
+
+    assert content == '{"ok": true}'
+    assert meta["served_model"] == "gemini-3.1"
+    assert meta["degraded_to"] == "gemini-3.1"
+    assert haiku.calls == 1
+    assert gemini.calls == 1
+
+
+@pytest.mark.asyncio
+async def test_call_background_invalid_json_exhaustion_raises():
+    haiku = FakeProvider(content="not-json")
+    reg = _make_registry(("haiku", haiku, ["claude-haiku-4.5"]))
+    router = ModelRouter(
+        reg,
+        main_model="main",
+        cheap_model="cheap",
+        background_model="claude-haiku-4.5",
+        background_failover=[],
+    )
+
+    with pytest.raises(ProviderError) as exc_info:
+        await router.call_background(_messages(), json_mode=True)
+
+    assert "exhausted" in str(exc_info.value).lower()
+
+
+@pytest.mark.asyncio
 async def test_call_for_raw_error_fails_over_for_non_streaming_call():
     primary = FakeProvider(raises=RuntimeError("raw relay error"))
     fallback = FakeProvider(content="fallback")
