@@ -279,7 +279,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
   const currentModel = modelCatalog.find((model) => model.id === chatModel)
   const textTierLabel = currentModel
     ? `${currentModel.label} · ${currentModel.included ? '会员免费' : `${currentModel.cost_coins}币`}`
-    : 'Gemini 3.1 · 0.5币'
+    : '双子座 3.1 · 0.5币'
 
   // Sync server-side voice_enabled once on mount (previously done by the
   // backstage page). Keeps the +菜单/语音聊天 toggle honest without opening it.

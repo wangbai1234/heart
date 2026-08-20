@@ -31,6 +31,29 @@ def test_catalog_has_all_selectable_models_and_default() -> None:
     assert all(not hasattr(model, "credential_group") for model in MODEL_CATALOG)
 
 
+def test_every_non_default_model_ends_with_gemini_failover() -> None:
+    from heart.infra.model_catalog import DEFAULT_CHAT_MODEL, MODEL_CATALOG
+
+    for model in MODEL_CATALOG:
+        if model.id != DEFAULT_CHAT_MODEL:
+            assert model.failover[-1] == DEFAULT_CHAT_MODEL
+
+
+def test_gemini_and_claude_use_product_display_names() -> None:
+    from heart.infra.model_catalog import MODEL_BY_ID
+
+    assert MODEL_BY_ID["gemini-3.1"].label == "双子座 3.1"
+    assert MODEL_BY_ID["gemini-3.1"].family == "双子座"
+    for model_id in (
+        "claude-haiku-4.5",
+        "claude-sonnet-4.6",
+        "claude-opus-4.6",
+        "claude-opus-5",
+    ):
+        assert MODEL_BY_ID[model_id].label.startswith("小克 ")
+        assert MODEL_BY_ID[model_id].family == "小克"
+
+
 def test_selectable_models_use_provider_env_and_explicit_upstream_ids() -> None:
     """Product slugs must route through reusable provider configs, not hardcoded IDs."""
     from heart.infra.llm_providers.registry import initialize_registry
