@@ -14,7 +14,6 @@ Author: 心屿团队
 
 from __future__ import annotations
 
-import asyncio
 import json
 import random
 from dataclasses import dataclass, field
@@ -413,18 +412,16 @@ class CriticAgent:
 
         try:
             router = await get_model_router()
-            response_text = await asyncio.wait_for(
-                router.call_background(
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt},
-                    ],
-                    temperature=self._TEMPERATURE,
-                    max_tokens=self._MAX_TOKENS,
-                    json_mode=True,
-                    agent_name=self._AGENT_NAME,
-                ),
-                timeout=self._TIMEOUT_SECONDS,
+            response_text = await router.call_background(
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                temperature=self._TEMPERATURE,
+                max_tokens=self._MAX_TOKENS,
+                json_mode=True,
+                agent_name=self._AGENT_NAME,
+                attempt_timeout_s=self._TIMEOUT_SECONDS,
             )
 
             # 记录到 cost tracker（如果已配置）
@@ -433,9 +430,6 @@ class CriticAgent:
 
             return response_text
 
-        except asyncio.TimeoutError:
-            logger.warning(f"CriticAgent: LLM call timed out after {self._TIMEOUT_SECONDS}s")
-            return None
         except Exception as e:
             logger.warning(f"CriticAgent: LLM call error: {e}")
             return None

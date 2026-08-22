@@ -653,19 +653,14 @@ class MemoryEncoderWorker:
             }
         ]
 
-        try:
-            response = await asyncio.wait_for(
-                router.call_background(
-                    messages=messages,
-                    temperature=0.0,  # Deterministic for fact extraction
-                    max_tokens=2000,
-                    json_mode=True,
-                    agent_name="memory_encoder",
-                ),
-                timeout=LLM_TIMEOUT_SECONDS,
-            )
-        except asyncio.TimeoutError:
-            raise TimeoutError(f"LLM call timed out after {LLM_TIMEOUT_SECONDS}s") from None
+        response = await router.call_background(
+            messages=messages,
+            temperature=0.0,  # Deterministic for fact extraction
+            max_tokens=2000,
+            json_mode=True,
+            agent_name="memory_encoder",
+            attempt_timeout_s=LLM_TIMEOUT_SECONDS,
+        )
 
         # Parse JSON
         try:

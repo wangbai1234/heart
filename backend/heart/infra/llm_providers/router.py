@@ -37,6 +37,7 @@ DEFAULT_BACKGROUND_FAILOVER = [
     "background-gemini-3.1-flash-lite-preview",
     "background-claude-haiku-4.5",
 ]
+DEFAULT_BACKGROUND_ATTEMPT_TIMEOUT_S = 10.0
 
 # Time-to-first-token deadline for the streaming path. If a candidate model does
 # not produce its first *content* byte within this window, we abort it and fail
@@ -69,6 +70,7 @@ class ModelRouter:
         cheap_model: str,
         background_model: str = DEFAULT_BACKGROUND_MODEL,
         background_failover: Optional[list[str]] = None,
+        background_attempt_timeout_s: Optional[float] = DEFAULT_BACKGROUND_ATTEMPT_TIMEOUT_S,
     ):
         self._registry = registry
         self._main_model = main_model
@@ -79,6 +81,7 @@ class ModelRouter:
             if background_failover is not None
             else list(DEFAULT_BACKGROUND_FAILOVER)
         )
+        self._background_attempt_timeout_s = background_attempt_timeout_s
 
     # ------------------------------------------------------------------
     # Legacy helpers (unchanged)
@@ -140,8 +143,13 @@ class ModelRouter:
         json_mode: bool = False,
         agent_name: str = "unknown",
         meta: Optional[dict] = None,
+        attempt_timeout_s: Optional[float] = None,
     ) -> str:
-        """Call the independent low-cost chain used by internal tasks."""
+        """Call the independent low-cost chain used by internal tasks.
+
+        The timeout applies to each candidate, not the complete chain, so one
+        stalled provider cannot prevent configured failover models from running.
+        """
         content, _served_model = await self.call_for(
             self._background_model,
             messages,
@@ -151,6 +159,11 @@ class ModelRouter:
             json_mode=json_mode,
             agent_name=agent_name,
             meta=meta,
+            attempt_timeout_s=(
+                self._background_attempt_timeout_s
+                if attempt_timeout_s is None
+                else attempt_timeout_s
+            ),
         )
         return content
 
@@ -221,6 +234,7 @@ class ModelRouter:
         json_mode: bool = False,
         agent_name: str = "unknown",
         meta: Optional[dict] = None,
+        attempt_timeout_s: Optional[float] = None,
     ) -> tuple[str, str]:
         """Call the specified model with automatic failover.
 
@@ -261,7 +275,20 @@ class ModelRouter:
                     model=candidate,
                     requested=model,
                 )
-                response = await provider.call(request)
+                if attempt_timeout_s is None:
+                    response = await provider.call(request)
+                else:
+                    try:
+                        response = await asyncio.wait_for(
+                            provider.call(request), timeout=attempt_timeout_s
+                        )
+                    except asyncio.TimeoutError as exc:
+                        raise ProviderError(
+                            f"model attempt timed out after {attempt_timeout_s:g}s",
+                            provider=candidate,
+                            model=candidate,
+                            retriable=True,
+                        ) from exc
                 # An error-free but empty response is useless to the user — treat
                 # it as a soft failure and fail over to the next model (the
                 # "deepseek 兜底"). Only the last usable candidate is allowed to

@@ -87,6 +87,7 @@ class Settings(BaseSettings):
         "background-gpt-5.4-mini,background-gemini-2.5-flash-lite,"
         "background-gemini-3.1-flash-lite-preview,background-claude-haiku-4.5"
     )
+    background_llm_attempt_timeout_seconds: float = 10.0
 
     # Embedding Service (OpenAI-compatible hosted endpoint, e.g. SiliconFlow bge-m3)
     embedding_model: str = "BAAI/bge-m3"
