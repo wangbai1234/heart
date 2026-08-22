@@ -62,6 +62,12 @@ DC() {
     docker compose -f "$COMPOSE_FILE" --env-file "$ENV_PROD" "$@"
 }
 
+api_is_live() {
+    DC exec -T api python -c \
+        "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/live', timeout=5).read()" \
+        &>/dev/null
+}
+
 # ──────────────────────────────────────────────────────────────────────────────
 # --stop / --restart / --status / --logs
 # ──────────────────────────────────────────────────────────────────────────────
@@ -87,7 +93,7 @@ case "$MODE" in
         DC ps
         echo ""
         info "健康检查："
-        curl -sf http://localhost:8000/health/live 2>/dev/null && echo " ✓ API live" || warn " ✗ API 不可达（可能未启动）"
+        api_is_live && echo " ✓ API live" || warn " ✗ API 不可达（可能未启动）"
         exit 0
         ;;
     --logs)
@@ -237,7 +243,7 @@ start_app_layer() {
 
     log "等待 api 健康..."
     for i in $(seq 1 60); do
-        if DC exec -T api curl -sf http://localhost:8000/health/live &>/dev/null; then
+        if api_is_live; then
             info "✓ api 健康 (${i}s)"
             break
         fi

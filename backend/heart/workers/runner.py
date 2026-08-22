@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import structlog
@@ -265,12 +266,16 @@ async def _run_replay_cleanup_loop(stop_event: asyncio.Event) -> None:
 
     while not stop_event.is_set():
         try:
+            # replay_snapshots.created_at is a legacy TIMESTAMP WITHOUT TIME ZONE
+            # column, so bind an explicit naive-UTC cutoff instead of trying to
+            # interpolate a parameter inside a PostgreSQL INTERVAL literal.
+            cutoff = (datetime.now(timezone.utc) - timedelta(days=retention_days)).replace(
+                tzinfo=None
+            )
             async with factory() as session:
                 result = await session.execute(
-                    text(
-                        "DELETE FROM replay_snapshots WHERE created_at < NOW() - INTERVAL ':days days'"
-                    ),
-                    {"days": retention_days},
+                    text("DELETE FROM replay_snapshots WHERE created_at < :cutoff"),
+                    {"cutoff": cutoff},
                 )
                 deleted = result.rowcount
                 await session.commit()
