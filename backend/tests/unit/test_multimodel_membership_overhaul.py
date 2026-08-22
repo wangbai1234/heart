@@ -116,6 +116,77 @@ def test_selectable_models_use_provider_env_and_explicit_upstream_ids() -> None:
     assert registry.get_canonical_model("internal-cheap-model") == "internal-cheap-model"
 
 
+def test_background_models_use_isolated_providers_and_upstream_ids() -> None:
+    """Internal slugs must never resolve through user-selectable chat providers."""
+    from heart.infra.llm_providers.registry import initialize_registry
+
+    env = {
+        "GPT_API_KEY": "chat-gpt-key",
+        "GPT_LUNA_MODEL": "chat-gpt-luna",
+        "GEMINI_API_KEY": "chat-gemini-key",
+        "GEMINI_MODEL": "chat-gemini-31",
+        "CLAUDE_API_KEY": "chat-claude-key",
+        "CLAUDE_HAIKU_MODEL": "chat-claude-haiku",
+        "BACKGROUND_GPT_API_KEY": "background-gpt-key",
+        "BACKGROUND_GPT_LUNA_MODEL": "internal-gpt-luna",
+        "BACKGROUND_GPT_MINI_MODEL": "internal-gpt-mini",
+        "BACKGROUND_GEMINI_API_KEY": "background-gemini-key",
+        "BACKGROUND_GEMINI_25_MODEL": "internal-gemini-25",
+        "BACKGROUND_GEMINI_31_MODEL": "internal-gemini-31",
+        "BACKGROUND_CLAUDE_API_KEY": "background-claude-key",
+        "BACKGROUND_CLAUDE_HAIKU_MODEL": "internal-claude-haiku",
+    }
+
+    with patch.dict("os.environ", env, clear=True):
+        registry = initialize_registry()
+
+    expected_models = {
+        "background-gpt-5.6-luna": "internal-gpt-luna",
+        "background-gpt-5.4-mini": "internal-gpt-mini",
+        "background-gemini-2.5-flash-lite": "internal-gemini-25",
+        "background-gemini-3.1-flash-lite-preview": "internal-gemini-31",
+        "background-claude-haiku-4.5": "internal-claude-haiku",
+    }
+    for slug, upstream_model in expected_models.items():
+        assert registry.has_model(slug)
+        assert registry.get_canonical_model(slug) == upstream_model
+
+    assert registry.get_provider_for_model("background-gpt-5.6-luna") is registry.get_provider(
+        "background-gpt"
+    )
+    assert registry.get_provider_for_model(
+        "background-gemini-2.5-flash-lite"
+    ) is registry.get_provider("background-gemini")
+    assert registry.get_provider_for_model(
+        "background-claude-haiku-4.5"
+    ) is registry.get_provider("background-claude")
+
+    assert registry.get_provider("background-gpt") is not registry.get_provider("gpt")
+    assert registry.get_provider("background-gemini") is not registry.get_provider("gemini")
+    assert registry.get_provider("background-claude") is not registry.get_provider("claude")
+    assert registry.get_canonical_model("gpt-5.6-luna") == "chat-gpt-luna"
+    assert registry.get_canonical_model("gemini-3.1") == "chat-gemini-31"
+    assert registry.get_canonical_model("claude-haiku-4.5") == "chat-claude-haiku"
+
+
+def test_missing_background_provider_skips_only_its_models() -> None:
+    """A missing family key must not prevent the remaining fallback families."""
+    from heart.infra.llm_providers.registry import initialize_registry
+
+    env = {
+        "BACKGROUND_GEMINI_API_KEY": "background-gemini-key",
+        "BACKGROUND_CLAUDE_API_KEY": "background-claude-key",
+    }
+    with patch.dict("os.environ", env, clear=True):
+        registry = initialize_registry()
+
+    assert not registry.has_model("background-gpt-5.6-luna")
+    assert not registry.has_model("background-gpt-5.4-mini")
+    assert registry.has_model("background-gemini-2.5-flash-lite")
+    assert registry.has_model("background-gemini-3.1-flash-lite-preview")
+    assert registry.has_model("background-claude-haiku-4.5")
+
+
 @pytest.mark.parametrize(
     ("model", "coins"),
     [("gemini-3.1", 0.5), ("claude-sonnet-4.6", 2), ("claude-opus-5", 3)],
