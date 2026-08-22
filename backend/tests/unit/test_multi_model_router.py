@@ -48,15 +48,23 @@ def _messages() -> list[dict]:
 class FakeProvider:
     """Synchronous-call fake that returns a fixed response or raises."""
 
-    def __init__(self, content: str = "ok", raises: Exception | None = None):
+    def __init__(
+        self,
+        content: str = "ok",
+        raises: Exception | None = None,
+        delay_s: float = 0,
+    ):
         self._content = content
         self._raises = raises
+        self._delay_s = delay_s
         self.calls: int = 0
         self.last_request: LLMRequest | None = None
 
     async def call(self, request: LLMRequest) -> LLMResponse:
         self.calls += 1
         self.last_request = request
+        if self._delay_s:
+            await asyncio.sleep(self._delay_s)
         if self._raises:
             raise self._raises
         return LLMResponse(
@@ -231,6 +239,33 @@ async def test_call_background_fails_over_in_its_configured_order():
     assert content == "stable fallback"
     assert haiku.calls == 1
     assert gemini.calls == 1
+
+
+@pytest.mark.asyncio
+async def test_call_background_timeout_applies_per_candidate_and_fails_over():
+    luna = FakeProvider(content="too late", delay_s=0.1)
+    mini = FakeProvider(content="fast fallback")
+    reg = _make_registry(
+        ("luna", luna, ["background-gpt-5.6-luna"]),
+        ("mini", mini, ["background-gpt-5.4-mini"]),
+    )
+    router = ModelRouter(
+        reg,
+        main_model="main",
+        cheap_model="cheap",
+        background_model="background-gpt-5.6-luna",
+        background_failover=["background-gpt-5.4-mini"],
+        background_attempt_timeout_s=0.01,
+    )
+    meta: dict = {}
+
+    content = await router.call_background(_messages(), agent_name="memory", meta=meta)
+
+    assert content == "fast fallback"
+    assert luna.calls == 1
+    assert mini.calls == 1
+    assert meta["served_model"] == "background-gpt-5.4-mini"
+    assert meta["degraded_to"] == "background-gpt-5.4-mini"
 
 
 @pytest.mark.asyncio
@@ -836,6 +871,7 @@ def test_config_has_independent_background_chain():
     )
 
     assert s.background_llm_model == "background-gpt-5.6-luna"
+    assert s.background_llm_attempt_timeout_seconds == 10.0
     assert s.background_llm_failover.split(",") == [
         "background-gpt-5.4-mini",
         "background-gemini-2.5-flash-lite",

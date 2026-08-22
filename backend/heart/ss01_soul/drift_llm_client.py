@@ -9,7 +9,6 @@ Author: 心屿团队
 
 from __future__ import annotations
 
-import asyncio
 import json
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
@@ -175,18 +174,16 @@ class DriftLLMClient:
 
         try:
             router = await get_model_router()
-            response_text = await asyncio.wait_for(
-                router.call_background(
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_message},
-                    ],
-                    temperature=0.0,
-                    max_tokens=1024,
-                    json_mode=True,
-                    agent_name="DriftDetector.evaluate_drift",
-                ),
-                timeout=timeout_seconds,
+            response_text = await router.call_background(
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_message},
+                ],
+                temperature=0.0,
+                max_tokens=1024,
+                json_mode=True,
+                agent_name="DriftDetector.evaluate_drift",
+                attempt_timeout_s=timeout_seconds,
             )
 
             # Parse JSON response
@@ -199,15 +196,6 @@ class DriftLLMClient:
                 timeout_occurred=False,
             )
 
-        except asyncio.TimeoutError:
-            # LLM call timed out
-            return LLMDriftResult(
-                drift_score=0.0,
-                drift_type="none",
-                violations=[],
-                required_patterns=[],
-                timeout_occurred=True,
-            )
         except (json.JSONDecodeError, KeyError, ValueError):
             # Malformed JSON response — fail gracefully
             return LLMDriftResult(

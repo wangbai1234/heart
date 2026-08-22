@@ -155,6 +155,10 @@ def get_model_router():
         os.environ.setdefault("CHEAP_LLM_MODEL", settings.cheap_llm_model)
         os.environ.setdefault("BACKGROUND_LLM_MODEL", settings.background_llm_model)
         os.environ.setdefault("BACKGROUND_LLM_FAILOVER", settings.background_llm_failover)
+        os.environ.setdefault(
+            "BACKGROUND_LLM_ATTEMPT_TIMEOUT_SECONDS",
+            str(settings.background_llm_attempt_timeout_seconds),
+        )
         os.environ.setdefault("LLM_MAX_CONCURRENCY", str(settings.llm_max_concurrency))
         os.environ.setdefault("LLM_MAX_RETRIES", str(settings.llm_max_retries))
         os.environ.setdefault("LLM_KEY_COOLDOWN_SECONDS", str(settings.llm_key_cooldown_seconds))
@@ -178,6 +182,7 @@ def get_model_router():
             cheap_model,
             background_model=background_model,
             background_failover=background_failover,
+            background_attempt_timeout_s=settings.background_llm_attempt_timeout_seconds,
         )
         logger.info("wiring_model_router_initialized")
         return router

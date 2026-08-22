@@ -650,14 +650,12 @@ class TestMemoryEncoderWorker:
         mock_result.scalar_one_or_none = MagicMock(return_value=sample_encoding_event)
         mock_db_session.execute = AsyncMock(return_value=mock_result)
 
-        # Mock LLM timeout
-        import asyncio
-
-        async def slow_llm(*args, **kwargs):
-            await asyncio.sleep(20)  # Longer than timeout
+        # The router only returns after every model attempt has timed out.
+        async def exhausted_timeout(*args, **kwargs):
+            raise TimeoutError("background model chain timed out")
 
         with patch("heart.workers.memory_encoder.get_model_router") as mock_router:
-            mock_router.return_value.call_background = slow_llm
+            mock_router.return_value.call_background = exhausted_timeout
 
             with pytest.raises(TimeoutError, match="timed out"):
                 await worker._process_event(sample_encoding_event)

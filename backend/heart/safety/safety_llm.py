@@ -11,7 +11,6 @@ Author: 心屿团队
 
 from __future__ import annotations
 
-import asyncio
 import json
 from dataclasses import dataclass
 from datetime import date
@@ -214,23 +213,21 @@ class SafetyLLMClassifier:
 
         try:
             router = await get_model_router()
-            response_text = await asyncio.wait_for(
-                router.call_background(
-                    messages=[
-                        {"role": "system", "content": _SAFETY_LLM_SYSTEM_PROMPT},
-                        {
-                            "role": "user",
-                            "content": _SAFETY_LLM_USER_PROMPT_TEMPLATE.format(
-                                user_message=user_message
-                            ),
-                        },
-                    ],
-                    temperature=self.TEMPERATURE,
-                    max_tokens=self.MAX_TOKENS,
-                    json_mode=True,
-                    agent_name=self.AGENT_NAME,
-                ),
-                timeout=self.TIMEOUT_SECONDS,
+            response_text = await router.call_background(
+                messages=[
+                    {"role": "system", "content": _SAFETY_LLM_SYSTEM_PROMPT},
+                    {
+                        "role": "user",
+                        "content": _SAFETY_LLM_USER_PROMPT_TEMPLATE.format(
+                            user_message=user_message
+                        ),
+                    },
+                ],
+                temperature=self.TEMPERATURE,
+                max_tokens=self.MAX_TOKENS,
+                json_mode=True,
+                agent_name=self.AGENT_NAME,
+                attempt_timeout_s=self.TIMEOUT_SECONDS,
             )
 
             if self._cost_tracker:
@@ -238,12 +235,6 @@ class SafetyLLMClassifier:
 
             return response_text
 
-        except asyncio.TimeoutError:
-            logger.warning(
-                "SafetyLLMClassifier: LLM call timed out after %ss",
-                self.TIMEOUT_SECONDS,
-            )
-            return None
         except Exception:
             logger.warning("SafetyLLMClassifier: LLM call error", exc_info=True)
             return None
