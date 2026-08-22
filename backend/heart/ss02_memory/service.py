@@ -19,7 +19,7 @@ Author: 心屿团队
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID, uuid4
@@ -118,6 +118,10 @@ class RetrievedMemory:
 
     # Source evidence for Critic
     source_evidence: str
+
+    # Stable source fields used by downstream policy decisions.  This avoids
+    # parsing character-styled ``reconstructed_text`` to identify name facts.
+    source_metadata: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -313,6 +317,17 @@ class MemoryService:
                         voice_dna_applied = []
 
                     state = getattr(sm.memory, "state", "vivid") or "vivid"
+                    source_metadata: dict[str, str] = {}
+                    if isinstance(sm.memory, IdentityMemory):
+                        source_metadata = {
+                            "category": sm.memory.category,
+                            "key": sm.memory.key,
+                        }
+                    elif isinstance(sm.memory, FactNode):
+                        source_metadata = {
+                            "subject": sm.memory.subject,
+                            "predicate": sm.memory.predicate,
+                        }
                     retrieved.append(
                         RetrievedMemory(
                             memory_id=sm.memory_id,
@@ -325,6 +340,7 @@ class MemoryService:
                             uncertainty_level=_state_to_uncertainty(state),
                             voice_dna_applied=voice_dna_applied,
                             source_evidence=_fallback_text(sm.memory),
+                            source_metadata=source_metadata,
                         )
                     )
 

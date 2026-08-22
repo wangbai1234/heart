@@ -9,6 +9,8 @@ interface AfdianBindingCardProps {
   checkoutUrl?: string | null
   /** Optional SKU / plan name to remind the user which item to select on 爱发电. */
   skuHint?: string
+  /** Wallet can use the direct-payment copy even before a checkout deep link is returned. */
+  forceAutoBindCopy?: boolean
 }
 
 /**
@@ -27,14 +29,15 @@ export function AfdianBindingCard({
   afdianUrl,
   checkoutUrl,
   skuHint,
+  forceAutoBindCopy = false,
 }: AfdianBindingCardProps) {
   const showToast = useToastStore((s) => s.show)
   const [copied, setCopied] = useState(false)
 
   // 有深链 → 免备注即充即到；否则回退主页 + 手填备注（旧流程）。
-  const autoBind = Boolean(checkoutUrl)
-  const href = autoBind
-    ? buildCheckoutUrl(checkoutUrl as string, bindingCode)
+  const autoBind = Boolean(checkoutUrl) || forceAutoBindCopy
+  const href = checkoutUrl
+    ? buildCheckoutUrl(checkoutUrl, bindingCode)
     : afdianUrl || '#'
 
   const copyCode = async () => {

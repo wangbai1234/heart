@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { useAuthStore } from '../stores/authStore'
-import { useThemeStore } from '../stores/themeStore'
 import { Button } from '../components/ui/Button'
 import { PasswordInput } from '../components/ui/PasswordInput'
 import { Toast } from '../components/ui/Toast'
@@ -18,11 +17,6 @@ export function ChangePasswordPage() {
   const goBack = useSafeBack('/settings')
   const user = useAuthStore((s) => s.user)
   const setUser = useAuthStore((s) => s.setUser)
-  const { resolvedTheme } = useThemeStore()
-  const bgImage = resolvedTheme === 'dark'
-    ? '/assets/backgrounds/暗色聊天背景图.webp'
-    : '/assets/backgrounds/聊天背景图.webp'
-
   // OTP-only users have no password yet → 设置密码 (no current password field).
   const hasPassword = user?.has_password ?? false
 
@@ -70,8 +64,7 @@ export function ChangePasswordPage() {
   }
 
   return (
-    <div className="relative w-full h-full overflow-hidden">
-      <img src={bgImage} alt="" className="absolute inset-0 h-full w-full object-cover z-0" />
+    <div className="app-atmosphere relative h-full w-full overflow-hidden">
 
       <div className="relative z-10 w-full h-full flex flex-col">
         {/* Header */}

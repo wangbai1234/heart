@@ -14,7 +14,13 @@ import re
 
 import pytest
 
-from heart.ss01_soul.draft import CharacterDraft, DisplayNameDraft, GreetingStyle, SliderSet
+from heart.ss01_soul.draft import (
+    CharacterDraft,
+    DisplayNameDraft,
+    GreetingStyle,
+    SliderSet,
+    SoulProfileDraft,
+)
 from heart.ss01_soul.schema_validator import SoulSpec
 from heart.ss01_soul.spec_builder import build_soul_spec_from_draft
 
@@ -100,6 +106,38 @@ def test_softening_triggers_nonempty():
     assert len(spec.relational_template.softening_triggers) >= 1
 
 
+def test_authored_soul_profile_overrides_generic_style_template():
+    draft = _make_draft(greeting_style=GreetingStyle.cool)
+    draft.archetype_label = "急诊科医生"
+    draft.soul_profile = SoulProfileDraft(
+        **{
+            "wound_essence": "一次错误判断伤害了信任自己的人",
+            "wound_manifest": "越在意越会独自承担所有风险",
+            "wound_defense": "用专业和冷静隔开真实的愧疚",
+            "private_truth": "他不相信自己值得被无条件留下",
+            "desire_surface": "把所有事情处理妥当",
+            "desire_hidden": "有人能看见疲惫却不逼他解释",
+            "desire_deepest": "允许自己被照顾而不失去价值",
+            "fear_ultimate": "自己的选择再次伤害重要的人",
+            "fear_daily": "暴露无法掌控局面的脆弱",
+            "fear_shadow": "负责只是拒绝信任别人的借口",
+            "belief_self": "保持可靠才有资格留在别人身边",
+            "belief_others": "承诺需要经过真正压力的检验",
+            "belief_love": "亲密意味着共同承担而非单方面拯救",
+            "belief_time": "时间检验人如何带着错误继续生活",
+            "softening_triggers": ["对方尊重沉默", "有人主动分担责任"],
+        }
+    )
+
+    spec = _build(draft)
+
+    assert spec.identity_anchor.archetype == "急诊科医生"
+    assert spec.identity_anchor.core_wound.essence == "一次错误判断伤害了信任自己的人"
+    assert spec.identity_anchor.core_desire.deepest == "允许自己被照顾而不失去价值"
+    assert spec.identity_anchor.core_belief.about_love == "亲密意味着共同承担而非单方面拯救"
+    assert spec.relational_template.softening_triggers == ["对方尊重沉默", "有人主动分担责任"]
+
+
 # ── VoiceDNA id regex ─────────────────────────────────────────────────────────
 
 
@@ -146,9 +184,7 @@ def _check_numeric_styles(spec: SoulSpec) -> None:
     ]:
         lo, hi = style.evolution_bound
         assert lo < hi, f"evolution_bound lo({lo}) >= hi({hi})"
-        assert lo <= style.baseline <= hi, (
-            f"baseline({style.baseline}) not in [{lo}, {hi}]"
-        )
+        assert lo <= style.baseline <= hi, f"baseline({style.baseline}) not in [{lo}, {hi}]"
 
 
 def test_numeric_style_invariants_default_sliders():

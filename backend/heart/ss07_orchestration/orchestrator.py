@@ -440,6 +440,7 @@ class Orchestrator:
             model=getattr(req, "model", "gemini-3.1"),
             stream_meta=_meta,
             voice_enabled=voice_enabled,
+            user_mask=getattr(req, "user_mask", None),
         )
 
         splitter = SentenceSplitter()

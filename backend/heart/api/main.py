@@ -44,6 +44,7 @@ from .routes_chat_ws import router as chat_ws_router
 from .routes_companions import router as companions_router
 from .routes_credits import router as credits_router
 from .routes_invite import router as invite_router
+from .routes_masks import router as masks_router
 from .routes_membership import router as membership_router
 from .routes_models import router as models_router
 from .routes_proactive import router as proactive_router
@@ -285,6 +286,7 @@ def create_app() -> FastAPI:
     app.include_router(auth_router)  # /api/auth/* (OTP, refresh, logout, me)
     app.include_router(credits_router)  # /api/credits/* (balance, transactions, redeem, pricing)
     app.include_router(membership_router)  # /api/membership (GET tier + entitlements)
+    app.include_router(masks_router)  # /api/masks (user-owned conversation personas)
     app.include_router(models_router)  # /api/models (catalog, status, preferences)
     app.include_router(invite_router)  # /api/invite (GET code, POST /use)
     app.include_router(admin_router)  # /api/admin/* (admin operations, requires X-Admin-Key)

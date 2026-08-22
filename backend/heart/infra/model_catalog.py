@@ -156,3 +156,25 @@ def normalize_model_id(model_id: str | None) -> str:
 
 def get_model_spec(model_id: str | None) -> ModelSpec | None:
     return MODEL_BY_ID.get(normalize_model_id(model_id))
+
+
+def model_ids_by_descending_coin_cost() -> tuple[str, ...]:
+    """Return every selectable model ordered by its user-facing coin price.
+
+    Python's sort is stable, so equal-priced models retain the catalog's
+    intentional product order. Authoring flows use the complete result as a
+    quality-first failover chain instead of coupling to one deployment model.
+    """
+    return tuple(
+        model.id for model in sorted(MODEL_CATALOG, key=lambda item: item.cost_coins, reverse=True)
+    )
+
+
+def model_ids_by_ascending_coin_cost() -> tuple[str, ...]:
+    """Return every selectable model ordered by coin price, cheapest first.
+
+    Stable sorting preserves catalog order for ties, so the 0.5-coin tier starts
+    with the default and operationally most reliable ``gemini-3.1`` model.
+    Quick authoring uses this availability-first chain.
+    """
+    return tuple(model.id for model in sorted(MODEL_CATALOG, key=lambda item: item.cost_coins))

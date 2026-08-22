@@ -27,6 +27,9 @@
 
   /* ── Colors — Page / Surface ────────────────────────────────────── */
   --color-bg-page:       #FFF0F3;                   /* Home light bg               */
+  --color-page-canvas:   #F7F6F7;                   /* Quiet functional page       */
+  --color-page-surface:  #FFFFFF;                   /* Solid elevated surface      */
+  --color-page-soft:     #F0EEF1;                   /* Secondary control surface   */
   --color-bg-page-dark:  #1A1A2E;                   /* dark mode base              */
   --color-surface-card:  rgba(255, 255, 255, 0.95);  /* card surface               */
   --color-bg-login:      #FFF8F3;                    /* Login page bottom           */

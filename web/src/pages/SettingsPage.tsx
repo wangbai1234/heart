@@ -6,7 +6,6 @@ import { useAppStore } from '../stores/appStore'
 import { useAuthStore } from '../stores/authStore'
 import { useCreditsStore } from '../stores/creditsStore'
 import { useMembershipStore } from '../stores/membershipStore'
-import { useSafeBack } from '../hooks/useSafeBack'
 import { Avatar } from '../components/ui/Avatar'
 import { Switch } from '../components/ui/Switch'
 import { Slider } from '../components/ui/Slider'
@@ -18,10 +17,11 @@ import { BottomSheet } from '../components/ui/BottomSheet'
 import { MuteTimePicker } from '../components/ui/MuteTimePicker'
 import { logout as apiLogout, clearConversations, deleteAccount, exportData, getInviteStatus } from '../services/api'
 import type { InviteStatus } from '../services/api'
+import { AppPageContent, AppPageShell } from '../components/ui/AppPageShell'
+import { TabBar } from '../components/ui/TabBar'
 
 export function SettingsPage() {
   const navigate = useNavigate()
-  const goBack = useSafeBack('/character')
   const { theme, setTheme, resolvedTheme } = useThemeStore()
   const { userAvatar, fontScale, setFontScale, muteStart, muteStartMin, muteEnd, muteEndMin, isMuteNever, setMuteTime, setMuteNever, pushEnabled, setPushEnabled } = useAppStore()
   const user = useAuthStore((s) => s.user)
@@ -56,9 +56,6 @@ export function SettingsPage() {
 
   const themeLabel = theme === 'light' ? '浅色' : theme === 'dark' ? '深色' : '自动'
 
-  const bgImage = resolvedTheme === 'dark'
-    ? '/assets/backgrounds/暗色聊天背景图.webp'
-    : '/assets/backgrounds/聊天背景图.webp'
   const isDark = resolvedTheme === 'dark'
   const memberGemImage = '/assets/settings/member-crown.webp'
 
@@ -130,49 +127,29 @@ export function SettingsPage() {
   }
 
   return (
-    <div className="relative w-full h-full flex flex-col overflow-hidden">
-      {/* Background */}
-      <img
-        src={bgImage}
-        alt=""
-        className="absolute inset-0 w-full h-full object-cover z-0"
-      />
-
+    <AppPageShell className="app-atmosphere flex flex-col">
       {/* Status bar */}
       <div style={{ height: 'var(--safe-top)' }} />
 
       {/* Navigation bar */}
-      <nav className="relative z-20 flex items-center justify-between px-5 h-[44px] shrink-0">
-        <button onClick={goBack} className="w-[44px] h-[44px] flex items-center justify-center">
-          <svg width="12" height="20" viewBox="0 0 12 20" fill="none" stroke="var(--color-ink)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="10,2 2,10 10,18" />
-          </svg>
-        </button>
-        <ScaledText as="span" className="text-[18px] font-medium text-[var(--color-ink)]" center>
+      <AppPageContent size="medium" className="relative z-20 flex h-[58px] shrink-0 items-center justify-between px-4 sm:px-5">
+        <ScaledText as="h1" className="text-[24px] font-bold text-[var(--color-ink)]">
           我的
         </ScaledText>
         <button
           onClick={() => setShowSettingsSheet(true)}
-          className="w-[44px] h-[44px] flex items-center justify-center rounded-full active:bg-[rgba(255,183,197,0.14)] transition-colors"
+          className="flex h-[40px] w-[40px] items-center justify-center rounded-[10px] bg-[var(--color-page-soft)] transition-colors active:opacity-75"
           aria-label="打开设置"
         >
           <SettingsIcon />
         </button>
-      </nav>
-
-      <div
-        className={`absolute inset-0 z-[1] pointer-events-none ${
-          isDark
-            ? 'bg-gradient-to-b from-transparent via-[rgba(18,18,26,0.06)] to-[rgba(18,18,26,0.18)]'
-            : 'bg-gradient-to-b from-transparent via-[rgba(255,248,243,0.18)] to-[rgba(255,248,243,0.42)]'
-        }`}
-      />
+      </AppPageContent>
 
       {/* Scrollable content */}
-      <div className="relative z-10 flex-1 overflow-y-auto px-4 pb-10">
+      <div className="relative z-10 mx-auto min-h-0 w-full max-w-[860px] flex-1 overflow-y-auto px-4 pb-[120px] sm:px-5">
         <button
           onClick={() => navigate('/settings/profile')}
-          className="w-full bg-[var(--color-glass-card)] backdrop-blur-[20px] rounded-[28px] shadow-[0_12px_34px_rgba(58,58,74,0.10)] p-5 mb-5 mt-4 border border-[var(--color-border-glass)] text-left active:scale-[0.99] transition-transform"
+          className="mb-3 mt-1 w-full px-1 py-5 text-left transition-opacity active:opacity-75"
         >
           <div className="flex items-center gap-4">
             <Avatar src={userAvatar || user?.avatar_url || undefined} size={72} border />
@@ -186,7 +163,7 @@ export function SettingsPage() {
                   className={`shrink-0 text-[11px] font-semibold rounded-full px-2.5 py-[3px] ${
                     membershipTier === 'free'
                       ? 'text-[var(--color-text-secondary)] bg-[var(--color-glass-55)]'
-                      : 'text-white bg-gradient-to-r from-[#B991FF] to-[#FF8FAB]'
+                      : 'bg-[var(--color-primary-500)] text-white'
                   }`}
                 >
                   {PROFILE_TIER_LABELS[membershipTier] ?? PROFILE_TIER_LABELS.free}
@@ -200,33 +177,34 @@ export function SettingsPage() {
           </div>
         </button>
 
-        <WalletPanel
-          balance={balance}
-          onRecharge={() => navigate('/wallet')}
-          onDetails={() => navigate('/credits/transactions')}
-        />
+        <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
+          <WalletPanel
+            balance={balance}
+            onRecharge={() => navigate('/wallet')}
+            onDetails={() => navigate('/credits/transactions')}
+          />
 
-        <button
-          onClick={() => navigate('/membership')}
-          className={`relative w-full min-h-[184px] overflow-hidden mt-5 rounded-[28px] border shadow-[0_16px_38px_rgba(58,58,74,0.18)] p-5 text-left active:scale-[0.99] transition-transform ${
-            isDark
-              ? 'border-[rgba(255,255,255,0.22)] bg-[linear-gradient(135deg,rgba(58,52,86,0.94),rgba(113,91,134,0.90)_54%,rgba(255,183,197,0.70))]'
-              : 'border-[rgba(255,220,232,0.80)] bg-[linear-gradient(135deg,rgba(255,255,255,0.92),rgba(255,240,246,0.88)_52%,rgba(255,183,197,0.54))]'
-          }`}
-        >
+          <button
+            onClick={() => navigate('/membership')}
+            className={`relative min-h-[148px] w-full overflow-hidden rounded-[14px] border p-4 text-left shadow-[0_6px_22px_rgba(24,24,32,0.10)] transition-opacity active:opacity-90 ${
+              isDark
+                ? 'border-white/10 bg-[linear-gradient(135deg,#24242B,#39343B_54%,#714A57)]'
+                : 'border-[rgba(255,110,138,0.18)] bg-[linear-gradient(135deg,#FFFFFF,#FFF4F6_55%,#F1D4DA)]'
+            }`}
+          >
           <div className="absolute inset-x-0 top-0 h-px bg-white/60" />
           <img
             src={memberGemImage}
             alt=""
-            className="absolute right-[4px] bottom-[-6px] w-[116px] h-[116px] object-contain pointer-events-none drop-shadow-[0_10px_28px_rgba(120,90,160,0.28)]"
+            className="pointer-events-none absolute bottom-[-6px] right-[-2px] h-[88px] w-[88px] object-contain drop-shadow-[0_10px_24px_rgba(90,54,68,0.24)]"
           />
-          <div className="relative min-h-[144px]">
+          <div className="relative min-h-[116px]">
             <div className="relative z-10 flex items-center justify-between gap-3">
               <div className="flex items-center gap-2 min-w-0">
                 <span className={`w-[34px] h-[34px] rounded-[12px] flex items-center justify-center border ${
                   isDark
-                    ? 'bg-[linear-gradient(135deg,rgba(255,255,255,0.18),rgba(185,145,255,0.18))] border-white/14'
-                    : 'bg-[linear-gradient(135deg,rgba(255,255,255,0.86),rgba(245,236,255,0.72))] border-white/70'
+                    ? 'border-white/14 bg-white/10'
+                    : 'border-white/70 bg-white/75'
                 }`}>
                   <CrownIcon tone={isDark ? 'light' : 'brand'} />
                 </span>
@@ -238,8 +216,8 @@ export function SettingsPage() {
                 查看权益
               </span>
             </div>
-            <div className="ml-[18px] mt-7 max-w-[58%] min-w-0">
-              <ScaledText as="p" className={`inline-block rounded-full px-3 py-1 text-[12px] font-semibold ${isDark ? 'bg-[rgba(185,145,255,0.42)] text-white' : 'bg-[rgba(255,143,171,0.26)] text-[#FF6E8A]'}`}>
+            <div className="ml-[2px] mt-5 max-w-[72%] min-w-0">
+              <ScaledText as="p" className={`inline-block rounded-full px-3 py-1 text-[12px] font-semibold ${isDark ? 'bg-white/12 text-white' : 'bg-[rgba(255,143,171,0.20)] text-[#E85577]'}`}>
                 {TIER_LABELS[membershipTier] ?? '体验版'}会员
               </ScaledText>
               <ScaledText as="p" className={`text-[14px] mt-3 leading-[1.55] ${isDark ? 'text-white/82' : 'text-[var(--color-text-secondary)]'}`}>
@@ -247,12 +225,14 @@ export function SettingsPage() {
               </ScaledText>
             </div>
           </div>
-        </button>
+          </button>
+        </div>
 
         <InviteShowcase
           code={inviteStatus?.invite_code}
           invitedCount={inviteStatus?.invited_count ?? 0}
           totalReward={inviteStatus?.total_reward ?? 0}
+          isDark={isDark}
           onInvite={() => navigate('/invite')}
         />
 
@@ -260,6 +240,8 @@ export function SettingsPage() {
           <InviteCodeCard code={inviteStatus.invite_code} onCopy={copyInviteCode} onOpen={() => navigate('/invite')} />
         )}
       </div>
+
+      <TabBar />
 
       <BottomSheet open={showSettingsSheet} onClose={() => setShowSettingsSheet(false)}>
         <div className="max-h-[78vh] overflow-y-auto pb-2">
@@ -465,7 +447,7 @@ export function SettingsPage() {
       </BottomSheet>
 
       <Toast visible={toast.visible} message={toast.message} onDismiss={() => setToast({ visible: false, message: '' })} />
-    </div>
+    </AppPageShell>
   )
 }
 
@@ -481,7 +463,7 @@ function SectionLabel({ children }: { children: ReactNode }) {
 
 function GroupCard({ children }: { children: ReactNode }) {
   return (
-    <div className="bg-[var(--color-glass-card)] backdrop-blur-[20px] rounded-[20px] shadow-[var(--shadow-card)] overflow-hidden border border-[var(--color-border-glass)] mb-2">
+    <div className="mb-2 overflow-hidden rounded-[12px] border border-[var(--color-divider)] bg-[var(--color-page-surface)]">
       {children}
     </div>
   )
@@ -497,7 +479,7 @@ function WalletPanel({
   onDetails: () => void
 }) {
   return (
-    <div className="relative overflow-hidden rounded-[28px] bg-[var(--color-glass-card)] backdrop-blur-[20px] border border-[var(--color-border-glass)] shadow-[var(--shadow-card)] p-5">
+    <div className="relative min-h-[148px] overflow-hidden rounded-[14px] border border-[var(--color-divider)] bg-[var(--color-page-surface)] p-4 shadow-[0_6px_22px_rgba(24,24,32,0.08)]">
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-2 min-w-0">
           <span className="w-[30px] h-[30px] rounded-[11px] bg-[rgba(255,183,197,0.16)] flex items-center justify-center text-[var(--color-primary)]">
@@ -512,11 +494,11 @@ function WalletPanel({
         </button>
       </div>
 
-      <div className="flex items-end justify-between gap-5 mt-7">
+      <div className="mt-5 flex items-end justify-between gap-2.5">
         <WalletAmount value={balance} label="yuoyuo币余额" />
         <button
           onClick={onRecharge}
-          className="h-[42px] px-6 rounded-full bg-gradient-to-r from-[#FFB7C5] to-[#FF8FAB] text-white text-[14px] font-semibold shadow-[var(--shadow-btn)] active:scale-[0.97] transition-transform shrink-0"
+          className="h-[38px] shrink-0 rounded-full bg-[var(--color-primary-500)] px-4 text-[13px] font-semibold text-white shadow-[var(--shadow-btn)] transition-transform active:scale-[0.97]"
         >
           充值
         </button>
@@ -547,43 +529,46 @@ function InviteShowcase({
   code,
   invitedCount,
   totalReward,
+  isDark,
   onInvite,
 }: {
   code?: string
   invitedCount: number
   totalReward: number
+  isDark: boolean
   onInvite: () => void
 }) {
   return (
     <button
       onClick={onInvite}
-      className="relative w-full overflow-hidden mt-5 rounded-[28px] bg-[var(--color-glass-card)] backdrop-blur-[20px] border border-[var(--color-border-glass)] shadow-[var(--shadow-card)] p-5 text-left active:scale-[0.99] transition-transform"
+      className={`relative mt-3 min-h-[154px] w-full overflow-hidden rounded-[16px] border p-5 text-left shadow-[0_8px_24px_rgba(73,48,62,0.11)] transition-opacity active:opacity-90 ${
+        isDark
+          ? 'border-white/10 bg-[linear-gradient(135deg,#2A232A_0%,#3A2933_58%,#5C3C49_100%)]'
+          : 'border-white/75 bg-[linear-gradient(135deg,#FFF8F3_0%,#FFE7ED_58%,#F2D4E1_100%)]'
+      }`}
     >
       <img
         src="/assets/settings/invite-mascot.webp"
         alt=""
-        className="absolute right-[-14px] top-[-40px] w-[210px] h-[273px] object-contain pointer-events-none"
+        className="pointer-events-none absolute right-[-12px] top-[-66px] h-[280px] w-[204px] object-contain drop-shadow-[0_10px_18px_rgba(232,85,119,0.16)]"
       />
-      <div className="relative pr-[116px] min-h-[196px] flex flex-col justify-between">
+      <div className="relative flex min-h-[124px] flex-col justify-between pr-[145px]">
         <div>
-          <ScaledText as="p" className="text-[15px] font-semibold text-[var(--color-ink)]">
+          <ScaledText as="p" className={`text-[14px] font-semibold ${isDark ? 'text-white/82' : 'text-[#C94A6A]'}`}>
             邀请好友
           </ScaledText>
-          <ScaledText as="h3" className="text-[24px] font-bold text-[var(--color-ink)] leading-[1.22] mt-5">
-            邀请好友<br />共同获得奖励
-          </ScaledText>
-          <ScaledText as="p" className="text-[13px] text-[var(--color-text-secondary)] leading-[1.65] mt-3">
-            邀请好友完成首次聊天后，奖励会自动发放到账户。
+          <ScaledText as="h3" className={`mt-2 text-[20px] font-bold leading-[1.3] ${isDark ? 'text-white' : 'text-[var(--color-ink)]'}`}>
+            邀请好友，一起得奖励
           </ScaledText>
           {code && (
-            <div className="flex items-center gap-3 mt-4 text-[12px] text-[var(--color-text-muted)]">
+            <div className="mt-3 flex items-center gap-3 text-[12px] text-[var(--color-text-muted)]">
               <span>已邀请 {invitedCount}</span>
               <span>累计 {totalReward} 币</span>
             </div>
           )}
         </div>
-        <span className="self-end min-w-[168px] h-[40px] rounded-full bg-gradient-to-r from-[#FFB7C5] to-[#FF8FAB] text-white text-[14px] font-semibold flex items-center justify-center shadow-[var(--shadow-btn)]">
-          立即邀请好友
+        <span className="flex h-[36px] min-w-[126px] self-start items-center justify-center rounded-full bg-[var(--color-primary-500)] px-4 text-[13px] font-semibold text-white shadow-[var(--shadow-btn)]">
+          邀请好友
         </span>
       </div>
     </button>
@@ -600,7 +585,7 @@ function InviteCodeCard({
   onOpen: () => void
 }) {
   return (
-    <div className="mt-5 rounded-[24px] bg-[var(--color-glass-card)] backdrop-blur-[20px] border border-[var(--color-border-glass)] shadow-[var(--shadow-card)] px-5 py-4">
+    <div className="mt-3 rounded-[12px] border border-[var(--color-divider)] bg-[var(--color-page-surface)] px-5 py-4">
       <div className="flex items-center justify-between gap-3">
         <ScaledText as="p" className="text-[15px] font-semibold text-[var(--color-ink)]">
           我的邀请码

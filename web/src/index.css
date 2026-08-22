@@ -68,6 +68,9 @@ input, textarea, select {
 /* ── Dark Theme Overrides ────────────────────────────────────── */
 [data-theme="dark"] {
   --color-bg-page: #1A1A2E;
+  --color-page-canvas: #15161A;
+  --color-page-surface: #202127;
+  --color-page-soft: #292A31;
   --color-surface: #12121A;
   --color-surface-card: rgba(30, 30, 46, 0.88);
   --color-ink: #E4E4E7;
@@ -83,6 +86,61 @@ input, textarea, select {
   --color-border-subtle: rgba(255, 255, 255, 0.06);
   --color-slider-track: rgba(255, 255, 255, 0.12);
   --color-bg-login: #12121A;
+}
+
+/* Quiet page atmosphere shared by the mobile hubs and account surfaces.
+   The background is CSS-only: content stays in focus and pages do not borrow
+   a character or chat artwork as a full-screen wallpaper. */
+.app-atmosphere {
+  background-color: var(--color-page-canvas);
+  background-image:
+    linear-gradient(125deg, rgba(255,183,197,0.15) 0 12%, transparent 12.2%),
+    linear-gradient(235deg, rgba(167,199,231,0.13) 0 10%, transparent 10.2%),
+    linear-gradient(180deg, rgba(255,255,255,0.94) 0%, rgba(249,247,249,0.96) 34%, rgba(244,245,247,1) 100%);
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+}
+
+[data-theme="dark"] .app-atmosphere {
+  background-color: #171719;
+  background-image:
+    linear-gradient(125deg, rgba(255,110,138,0.07) 0 12%, transparent 12.2%),
+    linear-gradient(235deg, rgba(109,170,206,0.06) 0 10%, transparent 10.2%),
+    linear-gradient(180deg, rgba(255,255,255,0.035) 0%, rgba(23,23,25,0.96) 42%, rgba(20,20,22,1) 100%);
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: 100% 100%;
+}
+
+.character-discovery-chrome {
+  background-color: rgba(255,255,255,0.68);
+  background-image: linear-gradient(112deg, rgba(255,183,197,0.24), rgba(255,255,255,0.76) 46%, rgba(167,199,231,0.20));
+  border-bottom: 1px solid rgba(58,58,74,0.06);
+  box-shadow: 0 10px 28px rgba(73,48,62,0.055);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+.character-discovery-chrome::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 0 auto;
+  width: 38%;
+  pointer-events: none;
+  background: rgba(167,199,231,0.10);
+  clip-path: polygon(38% 0, 100% 0, 100% 100%, 0 100%);
+}
+
+[data-theme="dark"] .character-discovery-chrome {
+  background-color: rgba(28,28,32,0.82);
+  background-image: linear-gradient(112deg, rgba(255,110,138,0.10), rgba(28,28,32,0.86) 48%, rgba(109,170,206,0.08));
+  border-bottom-color: rgba(255,255,255,0.07);
+  box-shadow: 0 10px 28px rgba(0,0,0,0.16);
+}
+
+[data-theme="dark"] .character-discovery-chrome::before {
+  background: rgba(109,170,206,0.045);
 }
 
 /* ── Animations ──────────────────────────────────────────────── */

@@ -15,9 +15,9 @@ const GENRE_GRADIENT: Record<string, string> = {
   末日无限流: 'linear-gradient(135deg, #C7A7A7 0%, #8E6B6B 100%)',
   修仙: 'linear-gradient(135deg, #BEE3D4 0%, #7ECBA5 100%)',
   古风宫斗: 'linear-gradient(135deg, #E7C7A7 0%, #C79A6B 100%)',
-  现代豪门: 'linear-gradient(135deg, #C8B6FF 0%, #A78BFA 100%)',
+  现代豪门: 'linear-gradient(135deg, #F2B8C4 0%, #B48691 100%)',
   西幻: 'linear-gradient(135deg, #A7C7E7 0%, #6B9BD1 100%)',
-  其他: 'linear-gradient(135deg, #E0D6F0 0%, #C8B6FF 100%)',
+  其他: 'linear-gradient(135deg, #D7D4D8 0%, #9EABB1 100%)',
 }
 
 export function genreGradient(genre: string): string {
@@ -35,7 +35,7 @@ export function ScenarioCard({ scenario, onOpen }: ScenarioCardProps) {
   return (
     <button
       onClick={() => onOpen(id)}
-      className="group relative flex flex-col text-left w-full rounded-[20px] overflow-hidden bg-[var(--color-glass-55)] backdrop-blur-[12px] border border-[var(--color-border-glass)] shadow-[var(--shadow-soft)] active:scale-[0.97] transition-transform"
+      className="group relative flex w-full flex-col overflow-hidden rounded-[12px] border border-[var(--color-divider)] bg-[var(--color-page-surface)] text-left shadow-[0_4px_16px_rgba(24,24,32,0.06)] transition-opacity active:opacity-90"
     >
       {/* Cover — the genre gradient always paints instantly as a placeholder so
           the grid never shows blank tiles while covers stream in; the image

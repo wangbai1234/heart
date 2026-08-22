@@ -261,6 +261,7 @@ def build_soul_spec_from_draft(
     """
     today = now or date.today().isoformat()
     tmpl = _STYLE_TEMPLATES[draft.greeting_style]
+    soul = draft.soul_profile
     s = draft.sliders
 
     # ── Display name ────────────────────────────────────────────────────────
@@ -344,28 +345,28 @@ def build_soul_spec_from_draft(
 
     # ── identity_anchor ──────────────────────────────────────────────────────
     identity_anchor = IdentityAnchor(
-        archetype=tmpl["archetype"],
+        archetype=draft.archetype_label or tmpl["archetype"],
         core_wound=CoreWound(
-            essence=tmpl["wound_essence"],
-            manifest=tmpl["wound_manifest"],
-            defense=tmpl["wound_defense"],
-            private_truth=tmpl["wound_private"],
+            essence=soul.wound_essence if soul else tmpl["wound_essence"],
+            manifest=soul.wound_manifest if soul else tmpl["wound_manifest"],
+            defense=soul.wound_defense if soul else tmpl["wound_defense"],
+            private_truth=soul.private_truth if soul else tmpl["wound_private"],
         ),
         core_desire=CoreDesire(
-            surface=tmpl["desire_surface"],
-            hidden=tmpl["desire_hidden"],
-            deepest=tmpl["desire_deepest"],
+            surface=soul.desire_surface if soul else tmpl["desire_surface"],
+            hidden=soul.desire_hidden if soul else tmpl["desire_hidden"],
+            deepest=soul.desire_deepest if soul else tmpl["desire_deepest"],
         ),
         core_fear=CoreFear(
-            ultimate=tmpl["fear_ultimate"],
-            daily=tmpl["fear_daily"],
-            shadow=tmpl["fear_shadow"],
+            ultimate=soul.fear_ultimate if soul else tmpl["fear_ultimate"],
+            daily=soul.fear_daily if soul else tmpl["fear_daily"],
+            shadow=soul.fear_shadow if soul else tmpl["fear_shadow"],
         ),
         core_belief=CoreBelief(
-            about_self=tmpl["belief_self"],
-            about_others=tmpl["belief_others"],
-            about_love=tmpl["belief_love"],
-            about_time=tmpl["belief_time"],
+            about_self=soul.belief_self if soul else tmpl["belief_self"],
+            about_others=soul.belief_others if soul else tmpl["belief_others"],
+            about_love=soul.belief_love if soul else tmpl["belief_love"],
+            about_time=soul.belief_time if soul else tmpl["belief_time"],
         ),
         voice_dna=voice_dna,
         anti_patterns=AntiPatterns(
@@ -426,7 +427,7 @@ def build_soul_spec_from_draft(
         default_distance=tmpl["default_distance"],
         intimacy_resistance=round(_invert(s.warmth) * 0.6 + 0.1, 4),
         softening_curve=tmpl["softening_curve"],
-        softening_triggers=tmpl["softening_triggers"],
+        softening_triggers=soul.softening_triggers if soul else tmpl["softening_triggers"],
     )
 
     # ── test_fixtures ────────────────────────────────────────────────────────

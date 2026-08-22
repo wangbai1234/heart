@@ -53,6 +53,33 @@ class SliderSet(BaseModel, extra="forbid"):
     steadiness: Annotated[float, Field(ge=0.0, le=1.0)] = 0.5
 
 
+class SoulProfileDraft(BaseModel, extra="forbid"):
+    """Character-specific inner life produced or authored during creation.
+
+    The deterministic builder still owns SoulSpec shape and safety baselines;
+    this model supplies the character-specific content that used to come from
+    one of five generic greeting-style templates.
+    """
+
+    wound_essence: Annotated[str, Field(min_length=4, max_length=160)]
+    wound_manifest: Annotated[str, Field(min_length=4, max_length=200)]
+    wound_defense: Annotated[str, Field(min_length=4, max_length=160)]
+    private_truth: Annotated[str, Field(min_length=4, max_length=160)]
+    desire_surface: Annotated[str, Field(min_length=2, max_length=120)]
+    desire_hidden: Annotated[str, Field(min_length=4, max_length=160)]
+    desire_deepest: Annotated[str, Field(min_length=4, max_length=160)]
+    fear_ultimate: Annotated[str, Field(min_length=4, max_length=160)]
+    fear_daily: Annotated[str, Field(min_length=4, max_length=160)]
+    fear_shadow: Annotated[str, Field(min_length=4, max_length=160)]
+    belief_self: Annotated[str, Field(min_length=4, max_length=160)]
+    belief_others: Annotated[str, Field(min_length=4, max_length=160)]
+    belief_love: Annotated[str, Field(min_length=4, max_length=160)]
+    belief_time: Annotated[str, Field(min_length=4, max_length=160)]
+    softening_triggers: list[Annotated[str, Field(min_length=2, max_length=80)]] = Field(
+        min_length=2, max_length=5
+    )
+
+
 class CharacterDraft(BaseModel, extra="forbid"):
     """Simplified character creation form — expanded into a full SoulSpec server-side.
 
@@ -108,6 +135,14 @@ class CharacterDraft(BaseModel, extra="forbid"):
     # -only, not fed to the model). Falls back to persona's first line when
     # omitted. Read by routes_characters._derive_profile_presentation.
     tagline: Optional[Annotated[str, Field(max_length=60)]] = None
+    # A distinct story hook for the profile's 叙引 card. It must not merely
+    # repeat tagline/intro; quick-prefill enforces that quality boundary.
+    one_liner: Optional[Annotated[str, Field(max_length=120)]] = None
+    # Short public identity label, e.g. "急诊科医生" or "流亡星舰领航员".
+    archetype_label: Optional[Annotated[str, Field(max_length=40)]] = None
+    # Character-specific psychological core. Older/manual drafts may omit it
+    # and continue to use the greeting-style compatibility template.
+    soul_profile: Optional[SoulProfileDraft] = None
     sliders: SliderSet = Field(default_factory=SliderSet)
     locale: str = "zh"
     # Intended visibility once the character is published.

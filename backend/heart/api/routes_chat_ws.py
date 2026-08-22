@@ -1072,6 +1072,9 @@ async def _handle_chat_message(
             from heart.ss07_orchestration.models import TurnRequest
 
             history = await _load_recent_conversation_history(db, user_uuid, character_id)
+            from heart.api.routes_masks import get_bound_mask
+
+            user_mask = await get_bound_mask(db, user_uuid, character_id)
             req = TurnRequest(
                 user_id=user_uuid,
                 character_id=character_id,
@@ -1080,6 +1083,7 @@ async def _handle_chat_message(
                 trace_id=uuid.UUID(turn_id),
                 model=model,
                 voice_enabled=bool(effective_voice),
+                user_mask=user_mask,
             )
 
             await ws.send_json(

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { useThemeStore } from '../stores/themeStore'
 import { useToastStore } from '../stores/toastStore'
@@ -48,6 +48,19 @@ const SLIDER_LABELS: Record<string, string> = {
 }
 
 const MAX_REGENERATE = 3
+const PREFILL_CLIENT_TIMEOUT_MS = 60_000
+
+function splitTags(value: string): string[] {
+  return value.split(/[、,，]/).map((item) => item.trim()).filter(Boolean).slice(0, 5)
+}
+
+function splitSpeechSamples(value: string): string[] {
+  return value.split('\n').map((item) => item.trim()).filter(Boolean).slice(0, 5)
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException && (error.name === 'AbortError' || error.name === 'TimeoutError')
+}
 
 /**
  * 快速创建确认页 - 批4
@@ -87,7 +100,10 @@ export function QuickConfirmPage() {
   const [moreExpanded, setMoreExpanded] = useState(false)
   const [regenerateCount, setRegenerateCount] = useState(0)
   const [regenerating, setRegenerating] = useState(false)
+  const [enriching, setEnriching] = useState(false)
+  const [enrichingElapsed, setEnrichingElapsed] = useState(0)
   const [creating, setCreating] = useState(false)
+  const prefillAbortRef = useRef<AbortController | null>(null)
   // 编辑模式：拉取草稿并回填全部字段
   const [loadingDraft, setLoadingDraft] = useState(isEdit)
 
@@ -98,6 +114,18 @@ export function QuickConfirmPage() {
   )
   const [sliders, setSliders] = useState<Record<string, number>>(initialPrefill?.sliders ?? {})
   const [catchphrases, setCatchphrases] = useState<string[]>(initialPrefill?.catchphrases ?? [])
+  const [tagline, setTagline] = useState(initialPrefill?.tagline ?? '')
+  const [intro, setIntro] = useState(initialPrefill?.intro ?? '')
+  const [oneLiner, setOneLiner] = useState(initialPrefill?.one_liner ?? '')
+  const [archetypeLabel, setArchetypeLabel] = useState(initialPrefill?.archetype_label ?? '')
+  const [backstory, setBackstory] = useState(initialPrefill?.backstory ?? '')
+  const [tagsText, setTagsText] = useState((initialPrefill?.tags ?? []).join('、'))
+  const [speechSamplesText, setSpeechSamplesText] = useState(
+    (initialPrefill?.speech_samples ?? []).join('\n'),
+  )
+  const [soulProfile, setSoulProfile] = useState<QuickPrefillResponse['soul_profile'] | undefined>(
+    initialPrefill?.soul_profile,
+  )
 
   useEffect(() => {
     if (!editId) return
@@ -114,6 +142,14 @@ export function QuickConfirmPage() {
         setGreetingStyle(draft.greeting_style ?? 'warm')
         if (draft.sliders) setSliders(draft.sliders)
         setCatchphrases(draft.catchphrases ?? [])
+        setTagline(draft.tagline ?? '')
+        setIntro(draft.intro ?? '')
+        setOneLiner(draft.one_liner ?? '')
+        setArchetypeLabel(draft.archetype_label ?? '')
+        setBackstory(draft.backstory ?? '')
+        setTagsText((draft.tags ?? []).join('、'))
+        setSpeechSamplesText((draft.speech_samples ?? []).join('\n'))
+        setSoulProfile(draft.soul_profile)
         if (draft.visibility === 'unlisted') setVisibility('unlisted')
         // 主题：按背景色反查预置
         const matched = THEME_PRESETS.find((p) => p.palette.bg === draft.ui_chrome?.bg)
@@ -129,6 +165,20 @@ export function QuickConfirmPage() {
       cancelled = true
     }
   }, [editId, showToast])
+
+  useEffect(() => {
+    if (!enriching) {
+      setEnrichingElapsed(0)
+      return
+    }
+    const startedAt = Date.now()
+    const timer = window.setInterval(() => {
+      setEnrichingElapsed(Math.floor((Date.now() - startedAt) / 1000))
+    }, 1000)
+    return () => window.clearInterval(timer)
+  }, [enriching])
+
+  useEffect(() => () => prefillAbortRef.current?.abort(), [])
 
   // 新建流程缺 state（直接访问URL）→ 回快速创建。编辑流程不受此限。
   if (!isEdit && (!navBase || !initialPrefill)) {
@@ -184,18 +234,68 @@ export function QuickConfirmPage() {
 
     setRegenerating(true)
     try {
-      const result = await quickPrefill({
-        display_name: name,
-        gender,
-        persona,
-      })
+      const result = await requestQuickPrefill()
       setOpening(result.opening)
       setRegenerateCount((c) => c + 1)
     } catch (err) {
-      const msg = err instanceof ApiError ? err.message : '重新生成失败，请稍后再试'
+      const msg = isAbortError(err)
+        ? '生成超时或已取消，请重试'
+        : err instanceof ApiError ? err.message : '重新生成失败，请稍后再试'
       showToast(msg, 'error')
     } finally {
       setRegenerating(false)
+    }
+  }
+
+  async function requestQuickPrefill(): Promise<QuickPrefillResponse> {
+    prefillAbortRef.current?.abort()
+    const controller = new AbortController()
+    prefillAbortRef.current = controller
+    const timer = window.setTimeout(() => controller.abort(), PREFILL_CLIENT_TIMEOUT_MS)
+    try {
+      return await quickPrefill({ display_name: name, gender, persona }, controller.signal)
+    } finally {
+      window.clearTimeout(timer)
+      if (prefillAbortRef.current === controller) prefillAbortRef.current = null
+    }
+  }
+
+  async function handleEnrich() {
+    if (regenerateCount >= MAX_REGENERATE) {
+      showToast('AI 完善次数已用完，仍可手动修改设定', 'error')
+      return
+    }
+    if (!name.trim() || persona.trim().length < 20) {
+      showToast('请先填写名字和至少 20 字的角色描述', 'error')
+      return
+    }
+
+    setEnriching(true)
+    try {
+      const result = await requestQuickPrefill()
+      setAgeRange(result.age_range)
+      setGreetingStyle(result.greeting_style)
+      setSliders(result.sliders)
+      setTagline(result.tagline)
+      setIntro(result.intro)
+      setOneLiner(result.one_liner)
+      setArchetypeLabel(result.archetype_label)
+      setBackstory(result.backstory)
+      setTagsText(result.tags.join('、'))
+      setCatchphrases(result.catchphrases)
+      setSpeechSamplesText(result.speech_samples.join('\n'))
+      setSoulProfile(result.soul_profile)
+      setOpening(result.opening)
+      setThemeId(result.theme_preset_id)
+      setRegenerateCount((count) => count + 1)
+      showToast('角色档案已完善，请确认后保存', 'success')
+    } catch (err) {
+      const message = isAbortError(err)
+        ? 'AI 完善超时或已取消，请重试'
+        : err instanceof ApiError ? err.message : 'AI 完善失败，请稍后再试'
+      showToast(message, 'error')
+    } finally {
+      setEnriching(false)
     }
   }
 
@@ -226,6 +326,14 @@ export function QuickConfirmPage() {
         cover_url: coverUrl,
         gender,
         persona,
+        tagline: tagline.trim() || undefined,
+        intro: intro.trim() || undefined,
+        one_liner: oneLiner.trim() || undefined,
+        archetype_label: archetypeLabel.trim() || undefined,
+        backstory: backstory.trim() || undefined,
+        tags: splitTags(tagsText),
+        speech_samples: splitSpeechSamples(speechSamplesText),
+        soul_profile: soulProfile,
         creation_mode: 'quick' as const,
         greeting_style: greetingStyle,
         age_range: ageRange,
@@ -272,8 +380,15 @@ export function QuickConfirmPage() {
   const summaryLine = [
     ageRange,
     GREETING_STYLE_LABELS[greetingStyle] ?? greetingStyle,
+    `${splitTags(tagsText).length} 个标签`,
     `${catchphrases.length} 条口癖`,
   ].join(' · ')
+
+  const enrichingLabel = enrichingElapsed < 5
+    ? '正在构建角色档案...'
+    : enrichingElapsed < 10
+      ? '正在完善人物经历与语言风格...'
+      : '当前模型响应较慢，正在尝试备用模型...'
 
   return (
     <div
@@ -384,7 +499,7 @@ export function QuickConfirmPage() {
             <label className="text-[14px] font-medium text-[var(--color-ink)]">开场白</label>
             <button
               onClick={handleRegenerate}
-              disabled={regenerating || regenerateCount >= MAX_REGENERATE}
+              disabled={regenerating || enriching || regenerateCount >= MAX_REGENERATE}
               className="text-[13px] font-medium text-[var(--color-primary)] disabled:opacity-40 active:scale-[0.96] transition-transform"
             >
               {regenerating
@@ -531,6 +646,111 @@ export function QuickConfirmPage() {
 
           {moreExpanded && (
             <div className={`mt-2 p-4 rounded-[12px] ${isDark ? 'bg-[var(--color-glass-55)]' : 'bg-white/60'}`}>
+              <div className="mb-4 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleEnrich}
+                  disabled={enriching || regenerating || regenerateCount >= MAX_REGENERATE}
+                  className="min-w-0 flex-1 min-h-[42px] rounded-[11px] border border-[rgba(255,143,171,0.35)] bg-[rgba(255,143,171,0.10)] px-3 py-2 text-[13px] leading-snug font-medium text-[#E86083] disabled:opacity-60 active:scale-[0.98] transition-transform"
+                >
+                  {enriching ? enrichingLabel : 'AI 完善全部设定'}
+                </button>
+                {enriching && (
+                  <button
+                    type="button"
+                    onClick={() => prefillAbortRef.current?.abort()}
+                    className="shrink-0 h-[42px] px-3 rounded-[11px] border border-[var(--color-border-subtle)] text-[13px] text-[var(--color-text-secondary)] active:scale-[0.96] transition-transform"
+                  >
+                    取消
+                  </button>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-2.5 mb-3">
+                <label className="block min-w-0">
+                  <span className="block text-[13px] text-[var(--color-text-secondary)] mb-1">身份标签</span>
+                  <input
+                    type="text"
+                    value={archetypeLabel}
+                    maxLength={40}
+                    onChange={(e) => setArchetypeLabel(e.target.value)}
+                    placeholder="例如：急诊科医生"
+                    className="w-full min-w-0 px-3 py-2 rounded-[10px] text-[14px] bg-[var(--color-glass-35)] border border-[var(--color-border-subtle)] text-[var(--color-ink)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-primary)]"
+                  />
+                </label>
+                <label className="block min-w-0">
+                  <span className="block text-[13px] text-[var(--color-text-secondary)] mb-1">角色短句</span>
+                  <input
+                    type="text"
+                    value={tagline}
+                    maxLength={60}
+                    onChange={(e) => setTagline(e.target.value)}
+                    placeholder="封面下的一句话"
+                    className="w-full min-w-0 px-3 py-2 rounded-[10px] text-[14px] bg-[var(--color-glass-35)] border border-[var(--color-border-subtle)] text-[var(--color-ink)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-primary)]"
+                  />
+                </label>
+              </div>
+
+              <label className="block mb-3">
+                <span className="block text-[13px] text-[var(--color-text-secondary)] mb-1">关于TA</span>
+                <textarea
+                  value={intro}
+                  maxLength={500}
+                  rows={4}
+                  onChange={(e) => setIntro(e.target.value)}
+                  placeholder="身份、性格、习惯与当下生活"
+                  className="w-full px-3 py-2 rounded-[10px] text-[14px] leading-relaxed resize-none bg-[var(--color-glass-35)] border border-[var(--color-border-subtle)] text-[var(--color-ink)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-primary)]"
+                />
+              </label>
+
+              <label className="block mb-3">
+                <span className="block text-[13px] text-[var(--color-text-secondary)] mb-1">叙引</span>
+                <textarea
+                  value={oneLiner}
+                  maxLength={120}
+                  rows={3}
+                  onChange={(e) => setOneLiner(e.target.value)}
+                  placeholder="人物矛盾、故事悬念或关系切口"
+                  className="w-full px-3 py-2 rounded-[10px] text-[14px] leading-relaxed resize-none bg-[var(--color-glass-35)] border border-[var(--color-border-subtle)] text-[var(--color-ink)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-primary)]"
+                />
+              </label>
+
+              <label className="block mb-3">
+                <span className="block text-[13px] text-[var(--color-text-secondary)] mb-1">人物经历</span>
+                <textarea
+                  value={backstory}
+                  maxLength={1500}
+                  rows={5}
+                  onChange={(e) => setBackstory(e.target.value)}
+                  placeholder="重要经历，以及它如何塑造现在的TA"
+                  className="w-full px-3 py-2 rounded-[10px] text-[14px] leading-relaxed resize-none bg-[var(--color-glass-35)] border border-[var(--color-border-subtle)] text-[var(--color-ink)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-primary)]"
+                />
+              </label>
+
+              <label className="block mb-3">
+                <span className="block text-[13px] text-[var(--color-text-secondary)] mb-1">角色标签</span>
+                <input
+                  type="text"
+                  value={tagsText}
+                  onChange={(e) => setTagsText(e.target.value)}
+                  placeholder="用顿号分隔，最多 5 个"
+                  className="w-full px-3 py-2 rounded-[10px] text-[14px] bg-[var(--color-glass-35)] border border-[var(--color-border-subtle)] text-[var(--color-ink)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-primary)]"
+                />
+              </label>
+
+              <label className="block mb-3">
+                <span className="block text-[13px] text-[var(--color-text-secondary)] mb-1">说话样本</span>
+                <textarea
+                  value={speechSamplesText}
+                  rows={4}
+                  onChange={(e) => setSpeechSamplesText(e.target.value)}
+                  placeholder="每行一句，最多 5 句"
+                  className="w-full px-3 py-2 rounded-[10px] text-[14px] leading-relaxed resize-none bg-[var(--color-glass-35)] border border-[var(--color-border-subtle)] text-[var(--color-ink)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-primary)]"
+                />
+              </label>
+
+              <div className="my-4 h-px bg-[var(--color-border-subtle)]" />
+
               {/* 年龄段 */}
               <div className="mb-3">
                 <label className="block text-[13px] text-[var(--color-text-secondary)] mb-1">年龄段</label>

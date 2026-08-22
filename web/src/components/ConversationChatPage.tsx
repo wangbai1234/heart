@@ -25,6 +25,7 @@ import { useVoiceRecorder } from '../hooks/useVoiceRecorder'
 import { VoiceRecordingOverlay } from './VoiceRecordingOverlay'
 import { ModelSelectorSheet } from './ModelSelectorSheet'
 import { ChatPlusMenu } from './ChatPlusMenu'
+import { MaskSheet } from './MaskSheet'
 import { VoiceChatSheet } from './VoiceChatSheet'
 import { VoicePickerSheet } from './VoicePickerSheet'
 import { TransferSheet } from './TransferSheet'
@@ -197,12 +198,14 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
   // 分支式首聊引导：选中的切入角度索引（null = 未选，展示角度列表）
   const [starterBranch, setStarterBranch] = useState<number | null>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const composerRef = useRef<HTMLDivElement>(null)
 
   // Input-area sheets (migrated from the deleted /character-backstage page).
   const [textTierOpen, setTextTierOpen] = useState(false)
   const [plusMenuOpen, setPlusMenuOpen] = useState(false)
   const [voiceChatOpen, setVoiceChatOpen] = useState(false)
   const [transferOpen, setTransferOpen] = useState(false)
+  const [maskSheetOpen, setMaskSheetOpen] = useState(false)
   const [restartConfirmOpen, setRestartConfirmOpen] = useState(false)
   const [restarting, setRestarting] = useState(false)
   // Turn currently being rolled back (撤回) — disables its button while in flight.
@@ -214,6 +217,26 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
   const [transferSending, setTransferSending] = useState(false)
   const [voicePickerOpen, setVoicePickerOpen] = useState(false)
   const [characterGender, setCharacterGender] = useState<'male' | 'female' | undefined>(undefined)
+
+  useEffect(() => {
+    if (!plusMenuOpen) return
+
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      if (!composerRef.current?.contains(event.target as Node)) {
+        setPlusMenuOpen(false)
+      }
+    }
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setPlusMenuOpen(false)
+    }
+
+    document.addEventListener('pointerdown', closeOnOutsidePointer)
+    document.addEventListener('keydown', closeOnEscape)
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsidePointer)
+      document.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [plusMenuOpen])
 
   // Voice recording state
   const [isRecording, setIsRecording] = useState(false)
@@ -307,12 +330,9 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
       })
   }, [currentCharacterId])
 
-  const pageBg = isDark
-    ? '/assets/backgrounds/暗色聊天背景图.webp'
-    : '/assets/backgrounds/聊天背景图.webp'
   // Prefer the character's portrait cover as the chat backdrop; a dark scrim keeps
-  // the glass bubbles + text legible over an arbitrary photo. No cover → the
-  // static themed background above.
+  // the glass bubbles + text legible over an arbitrary photo. No cover falls back
+  // to the shared image-led page atmosphere.
   const coverBg = currentCharacter?.cover_url ?? null
 
   const currentCompanion = companions.find((c) => c.character_id === currentCharacterId)
@@ -1307,16 +1327,14 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
   }
 
   return (
-    <div className="relative w-full h-full flex flex-col overflow-hidden">
+    <div className="app-atmosphere relative w-full h-full flex flex-col overflow-hidden">
       {coverBg ? (
         <>
           <img src={coverBg} alt="" className="absolute inset-0 w-full h-full object-cover z-0" />
           <div className={`absolute inset-0 z-0 ${isDark ? 'bg-black/60' : 'bg-black/25'}`} />
           <div className="absolute inset-0 z-0 bg-gradient-to-b from-black/35 via-transparent to-black/45" />
         </>
-      ) : (
-        <img src={pageBg} alt="" className="absolute inset-0 w-full h-full object-cover z-0" />
-      )}
+      ) : null}
 
       {/* Header */}
       <header
@@ -1485,93 +1503,106 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
         </button>
       </div>
 
-      {/* Input bar */}
+      {/* Unified composer: input row and + menu share one continuous surface. */}
       <div
-        className={`relative z-20 mx-3 mb-3 flex items-center gap-2.5 px-4 py-3 backdrop-blur-[24px] rounded-[28px] border ${
+        ref={composerRef}
+        className={`relative z-20 mx-3 shrink-0 overflow-hidden rounded-[24px] border backdrop-blur-[24px] transition-[background-color,border-color,box-shadow] duration-200 ${
           isDark
-            ? 'bg-[rgba(26,26,46,0.7)] border-[rgba(255,255,255,0.08)] shadow-[var(--shadow-sheet)]'
-            : 'bg-[var(--color-glass-75)] border-[var(--color-border-glass)] shadow-[var(--shadow-sheet)]'
+            ? 'border-white/8 bg-[rgba(26,26,46,0.84)] shadow-[0_12px_36px_rgba(0,0,0,0.26)]'
+            : 'border-white/75 bg-[rgba(255,255,255,0.82)] shadow-[0_10px_32px_rgba(74,48,57,0.13)]'
         }`}
-        style={{ marginBottom: plusMenuOpen ? 8 : 'calc(16px + var(--safe-bottom))' }}
+        style={{ marginBottom: 'calc(12px + var(--safe-bottom))' }}
       >
-        {/* Interrupt button when streaming, add button otherwise */}
-        {isStreaming ? (
+        <div className="flex min-h-[60px] items-center gap-2 px-3 py-2.5">
+          {/* Interrupt button when streaming, microphone otherwise */}
+          {isStreaming ? (
+            <button
+              type="button"
+              onClick={handleInterrupt}
+              aria-label="停止回复"
+              className="flex h-[40px] w-[40px] shrink-0 items-center justify-center"
+            >
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="var(--color-primary)">
+                <rect x="6" y="6" width="12" height="12" rx="2" />
+              </svg>
+            </button>
+          ) : (
+            <button
+              type="button"
+              aria-label="按住说话"
+              className="flex h-[40px] w-[40px] shrink-0 touch-none select-none items-center justify-center"
+              onPointerDown={handleMicPointerDown}
+              onPointerMove={handleMicPointerMove}
+              onPointerUp={handleMicPointerUp}
+              onPointerCancel={handleMicPointerUp}
+            >
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={isStreaming ? (isDark ? '#444' : '#DDD') : (isDark ? '#999' : '#888')} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="9" y="2" width="6" height="11" rx="3" />
+                <path d="M5 10a7 7 0 0 0 14 0" />
+                <line x1="12" y1="19" x2="12" y2="22" />
+                <line x1="8" y1="22" x2="16" y2="22" />
+              </svg>
+            </button>
+          )}
+          <input
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onFocus={() => setPlusMenuOpen(false)}
+            onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+            placeholder={isStreaming ? '正在回复中…' : `想和${profile.shortName}说点什么…`}
+            disabled={isStreaming}
+            className={`min-w-0 flex-1 bg-transparent text-[16px] outline-none ${
+              isDark ? 'text-[#EFE7DD] placeholder-[rgba(228,228,231,0.3)]' : 'text-[var(--color-ink)] placeholder-[var(--color-text-placeholder)]'
+            }`}
+          />
           <button
-            onClick={handleInterrupt}
-            className="w-[40px] h-[40px] flex items-center justify-center shrink-0"
+            type="button"
+            onClick={handleSend}
+            aria-label="发送"
+            disabled={isStreaming || !input.trim()}
+            className={`flex h-[40px] w-[40px] shrink-0 items-center justify-center rounded-full bg-gradient-to-r from-[#FFB7C5] to-[#FF8FAB] shadow-[var(--shadow-send)] transition-transform active:scale-90 ${
+              isStreaming || !input.trim() ? 'opacity-45' : ''
+            }`}
           >
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="var(--color-primary)">
-              <rect x="6" y="6" width="12" height="12" rx="2" />
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="white">
+              <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
             </svg>
           </button>
-        ) : (
           <button
-            className="w-[40px] h-[40px] flex items-center justify-center shrink-0 touch-none select-none"
-            onPointerDown={handleMicPointerDown}
-            onPointerMove={handleMicPointerMove}
-            onPointerUp={handleMicPointerUp}
-            onPointerCancel={handleMicPointerUp}
+            type="button"
+            onClick={() => setPlusMenuOpen((v) => !v)}
+            aria-label={plusMenuOpen ? '收起更多功能' : '更多功能'}
+            aria-expanded={plusMenuOpen}
+            className={`flex h-[40px] w-[40px] shrink-0 items-center justify-center rounded-full transition-[transform,background-color] active:scale-90 ${
+              plusMenuOpen
+                ? 'bg-[#FF8FAB]/16'
+                : isDark
+                  ? 'bg-white/8'
+                  : 'bg-black/[0.045]'
+            }`}
           >
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={isStreaming ? (isDark ? '#444' : '#DDD') : (isDark ? '#999' : '#888')} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="9" y="2" width="6" height="11" rx="3" />
-              <path d="M5 10a7 7 0 0 0 14 0" />
-              <line x1="12" y1="19" x2="12" y2="22" />
-              <line x1="8" y1="22" x2="16" y2="22" />
+            <svg
+              width="22" height="22" viewBox="0 0 24 24" fill="none"
+              stroke={plusMenuOpen ? '#FF7D9D' : isDark ? '#B9B9C0' : '#6B7280'} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"
+              className="transition-transform duration-200"
+              style={{ transform: plusMenuOpen ? 'rotate(45deg)' : 'none' }}
+            >
+              <line x1="12" y1="6" x2="12" y2="18" />
+              <line x1="6" y1="12" x2="18" y2="12" />
             </svg>
           </button>
-        )}
-        <input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onFocus={() => setPlusMenuOpen(false)}
-          onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-          placeholder={isStreaming ? '正在回复中…' : `想和${profile.shortName}说点什么…`}
-          disabled={isStreaming}
-          className={`flex-1 bg-transparent outline-none text-[16px] ${
-            isDark ? 'text-[#EFE7DD] placeholder-[rgba(228,228,231,0.3)]' : 'text-[var(--color-ink)] placeholder-[var(--color-text-placeholder)]'
-          }`}
-        />
-        <button
-          onClick={handleSend}
-          disabled={isStreaming || !input.trim()}
-          className={`w-[40px] h-[40px] rounded-full bg-gradient-to-r from-[#FFB7C5] to-[#FF8FAB] flex items-center justify-center shrink-0 shadow-[var(--shadow-send)] active:scale-90 transition-transform ${
-            isStreaming || !input.trim() ? 'opacity-50' : ''
-          }`}
-        >
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="white">
-            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
-          </svg>
-        </button>
-        {/* + 菜单：语音聊天 / 语音通话。可见圆与发送键同尺寸，
-            用中性表面色区分主次，不与发送键的粉色渐变撞色。 */}
-        <button
-          onClick={() => setPlusMenuOpen((v) => !v)}
-          aria-label="更多"
-          className={`w-[40px] h-[40px] rounded-full flex items-center justify-center shrink-0 active:scale-90 transition-transform ${
-            isDark ? 'bg-[rgba(255,255,255,0.08)]' : 'bg-[rgba(47,54,74,0.06)]'
-          }`}
-        >
-          <svg
-            width="22" height="22" viewBox="0 0 24 24" fill="none"
-            stroke={isDark ? '#B9B9C0' : '#6B7280'} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"
-            className="transition-transform duration-200"
-            style={{ transform: plusMenuOpen ? 'rotate(45deg)' : 'none' }}
-          >
-            <line x1="12" y1="6" x2="12" y2="18" />
-            <line x1="6" y1="12" x2="18" y2="12" />
-          </svg>
-        </button>
-      </div>
+        </div>
 
-      {/* + 号宫格面板：内联在输入框下方，展开时输入框上移、始终可见（微信样式）。 */}
-      <ChatPlusMenu
-        open={plusMenuOpen}
-        isDark={isDark}
-        onVoiceChat={() => { setPlusMenuOpen(false); setVoiceChatOpen(true) }}
-        onVoiceCall={() => { setPlusMenuOpen(false); handleVoiceCall() }}
-        onTransfer={() => { setPlusMenuOpen(false); setTransferOpen(true) }}
-        onRestart={() => { setPlusMenuOpen(false); setRestartConfirmOpen(true) }}
-      />
+        <ChatPlusMenu
+          open={plusMenuOpen}
+          isDark={isDark}
+          onVoiceChat={() => { setPlusMenuOpen(false); setVoiceChatOpen(true) }}
+          onVoiceCall={() => { setPlusMenuOpen(false); handleVoiceCall() }}
+          onTransfer={() => { setPlusMenuOpen(false); setTransferOpen(true) }}
+          onMasks={() => { setPlusMenuOpen(false); setMaskSheetOpen(true) }}
+          onRestart={() => { setPlusMenuOpen(false); setRestartConfirmOpen(true) }}
+        />
+      </div>
 
       {/* 输入区弹窗（模型选择 / +菜单 / 语音聊天开关） */}
       <ModelSelectorSheet
@@ -1585,6 +1616,12 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
         characterName={profile.shortName}
         isDark={isDark}
         onConfirm={handleTransfer}
+      />
+      <MaskSheet
+        open={maskSheetOpen}
+        onClose={() => setMaskSheetOpen(false)}
+        characterId={currentCharacterId as CharacterId}
+        characterName={profile.shortName}
       />
       <VoiceChatSheet
         open={voiceChatOpen}
