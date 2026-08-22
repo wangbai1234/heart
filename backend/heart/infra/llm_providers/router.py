@@ -30,8 +30,13 @@ logger = structlog.get_logger()
 
 # Legacy fallback for unknown model slugs. Catalog models define their own chain.
 DEFAULT_FAILOVER = ["grok", "deepseek"]
-DEFAULT_BACKGROUND_MODEL = "claude-haiku-4.5"
-DEFAULT_BACKGROUND_FAILOVER = ["deepseek-v4-flash", "gemini-3.1"]
+DEFAULT_BACKGROUND_MODEL = "background-gpt-5.6-luna"
+DEFAULT_BACKGROUND_FAILOVER = [
+    "background-gpt-5.4-mini",
+    "background-gemini-2.5-flash-lite",
+    "background-gemini-3.1-flash-lite-preview",
+    "background-claude-haiku-4.5",
+]
 
 # Time-to-first-token deadline for the streaming path. If a candidate model does
 # not produce its first *content* byte within this window, we abort it and fail

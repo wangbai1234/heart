@@ -815,8 +815,19 @@ def test_config_has_independent_background_chain():
     from heart.core.config import Settings
 
     s = Settings(
-        background_llm_model="claude-haiku-4.5",
-        background_llm_failover="deepseek-v4-flash,gemini-3.1",
+        background_gpt_api_key="background-gpt-key",
+        background_gpt_luna_model="gpt-5.6-luna",
+        background_gpt_mini_model="gpt-5.4-mini",
+        background_gemini_api_key="background-gemini-key",
+        background_gemini_25_model="gemini-2.5-flash-lite",
+        background_gemini_31_model="gemini-3.1-flash-lite-preview",
+        background_claude_api_key="background-claude-key",
+        background_claude_haiku_model="claude-haiku-4-5-20251001",
+        background_llm_model="background-gpt-5.6-luna",
+        background_llm_failover=(
+            "background-gpt-5.4-mini,background-gemini-2.5-flash-lite,"
+            "background-gemini-3.1-flash-lite-preview,background-claude-haiku-4.5"
+        ),
         main_llm_model="legacy-main",
         cheap_llm_model="legacy-cheap",
         jwt_algorithm="HS256",
@@ -824,9 +835,32 @@ def test_config_has_independent_background_chain():
         deepseek_api_key="fake",
     )
 
-    assert s.background_llm_model == "claude-haiku-4.5"
-    assert s.background_llm_failover == "deepseek-v4-flash,gemini-3.1"
+    assert s.background_llm_model == "background-gpt-5.6-luna"
+    assert s.background_llm_failover.split(",") == [
+        "background-gpt-5.4-mini",
+        "background-gemini-2.5-flash-lite",
+        "background-gemini-3.1-flash-lite-preview",
+        "background-claude-haiku-4.5",
+    ]
     assert s.background_llm_model not in {s.main_llm_model, s.cheap_llm_model}
+    assert s.background_gpt_api_key != s.gpt_api_key
+    assert s.background_gemini_api_key != s.gemini_api_key
+    assert s.background_claude_api_key != s.claude_api_key
+
+
+def test_default_background_failover_order_is_exact():
+    from heart.infra.llm_providers.router import (
+        DEFAULT_BACKGROUND_FAILOVER,
+        DEFAULT_BACKGROUND_MODEL,
+    )
+
+    assert [DEFAULT_BACKGROUND_MODEL, *DEFAULT_BACKGROUND_FAILOVER] == [
+        "background-gpt-5.6-luna",
+        "background-gpt-5.4-mini",
+        "background-gemini-2.5-flash-lite",
+        "background-gemini-3.1-flash-lite-preview",
+        "background-claude-haiku-4.5",
+    ]
 
 
 def test_config_membership_pricing_defaults():

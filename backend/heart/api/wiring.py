@@ -96,6 +96,9 @@ def get_model_router():
             settings.claude_api_key,
             settings.gemini_api_key,
             settings.gpt_api_key,
+            settings.background_gpt_api_key,
+            settings.background_gemini_api_key,
+            settings.background_claude_api_key,
         )
     ):
         logger.warning("wiring_no_llm_api_key", hint="Set an LLM provider API key in .env")
@@ -132,6 +135,18 @@ def get_model_router():
             "GPT_MODEL": settings.gpt_model,
             "GPT_LUNA_MODEL": settings.gpt_luna_model,
             "GPT_SOL_MODEL": settings.gpt_sol_model,
+            "BACKGROUND_GPT_API_KEY": settings.background_gpt_api_key,
+            "BACKGROUND_GPT_BASE_URL": settings.background_gpt_base_url,
+            "BACKGROUND_GPT_LUNA_MODEL": settings.background_gpt_luna_model,
+            "BACKGROUND_GPT_MINI_MODEL": settings.background_gpt_mini_model,
+            "BACKGROUND_GEMINI_API_KEY": settings.background_gemini_api_key,
+            "BACKGROUND_GEMINI_BASE_URL": settings.background_gemini_base_url,
+            "BACKGROUND_GEMINI_25_MODEL": settings.background_gemini_25_model,
+            "BACKGROUND_GEMINI_31_MODEL": settings.background_gemini_31_model,
+            "BACKGROUND_CLAUDE_API_KEY": settings.background_claude_api_key,
+            "BACKGROUND_CLAUDE_BASE_URL": settings.background_claude_base_url,
+            "BACKGROUND_CLAUDE_HAIKU_MODEL": settings.background_claude_haiku_model,
+            "BACKGROUND_CLAUDE_API_STYLE": settings.background_claude_api_style,
         }.items():
             if value:
                 os.environ.setdefault(name, value)
@@ -147,12 +162,14 @@ def get_model_router():
         registry = initialize_registry()
         main_model = os.getenv("MAIN_LLM_MODEL", "deepseek-chat")
         cheap_model = os.getenv("CHEAP_LLM_MODEL", "deepseek-chat")
-        background_model = os.getenv("BACKGROUND_LLM_MODEL", "claude-haiku-4.5")
+        background_model = os.getenv("BACKGROUND_LLM_MODEL", "background-gpt-5.6-luna")
         background_failover = [
             model.strip()
-            for model in os.getenv("BACKGROUND_LLM_FAILOVER", "deepseek-v4-flash,gemini-3.1").split(
-                ","
-            )
+            for model in os.getenv(
+                "BACKGROUND_LLM_FAILOVER",
+                "background-gpt-5.4-mini,background-gemini-2.5-flash-lite,"
+                "background-gemini-3.1-flash-lite-preview,background-claude-haiku-4.5",
+            ).split(",")
             if model.strip()
         ]
         router = ModelRouter(

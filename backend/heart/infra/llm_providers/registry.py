@@ -282,6 +282,82 @@ def _register_selectable_models(
         )
 
 
+def _register_background_models(
+    registry: ProviderRegistry,
+    circuit_breaker: Optional[CircuitBreakerInterface],
+) -> None:
+    """Register isolated MICU providers for non-user-facing internal tasks.
+
+    Provider names and routing slugs are deliberately distinct from chat. This
+    prevents a chat credential, relay group, or upstream model change from
+    silently changing memory extraction, safety checks, or summarization.
+    """
+    gpt_api_key = os.getenv("BACKGROUND_GPT_API_KEY")
+    if gpt_api_key:
+        registry.register_provider_instance(
+            provider_name="background-gpt",
+            provider=MicuProvider(
+                api_key=gpt_api_key,
+                base_url=_env_value("BACKGROUND_GPT_BASE_URL", "https://api-slb.micuapi.ai"),
+                protocol="responses",
+                provider_id="background-gpt",
+                user_agent=_CODEX_EXTERNAL_UA,
+                circuit_breaker=circuit_breaker,
+            ),
+        )
+        registry.register_model_alias(
+            "background-gpt-5.6-luna",
+            "background-gpt",
+            _env_value("BACKGROUND_GPT_LUNA_MODEL", "gpt-5.6-luna"),
+        )
+        registry.register_model_alias(
+            "background-gpt-5.4-mini",
+            "background-gpt",
+            _env_value("BACKGROUND_GPT_MINI_MODEL", "gpt-5.4-mini"),
+        )
+
+    gemini_api_key = os.getenv("BACKGROUND_GEMINI_API_KEY")
+    if gemini_api_key:
+        registry.register_provider_instance(
+            provider_name="background-gemini",
+            provider=MicuProvider(
+                api_key=gemini_api_key,
+                base_url=_env_value("BACKGROUND_GEMINI_BASE_URL", "https://api-slb.micuapi.ai"),
+                protocol="chat_completions",
+                provider_id="background-gemini",
+                user_agent=_BROWSER_EXTERNAL_UA,
+                circuit_breaker=circuit_breaker,
+            ),
+        )
+        registry.register_model_alias(
+            "background-gemini-2.5-flash-lite",
+            "background-gemini",
+            _env_value("BACKGROUND_GEMINI_25_MODEL", "gemini-2.5-flash-lite"),
+        )
+        registry.register_model_alias(
+            "background-gemini-3.1-flash-lite-preview",
+            "background-gemini",
+            _env_value("BACKGROUND_GEMINI_31_MODEL", "gemini-3.1-flash-lite-preview"),
+        )
+
+    claude_api_key = os.getenv("BACKGROUND_CLAUDE_API_KEY")
+    if claude_api_key:
+        registry.register_provider_instance(
+            provider_name="background-claude",
+            provider=ClaudeProvider(
+                api_key=claude_api_key,
+                base_url=_env_value("BACKGROUND_CLAUDE_BASE_URL", "https://api-slb.micuapi.ai"),
+                circuit_breaker=circuit_breaker,
+                api_style=_env_value("BACKGROUND_CLAUDE_API_STYLE", "anthropic"),
+            ),
+        )
+        registry.register_model_alias(
+            "background-claude-haiku-4.5",
+            "background-claude",
+            _env_value("BACKGROUND_CLAUDE_HAIKU_MODEL", "claude-haiku-4-5-20251001"),
+        )
+
+
 def initialize_registry(
     circuit_breaker: Optional[CircuitBreakerInterface] = None,
 ) -> ProviderRegistry:
@@ -293,7 +369,7 @@ def initialize_registry(
     - New Gemini/GPT provider settings
     - One explicit upstream model ID for every selectable product model
     - Legacy MAIN_LLM_MODEL/CHEAP_LLM_MODEL aliases
-    - BACKGROUND_LLM_MODEL/BACKGROUND_LLM_FAILOVER are consumed by ModelRouter
+    - Separate BACKGROUND_* credentials and model IDs for internal task routing
 
     Args:
         circuit_breaker: Optional circuit breaker
@@ -389,8 +465,9 @@ def initialize_registry(
         )
 
     # Attach user-selectable product slugs without replacing the existing
-    # DeepSeek/Grok/Claude configs used by legacy and background callers.
+    # DeepSeek/Grok/Claude configs used by legacy and chat callers.
     _register_selectable_models(registry, circuit_breaker)
+    _register_background_models(registry, circuit_breaker)
 
     # Old clients remain functional during rollout, but are normalized to the
     # new public catalog before billing and persistence wherever possible.

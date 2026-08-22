@@ -57,6 +57,22 @@ class Settings(BaseSettings):
     gpt_luna_model: str = "gpt-5.6-luna"
     gpt_sol_model: str = "gpt-5.6-sol"
 
+    # LLM Providers - internal background tasks (separate MICU groups).
+    # These credentials must never be shared with the user-selectable chat
+    # providers above, even when the upstream model ID happens to be the same.
+    background_gpt_api_key: str = ""
+    background_gpt_base_url: str = "https://api-slb.micuapi.ai"
+    background_gpt_luna_model: str = "gpt-5.6-luna"
+    background_gpt_mini_model: str = "gpt-5.4-mini"
+    background_gemini_api_key: str = ""
+    background_gemini_base_url: str = "https://api-slb.micuapi.ai"
+    background_gemini_25_model: str = "gemini-2.5-flash-lite"
+    background_gemini_31_model: str = "gemini-3.1-flash-lite-preview"
+    background_claude_api_key: str = ""
+    background_claude_base_url: str = "https://api-slb.micuapi.ai"
+    background_claude_haiku_model: str = "claude-haiku-4-5-20251001"
+    background_claude_api_style: str = "anthropic"
+
     # Outbound LLM concurrency / failover (process-global; see llm_providers/pool.py)
     llm_max_concurrency: int = 8
     llm_max_retries: int = 2
@@ -66,8 +82,11 @@ class Settings(BaseSettings):
     # production internal tasks use the independent background chain below.
     main_llm_model: str = "deepseek-chat"
     cheap_llm_model: str = "deepseek-chat"
-    background_llm_model: str = "claude-haiku-4.5"
-    background_llm_failover: str = "deepseek-v4-flash,gemini-3.1"
+    background_llm_model: str = "background-gpt-5.6-luna"
+    background_llm_failover: str = (
+        "background-gpt-5.4-mini,background-gemini-2.5-flash-lite,"
+        "background-gemini-3.1-flash-lite-preview,background-claude-haiku-4.5"
+    )
 
     # Embedding Service (OpenAI-compatible hosted endpoint, e.g. SiliconFlow bge-m3)
     embedding_model: str = "BAAI/bge-m3"
