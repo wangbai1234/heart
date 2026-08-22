@@ -515,7 +515,9 @@ class TestL4Promotion:
         assert fact_nodes[0].id in promoted
 
         # Check L4 created
-        stmt = select(IdentityMemory).where(IdentityMemory.source_fact_id == fact_nodes[0].id)
+        stmt = select(IdentityMemory).where(
+            IdentityMemory.promoted_from_fact_id == fact_nodes[0].id
+        )
         result = await async_session.execute(stmt)
         identity = result.scalar_one()
 
@@ -553,7 +555,9 @@ class TestL4Promotion:
         # But promoted2 might be empty or contain it - implementation dependent
         # The key is no duplicate L4 entries
 
-        stmt = select(IdentityMemory).where(IdentityMemory.source_fact_id == fact_nodes[0].id)
+        stmt = select(IdentityMemory).where(
+            IdentityMemory.promoted_from_fact_id == fact_nodes[0].id
+        )
         result = await async_session.execute(stmt)
         identities = result.scalars().all()
 
