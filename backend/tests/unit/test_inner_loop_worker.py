@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import collections
+import inspect
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 
@@ -82,7 +84,6 @@ class TestSingleSessionQuery:
     def test_single_query_returns_joined_data(self):
         """The tick query should be a single JOIN, not N separate queries."""
         # Read the source to verify single query pattern
-        import inspect
         from heart.ss06_inner_state.inner_loop_worker import InnerLoopWorker
 
         source = inspect.getsource(InnerLoopWorker._tick_all_active_users)
@@ -186,3 +187,60 @@ class TestSingleSessionQuery:
 
         ctx = composer.compose.await_args.kwargs["ctx"]
         assert ctx.model == "gpt-5.5"
+
+    @pytest.mark.asyncio
+    async def test_v2_persists_action_and_dialogue_as_separate_bubbles(self, monkeypatch):
+        """Inline v2 delivery must preserve the regular chat bubble contract."""
+        from heart.ss06_inner_state import proactive_repo
+        from heart.ss06_inner_state.inner_loop_worker import InnerLoopWorker
+
+        session = MagicMock()
+        session.execute = AsyncMock()
+        session.commit = AsyncMock()
+
+        class _SessionContext:
+            async def __aenter__(self):
+                return session
+
+            async def __aexit__(self, exc_type, exc, tb):
+                return False
+
+        composer = MagicMock()
+        composer.compose = AsyncMock(
+            return_value=SimpleNamespace(response="（轻笑）你还没睡吗？")
+        )
+        monkeypatch.setattr(
+            "heart.api.wiring._get_session_factory",
+            lambda: lambda: _SessionContext(),
+        )
+        monkeypatch.setattr(
+            "heart.api.wiring.build_composer_service",
+            AsyncMock(return_value=composer),
+        )
+        monkeypatch.setattr(proactive_repo, "count_today_per_user", AsyncMock(return_value=0))
+        monkeypatch.setattr(
+            proactive_repo, "any_recent_across_characters", AsyncMock(return_value=False)
+        )
+        monkeypatch.setattr(proactive_repo, "insert_message_audit", AsyncMock())
+
+        worker = InnerLoopWorker(
+            db_session_factory=MagicMock(),
+            inner_state_service=MagicMock(),
+        )
+        await worker._generate_v2_proactive_message(
+            user_id=uuid4(),
+            character_id="rin",
+            hours_since=12,
+            user_timezone="Asia/Shanghai",
+            model="gpt-5.5",
+        )
+
+        inserts = [call for call in session.execute.await_args_list if "INSERT INTO chat_messages" in str(call.args[0])]
+        assert len(inserts) == 2
+        first_params = inserts[0].args[1]
+        second_params = inserts[1].args[1]
+        assert [first_params["kind"], second_params["kind"]] == ["action", "text"]
+        assert [first_params["sequence_id"], second_params["sequence_id"]] == [0, 1]
+        assert first_params["turn_id"] == second_params["turn_id"]
+        assert first_params["content"] == "轻笑"
+        assert second_params["content"] == "你还没睡吗？"

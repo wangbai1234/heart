@@ -639,6 +639,7 @@ class InnerLoopWorker:
 
         from heart.api.wiring import _get_session_factory, build_composer_service
         from heart.core.config import settings
+        from heart.ss05_composer.message_splitter import split_response
         from heart.ss05_composer.service import CompositionContext
         from heart.ss06_inner_state.models import ProactiveMessage as _ProactiveModel
 
@@ -714,27 +715,42 @@ class InnerLoopWorker:
             if not content:
                 return
 
+            # Keep proactive replies on the same semantic bubble contract as
+            # regular chat replies.  The v2 path is persisted directly into
+            # chat_messages (rather than returned through /proactive/pending),
+            # so without this split a parenthetical action and its dialogue
+            # would be rendered as one ordinary text bubble after refresh.
+            segments = split_response(content) or [{"kind": "text", "content": content}]
+
             now = datetime.now(timezone.utc)
             msg_id = uuid4()
 
-            # Store in chat_messages with is_proactive=True
+            # Store one row per semantic bubble, preserving one turn for
+            # history/context grouping.  Actions are text-modality rows with
+            # zero billing/audio metadata, just like normal chat persistence.
             try:
                 from sqlalchemy import text as sa_text
 
-                await session.execute(
-                    sa_text(
-                        "INSERT INTO chat_messages "
-                        "(id, user_id, character_id, role, content, is_proactive, created_at) "
-                        "VALUES (:id, :user_id, :character_id, 'assistant', :content, true, :now)"
-                    ),
-                    {
-                        "id": str(msg_id),
-                        "user_id": str(user_id),
-                        "character_id": character_id,
-                        "content": content,
-                        "now": now,
-                    },
-                )
+                for sequence_id, segment in enumerate(segments):
+                    await session.execute(
+                        sa_text(
+                            "INSERT INTO chat_messages "
+                            "(id, user_id, character_id, turn_id, role, content, "
+                            " modality, sequence_id, kind, channel, is_proactive, created_at) "
+                            "VALUES (:id, :user_id, :character_id, :turn_id, 'assistant', "
+                            " :content, 'text', :sequence_id, :kind, 'chat', true, :now)"
+                        ),
+                        {
+                            "id": str(msg_id if sequence_id == 0 else uuid4()),
+                            "user_id": str(user_id),
+                            "character_id": character_id,
+                            "turn_id": str(turn_id),
+                            "content": segment["content"],
+                            "sequence_id": sequence_id,
+                            "kind": segment["kind"],
+                            "now": now,
+                        },
+                    )
             except Exception as e:
                 logger.error(
                     "proactive_v2_chat_insert_failed",
