@@ -26,6 +26,7 @@ Bug fixes applied:
 5. Reinforcement bumps initial_importance (not current score)
 6. NULL handling for optional fields
 7. Clock skew protection (elapsed ≥ 0)
+8. UTC normalization for legacy TIMESTAMP columns
 
 Author: 心屿团队
 """
@@ -385,10 +386,24 @@ class DecayEngine:
 
         Bug fix: Use total_seconds() to avoid integer day truncation.
         Clock skew protection: elapsed ≥ 0.
+
+        The original memory migrations used PostgreSQL ``TIMESTAMP`` columns,
+        so asyncpg can return naive datetimes even though the ORM now declares
+        ``timezone=True``. Project timestamps are stored as UTC; normalize both
+        operands here so legacy rows and newer aware values behave identically.
         """
-        elapsed_seconds = (now - last_updated).total_seconds()
+        last_updated_utc = self._normalize_utc(last_updated)
+        now_utc = self._normalize_utc(now)
+        elapsed_seconds = (now_utc - last_updated_utc).total_seconds()
         elapsed_days = max(0.0, elapsed_seconds / 86400.0)
         return elapsed_days
+
+    @staticmethod
+    def _normalize_utc(value: datetime) -> datetime:
+        """Treat naive database timestamps as UTC and convert aware values to UTC."""
+        if value.tzinfo is None or value.utcoffset() is None:
+            return value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc)
 
     def _clamp(self, value: float, min_val: float, max_val: float) -> float:
         """Clamp value to [min_val, max_val]."""

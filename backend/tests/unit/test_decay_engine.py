@@ -197,6 +197,29 @@ class TestInvariantI1:
 
             prev_importance = decayed.importance_score
 
+    def test_naive_database_timestamp_decays_against_aware_now(self, l2_memory, now):
+        """Legacy TIMESTAMP rows returned by asyncpg are interpreted as UTC."""
+        engine = DecayEngine()
+        l2_memory.updated_at = (now - timedelta(days=30)).replace(tzinfo=None)
+        initial_importance = l2_memory.importance_score
+
+        decayed = engine.apply_decay_lazy(l2_memory, now)
+
+        assert decayed.importance_score < initial_importance
+
+    def test_aware_timestamp_decays_against_naive_utc_now(self, l3_fact, now):
+        """Caller-provided naive UTC timestamps are normalized at the same boundary."""
+        engine = DecayEngine()
+        l3_fact.importance_score = l3_fact.importance
+        l3_fact.initial_importance = l3_fact.importance
+        l3_fact.updated_at = now - timedelta(days=30)
+        naive_now = now.replace(tzinfo=None)
+        initial_importance = l3_fact.importance_score
+
+        decayed = engine.apply_decay_lazy(l3_fact, naive_now)
+
+        assert decayed.importance_score < initial_importance
+
 
 # ============================================================
 # I2: L4 never decays
