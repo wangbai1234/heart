@@ -410,7 +410,7 @@ class L4Promoter:
                     and_(
                         IdentityMemory.user_id == user_id,
                         IdentityMemory.character_id == character_id,
-                        IdentityMemory.source_episode_id == fact.id,  # type: ignore[attr-defined]
+                        IdentityMemory.promoted_from_fact_id == fact.id,
                     )
                 )
                 result = await session.execute(existing_stmt)
@@ -425,6 +425,7 @@ class L4Promoter:
                     continue
 
                 # Promote to L4
+                promoted_at = datetime.now(timezone.utc)
                 identity = IdentityMemory(
                     id=uuid4(),
                     user_id=user_id,
@@ -432,14 +433,25 @@ class L4Promoter:
                     key=fact.predicate,
                     value=fact.object,
                     category="user_identity",  # Simplified
-                    source_fact_id=fact.id,
-                    raw_evidence=fact.raw_evidence,
-                    confidence=fact.confidence,
-                    created_at=datetime.now(timezone.utc),
-                    updated_at=datetime.now(timezone.utc),
+                    disclosed_at=promoted_at,
+                    disclosure_context=fact.raw_evidence,
+                    source_turn_ids=fact.source_turn_ids or [],
+                    sacred_reason=reason,
+                    significance_score=max(fact.importance, 0.85),
+                    promotion_trigger=reason,
+                    promoted_from_fact_id=fact.id,
+                    reconstruction_hints={
+                        "original_literal": fact.literal_text,
+                        "confidence": fact.confidence,
+                        "emotional_charge": fact.emotional_charge,
+                    },
+                    created_at=promoted_at,
                 )
 
                 session.add(identity)
+                fact.is_identity_level = True
+                fact.promoted_to_l4_at = promoted_at
+                fact.promotion_reason = reason
                 promoted.append(fact.id)
 
                 logger.info(
@@ -881,67 +893,18 @@ class ConsolidationWorker:
             user_id: User ID
             character_id: Character ID
         """
-        # Fetch all L2 episodes
-        stmt = select(EpisodicMemory).where(
-            and_(
-                EpisodicMemory.user_id == user_id,
-                EpisodicMemory.character_id == character_id,
-            )
+        stats = await self.decay_engine.apply_decay_batch(
+            session,
+            user_id,
+            character_id,
         )
-
-        result = await session.execute(stmt)
-        episodes = result.scalars().all()
-
-        # Apply decay
-        for episode in episodes:
-            new_importance = self.decay_engine.calculate_current_importance(
-                initial_importance=episode.initial_importance,
-                created_at=episode.created_at,
-                emotional_peak_valence=episode.emotional_peak.get("valence", 0),
-                emotional_peak_arousal=episode.emotional_peak.get("arousal", 0),
-                recall_count=episode.recall_count,
-                decay_immunity=episode.decay_immunity,
-            )
-
-            episode.importance_score = new_importance
-            episode.state = self.decay_engine.compute_state(new_importance)
-            episode.updated_at = datetime.now(timezone.utc)
-
-        # Fetch all L3 facts
-        stmt = select(FactNode).where(
-            and_(
-                FactNode.user_id == user_id,
-                FactNode.character_id == character_id,
-                ~FactNode.do_not_recall,
-            )
-        )
-
-        result = await session.execute(stmt)
-        facts = result.scalars().all()
-
-        # Apply decay
-        for fact in facts:
-            new_importance = self.decay_engine.calculate_current_importance(
-                initial_importance=fact.importance,  # type: ignore[attr-defined]
-                created_at=fact.created_at,
-                emotional_peak_valence=fact.emotional_charge,  # type: ignore[attr-defined]
-                emotional_peak_arousal=abs(fact.emotional_charge),  # type: ignore[attr-defined]
-                recall_count=fact.recall_count or 0,
-                decay_immunity=0.0,
-            )
-
-            fact.importance_score = new_importance
-            fact.state = self.decay_engine.compute_state(new_importance)
-            fact.updated_at = datetime.now(timezone.utc)
-
-        await session.commit()
 
         logger.info(
             "batch_decay_applied",
             user_id=str(user_id),
             character_id=character_id,
-            episodes_decayed=len(episodes),
-            facts_decayed=len(facts),
+            episodes_decayed=stats["l2_processed"],
+            facts_decayed=stats["l3_processed"],
         )
 
     async def _schedule_anniversaries(
