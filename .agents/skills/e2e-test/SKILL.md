@@ -63,7 +63,7 @@ Look at the **first** failing test and check in this order:
 
 1. Did uvicorn fail to start? Look for `uvicorn failed to start` in pytest output.
    - Common: missing env vars (`JWT_SECRET_KEY`), bad `DATABASE_URL`, port in use.
-2. Did `/api/health/ready` time out?
+2. Did `/health/ready` time out?
    - Server started but a dependency (PG / Redis) is unreachable.
 3. Did login return non-200?
    - Auth wiring broken; check `heart/core/auth.py` and `routes.py:60`.

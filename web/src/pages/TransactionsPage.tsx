@@ -76,26 +76,37 @@ export function TransactionsPage() {
   }
 
   return (
-    <div className="relative w-full h-full flex flex-col overflow-hidden">
+    <div className="app-atmosphere relative flex h-full w-full flex-col overflow-hidden">
+      <div style={{ height: 'var(--safe-top)' }} />
       {/* Header */}
-      <nav className="relative z-20 flex items-center justify-between px-5 h-[44px] shrink-0" style={{ paddingTop: 'var(--safe-top)' }}>
+      <nav className="relative z-20 flex h-[52px] shrink-0 items-center justify-between border-b border-white/40 px-5">
         <button onClick={goBack} className="w-[44px] h-[44px] flex items-center justify-center">
           <svg width="12" height="20" viewBox="0 0 12 20" fill="none" stroke="var(--color-ink)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="10,2 2,10 10,18" />
           </svg>
         </button>
-        <span className="text-[17px] font-medium text-[var(--color-ink)]">yuoyuo币明细</span>
+        <span className="text-[17px] font-semibold text-[var(--color-ink)]">yuoyuo币明细</span>
         <div className="w-[44px]" />
       </nav>
 
       {/* Balance card */}
-      <div className="mx-5 mb-4 p-4 rounded-[16px] bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-accent)]">
-        <p className="text-[13px] text-white/70">当前 yuoyuo币</p>
-        <p className="text-[32px] font-bold text-white mt-1">{balance}</p>
+      <div className="relative z-10 mx-4 mb-4 mt-4 overflow-hidden rounded-[20px] border border-white/35 bg-[linear-gradient(135deg,#FF9FB3_0%,#FF7898_56%,#A7C7E7_100%)] p-5 shadow-[0_12px_30px_rgba(232,85,119,0.18)]">
+        <div className="pointer-events-none absolute inset-y-0 right-0 w-[42%] bg-[linear-gradient(110deg,transparent,rgba(255,255,255,0.18))]" />
+        <div className="relative flex items-start justify-between">
+          <div>
+            <p className="text-[13px] text-white/75">当前 yuoyuo币</p>
+            <p className="mt-1 text-[34px] font-bold leading-none text-white">{balance}</p>
+          </div>
+          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.84)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="8.5" />
+            <path d="M12 7v10M15 9.5c-.7-1-1.7-1.5-3-1.5-1.7 0-3 1-3 2.4 0 3.1 6 1.5 6 4.4 0 1.5-1.3 2.7-3.2 2.7-1.5 0-2.6-.5-3.4-1.6" />
+          </svg>
+        </div>
+        <p className="relative mt-3 text-[12px] text-white/70">签到币与购买币均永久有效</p>
       </div>
 
       {/* Transaction list */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-5">
+      <div ref={scrollRef} className="relative z-10 flex-1 overflow-y-auto px-4 pb-2">
         {loading ? (
           <div className="space-y-3">
             {Array.from({ length: 5 }).map((_, i) => (
@@ -118,11 +129,11 @@ export function TransactionsPage() {
             <p className="text-[var(--color-text-muted)] text-[14px]">暂无 yuoyuo币记录</p>
           </div>
         ) : (
-          <div className="space-y-0">
+          <div className="overflow-hidden rounded-[18px] border border-[var(--color-border-glass)] bg-[var(--color-glass-card)] shadow-[var(--shadow-card)]">
             {items.map((item, i) => (
               <div
                 key={i}
-                className="flex items-center justify-between py-3 border-b border-[var(--color-divider-inset)]"
+                className={`flex items-center justify-between px-4 py-3.5 ${i < items.length - 1 ? 'border-b border-[var(--color-divider-inset)]' : ''}`}
               >
                 <div>
                   <p className="text-[14px] text-[var(--color-ink)]">

@@ -1427,34 +1427,27 @@ export function CharacterProfilePage() {
         </div>
 
         {/* 关于TA card — truncated intro（高级 HTML 模式下隐藏，交给创作者自排） */}
-        {!hasCustomHtml && profile && (profile.tagline || profile.intro) && (
+        {!hasCustomHtml && profile?.intro && (
           <div className="mt-5 rounded-[20px] bg-[var(--color-glass-75)] border border-[var(--color-border-glass)] p-4">
             <div className="flex items-center gap-2 text-[13px] font-semibold" style={{ color: theme.accent }}>
               <span className="inline-block w-[3px] h-[14px] rounded-full" style={{ background: theme.accent }} />
               关于TA
             </div>
-            {profile.tagline && (
-              <p className="mt-3 text-[15px] leading-relaxed text-[var(--color-ink)]">{profile.tagline}</p>
-            )}
-            {profile.intro && (
-              <>
-                <p
-                  className={`mt-3 text-[14px] leading-relaxed text-[var(--color-text-secondary)] whitespace-pre-wrap ${
-                    !aboutExpanded && 'line-clamp-4'
-                  }`}
-                >
-                  {profile.intro}
-                </p>
-                {profile.intro.length > 120 && (
-                  <button
-                    onClick={() => setAboutExpanded((p) => !p)}
-                    className="mt-2 text-[13px] font-medium active:scale-[0.96] transition-transform"
-                    style={{ color: theme.accent }}
-                  >
-                    {aboutExpanded ? '收起' : '更多'}
-                  </button>
-                )}
-              </>
+            <p
+              className={`mt-3 text-[14px] leading-relaxed text-[var(--color-text-secondary)] whitespace-pre-wrap ${
+                !aboutExpanded && 'line-clamp-4'
+              }`}
+            >
+              {profile.intro}
+            </p>
+            {profile.intro.length > 120 && (
+              <button
+                onClick={() => setAboutExpanded((p) => !p)}
+                className="mt-2 text-[13px] font-medium active:scale-[0.96] transition-transform"
+                style={{ color: theme.accent }}
+              >
+                {aboutExpanded ? '收起' : '更多'}
+              </button>
             )}
           </div>
         )}

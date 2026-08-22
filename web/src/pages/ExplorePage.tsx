@@ -1,6 +1,5 @@
 import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useThemeStore } from '../stores/themeStore'
 import { useStoryStore } from '../stores/storyStore'
 import { useCharactersStore } from '../stores/charactersStore'
 import { TabBar } from '../components/ui/TabBar'
@@ -9,6 +8,7 @@ import { ErrorState } from '../components/ui/ErrorState'
 import { EmptyState } from '../components/ui/EmptyState'
 import { ScenarioCard, genreGradient } from '../components/story/ScenarioCard'
 import { resolveCharacterProfile } from '../data/uiContent'
+import { AppPageContent, AppPageShell } from '../components/ui/AppPageShell'
 
 /**
  * Explore (探索) — the play center. Hero featured scenario + genre filter chips
@@ -17,7 +17,6 @@ import { resolveCharacterProfile } from '../data/uiContent'
  */
 export function ExplorePage() {
   const navigate = useNavigate()
-  const { resolvedTheme } = useThemeStore()
   const {
     scenarios,
     featuredScenarios,
@@ -38,11 +37,6 @@ export function ExplorePage() {
     void loadRecentScenarios()
   }, [loadCatalog, loadRecentScenarios])
 
-  const pageBg =
-    resolvedTheme === 'dark'
-      ? '/assets/backgrounds/暗色聊天背景图.webp'
-      : '/assets/backgrounds/聊天背景图.webp'
-
   // 推荐区：显示热度最高的 4 个 featured 剧情，支持左右滑动
   const featuredTop4 = featuredScenarios.slice(0, 4)
   // 剧情网格：显示当前分类的所有剧情（不排除推荐区剧情，用户可能想从分类找到它们）
@@ -50,28 +44,27 @@ export function ExplorePage() {
   const openScenario = (id: string) => navigate(`/explore/${id}`)
 
   return (
-    <div className="relative w-full h-full overflow-hidden">
-      <img src={pageBg} alt="" className="absolute inset-0 w-full h-full object-cover z-0" />
-
-      <div className="relative z-10 h-full flex flex-col">
+    <AppPageShell className="app-atmosphere">
+      <div className="relative z-10 h-full flex flex-col bg-transparent">
         <div style={{ height: 'var(--safe-top)' }} />
 
         {/* Header */}
-        <div className="flex items-center justify-between pl-5 pr-4 py-3 shrink-0">
-          <div className="flex flex-col">
-            <span className="text-[24px] font-bold text-[var(--color-ink)]">探索</span>
-            <span className="text-[12px] text-[var(--color-text-secondary)]">
-              进入一段由 AI 主持的互动剧情
-            </span>
+        <AppPageContent className="flex h-[58px] shrink-0 items-center justify-between px-4 sm:px-5">
+          <div>
+            <p className="text-[11px] font-semibold tracking-[0.12em] text-[var(--color-primary-600)]">今日故事</p>
+            <h1 className="mt-0.5 text-[23px] font-bold leading-none text-[var(--color-ink)]">探索</h1>
           </div>
-        </div>
+          <span className="rounded-full border border-[var(--color-divider)] bg-[var(--color-page-surface)] px-3 py-1.5 text-[12px] font-medium text-[var(--color-text-secondary)] shadow-[0_3px_12px_rgba(90,54,68,0.05)]">
+            今日精选
+          </span>
+        </AppPageContent>
 
         {/* Scrollable content */}
-        <div className="flex-1 overflow-y-auto px-4 pb-[160px]">
+        <AppPageContent className="min-h-0 flex-1 overflow-y-auto px-3.5 pb-[124px] sm:px-5">
           {loading && !loaded ? (
             <ExploreSkeleton />
           ) : error && !loaded ? (
-            <div className="pt-20">
+            <div className="mx-auto mt-5 max-w-[520px] rounded-[12px] border border-[var(--color-divider)] bg-[var(--color-page-surface)]">
               <ErrorState
                 title="加载失败"
                 description="剧情列表没能加载出来，检查网络后重试。"
@@ -82,13 +75,13 @@ export function ExplorePage() {
             <>
               {/* Featured hero carousel - 支持左右滑动的推荐 banner */}
               {featuredTop4.length > 0 && (
-                <div className="flex gap-3 overflow-x-auto pb-1 mb-5 -mx-1 px-1 snap-x snap-mandatory scrollbar-none">
+                <div className="-mx-1 mb-5 flex snap-x snap-mandatory gap-2.5 overflow-x-auto px-1 pb-1 scrollbar-none">
                   {featuredTop4.map((scenario) => (
                     <button
                       key={scenario.id}
                       onClick={() => openScenario(scenario.id)}
-                      className="relative shrink-0 w-[calc(100vw-32px)] h-[220px] rounded-[24px] overflow-hidden shadow-[var(--shadow-hero)] active:scale-[0.98] transition-transform snap-center"
-                      style={{ background: 'linear-gradient(135deg, #FFD6E0 0%, #C8B6FF 100%)' }}
+                      className="relative h-[174px] w-full shrink-0 snap-center overflow-hidden rounded-[15px] border border-white/65 shadow-[0_8px_24px_rgba(73,48,62,0.14)] transition-opacity active:opacity-90 sm:h-[220px] sm:w-[680px]"
+                      style={{ background: genreGradient(scenario.genre) }}
                     >
                       {scenario.cover_url && (
                         <img
@@ -100,17 +93,17 @@ export function ExplorePage() {
                         />
                       )}
                       <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent" />
-                      <div className="absolute top-3 left-3 inline-flex h-[24px] items-center rounded-full bg-white/85 px-2.5 text-[12px] font-semibold text-[var(--color-primary-600)]">
+                      <div className="absolute left-3 top-3 inline-flex h-[23px] items-center rounded-full bg-black/25 px-2.5 text-[11px] font-semibold text-white backdrop-blur-[5px]">
                         热门推荐
                       </div>
-                      <div className="absolute bottom-0 left-0 right-0 p-4 text-left">
-                        <p className="text-[20px] font-bold text-white leading-[1.3] line-clamp-1">
+                      <div className="absolute bottom-0 left-0 right-0 p-3.5 text-left">
+                        <p className="text-[18px] font-bold leading-[1.3] text-white line-clamp-1">
                           {scenario.title}
                         </p>
-                        <p className="mt-1 text-[13px] text-white/85 leading-[1.5] line-clamp-2">
+                        <p className="mt-1 text-[12px] leading-[1.45] text-white/85 line-clamp-2">
                           {scenario.blurb}
                         </p>
-                        <div className="mt-2 flex items-center gap-2 text-[12px] text-white/80">
+                        <div className="mt-1.5 flex items-center gap-2 text-[11px] text-white/80">
                           <span className="rounded-full bg-white/20 px-2 py-0.5">{scenario.genre}</span>
                           <span>{scenario.play_count} 人玩过</span>
                         </div>
@@ -123,7 +116,7 @@ export function ExplorePage() {
               {/* Recent scenarios (近期玩过) */}
               {recentScenarios.length > 0 && (
                 <div className="mb-5">
-                  <div className="flex items-center gap-1.5 mb-3">
+                  <div className="mb-2.5 flex items-center gap-1.5">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--color-primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                       <circle cx="12" cy="12" r="10" />
                       <polyline points="12 6 12 12 16 14" />
@@ -135,10 +128,10 @@ export function ExplorePage() {
                       <button
                         key={item.run_id}
                         onClick={() => navigate(`/explore/${item.scenario_id}`)}
-                        className="shrink-0 w-[100px] active:scale-[0.97] transition-transform"
+                        className="w-[92px] shrink-0 transition-transform active:scale-[0.97]"
                       >
                         <div
-                          className="w-[100px] h-[130px] rounded-[16px] overflow-hidden"
+                          className="h-[118px] w-[92px] overflow-hidden rounded-[12px] border border-white/65 shadow-[0_4px_14px_rgba(73,48,62,0.10)]"
                           style={{ background: genreGradient(item.genre) }}
                         >
                           {item.cover_url && (
@@ -151,10 +144,10 @@ export function ExplorePage() {
                             />
                           )}
                         </div>
-                        <p className="mt-1.5 text-[12px] text-[var(--color-ink)] line-clamp-1 text-center font-medium">
+                        <p className="mt-1.5 text-center text-[12px] font-medium text-[var(--color-ink)] line-clamp-1">
                           {item.title}
                         </p>
-                        <p className="mt-0.5 text-[10px] text-[var(--color-primary)] text-center font-medium">
+                        <p className="mt-0.5 text-center text-[10px] font-medium text-[var(--color-primary-600)]">
                           继续游玩
                         </p>
                       </button>
@@ -184,7 +177,7 @@ export function ExplorePage() {
 
               {/* Scenario grid */}
               {loading ? (
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-4 md:grid-cols-4">
                   {Array.from({ length: 4 }).map((_, i) => (
                     <Skeleton key={i} className="w-full aspect-[3/4] rounded-[20px]" />
                   ))}
@@ -199,7 +192,7 @@ export function ExplorePage() {
                   />
                 </div>
               ) : (
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
                   {grid.map((s) => (
                     <ScenarioCard key={s.id} scenario={s} onOpen={openScenario} />
                   ))}
@@ -247,14 +240,14 @@ export function ExplorePage() {
                 </div>
               )}
 
-              <div className="h-[60px]" aria-hidden="true" />
+              <div className="h-[20px]" aria-hidden="true" />
             </>
           )}
-        </div>
+        </AppPageContent>
 
         <TabBar />
       </div>
-    </div>
+    </AppPageShell>
   )
 }
 
@@ -272,8 +265,8 @@ function GenreChip({
       onClick={onClick}
       className={`shrink-0 h-[34px] px-3.5 rounded-full text-[13px] font-medium whitespace-nowrap transition-colors ${
         active
-          ? 'bg-[var(--color-primary)] text-white shadow-[var(--shadow-send)]'
-          : 'bg-[var(--color-glass-55)] text-[var(--color-ink)] border border-[var(--color-border-glass)]'
+          ? 'bg-[var(--color-primary-500)] text-white shadow-[var(--shadow-send)]'
+          : 'border border-[var(--color-divider)] bg-[var(--color-page-surface)] text-[var(--color-text-secondary)] shadow-[0_2px_8px_rgba(73,48,62,0.04)]'
       }`}
     >
       {label}
@@ -284,15 +277,15 @@ function GenreChip({
 function ExploreSkeleton() {
   return (
     <>
-      <Skeleton className="w-full h-[220px] rounded-[24px] mb-5" />
+      <Skeleton className="mb-5 h-[174px] w-full rounded-[15px]" />
       <div className="flex gap-2 mb-4">
         {Array.from({ length: 4 }).map((_, i) => (
-          <Skeleton key={i} className="h-[34px] w-[72px] rounded-full" />
+          <Skeleton key={i} className="h-[32px] w-[72px] rounded-full" />
         ))}
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 gap-2.5">
         {Array.from({ length: 4 }).map((_, i) => (
-          <Skeleton key={i} className="w-full aspect-[3/4] rounded-[20px]" />
+          <Skeleton key={i} className="aspect-[3/4] w-full rounded-[14px]" />
         ))}
       </div>
     </>

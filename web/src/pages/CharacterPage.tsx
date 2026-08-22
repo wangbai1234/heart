@@ -4,6 +4,7 @@ import { useThemeStore } from '../stores/themeStore'
 import { useScrollRestore } from '../hooks/useScrollRestore'
 import { usePullToRefresh } from '../hooks/usePullToRefresh'
 import { TabBar } from '../components/ui/TabBar'
+import { AppPageShell } from '../components/ui/AppPageShell'
 import { NoticeDialog } from '../components/ui/NoticeDialog'
 import { Dialog } from '../components/ui/Dialog'
 import { AnnouncementSheet } from '../components/AnnouncementSheet'
@@ -360,36 +361,34 @@ export function CharacterPage() {
     return base
   }, [rankedItems, activeMode, activeTag, query, isFavorite])
 
-  const pageBg =
-    resolvedTheme === 'dark'
-      ? '/assets/backgrounds/暗色聊天背景图.webp'
-      : '/assets/backgrounds/聊天背景图.webp'
   const isDark = resolvedTheme === 'dark'
   const activeModeText = isDark ? 'text-[var(--color-ink)]' : 'text-[#3A3A4A]'
   const inactiveModeText = isDark ? 'text-[var(--color-text-secondary)]' : 'text-[rgba(58,58,74,0.52)]'
   const inactiveTagText = isDark ? 'text-[var(--color-text-secondary)]' : 'text-[rgba(58,58,74,0.66)]'
   const filterPanelClass = isDark
-    ? 'bg-[var(--color-glass-90)] border-[var(--color-border-glass)]'
-    : 'bg-[rgba(255,248,243,0.96)] border-[rgba(255,255,255,0.75)]'
+    ? 'bg-[var(--color-page-surface)] border-[var(--color-divider)]'
+    : 'bg-[var(--color-page-surface)] border-[var(--color-divider)]'
   const filterPanelTitle = isDark ? 'text-[var(--color-ink)]' : 'text-[#3A3A4A]'
   const filterPanelHint = isDark ? 'text-[var(--color-text-muted)]' : 'text-[rgba(58,58,74,0.45)]'
   const filterChipIdle = isDark
     ? 'bg-white/[0.04] text-[var(--color-text-secondary)] border-[var(--color-border-glass)]'
     : 'bg-white/30 text-[rgba(58,58,74,0.62)] border-[rgba(58,58,74,0.12)]'
+  const headerActionClass = isDark
+    ? 'border border-white/10 bg-white/[0.08] text-[var(--color-text-secondary)]'
+    : 'border border-white/65 bg-white/68 text-[var(--color-text-secondary)] shadow-[0_3px_12px_rgba(90,54,68,0.06)]'
 
   return (
-    <div className="relative w-full h-full flex flex-col overflow-hidden">
-      <img src={pageBg} alt="" className="absolute inset-0 w-full h-full object-cover z-0" />
-
+    <AppPageShell className="app-atmosphere">
       <div className="relative z-10 h-full flex flex-col">
         <div style={{ height: 'calc(var(--safe-top) + 4px)' }} />
 
+        <div className="character-discovery-chrome relative z-20 shrink-0">
         {/* Navigation bar — brand logo (login-page style) + search / announcement. */}
-        <div className="relative z-20 flex items-center justify-between gap-2.5 px-5 h-[58px] shrink-0">
+        <div className="relative z-20 mx-auto flex h-[54px] w-full max-w-[1180px] shrink-0 items-center justify-between gap-2.5 px-4 sm:px-5">
           <img
             src="/assets/ui/wordmark.png"
             alt="yuoyuo"
-            className="shrink-0 h-[44px] w-auto select-none"
+            className="h-[38px] w-auto shrink-0 select-none"
             draggable={false}
           />
           <div className="flex items-center gap-1.5">
@@ -400,12 +399,12 @@ export function CharacterPage() {
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   placeholder="搜索角色 / 标签"
-                  className="w-[132px] min-[380px]:w-[176px] h-[44px] px-4 rounded-full bg-black/8 dark:bg-white/8 backdrop-blur-[16px] border border-black/6 dark:border-white/6 text-[14px] text-[var(--color-ink)] placeholder:text-[var(--color-text-muted)] outline-none focus:border-[var(--color-primary)]/40 focus:bg-black/12 dark:focus:bg-white/12 transition-all"
+                  className="h-[40px] w-[132px] rounded-[10px] border border-[var(--color-divider)] bg-[var(--color-page-soft)] px-3.5 text-[14px] text-[var(--color-ink)] outline-none transition-colors placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-primary-400)] min-[380px]:w-[176px]"
                 />
                 <button
                   onClick={() => { setShowSearch(false); setQuery('') }}
                   aria-label="关闭搜索"
-                  className="w-[44px] h-[44px] rounded-full bg-black/8 dark:bg-white/8 backdrop-blur-[12px] border border-black/6 dark:border-white/6 flex items-center justify-center text-[var(--color-text-secondary)] hover:bg-black/12 dark:hover:bg-white/12 hover:text-[var(--color-ink)] active:scale-95 transition-all"
+                  className={`flex h-[40px] w-[40px] items-center justify-center rounded-[12px] transition-colors active:scale-95 ${headerActionClass}`}
                 >
                   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                     <line x1="4" y1="4" x2="12" y2="12" />
@@ -418,7 +417,7 @@ export function CharacterPage() {
                 <button
                   onClick={() => setShowSearch(true)}
                   aria-label="搜索"
-                  className="w-[44px] h-[44px] rounded-full bg-black/8 dark:bg-white/8 backdrop-blur-[12px] border border-black/6 dark:border-white/6 flex items-center justify-center text-[var(--color-text-secondary)] hover:bg-black/12 dark:hover:bg-white/12 hover:text-[var(--color-ink)] active:scale-95 transition-all"
+                  className={`flex h-[40px] w-[40px] items-center justify-center rounded-[12px] transition-colors active:scale-95 ${headerActionClass}`}
                 >
                   <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
                     <circle cx="7" cy="7" r="5" />
@@ -428,7 +427,7 @@ export function CharacterPage() {
                 <button
                   onClick={() => { setLinkInput(''); setShowOpenLink(true) }}
                   aria-label="打开分享链接"
-                  className="w-[44px] h-[44px] rounded-full bg-black/8 dark:bg-white/8 backdrop-blur-[12px] border border-black/6 dark:border-white/6 flex items-center justify-center text-[var(--color-text-secondary)] hover:bg-black/12 dark:hover:bg-white/12 hover:text-[var(--color-ink)] active:scale-95 transition-all"
+                  className="flex h-[40px] w-[40px] items-center justify-center rounded-[10px] bg-[var(--color-page-soft)] text-[var(--color-text-secondary)] transition-colors active:scale-95"
                 >
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
@@ -438,7 +437,7 @@ export function CharacterPage() {
                 <button
                   onClick={() => setShowAnnounce(true)}
                   aria-label="公告"
-                  className="relative w-[44px] h-[44px] rounded-full bg-black/8 dark:bg-white/8 backdrop-blur-[12px] border border-black/6 dark:border-white/6 flex items-center justify-center text-[var(--color-text-secondary)] hover:bg-black/12 dark:hover:bg-white/12 hover:text-[var(--color-ink)] active:scale-95 transition-all"
+                  className={`relative flex h-[40px] w-[40px] items-center justify-center rounded-[12px] transition-colors active:scale-95 ${headerActionClass}`}
                 >
                   <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M8 2.5a3 3 0 0 0-3 3v.9A5.25 5.25 0 0 1 3.2 10.5L2 11.5v1.25h12v-1.25l-1.2-1a5.25 5.25 0 0 1-1.8-4.1v-.9a3 3 0 0 0-3-3Z" />
@@ -455,12 +454,12 @@ export function CharacterPage() {
         </div>
 
         {/* Primary mode tabs (推荐 / 新角色 / 收藏 / 我的) — large, underline-active. */}
-        <div className="relative z-20 shrink-0 flex items-center gap-7 px-5 pt-1 pb-1.5 overflow-x-auto no-scrollbar">
+        <div className="relative z-20 mx-auto flex w-full max-w-[1180px] shrink-0 items-center gap-6 overflow-x-auto border-b border-black/[0.045] px-4 pb-1 pt-0.5 no-scrollbar sm:px-5">
           {DISCOVERY_MODES.map((mode) => (
             <button
               key={mode}
               onClick={() => setActiveMode(mode)}
-              className={`relative shrink-0 pb-1.5 text-[18px] transition-colors ${
+              className={`relative shrink-0 pb-2 text-[16px] transition-colors ${
                 activeMode === mode
                   ? `font-bold ${activeModeText}`
                   : `font-semibold ${inactiveModeText}`
@@ -468,29 +467,29 @@ export function CharacterPage() {
             >
               {mode}
               {activeMode === mode && (
-                <span className="absolute left-1/2 -translate-x-1/2 bottom-0 h-[3px] w-[24px] rounded-full bg-[var(--color-primary)] shadow-[0_0_12px_rgba(255,183,197,0.48)]" />
+                <span className="absolute bottom-0 left-1/2 h-[3px] w-[20px] -translate-x-1/2 rounded-full bg-[var(--color-primary-500)]" />
               )}
             </button>
           ))}
         </div>
 
         {/* Secondary tag chips (scrollable) + funnel filter button (right, fixed) */}
-        <div className="relative z-30 shrink-0 px-3 pb-2">
+        <div className="relative z-30 mx-auto w-full max-w-[1180px] shrink-0 px-3 pb-2 pt-1 sm:px-4">
           <div className="flex min-h-[40px] items-center gap-1.5">
             <div className="flex-1 min-w-0 flex gap-1.5 overflow-x-auto overflow-y-hidden touch-pan-x no-scrollbar">
               {pinnedTagChips.map((tag) => (
                 <button
                   key={tag}
                   onClick={() => setActiveTag(tag)}
-                  className={`relative shrink-0 h-[36px] px-3.5 rounded-full text-[16px] border transition-colors ${
+                    className={`relative h-[32px] shrink-0 rounded-full px-3.5 text-[13px] transition-colors ${
                     activeTag === tag
-                      ? 'bg-[var(--color-primary)] text-white border-transparent font-bold shadow-[0_8px_18px_rgba(255,143,171,0.22)]'
-                      : `bg-transparent ${inactiveTagText} border-transparent font-semibold`
+                      ? 'bg-[var(--color-primary-500)] text-white font-semibold'
+                      : `bg-transparent ${inactiveTagText} font-medium`
                   }`}
                 >
                   {tag}
                   {activeTag === tag && (
-                    <span className="absolute left-1/2 -translate-x-1/2 -bottom-[6px] w-0 h-0 border-l-[6px] border-r-[6px] border-t-[6px] border-l-transparent border-r-transparent border-t-[var(--color-primary)]" />
+                    <span className="sr-only">已选择</span>
                   )}
                 </button>
               ))}
@@ -524,7 +523,7 @@ export function CharacterPage() {
                 onClick={() => setShowFilter(false)}
                 className="fixed inset-0 z-20 cursor-default bg-black/20"
               />
-              <div className={`absolute left-[-12px] right-[-12px] top-full z-30 rounded-b-[24px] backdrop-blur-[22px] border-t shadow-[0_18px_40px_rgba(0,0,0,0.18)] px-4 pt-3.5 pb-4 ${filterPanelClass}`}>
+              <div className={`absolute left-0 right-0 top-full z-30 rounded-b-[16px] border-t px-4 pb-4 pt-3.5 shadow-[0_18px_40px_rgba(0,0,0,0.14)] ${filterPanelClass}`}>
                 <div className="flex items-baseline justify-between gap-3 mb-3">
                   <div className="min-w-0 flex items-baseline gap-2.5">
                     <p className={`shrink-0 text-[17px] font-bold leading-none ${filterPanelTitle}`}>更多标签</p>
@@ -559,9 +558,15 @@ export function CharacterPage() {
             </>
           )}
         </div>
+        </div>
 
         {/* Discovery grid */}
-        <div ref={gridRef} className="relative z-10 flex-1 overflow-y-auto overscroll-y-contain px-5 pt-1 pb-[80px]">
+        <div ref={gridRef} className="relative z-10 mx-auto min-h-0 w-full max-w-[1180px] flex-1 overflow-y-auto overscroll-y-contain px-3.5 pb-[120px] pt-1.5 sm:px-5">
+          <div className="px-1 pb-2 pt-1">
+            <p className="text-[14px] font-semibold text-[var(--color-ink)]">
+              {activeMode === MODE_RECOMMENDED ? '为你推荐' : activeMode}
+            </p>
+          </div>
           {/* Pull-to-refresh indicator — height tracks finger pull, snaps to a
               spinner while refreshing. */}
           {(pull > 0 || refreshing) && (
@@ -580,13 +585,19 @@ export function CharacterPage() {
             </div>
           )}
           {filtered.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-center gap-2 pb-20">
-              <span className="text-[15px] text-[var(--color-text-secondary)]">
-                {items.length === 0 ? '正在加载角色…' : '没有找到匹配的角色'}
-              </span>
-            </div>
+            items.length === 0 ? (
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 md:grid-cols-4 xl:grid-cols-5" aria-label="正在加载角色">
+                {Array.from({ length: 10 }).map((_, index) => (
+                  <div key={index} className="aspect-[3/4] animate-pulse rounded-[12px] bg-[var(--color-page-soft)]" />
+                ))}
+              </div>
+            ) : (
+              <div className="flex h-full flex-col items-center justify-center gap-2 pb-20 text-center">
+                <span className="text-[15px] text-[var(--color-text-secondary)]">没有找到匹配的角色</span>
+              </div>
+            )
           ) : (
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-4 md:grid-cols-4 xl:grid-cols-5">
               {filtered.map((it) => (
                 <DiscoveryCard
                   key={it.id}
@@ -664,7 +675,7 @@ export function CharacterPage() {
           </button>
         </div>
       </Dialog>
-    </div>
+    </AppPageShell>
   )
 }
 
@@ -690,10 +701,10 @@ function DiscoveryCard({
   const displayTags = tags.slice(0, 2)
 
   return (
-    <div className="group relative flex flex-col w-full rounded-[14px] overflow-hidden bg-[var(--color-glass-55)] backdrop-blur-[12px] border border-[var(--color-border-glass)] shadow-[0_2px_8px_rgba(0,0,0,0.04),0_8px_24px_rgba(0,0,0,0.06)] transition-all duration-[var(--duration-normal)] ease-[var(--ease-standard)] hover:shadow-[0_4px_12px_rgba(0,0,0,0.06),0_12px_32px_rgba(0,0,0,0.08)] hover:-translate-y-1">
+    <div className="group relative flex w-full flex-col overflow-hidden rounded-[14px] border border-white/70 bg-transparent shadow-[0_5px_18px_rgba(73,48,62,0.12)] transition-shadow duration-[var(--duration-normal)] hover:shadow-[0_8px_26px_rgba(73,48,62,0.16)]">
       <button
         onClick={onOpen}
-        className="relative w-full aspect-[3/4] active:scale-[0.97] transition-transform text-left"
+        className="relative aspect-[0.72] w-full text-left transition-opacity active:opacity-90"
         style={{ background: `linear-gradient(135deg, ${profile.tagBg}, transparent)` }}
       >
         <CoverFill cover={profile.cover} alt={profile.name} />
@@ -712,8 +723,8 @@ function DiscoveryCard({
         )}
 
         {/* name + hook + interaction data overlay */}
-        <div className="absolute inset-x-0 bottom-0 p-2.5 space-y-1">
-          <p className="text-[16px] font-bold leading-tight text-white line-clamp-1 text-left">{profile.name}</p>
+        <div className="absolute inset-x-0 bottom-0 space-y-1 p-2.5">
+          <p className="text-[15px] font-bold leading-tight text-white line-clamp-1 text-left">{profile.name}</p>
           {hook && (
             <p className="text-[12px] leading-[1.5] text-white/95 font-medium line-clamp-2 text-left">
               {hook}
@@ -735,7 +746,7 @@ function DiscoveryCard({
                 {displayTags.map((tag) => (
                   <span
                     key={tag}
-                    className="inline-flex items-center h-[20px] px-2 rounded-full bg-white/10 border border-white/20 backdrop-blur-[2px] text-[11px] text-white/80 transition-all duration-[var(--duration-fast)] hover:bg-white/20 truncate max-w-[72px]"
+                    className="inline-flex h-[20px] max-w-[72px] items-center truncate rounded-full border border-white/20 bg-black/16 px-2 text-[11px] text-white/88"
                     title={tag}
                   >
                     {tag}

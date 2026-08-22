@@ -10,6 +10,8 @@ import { EmptyState } from '../components/ui/EmptyState'
 import { OfflineState } from '../components/ui/OfflineState'
 import { Button } from '../components/ui/Button'
 import { BreathingDots } from '../components/ui/BreathingDots'
+import { ChatPlusMenu } from '../components/ChatPlusMenu'
+import { MaskSheet } from '../components/MaskSheet'
 
 const sections = [
   'offline',
@@ -20,6 +22,7 @@ const sections = [
   'loading',
   'skeleton',
   'breathing',
+  'mask',
 ] as const
 
 type Section = (typeof sections)[number]
@@ -31,6 +34,8 @@ export function UIStatePreviewPage() {
   const [showDialog, setShowDialog] = useState(false)
   const [showToast, setShowToast] = useState(false)
   const [showSheet, setShowSheet] = useState(false)
+  const [showMaskSheet, setShowMaskSheet] = useState(false)
+  const [showComposerMenu, setShowComposerMenu] = useState(true)
 
   return (
     <div className="relative w-full h-full flex flex-col overflow-hidden bg-[var(--color-surface)]">
@@ -144,6 +149,37 @@ export function UIStatePreviewPage() {
             <p className="text-[13px] text-[var(--color-text-muted)]">Typing indicator (600ms cycle)</p>
           </div>
         )}
+
+        {activeSection === 'mask' && (
+          <div className="mx-auto w-full max-w-[520px] px-3 py-8">
+            <div className={`overflow-hidden rounded-[24px] border backdrop-blur-[24px] ${resolvedTheme === 'dark' ? 'border-white/8 bg-[rgba(26,26,46,0.84)]' : 'border-white/75 bg-[rgba(255,255,255,0.82)] shadow-[0_10px_32px_rgba(74,48,57,0.13)]'}`}>
+              <div className="flex min-h-[60px] items-center gap-2 px-3 py-2.5">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center text-[var(--color-text-secondary)]">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="9" y="2" width="6" height="11" rx="3" />
+                    <path d="M5 10a7 7 0 0 0 14 0M12 18.5v3M8 22h8" />
+                  </svg>
+                </span>
+                <span className="min-w-0 flex-1 truncate text-[16px] text-[var(--color-text-placeholder)]">想和凛说点什么…</span>
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-r from-[#FFB7C5] to-[#FF8FAB] opacity-45">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="white"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" /></svg>
+                </span>
+                <button type="button" aria-label={showComposerMenu ? '收起更多功能' : '更多功能'} onClick={() => setShowComposerMenu((value) => !value)} className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${showComposerMenu ? 'bg-[#FF8FAB]/16 text-[#FF7D9D]' : 'bg-black/[0.045] text-[var(--color-text-secondary)]'}`}>
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" className="transition-transform duration-200" style={{ transform: showComposerMenu ? 'rotate(45deg)' : 'none' }}><line x1="12" y1="6" x2="12" y2="18" /><line x1="6" y1="12" x2="18" y2="12" /></svg>
+                </button>
+              </div>
+              <ChatPlusMenu
+                open={showComposerMenu}
+                isDark={resolvedTheme === 'dark'}
+                onVoiceChat={() => {}}
+                onVoiceCall={() => {}}
+                onTransfer={() => {}}
+                onMasks={() => setShowMaskSheet(true)}
+                onRestart={() => {}}
+              />
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Dialog */}
@@ -181,6 +217,12 @@ export function UIStatePreviewPage() {
           完成
         </Button>
       </BottomSheet>
+      <MaskSheet
+        open={showMaskSheet}
+        onClose={() => setShowMaskSheet(false)}
+        characterId="rin"
+        characterName="凛"
+      />
     </div>
   )
 }

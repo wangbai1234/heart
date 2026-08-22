@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { useThemeStore } from '../stores/themeStore'
 import { useCreditsStore } from '../stores/creditsStore'
 import { redeemCode } from '../services/api'
 import { OTPInput } from '../components/ui/OTPInput'
@@ -10,17 +9,12 @@ import { useSafeBack } from '../hooks/useSafeBack'
 
 export function RedeemPage() {
   const goBack = useSafeBack('/wallet')
-  const { resolvedTheme } = useThemeStore()
   const creditsStore = useCreditsStore()
   const [code, setCode] = useState('')
   const [loading, setLoading] = useState(false)
   const [toast, setToast] = useState({ visible: false, message: '' })
   const [showSuccess, setShowSuccess] = useState(false)
   const [showHelp, setShowHelp] = useState(false)
-
-  const bgImage = resolvedTheme === 'dark'
-    ? '/assets/backgrounds/暗色聊天背景图.webp'
-    : '/assets/backgrounds/聊天背景图.webp'
 
   const isCodeComplete = code.replace(/[^a-zA-Z0-9]/g, '').length === 12
 
@@ -59,9 +53,7 @@ export function RedeemPage() {
   }
 
   return (
-    <div className="relative w-full h-full flex flex-col overflow-hidden">
-      {/* Background */}
-      <img src={bgImage} alt="" className="absolute inset-0 w-full h-full object-cover z-0" />
+    <div className="app-atmosphere relative flex h-full w-full flex-col overflow-hidden">
 
       {/* Status bar */}
       <div style={{ height: 'var(--safe-top)' }} />

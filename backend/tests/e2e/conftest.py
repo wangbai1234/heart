@@ -2,7 +2,7 @@
 
 Design:
     - session-scope `e2e_server`: spawns `uvicorn heart.api.main:create_app --factory`
-      on a free port, waits for /api/health/ready, yields base_url, SIGTERMs on teardown.
+      on a free port, waits for /health/ready, yields base_url, SIGTERMs on teardown.
     - session-scope `api_context`: Playwright sync APIRequestContext bound to base_url.
     - function-scope `pg_conn`: psycopg2 connection to the same Postgres the server uses.
     - function-scope `clean_demo_user`: deletes any prior session rows for the test user
@@ -19,7 +19,7 @@ import subprocess
 import time
 from pathlib import Path
 from typing import Iterator
-from uuid import NAMESPACE_DNS, UUID, uuid5
+from uuid import UUID
 
 import pytest
 
@@ -58,7 +58,7 @@ def _wait_ready(base_url: str, timeout_s: float = 30.0) -> None:
     last_err: Exception | None = None
     while time.monotonic() < deadline:
         try:
-            r = httpx.get(f"{base_url}/api/health/ready", timeout=2.0)
+            r = httpx.get(f"{base_url}/health/ready", timeout=2.0)
             if r.status_code == 200:
                 return
         except Exception as e:
@@ -84,6 +84,8 @@ def e2e_server() -> Iterator[str]:
     env.setdefault("REDIS_URL", "redis://localhost:6379/0")
     env.setdefault("LLM_PROVIDER", "fake")  # default to fake LLM; override to test real
     env.setdefault("HEART_TURN_PROFILER", "1")
+    env["HEART_DEV_MODE"] = "true"  # exposes deterministic test login only in this subprocess
+    env["HEART_WORKERS_ENABLED"] = "false"  # keep E2E isolated from background jobs
     # Stable JWT secret for the run
     env.setdefault("JWT_SECRET_KEY", "e2e-test-secret-not-for-prod-do-not-reuse")
 
@@ -153,13 +155,13 @@ def pg_conn():
 
 # ─── demo user identity ───────────────────────────────────────────────
 
-DEMO_USER_ID = "e2e_demo_user"
+DEMO_USER_ID = "e24a2e77-e5bb-59bb-95eb-1a65185103eb"
 DEMO_CHARACTER_ID = "rin"
 
 
 def demo_user_uuid() -> UUID:
-    """Same coercion as routes._coerce_uuid for non-UUID user_ids."""
-    return uuid5(NAMESPACE_DNS, DEMO_USER_ID)
+    """Stable UUID used by the dev-login E2E account."""
+    return UUID(DEMO_USER_ID)
 
 
 @pytest.fixture

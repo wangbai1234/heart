@@ -238,7 +238,7 @@ async def pricing() -> dict:
                 "daily_checkin_coins": settings.immersive_daily_checkin_coins,
                 "daily_coins_permanent": True,
                 "benefits": [
-                    "全部文字模型无限次使用",
+                    "全部文字聊天模型免费无限次调用",
                     "每日签到领取80币",
                     "签到币永久有效，可用于其他能力",
                     "免费解锁所有剧情",

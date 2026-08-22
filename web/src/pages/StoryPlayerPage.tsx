@@ -1,6 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { useThemeStore } from '../stores/themeStore'
 import { useStoryStore, type StoryMessageVM } from '../stores/storyStore'
 import { useStoryWebSocket } from '../hooks/useStoryWebSocket'
 import { NavigationBar } from '../components/ui/NavigationBar'
@@ -21,7 +20,6 @@ import { splitGmText } from '../utils/storyBubbles'
 export function StoryPlayerPage() {
   const navigate = useNavigate()
   const { runId = '' } = useParams()
-  const { resolvedTheme } = useThemeStore()
 
   const runMeta = useStoryStore((s) => s.runMetaById[runId])
   const messages = useStoryStore((s) => s.messagesByRun[runId])
@@ -45,11 +43,6 @@ export function StoryPlayerPage() {
     const el = scrollRef.current
     if (el) el.scrollTop = el.scrollHeight
   }, [messages, streamText, generating])
-
-  const pageBg =
-    resolvedTheme === 'dark'
-      ? '/assets/backgrounds/暗色聊天背景图.webp'
-      : '/assets/backgrounds/聊天背景图.webp'
 
   const handleSend = () => {
     const text = draft.trim()
@@ -87,8 +80,7 @@ export function StoryPlayerPage() {
       : []
 
   return (
-    <div className="relative w-full h-full overflow-hidden flex flex-col">
-      <img src={pageBg} alt="" className="absolute inset-0 w-full h-full object-cover z-0" />
+    <div className="app-atmosphere relative flex h-full w-full flex-col overflow-hidden">
       <NavigationBar
         title={runMeta?.title ?? '剧情'}
         onBack={() => navigate('/explore')}

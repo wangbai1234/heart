@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { useThemeStore } from '../stores/themeStore'
 import { useToastStore } from '../stores/toastStore'
 import { getInviteStatus, type InviteStatus } from '../services/api'
 import { Skeleton } from '../components/ui/Skeleton'
@@ -7,14 +6,9 @@ import { useSafeBack } from '../hooks/useSafeBack'
 
 export function InvitePage() {
   const goBack = useSafeBack('/character')
-  const { resolvedTheme } = useThemeStore()
   const showToast = useToastStore((s) => s.show)
   const [status, setStatus] = useState<InviteStatus | null>(null)
   const [loadError, setLoadError] = useState(false)
-
-  const bgImage = resolvedTheme === 'dark'
-    ? '/assets/backgrounds/暗色聊天背景图.webp'
-    : '/assets/backgrounds/聊天背景图.webp'
 
   const load = () => {
     setLoadError(false)
@@ -38,17 +32,16 @@ export function InvitePage() {
   const invited = status?.invited_count ?? 0
 
   return (
-    <div className="relative w-full h-full flex flex-col overflow-hidden">
-      <img src={bgImage} alt="" className="absolute inset-0 w-full h-full object-cover z-0" />
+    <div className="app-atmosphere relative flex h-full w-full flex-col overflow-hidden">
       <div style={{ height: 'var(--safe-top)' }} />
 
-      <nav className="relative z-20 flex items-center justify-between px-5 h-[44px] shrink-0">
+      <nav className="relative z-20 flex h-[52px] shrink-0 items-center justify-between border-b border-white/40 px-5">
         <button onClick={goBack} className="w-[44px] h-[44px] flex items-center justify-center">
           <svg width="12" height="20" viewBox="0 0 12 20" fill="none" stroke="var(--color-ink)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="10,2 2,10 10,18" />
           </svg>
         </button>
-        <span className="text-[17px] font-medium text-[var(--color-ink)]">邀请好友</span>
+        <span className="text-[17px] font-semibold text-[var(--color-ink)]">邀请好友</span>
         <div className="w-[44px]" />
       </nav>
 
@@ -71,40 +64,60 @@ export function InvitePage() {
         {status && (
           <>
             {/* Invite code hero */}
-            <div className="bg-[var(--color-glass-75)] backdrop-blur-[20px] rounded-[20px] border border-[var(--color-border-glass)] shadow-[var(--shadow-hero)] p-6 mt-4 mb-5 text-center">
-              <p className="text-[14px] text-[var(--color-text-secondary)] mb-1">邀请好友，双方各得 40 yuoyuo币</p>
-              <p className="text-[13px] text-[var(--color-text-muted)] mb-3">好友完成首次聊天后到账</p>
-              <button
-                onClick={() => copy(status.invite_code, '邀请码')}
-                className="inline-flex items-center gap-2 px-5 py-3 rounded-[14px] bg-[var(--color-glass-90)] border border-[var(--color-border-glass)] active:scale-[0.98] transition-transform"
-              >
-                <span className="text-[24px] font-bold tracking-[0.16em] text-[var(--color-ink)] font-[var(--font-latin)]">
-                  {status.invite_code}
-                </span>
-                <span className="text-[13px] font-medium text-[var(--color-primary)]">复制</span>
-              </button>
-              <button
-                onClick={() => copy(status.invite_url, '邀请链接')}
-                className="mt-3 block w-full text-center py-3 rounded-full bg-gradient-to-r from-[#FFB7C5] to-[#FF8FAB] text-[var(--color-text-on-primary)] text-[15px] font-medium shadow-[var(--shadow-btn)] active:scale-[0.97] transition-transform"
-              >
-                复制邀请链接
-              </button>
+            <div className="relative mt-4 mb-5 overflow-hidden rounded-[20px] border border-[var(--color-border-glass)] bg-[var(--color-page-surface)] p-5 shadow-[var(--shadow-card)]">
+              <div className="pointer-events-none absolute right-0 top-0 h-[150px] w-[180px] bg-[linear-gradient(115deg,transparent,rgba(255,183,197,0.22))]" />
+              <div className="relative min-h-[132px] pr-[112px]">
+                <p className="text-[11px] font-semibold tracking-[0.14em] text-[var(--color-primary-600)]">YUOYUO 邀请计划</p>
+                <h1 className="mt-2 text-[22px] font-semibold leading-[1.35] text-[var(--color-ink)]">邀请朋友，一起聊得更久</h1>
+                <p className="mt-2 text-[13px] leading-[1.6] text-[var(--color-text-secondary)]">你和好友各得 40 yuoyuo币，好友完成首次聊天后到账。</p>
+                <img src="/assets/settings/invite-mascot.webp" alt="" className="pointer-events-none absolute -right-2 -top-2 h-[122px] w-[122px] object-contain" />
+              </div>
+              <div className="relative mt-4 border-t border-[var(--color-divider)] pt-4">
+                <p className="mb-2 text-[12px] text-[var(--color-text-muted)]">我的邀请码</p>
+                <button
+                  onClick={() => copy(status.invite_code, '邀请码')}
+                  className="flex w-full items-center justify-between rounded-[13px] border border-[var(--color-border-glass)] bg-[var(--color-page-soft)] px-4 py-3 active:scale-[0.99] transition-transform"
+                >
+                  <span className="text-[23px] font-bold tracking-[0.16em] text-[var(--color-ink)] font-[var(--font-latin)]">
+                    {status.invite_code}
+                  </span>
+                  <span className="text-[13px] font-medium text-[var(--color-primary-600)]">复制</span>
+                </button>
+                <button
+                  onClick={() => copy(status.invite_url, '邀请链接')}
+                  className="mt-3 block w-full rounded-[13px] bg-[var(--color-primary-500)] py-3 text-center text-[15px] font-medium text-white shadow-[var(--shadow-btn)] active:scale-[0.98] transition-transform"
+                >
+                  复制邀请链接
+                </button>
+              </div>
             </div>
 
             {/* Stats */}
-            <div className="grid grid-cols-3 gap-3 mb-5">
-              <StatCell label="已邀请" value={invited} />
-              <StatCell label="待首聊" value={status.pending_count} />
-              <StatCell label="累计获得" value={status.total_reward} accent />
+            <div className="mb-6 grid grid-cols-3 divide-x divide-[var(--color-divider)] overflow-hidden rounded-[18px] border border-[var(--color-border-glass)] bg-[var(--color-page-surface)]/88 py-3 shadow-[var(--shadow-soft)]">
+              <div className="text-center">
+                <p className="text-[21px] font-bold text-[var(--color-ink)]">{invited}</p>
+                <p className="mt-1 text-[11px] text-[var(--color-text-muted)]">已邀请</p>
+              </div>
+              <div className="text-center">
+                <p className="text-[21px] font-bold text-[var(--color-ink)]">{status.pending_count}</p>
+                <p className="mt-1 text-[11px] text-[var(--color-text-muted)]">待首聊</p>
+              </div>
+              <div className="text-center">
+                <p className="text-[21px] font-bold text-[var(--color-primary-600)]">{status.total_reward}</p>
+                <p className="mt-1 text-[11px] text-[var(--color-text-muted)]">累计 yuoyuo币</p>
+              </div>
             </div>
 
             {/* Stage progress */}
-            <p className="text-[13px] font-medium text-[var(--color-ink)] mb-3">阶段奖励</p>
-            <div className="space-y-4">
+            <div className="mb-3 flex items-end justify-between px-1">
+              <p className="text-[15px] font-semibold text-[var(--color-ink)]">阶段奖励</p>
+              <span className="text-[11px] text-[var(--color-text-muted)]">完成首次聊天后到账</span>
+            </div>
+            <div className="overflow-hidden rounded-[18px] border border-[var(--color-border-glass)] bg-[var(--color-page-surface)]/88 shadow-[var(--shadow-soft)]">
               {status.stages.map((stage) => {
                 const pct = Math.min(100, Math.round((invited / stage.threshold) * 100))
                 return (
-                  <div key={stage.threshold} className="bg-[var(--color-glass-card)] backdrop-blur-[16px] rounded-[16px] border border-[var(--color-border-glass)] p-4">
+                  <div key={stage.threshold} className="border-b border-[var(--color-divider)] p-4 last:border-b-0">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-[14px] text-[var(--color-ink)]">
                         邀请满 {stage.threshold} 人
@@ -125,21 +138,10 @@ export function InvitePage() {
               })}
             </div>
 
-            <p className="text-center text-[12px] text-[var(--color-text-muted)] mt-6">
-              奖励在好友完成首次聊天后自动发放。
-            </p>
+            <p className="mt-5 text-center text-[12px] text-[var(--color-text-muted)]">奖励在好友完成首次聊天后自动发放。</p>
           </>
         )}
       </div>
-    </div>
-  )
-}
-
-function StatCell({ label, value, accent }: { label: string; value: number; accent?: boolean }) {
-  return (
-    <div className="bg-[var(--color-glass-card)] backdrop-blur-[16px] rounded-[16px] border border-[var(--color-border-glass)] p-3 text-center">
-      <p className={`text-[22px] font-bold ${accent ? 'text-[var(--color-primary)]' : 'text-[var(--color-ink)]'}`}>{value}</p>
-      <p className="text-[12px] text-[var(--color-text-muted)] mt-1">{label}</p>
     </div>
   )
 }

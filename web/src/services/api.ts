@@ -378,6 +378,48 @@ export async function getModelPreferences(): Promise<{
   return request('/models/preferences')
 }
 
+// ── User masks (explicit conversation personas) ─────────────────
+
+export interface UserMask {
+  id: string
+  name: string
+  gender: 'male' | 'female' | 'unspecified'
+  bio: string
+  bound_character_ids: string[]
+  created_at: string
+  updated_at: string
+}
+
+export interface UserMaskInput {
+  name: string
+  gender: UserMask['gender']
+  bio: string
+}
+
+export async function getMasks(): Promise<{ items: UserMask[] }> {
+  return request('/masks')
+}
+
+export async function createMask(input: UserMaskInput): Promise<{ item: UserMask }> {
+  return request('/masks', { method: 'POST', body: JSON.stringify(input) })
+}
+
+export async function updateMask(id: string, input: UserMaskInput): Promise<{ item: UserMask }> {
+  return request(`/masks/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(input) })
+}
+
+export async function bindMask(id: string, characterId: string): Promise<{ item: UserMask }> {
+  return request(`/masks/${encodeURIComponent(id)}/bind?character_id=${encodeURIComponent(characterId)}`, { method: 'POST' })
+}
+
+export async function unbindMask(id: string, characterId: string): Promise<{ ok: boolean }> {
+  return request(`/masks/${encodeURIComponent(id)}/unbind?character_id=${encodeURIComponent(characterId)}`, { method: 'POST' })
+}
+
+export async function deleteMask(id: string): Promise<{ ok: boolean }> {
+  return request(`/masks/${encodeURIComponent(id)}`, { method: 'DELETE' })
+}
+
 export async function saveModelPreference(
   characterId: string,
   modelId: string,
@@ -873,6 +915,24 @@ export interface QuickPrefillRequest {
   persona: string
 }
 
+export interface SoulProfileDraftDTO {
+  wound_essence: string
+  wound_manifest: string
+  wound_defense: string
+  private_truth: string
+  desire_surface: string
+  desire_hidden: string
+  desire_deepest: string
+  fear_ultimate: string
+  fear_daily: string
+  fear_shadow: string
+  belief_self: string
+  belief_others: string
+  belief_love: string
+  belief_time: string
+  softening_triggers: string[]
+}
+
 export interface QuickPrefillResponse {
   age_range: string
   greeting_style: 'warm' | 'cool' | 'playful' | 'reserved' | 'intense'
@@ -884,15 +944,27 @@ export interface QuickPrefillResponse {
     playfulness: number
     steadiness: number
   }
+  tagline: string
+  intro: string
+  one_liner: string
+  archetype_label: string
+  backstory: string
+  tags: string[]
   catchphrases: string[]
+  speech_samples: string[]
+  soul_profile: SoulProfileDraftDTO
   opening: string
   theme_preset_id: string
 }
 
-export async function quickPrefill(body: QuickPrefillRequest): Promise<QuickPrefillResponse> {
+export async function quickPrefill(
+  body: QuickPrefillRequest,
+  signal?: AbortSignal,
+): Promise<QuickPrefillResponse> {
   return request('/characters/quick-prefill', {
     method: 'POST',
     body: JSON.stringify(body),
+    signal,
   })
 }
 
@@ -924,6 +996,12 @@ export interface CharacterDraftDTO {
   intro?: string
   /** One-line public tagline under the name (display-only, ≤60 chars). */
   tagline?: string
+  /** Distinct story hook shown in the 叙引 card (display-only, ≤120 chars). */
+  one_liner?: string
+  /** Short public identity label shown in the profile dossier. */
+  archetype_label?: string
+  /** Character-specific inner life used to build the runtime SoulSpec. */
+  soul_profile?: SoulProfileDraftDTO
   sliders: {
     warmth: number
     talkativeness: number

@@ -131,3 +131,38 @@ def test_prompt_contains_action_bracket_format_contract():
     assert "（）" in prompt
     # Sanity: the anti-example the format section warns about.
     assert "目光微微闪动" in prompt or "括号里只写动作" in prompt
+
+
+def test_bound_user_mask_is_injected_as_user_identity():
+    """A mask steers how the character understands the user, not its own identity."""
+    service = ComposerService.__new__(ComposerService)
+    service._sanitizer_config = None
+    prompt = service._build_system_prompt(
+        anchor=AnchorContextBlock(),
+        memory=MemoryContextBlock(
+            retrieved_memories=[{"text": "你们一起看过海", "type": "L2", "score": 0.8}],
+            historical_identity_memories=[
+                {"text": "用户的名字是王白", "type": "L4", "score": 0.99}
+            ],
+        ),
+        emotion=EmotionContextBlock(),
+        relationship=RelationshipContextBlock(),
+        inner_state=InnerStateContextBlock(),
+        soul_spec=_make_soul_spec(),
+        user_mask={
+            "name": "小满",
+            "gender": "female",
+            "bio": "性格安静，喜欢摄影，是角色多年未见的旧友。",
+        },
+    )
+
+    assert "【当前用户身份】" in prompt
+    assert "「小满」" in prompt
+    assert "性别：女性" in prompt
+    assert "多年未见的旧友" in prompt
+    assert "不要提及‘面具’" in prompt
+    assert "【历史身份记忆（仅用于回应本轮明确的历史身份询问）】" in prompt
+    assert "用户的名字是王白" in prompt
+    assert "【当前用户称呼决策（最高优先级）】" in prompt
+    assert "只能使用「小满」" in prompt
+    assert prompt.rfind("【当前用户称呼决策（最高优先级）】") > prompt.rfind("用户的名字是王白")

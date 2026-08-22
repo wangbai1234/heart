@@ -28,6 +28,8 @@ class TurnRequest:
     # True when the user has voice on for this turn (resolved after tier gating).
     # Drives the composer's per-sentence {E:情绪} sentinel prompt.
     voice_enabled: bool = False
+    # Explicit user-owned persona ("mask") bound to this character.
+    user_mask: Optional[dict] = None
 
 
 @dataclass

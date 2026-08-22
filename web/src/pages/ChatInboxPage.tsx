@@ -116,10 +116,6 @@ export function ChatInboxPage() {
       .catch(() => {})
   }, [])
 
-  const pageBg = resolvedTheme === 'dark'
-    ? '/assets/backgrounds/暗色聊天背景图.webp'
-    : '/assets/backgrounds/聊天背景图.webp'
-
   // Catalog: server list when loaded, built-in profiles as fallback.
   const catalog: Array<{ id: string; displayName?: string; avatarUrl?: string | null; coverUrl?: string | null; isOwner: boolean }> =
     serverCharacters.length > 0
@@ -211,9 +207,7 @@ export function ChatInboxPage() {
   }
 
   return (
-    <div className="relative h-full overflow-hidden">
-      <img src={pageBg} alt="" className="absolute inset-0 h-full w-full object-cover" />
-
+    <div className="app-atmosphere relative h-full overflow-hidden">
       <div className="relative z-10 flex h-full flex-col">
         <div style={{ height: 'var(--safe-top)' }} />
 

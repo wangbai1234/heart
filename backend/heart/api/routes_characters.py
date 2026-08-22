@@ -2,15 +2,17 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 import uuid
 from dataclasses import asdict
+from difflib import SequenceMatcher
 from typing import Literal
 
 import structlog
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError, model_validator
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,7 +25,7 @@ from heart.ss01_soul.character_catalog import (
     ensure_character_loaded,
 )
 from heart.ss01_soul.character_content import CharacterContent, get_display_name
-from heart.ss01_soul.draft import CharacterDraft
+from heart.ss01_soul.draft import CharacterDraft, SliderSet, SoulProfileDraft
 
 logger = structlog.get_logger(__name__)
 
@@ -192,6 +194,18 @@ def _derive_intro(archetype: str, persona: str, backstory: str) -> str:
     return persona.strip()
 
 
+def _normalized_copy(value: str) -> str:
+    """Normalize public copy for exact-content deduplication across UI sections."""
+    return re.sub(r"[\W_]+", "", value or "", flags=re.UNICODE).casefold()
+
+
+def _is_duplicate_copy(candidate: str, *existing: str) -> bool:
+    normalized = _normalized_copy(candidate)
+    return bool(normalized) and any(
+        normalized == _normalized_copy(item) for item in existing if item
+    )
+
+
 def _derive_personality(draft: dict) -> list[dict]:
     """性格轴 from an explicit ``personality`` list, else derived from sliders."""
     personality: list[dict] = []
@@ -251,6 +265,13 @@ def _derive_profile_presentation(spec: dict, draft: dict, is_builtin: bool = Fal
     one_liner = override("one_liner", archetype_first or persona_first)
 
     intro = override("intro", "") or _derive_intro(public_archetype, persona, backstory)
+    # Legacy quick drafts only carried persona, so all three fallbacks could be
+    # the same sentence. Suppress duplicates at read time to fix existing rows
+    # without rewriting creator data. New quick drafts author each field.
+    if _is_duplicate_copy(intro, tagline):
+        intro = ""
+    if _is_duplicate_copy(one_liner, tagline, intro):
+        one_liner = ""
     personality = _derive_personality(draft)
 
     return {
@@ -561,7 +582,10 @@ async def _require_owner(
     403 if it is a builtin (owner_user_id IS NULL).
     """
     result = await db.execute(
-        text("SELECT id, owner_user_id, visibility, status FROM characters WHERE id = :cid"),
+        text(
+            "SELECT id, owner_user_id, visibility, status, soul_spec_version"
+            " FROM characters WHERE id = :cid"
+        ),
         {"cid": character_id},
     )
     row = result.mappings().fetchone()
@@ -1308,14 +1332,62 @@ class QuickPrefillRequest(BaseModel):
 
 
 class QuickPrefillResponse(BaseModel):
-    """快速创建 AI 预填响应"""
+    """A complete, independently-authored quick character bible."""
 
-    age_range: str
+    age_range: str = Field(pattern=r"^\d{1,3}-\d{1,3}$")
     greeting_style: Literal["warm", "cool", "playful", "reserved", "intense"]
-    sliders: dict[str, float]  # 6个slider值
-    catchphrases: list[str]  # 3条
-    opening: str
-    theme_preset_id: str  # 推荐的主题配色id
+    sliders: SliderSet
+    tagline: str = Field(min_length=8, max_length=60)
+    intro: str = Field(min_length=60, max_length=500)
+    one_liner: str = Field(min_length=20, max_length=120)
+    archetype_label: str = Field(min_length=2, max_length=40)
+    backstory: str = Field(min_length=80, max_length=1500)
+    tags: list[str] = Field(min_length=3, max_length=5)
+    catchphrases: list[str] = Field(min_length=3, max_length=3)
+    speech_samples: list[str] = Field(min_length=3, max_length=5)
+    soul_profile: SoulProfileDraft
+    opening: str = Field(min_length=100, max_length=2000)
+    theme_preset_id: Literal[
+        "night_velvet",
+        "crimson_noir",
+        "amber_warm",
+        "royal_gold",
+        "earth_sage",
+        "ocean_depth",
+        "bright_warm",
+        "forest_mint",
+    ]
+
+    @model_validator(mode="after")
+    def distinct_public_copy(self) -> "QuickPrefillResponse":
+        fields = {
+            "tagline": self.tagline,
+            "intro": self.intro,
+            "one_liner": self.one_liner,
+            "backstory": self.backstory,
+        }
+        normalized = {name: _normalized_copy(value) for name, value in fields.items()}
+        names = list(normalized)
+        for index, left_name in enumerate(names):
+            left = normalized[left_name]
+            for right_name in names[index + 1 :]:
+                right = normalized[right_name]
+                shorter, longer = sorted((left, right), key=len)
+                repeated = shorter in longer or SequenceMatcher(None, left, right).ratio() >= 0.78
+                if repeated:
+                    raise ValueError(f"{right_name} duplicates {left_name}")
+        if any(not tag.strip() or len(tag.strip()) > 20 for tag in self.tags):
+            raise ValueError("tags must be non-empty and no longer than 20 characters")
+        if any(not item.strip() or len(item.strip()) > 50 for item in self.catchphrases):
+            raise ValueError("catchphrases must be non-empty and no longer than 50 characters")
+        if any(not item.strip() or len(item.strip()) > 120 for item in self.speech_samples):
+            raise ValueError("speech_samples must be non-empty and no longer than 120 characters")
+        return self
+
+
+_QUICK_PREFILL_ATTEMPT_TIMEOUT_S = 10.0
+_QUICK_PREFILL_TOTAL_TIMEOUT_S = 55.0
+_QUICK_PREFILL_MAX_TOKENS = 2200
 
 
 @router.post("/quick-prefill")
@@ -1325,7 +1397,8 @@ async def quick_prefill(
 ) -> QuickPrefillResponse:
     """快速创建：一次性 AI 预填所有设定（批4）。
 
-    主模型、创作者审、不落库、后续 verbatim 零运行时 LLM。
+    从稳定的低币价模型开始调用并按币价升序完整兜底；创作者审、不落库，
+    后续 verbatim 零运行时 LLM。
     失败时抛异常到前端，绝不偷偷套默认值假装成功。
     """
     from heart.api.wiring import get_model_router
@@ -1336,93 +1409,162 @@ async def quick_prefill(
         logger.error("quick_prefill_unavailable", extra={"user_id": current_user.user_id})
         raise HTTPException(status_code=503, detail=msg)
 
-    # 构建prompt让LLM一次性产出所有字段
-    prompt = f"""你是角色创作助手。根据用户提供的基础信息，生成完整的角色设定。
+    # One authoring call produces both public profile copy and the private soul
+    # core. Each public field has a distinct editorial job so the profile never
+    # repeats the user's original persona across multiple sections.
+    prompt = f"""你是专业角色编剧。根据用户给出的角色种子，扩写一份可长期扮演、前后一致的完整角色档案。
 
 基础信息：
 - 名字：{body.display_name}
 - 性别：{"男" if body.gender == "male" else "女"}
-- 人设：{body.persona}
+- 用户提供的角色种子：{body.persona}
 
-请生成以下内容（必须是合法JSON）：
+只返回以下结构的合法 JSON，所有文字字段使用简体中文：
 {{
-  "age_range": "年龄段(如: 18-24, 25-30, 30-35等)",
-  "greeting_style": "相处风格(warm/cool/playful/reserved/intense之一)",
+  "age_range": "18-24",
+  "greeting_style": "warm/cool/playful/reserved/intense 之一",
   "sliders": {{
-    "warmth": 0.0-1.0之间的值,
-    "talkativeness": 0.0-1.0之间的值,
-    "directness": 0.0-1.0之间的值,
-    "humor": 0.0-1.0之间的值,
-    "playfulness": 0.0-1.0之间的值,
-    "steadiness": 0.0-1.0之间的值
+    "warmth": 0.0,
+    "talkativeness": 0.0,
+    "directness": 0.0,
+    "humor": 0.0,
+    "playfulness": 0.0,
+    "steadiness": 0.0
   }},
-  "catchphrases": ["口头禅1", "口头禅2", "口头禅3"],
-  "opening": "200-400字的第一次见面开场白，代入角色口吻。格式要求：场景描述和动作、神态用中文括号（）包裹独立成行，说出口的话不加引号直接输出，括号段与对白段自由穿插",
-  "theme_preset_id": "推荐配色id(night_velvet/crimson_noir/amber_warm/royal_gold/earth_sage/ocean_depth/bright_warm/forest_mint之一)"
+  "tagline": "8-30字，封面下的一句角色钩子",
+  "intro": "80-180字，只介绍身份、职业、性格、习惯与当下生活",
+  "one_liner": "30-80字，只写尚未解决的人物矛盾、故事悬念以及用户可进入的关系切口",
+  "archetype_label": "2-12字的具体身份标签",
+  "backstory": "150-400字，解释重要经历如何塑造现在的性格和选择",
+  "tags": ["3到5个具体标签"],
+  "catchphrases": ["3条真实口癖，每条不超过20字"],
+  "speech_samples": ["3到5句不同情境下的自然说话样本，不要写动作"],
+  "soul_profile": {{
+    "wound_essence": "核心创伤本质",
+    "wound_manifest": "它在日常行为中的外显方式",
+    "wound_defense": "受到威胁时的防御机制",
+    "private_truth": "只有角色自己知道的真相",
+    "desire_surface": "表面渴望",
+    "desire_hidden": "隐藏渴望",
+    "desire_deepest": "最深渴望",
+    "fear_ultimate": "终极恐惧",
+    "fear_daily": "日常会被触发的恐惧",
+    "fear_shadow": "角色不愿承认的阴影恐惧",
+    "belief_self": "角色如何看待自己",
+    "belief_others": "角色如何看待他人",
+    "belief_love": "角色对亲密关系的核心信念",
+    "belief_time": "角色如何看待时间与改变",
+    "softening_triggers": ["2到5个能让角色逐渐卸下防备的具体事件"]
+  }},
+  "opening": "200-400字的第一次见面场景",
+  "theme_preset_id": "night_velvet/crimson_noir/amber_warm/royal_gold/earth_sage/ocean_depth/bright_warm/forest_mint 之一"
 }}
 
-要求：
-- age_range 从人设推断合理年龄段
-- greeting_style 与性格匹配
-- sliders 反映人设描述的性格特质
-- catchphrases 符合角色说话风格，每条≤20字
-- opening 必须符合格式：场景/动作用（）包裹独立成行，对白无引号直接输出，action与dialogue自由穿插。例：（深夜的酒吧，烟雾缭绕）\n你来晚了\n（轻轻点燃一支烟，眼神慵懒扫过来）
-- theme_preset_id 根据角色气质选择(如冷峻选crimson_noir，温暖选bright_warm)
+质量要求：
+- tagline、intro、one_liner、backstory 必须承担不同信息职责，禁止互相复制、摘抄首句或近义改写。
+- 必须补足职业/生活状态、行为习惯、关系模式、内在矛盾和语言特征，但不得擅自改变用户明确给出的事实。
+- 心理内核之间要有因果关系：创伤影响信念，信念影响防御，欲望与恐惧形成真实张力；禁止空泛的“外冷内热”“害怕失去”等模板句。
+- speech_samples 要能体现同一角色在平静、关心、被冒犯等不同情境下仍保持一致声音。
+- opening 中场景、动作、神态用中文括号（）包裹并独立成行；对白不加引号；动作与对白自然穿插。
+- 不要把用户称为固定姓名，不要替用户决定身份或行动。
 
 只返回JSON，不要其他文字。"""
 
-    try:
-        response_text = await router.call_main(
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.8,
-            max_tokens=800,
-            agent_name="QuickPrefill.ugc",
-        )
-    except Exception as e:
-        logger.exception(
-            "quick_prefill_llm_failed",
-            extra={"user_id": current_user.user_id, "error": str(e)},
-        )
-        raise HTTPException(
-            status_code=502,
-            detail="AI 预填失败，请重试或使用「角色创作」模式手动填写",
-        ) from e
+    from heart.infra.model_catalog import model_ids_by_ascending_coin_cost
 
-    if not response_text or not response_text.strip():
-        logger.error(
-            "quick_prefill_empty_response",
-            extra={"user_id": current_user.user_id},
-        )
-        raise HTTPException(status_code=502, detail="AI 生成为空，请重试")
+    model_chain = model_ids_by_ascending_coin_cost()
+    deadline = asyncio.get_running_loop().time() + _QUICK_PREFILL_TOTAL_TIMEOUT_S
+    last_error: Exception | None = None
+    previous_response = ""
+    previous_served_model = model_chain[0]
+    for attempt in range(2):
+        messages = [{"role": "user", "content": prompt}]
+        if attempt == 1:
+            messages.append({"role": "assistant", "content": previous_response[:12000]})
+            messages.append(
+                {
+                    "role": "user",
+                    "content": (
+                        "上面的 JSON 未通过结构或内容去重校验。请完整重写并严格满足字段长度、"
+                        "数量和内容职责，只返回修正后的完整 JSON。校验错误："
+                        f"{last_error}"
+                    ),
+                }
+            )
+        routing_meta: dict = {}
+        remaining_s = deadline - asyncio.get_running_loop().time()
+        if remaining_s <= 0:
+            raise HTTPException(status_code=504, detail="AI 生成超时，请重试")
+        requested_model = model_chain[0] if attempt == 0 else previous_served_model
+        failover = list(model_chain[1:]) if attempt == 0 else []
+        try:
+            response_text, served_model = await asyncio.wait_for(
+                router.call_for(
+                    requested_model,
+                    messages=messages,
+                    failover=failover,
+                    temperature=0.8,
+                    max_tokens=_QUICK_PREFILL_MAX_TOKENS,
+                    json_mode=True,
+                    agent_name="QuickPrefill.ugc",
+                    meta=routing_meta,
+                    attempt_timeout_s=min(_QUICK_PREFILL_ATTEMPT_TIMEOUT_S, remaining_s),
+                ),
+                timeout=remaining_s,
+            )
+            previous_served_model = served_model
+            logger.info(
+                "quick_prefill_model_served",
+                requested_model=requested_model,
+                served_model=served_model,
+                user_id=current_user.user_id,
+                attempt=attempt + 1,
+            )
+        except TimeoutError as exc:
+            logger.warning(
+                "quick_prefill_total_timeout",
+                user_id=current_user.user_id,
+                attempt=attempt + 1,
+                timeout_s=_QUICK_PREFILL_TOTAL_TIMEOUT_S,
+            )
+            raise HTTPException(status_code=504, detail="AI 生成超时，请重试") from exc
+        except Exception as exc:
+            logger.exception(
+                "quick_prefill_llm_failed",
+                extra={"user_id": current_user.user_id, "error": str(exc)},
+            )
+            raise HTTPException(
+                status_code=502,
+                detail="AI 预填失败，请重试或使用「角色创作」模式手动填写",
+            ) from exc
 
-    # 解析JSON
-    try:
-        # 提取JSON（可能被markdown包裹）
-        parsed_text = response_text.strip()
-        if parsed_text.startswith("```"):
-            # 去除markdown代码块
-            lines = parsed_text.split("\n")
-            parsed_text = "\n".join(lines[1:-1]) if len(lines) > 2 else parsed_text
-        data = json.loads(parsed_text)
+        if not response_text or not response_text.strip():
+            last_error = ValueError("empty response")
+            previous_response = ""
+            continue
 
-        return QuickPrefillResponse(
-            age_range=data["age_range"],
-            greeting_style=data["greeting_style"],
-            sliders=data["sliders"],
-            catchphrases=data["catchphrases"][:3],  # 只取前3条
-            opening=data["opening"],
-            theme_preset_id=data["theme_preset_id"],
-        )
-    except (json.JSONDecodeError, KeyError, ValueError) as e:
-        logger.exception(
-            "quick_prefill_parse_failed",
-            extra={
-                "user_id": current_user.user_id,
-                "response_text": response_text[:500],
-                "error": str(e),
-            },
-        )
-        raise HTTPException(
-            status_code=502,
-            detail="AI 响应格式错误，请重试",
-        ) from e
+        previous_response = response_text.strip()
+        try:
+            parsed_text = previous_response
+            if parsed_text.startswith("```"):
+                lines = parsed_text.split("\n")
+                parsed_text = "\n".join(lines[1:-1]) if len(lines) > 2 else parsed_text
+            return QuickPrefillResponse.model_validate(json.loads(parsed_text))
+        except (json.JSONDecodeError, ValidationError, ValueError) as exc:
+            last_error = exc
+            logger.warning(
+                "quick_prefill_validation_retry",
+                user_id=current_user.user_id,
+                attempt=attempt + 1,
+                error=str(exc),
+            )
+
+    logger.error(
+        "quick_prefill_parse_failed",
+        extra={
+            "user_id": current_user.user_id,
+            "response_text": previous_response[:500],
+            "error": str(last_error),
+        },
+    )
+    raise HTTPException(status_code=502, detail="AI 生成的角色设定不够完整，请重试")

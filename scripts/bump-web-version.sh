@@ -26,6 +26,16 @@ if [[ ! -f "$VERSION_FILE" ]]; then
   exit 0
 fi
 
+# A deliberate release bump takes precedence over the automatic patch bump.
+# Stage it here so `git commit web/src/...` cannot silently turn 2.0.1 into
+# 2.0.2 or omit the manually selected version from the commit.
+if ! git diff --quiet HEAD -- "$VERSION_FILE"; then
+  current_version="$(node -p "require('$VERSION_FILE').version")"
+  git add "$VERSION_FILE"
+  echo "bump-web-version: preserving manual version -> $current_version"
+  exit 0
+fi
+
 new_version="$(node -e '
   const fs = require("fs");
   const f = process.argv[1];

@@ -8,6 +8,7 @@ import { TabBar } from '../components/ui/TabBar'
 import { Dialog } from '../components/ui/Dialog'
 import { CharacterCard } from '../components/CharacterCard'
 import { ApiError, type CharacterDTO } from '../services/api'
+import { AppPageContent, AppPageShell } from '../components/ui/AppPageShell'
 
 function useToast() {
   return useToastStore((s) => s.show)
@@ -102,19 +103,15 @@ export function CreateHubPage() {
   }
 
   return (
-    <div
-      className="relative w-full min-h-full flex flex-col"
-      style={{ background: isDark ? 'var(--color-bg-page)' : 'linear-gradient(160deg, #FFF0F3 0%, #FFF8F3 40%, #F7F0FF 100%)' }}
-    >
-      <div className={`absolute top-0 left-1/2 -translate-x-1/2 w-[280px] h-[180px] rounded-full blur-[60px] pointer-events-none ${isDark ? 'bg-[rgba(255,183,197,0.06)]' : 'bg-[rgba(255,183,197,0.18)]'}`} />
-
+    <AppPageShell className="app-atmosphere flex min-h-full flex-col">
       <div style={{ height: 'env(safe-area-inset-top, 47px)' }} />
 
-      <nav className="relative z-20 flex items-center justify-center px-5 h-[44px] shrink-0">
-        <span className="text-[17px] font-semibold text-[var(--color-ink)]">创作中心</span>
-      </nav>
+      <AppPageContent size="medium" className="flex h-[58px] shrink-0 items-center px-4 sm:px-5">
+        <h1 className="text-[24px] font-bold text-[var(--color-ink)]">创作</h1>
+      </AppPageContent>
 
-      <div ref={scrollRef} className="relative z-10 flex-1 overflow-y-auto px-4 pb-[120px] pt-4">
+      <div ref={scrollRef} className="relative z-10 mx-auto min-h-0 w-full max-w-[860px] flex-1 overflow-y-auto px-4 pb-[120px] pt-2 sm:px-5">
+        <CreatorHero atLimit={atLimit} isDark={isDark} onStart={() => navigate('/characters/new/quick')} />
         {myChars.length === 0 ? (
           <EmptyState />
         ) : (
@@ -208,86 +205,102 @@ export function CreateHubPage() {
           </button>
         </div>
       </Dialog>
-    </div>
+    </AppPageShell>
   )
 }
 
 function EmptyState() {
-  const { resolvedTheme } = useThemeStore()
-  const isDark = resolvedTheme === 'dark'
-
   return (
-    <div className="flex flex-col items-center justify-center pt-20 pb-12 px-6 text-center">
-      <div
-        className={`w-[88px] h-[88px] rounded-full bg-gradient-to-br from-[rgba(255,183,197,0.28)] to-[rgba(200,182,255,0.20)] flex items-center justify-center mb-6 ${
-          isDark ? 'border border-[var(--color-border-subtle)] shadow-[0_8px_24px_rgba(0,0,0,0.20)]' : 'border border-[rgba(255,255,255,0.70)] shadow-[0_8px_24px_rgba(255,183,197,0.18)]'
-        }`}
-      >
-        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--color-primary)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M12 2L2 7l10 5 10-5-10-5z" />
-          <path d="M2 17l10 5 10-5" />
-          <path d="M2 12l10 5 10-5" />
-        </svg>
-      </div>
-      <h2 className="text-[20px] font-semibold text-[var(--color-ink)] mb-2">还没有自创角色</h2>
-      <p className="text-[14px] text-[var(--color-text-secondary)] leading-[1.65] mb-8 max-w-[260px]">
-        创建属于你的专属角色，设计 Ta 的名字、性格与说话方式。
-      </p>
+    <div className="flex flex-col px-1 pb-12 pt-3 text-left">
+      <h2 className="text-[18px] font-semibold text-[var(--color-ink)]">开始你的角色创作</h2>
+      <p className="mt-1 text-[13px] leading-[1.5] text-[var(--color-text-secondary)]">从一句想法开始，把 Ta 的性格和故事交给你决定。</p>
       <ModeSelector atLimit={false} />
     </div>
+  )
+}
+
+function CreatorHero({
+  atLimit,
+  isDark,
+  onStart,
+}: {
+  atLimit: boolean
+  isDark: boolean
+  onStart: () => void
+}) {
+  return (
+    <section
+      className={`relative mb-5 min-h-[170px] overflow-hidden rounded-[18px] border p-5 shadow-[0_8px_24px_rgba(73,48,62,0.10)] ${
+        isDark
+          ? 'border-white/10 bg-[linear-gradient(135deg,#2A232A_0%,#3A2933_58%,#5C3C49_100%)]'
+          : 'border-white/75 bg-[linear-gradient(135deg,#FFF8F3_0%,#FFE8EF_58%,#F4D5E2_100%)]'
+      }`}
+    >
+      <div className="relative z-10 max-w-[62%]">
+        <span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ${isDark ? 'bg-white/12 text-white/80' : 'bg-white/70 text-[#C94A6A]'}`}>
+          创作工作台
+        </span>
+        <h2 className={`mt-3 text-[20px] font-bold leading-[1.25] ${isDark ? 'text-white' : 'text-[var(--color-ink)]'}`}>
+          创造一个会被记住的角色
+        </h2>
+        <p className={`mt-2 text-[12px] leading-[1.5] ${isDark ? 'text-white/72' : 'text-[var(--color-text-secondary)]'}`}>
+          让每一次相遇，都从你的设定开始。
+        </p>
+        <button
+          onClick={onStart}
+          disabled={atLimit}
+          className={`mt-4 inline-flex h-[36px] items-center justify-center rounded-full px-4 text-[13px] font-semibold transition-transform active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-60 ${isDark ? 'bg-white text-[#A14C68]' : 'bg-[var(--color-primary-500)] text-white shadow-[var(--shadow-btn)]'}`}
+        >
+          {atLimit ? '角色名额已满' : '开始创建'}
+        </button>
+      </div>
+      <div className="pointer-events-none absolute -bottom-4 right-[-12px] flex items-end" aria-hidden="true">
+        <img src="/assets/characters/character_ji_yu_avatar.webp" alt="" className="h-[92px] w-[72px] -rotate-[8deg] rounded-[14px] object-cover opacity-80 shadow-[0_8px_18px_rgba(73,48,62,0.18)]" />
+        <img src="/assets/characters/character_li_shen_avatar.webp" alt="" className="relative z-10 h-[130px] w-[100px] -translate-x-2 rounded-[16px] border-4 border-white/70 object-cover shadow-[0_12px_26px_rgba(73,48,62,0.22)]" />
+        <img src="/assets/characters/character_cheng_xu_avatar.webp" alt="" className="h-[98px] w-[76px] -translate-x-4 rotate-[7deg] rounded-[14px] object-cover opacity-85 shadow-[0_8px_18px_rgba(73,48,62,0.18)]" />
+      </div>
+    </section>
   )
 }
 
 /** 批3: 两档入口 - 快速创建 vs 角色创作 */
 function ModeSelector({ atLimit }: { atLimit: boolean }) {
   const navigate = useNavigate()
-  const { resolvedTheme } = useThemeStore()
-  const isDark = resolvedTheme === 'dark'
 
   if (atLimit) {
     return (
-      <div className="w-full mb-6 h-[64px] rounded-[20px] bg-[var(--color-glass-55)] border border-[var(--color-border-glass)] text-[var(--color-text-muted)] text-[18px] font-bold flex items-center justify-center">
+      <div className="mb-6 flex h-[58px] w-full items-center justify-center rounded-[12px] border border-[var(--color-divider)] bg-[var(--color-page-soft)] text-[16px] font-semibold text-[var(--color-text-muted)]">
         已达上限(5个角色)
       </div>
     )
   }
 
   return (
-    <div className="w-full mb-6 flex flex-col gap-3">
+    <div className="mb-6 flex w-full flex-col gap-3 sm:grid sm:grid-cols-2">
       <button
         onClick={() => navigate('/characters/new/quick')}
-        className={`w-full p-5 rounded-[20px] text-left active:scale-[0.98] transition-transform ${
-          isDark
-            ? 'bg-[var(--color-glass-75)] border border-[var(--color-border-glass)]'
-            : 'bg-white/80 backdrop-blur-sm border border-[rgba(255,183,197,0.20)] shadow-[0_4px_16px_rgba(255,183,197,0.12)]'
-        }`}
+        className="w-full rounded-[12px] border border-[rgba(255,110,138,0.30)] bg-[var(--color-page-surface)] p-4 text-left shadow-[0_4px_16px_rgba(24,24,32,0.06)] transition-opacity active:opacity-85"
       >
         <div className="flex items-start gap-3">
-          <div className="shrink-0 w-[44px] h-[44px] rounded-full bg-gradient-to-br from-[#FFB7C5] to-[#FF8FAB] flex items-center justify-center">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <div className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-[10px] bg-[rgba(255,110,138,0.14)] text-[var(--color-primary-500)]">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
             </svg>
           </div>
           <div className="flex-1">
             <h3 className="text-[17px] font-semibold text-[var(--color-ink)] mb-1">快速创建</h3>
-            <p className="text-[13px] text-[var(--color-text-secondary)] leading-[1.5]">
-              填四项，剩下交给 AI，几十秒出一个能聊的角色
-            </p>
+            <p className="text-[13px] text-[var(--color-text-secondary)] leading-[1.5]">AI 辅助生成</p>
           </div>
         </div>
       </button>
 
       <button
         onClick={() => navigate('/characters/new/workshop')}
-        className={`w-full p-5 rounded-[20px] text-left active:scale-[0.98] transition-transform ${
-          isDark
-            ? 'bg-[var(--color-glass-75)] border border-[var(--color-border-glass)]'
-            : 'bg-white/80 backdrop-blur-sm border border-[rgba(200,182,255,0.20)] shadow-[0_4px_16px_rgba(200,182,255,0.12)]'
-        }`}
+        className="w-full rounded-[12px] border border-[var(--color-divider)] bg-[var(--color-page-surface)] p-4 text-left shadow-[0_4px_16px_rgba(24,24,32,0.06)] transition-opacity active:opacity-85"
       >
         <div className="flex items-start gap-3">
-          <div className="shrink-0 w-[44px] h-[44px] rounded-full bg-gradient-to-br from-[#C8B6FF] to-[#9D7CFF] flex items-center justify-center">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <div className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-[10px] bg-[rgba(111,168,207,0.15)] text-[#6FA8CF]">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 19l7-7 3 3-7 7-3-3z" />
               <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z" />
               <path d="M2 2l7.586 7.586" />
@@ -296,13 +309,10 @@ function ModeSelector({ atLimit }: { atLimit: boolean }) {
           </div>
           <div className="flex-1">
             <h3 className="text-[17px] font-semibold text-[var(--color-ink)] mb-1">角色创作</h3>
-            <p className="text-[13px] text-[var(--color-text-secondary)] leading-[1.5]">
-              一步步填，详情页会跟着变好看，可申请公开
-            </p>
+            <p className="text-[13px] text-[var(--color-text-secondary)] leading-[1.5]">逐步精细设定</p>
           </div>
         </div>
       </button>
     </div>
   )
 }
-

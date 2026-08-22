@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { useThemeStore } from '../stores/themeStore'
 import { useMembershipStore } from '../stores/membershipStore'
 import { getPricing, type Pricing, type MembershipTierInfo } from '../services/api'
 import { AfdianBindingCard } from '../components/AfdianBindingCard'
@@ -29,15 +28,10 @@ function formatExpiry(iso: string | null): string | null {
 
 export function MembershipPage() {
   const goBack = useSafeBack('/settings')
-  const { resolvedTheme } = useThemeStore()
   const membership = useMembershipStore()
   const [pricing, setPricing] = useState<Pricing | null>(null)
   const [loadError, setLoadError] = useState(false)
   const [selectedTier, setSelectedTier] = useState<string>('plus')
-
-  const bgImage = resolvedTheme === 'dark'
-    ? '/assets/backgrounds/暗色聊天背景图.webp'
-    : '/assets/backgrounds/聊天背景图.webp'
 
   useEffect(() => {
     membership.refresh()
@@ -54,11 +48,10 @@ export function MembershipPage() {
     tiers.find((t) => t.tier === 'plus')
 
   return (
-    <div className="relative w-full h-full flex flex-col overflow-hidden">
-      <img src={bgImage} alt="" className="absolute inset-0 w-full h-full object-cover z-0" />
+    <div className="app-atmosphere relative flex h-full w-full flex-col overflow-hidden">
       <div style={{ height: 'var(--safe-top)' }} />
 
-      <nav className="relative z-20 flex items-center justify-between px-5 h-[44px] shrink-0">
+      <nav className="relative z-20 flex h-[44px] shrink-0 items-center justify-between px-5">
         <button onClick={goBack} className="w-[44px] h-[44px] flex items-center justify-center">
           <svg width="12" height="20" viewBox="0 0 12 20" fill="none" stroke="var(--color-ink)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="10,2 2,10 10,18" />
@@ -171,11 +164,11 @@ export function MembershipPage() {
                   ...t.benefits,
                   ...(t.tier === 'free' ? ['每日签到20币，永久有效'] : []),
                   ...(t.tier === 'plus' ? ['每日签到80币，永久有效'] : []),
-                  ...(t.tier === 'immersive' ? ['每日签到80币，永久有效', '全部文字模型无限次'] : []),
-                ].filter((benefit, index, all) => all.indexOf(benefit) === index).map((b, i) => (
-                    <li key={i} className="flex items-start gap-2 text-[14px] text-[var(--color-text-secondary)]">
+                  ...(t.tier === 'immersive' ? ['每日签到80币，永久有效'] : []),
+                ].filter((benefit, index, all) => all.indexOf(benefit) === index).map((benefit) => (
+                    <li key={benefit} className="flex items-start gap-2 text-[14px] text-[var(--color-text-secondary)]">
                       <span className="mt-[6px] w-[5px] h-[5px] rounded-full shrink-0" style={{ backgroundColor: accent }} />
-                      {b}
+                      {benefit}
                     </li>
                   ))}
                 </ul>
