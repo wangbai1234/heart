@@ -86,22 +86,40 @@ function isDiscoverable(it: GridItem): boolean {
   return !!it.companion && it.companion.companion_status !== 'locked'
 }
 
-const FEATURED_CHARACTER_ORDER = [
-  'char_b8ed4c9b', // 祝淮昭
-  'char_ae43cbad', // 裴承望
-  'he_linchuan',
-  'wen_yanqing',
-  'li_shen',
-  'ji_yu',
-  'cheng_xu',
-  'gu_beichen',
-  'qin_xiao',
-  'li_jue',
-  'jiang_yueze',
-  'gu_xingzhou',
-  'jiang_ye',
+const FEATURED_CHARACTERS = [
+  { id: 'char_b8ed4c9b', name: '祝淮昭' },
+  { id: 'char_ae43cbad', name: '裴承望' },
+  { id: 'cen_li', name: '岑砺' },
+  { id: 'xie_tingyun', name: '谢停云' },
+  { id: 'xu_qichi', name: '许栖迟' },
+  { id: 'xie_mingluan', name: '谢明鸾' },
+  { id: 'qi_wang', name: '祁妄' },
+  { id: 'yan_wujiu', name: '晏无咎' },
+  { id: 'li_yao', name: '黎曜' },
+  { id: 'tang_jingzhou', name: '唐惊昼' },
+  { id: 'pei_zhaoye', name: '裴照野' },
+  { id: 'he_linchuan', name: '贺临川' },
+  { id: 'wen_yanqing', name: '闻砚清' },
+  { id: 'li_shen', name: '厉深' },
+  { id: 'ji_yu', name: '季屿' },
+  { id: 'cheng_xu', name: '程叙' },
+  { id: 'gu_beichen', name: '顾北辰' },
+  { id: 'qin_xiao', name: '秦骁' },
+  { id: 'li_jue', name: '厉决' },
+  { id: 'jiang_yueze', name: '江月泽' },
+  { id: 'gu_xingzhou', name: '顾行舟' },
+  { id: 'jiang_ye', name: '江野' },
 ] as const
-const FEATURED_CHARACTER_INDEX = new Map<string, number>(FEATURED_CHARACTER_ORDER.map((id, index) => [id, index]))
+const FEATURED_CHARACTER_INDEX = new Map<string, number>(
+  FEATURED_CHARACTERS.map((character, index) => [character.id, index]),
+)
+const FEATURED_CHARACTER_NAME_INDEX = new Map<string, number>(
+  FEATURED_CHARACTERS.map((character, index) => [character.name, index]),
+)
+
+function featuredCharacterIndex(item: GridItem): number | undefined {
+  return FEATURED_CHARACTER_INDEX.get(item.id) ?? FEATURED_CHARACTER_NAME_INDEX.get(item.profile.name)
+}
 const EDITORIAL_HEAT_OVERRIDES = new Map<string, number>([
   ['char_b8ed4c9b', 6388], // 祝淮昭
   ['char_ae43cbad', 6216], // 裴承望
@@ -281,8 +299,8 @@ export function CharacterPage() {
 
   const rankedItems = useMemo(() => {
     return [...items].sort((left, right) => {
-      const leftFeatured = FEATURED_CHARACTER_INDEX.get(left.id)
-      const rightFeatured = FEATURED_CHARACTER_INDEX.get(right.id)
+      const leftFeatured = featuredCharacterIndex(left)
+      const rightFeatured = featuredCharacterIndex(right)
       if (leftFeatured !== undefined || rightFeatured !== undefined) {
         if (leftFeatured === undefined) return 1
         if (rightFeatured === undefined) return -1
@@ -364,8 +382,8 @@ export function CharacterPage() {
     } else if (activeMode === MODE_RECOMMENDED && !q) {
       // 推荐: 精选置顶优先级最高（不受性向影响），其余角色再按「女性向」靠前。
       base.sort((a, b) => {
-        const aFeatured = FEATURED_CHARACTER_INDEX.get(a.id)
-        const bFeatured = FEATURED_CHARACTER_INDEX.get(b.id)
+        const aFeatured = featuredCharacterIndex(a)
+        const bFeatured = featuredCharacterIndex(b)
         if (aFeatured !== undefined || bFeatured !== undefined) {
           if (aFeatured === undefined) return 1
           if (bFeatured === undefined) return -1

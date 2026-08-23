@@ -86,6 +86,17 @@ import { ShiyanPremiseCard } from './characterProfiles/ShiyanPremiseCard'
 import { ChuRanPremiseCard } from './characterProfiles/ChuRanPremiseCard'
 import { HeLinchuanPremiseCard } from './characterProfiles/HeLinchuanPremiseCard'
 import { WenYanqingPremiseCard } from './characterProfiles/WenYanqingPremiseCard'
+import {
+  CenLiPremiseCard,
+  XieTingyunPremiseCard,
+  XuQichiPremiseCard,
+  XieMingluanPremiseCard,
+  QiWangPremiseCard,
+  YanWujiuPremiseCard,
+  LiYaoPremiseCard,
+  TangJingzhouPremiseCard,
+  PeiZhaoyePremiseCard,
+} from './characterProfiles/BatchNinePremiseCards'
 import { getCharacterSettings } from '../services/api'
 
 const EMPTY_MESSAGES: Message[] = []
@@ -147,6 +158,15 @@ const PREMISE_CARDS: Record<string, ComponentType> = {
   churan: ChuRanPremiseCard,
   he_linchuan: HeLinchuanPremiseCard,
   wen_yanqing: WenYanqingPremiseCard,
+  cen_li: CenLiPremiseCard,
+  xie_tingyun: XieTingyunPremiseCard,
+  xu_qichi: XuQichiPremiseCard,
+  xie_mingluan: XieMingluanPremiseCard,
+  qi_wang: QiWangPremiseCard,
+  yan_wujiu: YanWujiuPremiseCard,
+  li_yao: LiYaoPremiseCard,
+  tang_jingzhou: TangJingzhouPremiseCard,
+  pei_zhaoye: PeiZhaoyePremiseCard,
 }
 
 /** 引导回复气泡：首聊时出现在消息区底部，点击直接发送（帮用户破冰）。
