@@ -64,8 +64,8 @@ class CharacterEntry:
     cover_url: Optional[str] = None
     chat_user_count: int = 0
     # One-line public plot hook shown under the name on the discovery card
-    # (display-only, ≤60 chars). Sourced from the UGC draft; None for built-ins
-    # (the client falls back to the bundled summary).
+    # (display-only, ≤60 chars). Sourced from the active draft for both seeded
+    # first-party characters and UGC.
     tagline: Optional[str] = None
     # ISO-8601 creation timestamp; drives the "新角色" (newest) discovery sort.
     created_at: Optional[str] = None
@@ -133,7 +133,6 @@ def build_catalog_entries(
         popularity: Optional mapping of character_id → chat user count.
             Higher count = more engagement. Used to sort UGC characters.
         taglines: Optional mapping of character_id → one-line plot hook (from draft).
-            Built-in characters fall back client-side to bundled summaries.
         creation_modes: Optional mapping of character_id → 'quick' | 'workshop'.
             Drives the edit route in CharacterCard.
     """

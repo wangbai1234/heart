@@ -96,12 +96,16 @@ async def list_characters(
     ]
     has_voice_map = {row["id"]: bool(row.get("has_voice", False)) for row in raw_rows}
 
-    # Fetch avatar_url, tagline, creation_mode from soul_specs.draft for UGC characters
+    # Fetch authored catalog copy for every visible character. Built-ins used to
+    # skip this query and rely on the client's bundled summaries, which made a
+    # newly seeded first-party character appear without its plot hook until a
+    # separate frontend hardcode shipped.
     avatar_urls: dict[str, str | None] = {}
     taglines: dict[str, str | None] = {}
     creation_modes: dict[str, str | None] = {}
-    ugc_ids = [row.id for row in rows if row.owner_user_id is not None]
-    if ugc_ids:
+    visible_ids = [row.id for row in rows]
+    ugc_ids = {row.id for row in rows if row.owner_user_id is not None}
+    if visible_ids:
         content_result = await db.execute(
             text(
                 """
@@ -113,14 +117,14 @@ async def list_characters(
                 WHERE character_id = ANY(:ids) AND status = 'active'
                 """
             ),
-            {"ids": ugc_ids},
+            {"ids": visible_ids},
         )
         for row in content_result:
-            if row.avatar_url:
+            if row.character_id in ugc_ids and row.avatar_url:
                 avatar_urls[row.character_id] = row.avatar_url
             if row.tagline:
                 taglines[row.character_id] = row.tagline
-            if row.creation_mode:
+            if row.character_id in ugc_ids and row.creation_mode:
                 creation_modes[row.character_id] = row.creation_mode
 
     # Compute popularity by counting distinct chat users per character

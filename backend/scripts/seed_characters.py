@@ -299,11 +299,14 @@ async def main() -> None:
                     text(
                         """
                         INSERT INTO characters
-                          (id, owner_user_id, visibility, status, soul_spec_version, tags, cover_url)
-                        VALUES (:id, NULL, :vis, 'active', :ver, CAST(:tags AS jsonb), :cover)
+                          (id, owner_user_id, visibility, status, review_status,
+                           soul_spec_version, tags, cover_url)
+                        VALUES (:id, NULL, :vis, 'active', 'approved',
+                                :ver, CAST(:tags AS jsonb), :cover)
                         ON CONFLICT (id) DO UPDATE SET
                           visibility = EXCLUDED.visibility,
                           status = 'active',
+                          review_status = 'approved',
                           soul_spec_version = EXCLUDED.soul_spec_version,
                           tags = EXCLUDED.tags,
                           cover_url = COALESCE(EXCLUDED.cover_url, characters.cover_url)

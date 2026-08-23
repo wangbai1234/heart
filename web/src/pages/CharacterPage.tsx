@@ -86,9 +86,25 @@ function isDiscoverable(it: GridItem): boolean {
   return !!it.companion && it.companion.companion_status !== 'locked'
 }
 
-const FEATURED_CHARACTER_ORDER = ['char_b8ed4c9b', 'char_ae43cbad', 'li_shen', 'ji_yu', 'cheng_xu', 'gu_beichen', 'qin_xiao', 'li_jue', 'jiang_yueze', 'gu_xingzhou', 'jiang_ye'] as const
+const FEATURED_CHARACTER_ORDER = [
+  'char_b8ed4c9b', // 祝淮昭
+  'char_ae43cbad', // 裴承望
+  'he_linchuan',
+  'wen_yanqing',
+  'li_shen',
+  'ji_yu',
+  'cheng_xu',
+  'gu_beichen',
+  'qin_xiao',
+  'li_jue',
+  'jiang_yueze',
+  'gu_xingzhou',
+  'jiang_ye',
+] as const
 const FEATURED_CHARACTER_INDEX = new Map<string, number>(FEATURED_CHARACTER_ORDER.map((id, index) => [id, index]))
 const EDITORIAL_HEAT_OVERRIDES = new Map<string, number>([
+  ['char_b8ed4c9b', 6388], // 祝淮昭
+  ['char_ae43cbad', 6216], // 裴承望
   ['zhou_jin', 5867],
   ['song_ye', 4218],
   ['pei_tinglan', 5732],

@@ -164,7 +164,7 @@ class LexiconLoader:
                         compiled.patterns.append(
                             CompiledPattern(
                                 regex=regex,
-                                severity_default=sev_default,
+                                severity_default=pat_data.get("severity", sev_default),
                                 category=cat_name,
                                 pattern_index=idx,
                                 exemptions=exemptions,
@@ -319,11 +319,14 @@ class WellbeingAccumulator:
 
         if despair_count >= 8:
             result["escalated"] = True
-            result["escalated_severity"] = "PURPLE"
+            # Repeated low mood warrants a more careful normal response, but is
+            # not evidence of suicidal intent by itself. PURPLE is reserved for
+            # a current explicit suicide/self-harm signal in the message.
+            result["escalated_severity"] = "ORANGE"
             result["escalation_reason"] = (
                 f"Despair signals in {despair_count}/{len(state.despair_signals)} recent turns"
             )
-            logger.warning(
+            logger.info(
                 "wellbeing_escalation_despair", user_id=str(user_id), despair_count=despair_count
             )
 
@@ -494,15 +497,26 @@ class SafetyAgent:
                 for m in pat.regex.finditer(message):
                     match_text = m.group(0)
                     exempted = False
-                    for exc_regex, _action in pat.exemptions:
+                    final_severity = pat.severity_default
+                    for exc_regex, action in pat.exemptions:
                         if exc_regex.search(message):
-                            exempted = True
+                            override = {
+                                "downgrade_to_green": "GREEN",
+                                "downgrade_to_yellow": "YELLOW",
+                                "downgrade_to_orange": "ORANGE",
+                            }.get(action, "GREEN")
+                            if (
+                                SeverityLevel(override).ordinal
+                                < SeverityLevel(final_severity).ordinal
+                            ):
+                                final_severity = override
+                            exempted = final_severity == "GREEN"
                             break
                     hit = _Layer1Hit(
                         pattern=pat,
                         match_text=match_text,
                         exempted=exempted,
-                        final_severity="GREEN" if exempted else pat.severity_default,
+                        final_severity=final_severity,
                     )
                     hits.append(hit)
 

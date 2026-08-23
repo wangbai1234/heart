@@ -76,26 +76,40 @@ class TestLocaleDetection:
 
 
 class TestChineseLexiconSuicide:
-    """zh — suicide category (should trigger PURPLE)"""
+    """zh — explicit current intent blocks; distress/context does not."""
 
-    POSITIVES = [
+    PURPLE_CASES = [
         "我想自杀",
         "我不想活了",
-        "活着没意思",
-        "想跳楼了",
-        "我有安眠药",
-        "已经写了遗书",
-        "今晚就结束一切",
+        "我准备跳楼了",
+        "我想吞一瓶安眠药",
+        "我已经写了遗书",
+        "今晚就去死",
         "不想再醒来了",
-        "世界不需要我",
-        "生不如死",
+        "死了算了",
     ]
 
-    NEGATIVES = [
+    NON_BLOCKING_CASES = [
         "今天天气真好",  # normal
         "我想吃火锅",  # 想 + eat, not suicide
         "活着就是要开心",  # positive
         "电影里主角跳楼了",  # narrative
+        "小说里的主角想自杀",  # fictional intent
+        "这个角色的台词是我想自杀，会不会太沉重",  # role-writing context
+        "他说他想自杀，我不知道该怎么帮助他",  # third-party report
+        "他说他想去死，我不知道该怎么劝他",  # third-party direct wording
+        "你是不是想自杀",  # asking another person
+        "我不想自杀，只是想请一天假休息",  # explicit denial
+        "我从来没想过自杀，只是在讨论这部电影",  # denial with quoted term
+        "我最近在吃医生开的安眠药",  # medicine mention without intent
+        "律师建议我早点立遗嘱",  # legal context, no crisis intent
+        "小说里他已经写好了遗书",  # fictional preparation
+        "这个角色今晚就去死，剧情是不是太虐了",  # fictional timed action
+        "今晚就结束这个项目",  # ordinary completion
+        "马上就走，去车站接朋友",  # ordinary departure
+        "活着没意思，这个游戏太无聊了",  # distress/hyperbole, not imminent intent
+        "世界不需要我做这个表格",  # ordinary phrase extension
+        "最近忙得生不如死",  # hyperbole
         "工作结束了",  # work ended
         "不想加班",  # don't want overtime
         "世界需要和平",  # world needs peace
@@ -104,17 +118,31 @@ class TestChineseLexiconSuicide:
         "我今天好累想休息",  # tired, not suicide
     ]
 
-    @pytest.mark.parametrize("msg", POSITIVES)
+    @pytest.mark.parametrize("msg", PURPLE_CASES)
     def test_positive_suicide(self, safety_agent, msg):
         result = _run_sync_classify(safety_agent, msg, "zh")
         assert_severity(result, SeverityLevel.PURPLE)
 
-    @pytest.mark.parametrize("msg", NEGATIVES)
+    @pytest.mark.parametrize("msg", NON_BLOCKING_CASES)
     def test_negative_suicide(self, safety_agent, msg):
         result = _run_sync_classify(safety_agent, msg, "zh")
-        assert result.severity != SeverityLevel.PURPLE, (
-            f"False positive: '{msg}' classified as PURPLE — {result.reason}"
+        assert result.severity not in (SeverityLevel.PURPLE, SeverityLevel.RED), (
+            f"False positive: '{msg}' blocked as {result.severity.value} — {result.reason}"
         )
+
+    @pytest.mark.parametrize(
+        "msg,expected",
+        [
+            ("活着没意思", SeverityLevel.YELLOW),
+            ("世界不需要我", SeverityLevel.YELLOW),
+            ("生不如死", SeverityLevel.YELLOW),
+            ("今晚就结束一切", SeverityLevel.ORANGE),
+            ("我有安眠药", SeverityLevel.GREEN),
+        ],
+    )
+    def test_ambiguous_signals_are_observed_without_blocking(self, safety_agent, msg, expected):
+        result = _run_sync_classify(safety_agent, msg, "zh")
+        assert_severity(result, expected)
 
 
 class TestChineseLexiconSelfHarm:
@@ -136,6 +164,12 @@ class TestChineseLexiconSelfHarm:
         "打篮球时撞到墙了",  # sports accident
         "被蚊子咬了",  # bug bite
         "理发的时候不小心割到",  # haircut accident
+        "刚才做饭切到手了",  # cooking accident
+        "倒开水时不小心烫到手",  # household accident
+        "我从小就有咬指甲的习惯",  # common habit, not self-harm crisis
+        "你刚才是不是切到手了",  # asking about an ordinary accident
+        "这道题太难了，我真的想撞墙",  # common hyperbole
+        "剧情里她割腕了，接下来该怎么写",  # fictional third-person action
     ]
 
     @pytest.mark.parametrize("msg", POSITIVES)
@@ -147,6 +181,49 @@ class TestChineseLexiconSelfHarm:
     def test_negative_self_harm(self, safety_agent, msg):
         result = _run_sync_classify(safety_agent, msg, "zh")
         assert result.severity != SeverityLevel.PURPLE, f"False positive: '{msg}' — {result.reason}"
+
+
+class TestWellbeingEscalationPrecision:
+    """Repeated distress alone must never become a blocking suicide classification."""
+
+    @pytest.mark.asyncio
+    async def test_repeated_despair_escalates_to_orange_not_purple(self):
+        from uuid import uuid4
+
+        agent = SafetyAgent()
+        result = None
+        for _ in range(8):
+            result = await agent.classify(
+                "我真的很绝望",
+                locale="zh",
+                user_id=uuid4(),
+                character_id="test",
+            )
+
+        assert result is not None
+        # Different users above also assert that global wording cannot create a
+        # cross-user crisis state. Exercise one user's accumulation separately.
+        user_id = uuid4()
+        for _ in range(8):
+            result = await agent.classify(
+                "我真的很绝望",
+                locale="zh",
+                user_id=user_id,
+                character_id="test",
+            )
+        assert result.severity == SeverityLevel.ORANGE
+
+    @pytest.mark.asyncio
+    async def test_explicit_intent_still_blocks_immediately(self):
+        from uuid import uuid4
+
+        result = await SafetyAgent().classify(
+            "我今晚就去死",
+            locale="zh",
+            user_id=uuid4(),
+            character_id="test",
+        )
+        assert result.severity == SeverityLevel.PURPLE
 
 
 class TestChineseLexiconOthersHarm:

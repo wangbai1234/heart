@@ -84,6 +84,8 @@ import { WeiHengPremiseCard } from './characterProfiles/WeiHengPremiseCard'
 import { QiFeiPremiseCard } from './characterProfiles/QiFeiPremiseCard'
 import { ShiyanPremiseCard } from './characterProfiles/ShiyanPremiseCard'
 import { ChuRanPremiseCard } from './characterProfiles/ChuRanPremiseCard'
+import { HeLinchuanPremiseCard } from './characterProfiles/HeLinchuanPremiseCard'
+import { WenYanqingPremiseCard } from './characterProfiles/WenYanqingPremiseCard'
 import { getCharacterSettings } from '../services/api'
 
 const EMPTY_MESSAGES: Message[] = []
@@ -143,6 +145,8 @@ const PREMISE_CARDS: Record<string, ComponentType> = {
   qi_fei: QiFeiPremiseCard,
   shiyan: ShiyanPremiseCard,
   churan: ChuRanPremiseCard,
+  he_linchuan: HeLinchuanPremiseCard,
+  wen_yanqing: WenYanqingPremiseCard,
 }
 
 /** 引导回复气泡：首聊时出现在消息区底部，点击直接发送（帮用户破冰）。
