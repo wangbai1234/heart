@@ -186,8 +186,11 @@ export function CharacterPage() {
   }
 
   useEffect(() => {
-    void loadCharacters()
-    void loadCompanions()
+    // The page can be revisited after quick creation while both stores are
+    // already marked as loaded. Force a fresh snapshot so the new owned
+    // character is immediately available under「我的」without pull-to-refresh.
+    void loadCharacters(true)
+    void loadCompanions(true)
   }, [loadCharacters, loadCompanions])
 
   // PWA users keep the app open for days, so a one-time mount load means a

@@ -53,6 +53,10 @@ interface CharactersState {
 
 // Deduplicate concurrent / repeated loads across the app.
 let inflight: Promise<void> | null = null
+// A forced refresh requested while an older request is in flight must run
+// once more after that request settles; otherwise quick creation can reuse a
+// pre-create catalog response and leave「我的」stale until pull-to-refresh.
+let forcedRefresh: Promise<void> | null = null
 // Per-id inflight dedup for profile fetches (two components mounting the same
 // /character/:id at once share one request).
 const profileInflight: Record<string, Promise<CharacterProfileDTO | null>> = {}
@@ -83,6 +87,23 @@ export const useCharactersStore = create<CharactersState>((set, get) => ({
 
   load: async (force = false) => {
     if (!force && (get().loaded || get().loading)) return
+    if (force && forcedRefresh) return forcedRefresh
+    if (force && inflight) {
+      const current = inflight
+      let refresh: Promise<void>
+      refresh = current.then(
+        () => {
+          if (forcedRefresh === refresh) forcedRefresh = null
+          return get().load(true)
+        },
+        () => {
+          if (forcedRefresh === refresh) forcedRefresh = null
+          return get().load(true)
+        },
+      )
+      forcedRefresh = refresh
+      return refresh
+    }
     if (inflight) return inflight
 
     set({ loading: true })

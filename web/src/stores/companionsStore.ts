@@ -18,6 +18,10 @@ interface CompanionsState {
 }
 
 let inflight: Promise<void> | null = null
+// A forced refresh requested while an older request is in flight must run
+// once more after that request settles; otherwise quick creation can reuse a
+// pre-create companion snapshot and hide the initial intimacy state.
+let forcedRefresh: Promise<void> | null = null
 
 export const useCompanionsStore = create<CompanionsState>((set, get) => ({
   companions: [],
@@ -26,6 +30,23 @@ export const useCompanionsStore = create<CompanionsState>((set, get) => ({
 
   load: async (force = false) => {
     if (!force && (get().loaded || get().loading)) return
+    if (force && forcedRefresh) return forcedRefresh
+    if (force && inflight) {
+      const current = inflight
+      let refresh: Promise<void>
+      refresh = current.then(
+        () => {
+          if (forcedRefresh === refresh) forcedRefresh = null
+          return get().load(true)
+        },
+        () => {
+          if (forcedRefresh === refresh) forcedRefresh = null
+          return get().load(true)
+        },
+      )
+      forcedRefresh = refresh
+      return refresh
+    }
     if (inflight) return inflight
 
     set({ loading: true })
