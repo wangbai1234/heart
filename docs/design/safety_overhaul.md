@@ -2,7 +2,7 @@
 
 **Status**: Design proposal
 **Author**: Heart Platform
-**Last updated**: 2026-06-02
+**Last updated**: 2026-08-23
 **Spec reference**: `runtime_specs/07_agent_orchestration.md` §3.9
 
 ---
@@ -93,7 +93,7 @@ categories:
 | Layer 1 结果 | 是否调用 Layer 2 |
 | --- | --- |
 | 高置信 PURPLE (regex 命中 `suicide`/`self_harm` 且无豁免上下文) | **否** — 直接 PURPLE，节省延迟 |
-| YELLOW + `despair` | 是 — 判断是否升级 PURPLE |
+| YELLOW + `despair` | 是 — 只做语义复核；没有第一人称当前意图时不得升级 PURPLE |
 | GREEN 但 message > 80 字符且含情绪词 | 是 — 抽样 30% 防漏报 |
 | GREEN 且 message 短 (<20 字符) 无情绪词 | 否 |
 
@@ -148,7 +148,7 @@ class WellbeingAccumulator:
 
 | 累积条件 | 动作 |
 | --- | --- |
-| 最近 20 turn 内 ≥ 8 turn 命中 `despair` (Layer 1) | 当前 turn severity 强制提升一档（YELLOW→ORANGE，ORANGE→**PURPLE**） |
+| 最近 20 turn 内 ≥ 8 turn 命中 `despair` (Layer 1) | 提升到 ORANGE，继续正常对话并采用更谨慎的回应；不能仅凭累计低落升级 PURPLE |
 | `loneliness` ≥ 12/20 AND `sleep_disturbance` ≥ 5/20 | 触发非阻断式 wellbeing 提示（YELLOW） |
 | 距离上一次 PURPLE ≤ 7 天 AND 当前 ≥ ORANGE | 强制走 PURPLE care path |
 
@@ -294,23 +294,28 @@ CREATE INDEX ix_purple_audit_time ON safety_purple_audit (occurred_at DESC);
 
 ### 3.1 上下文豁免（Layer 1 内置）
 
-每条 regex 可附 `false_positive_exemptions`：
+每条 regex 可用 `severity` 覆盖类别默认级别，并附
+`false_positive_exemptions`。这使“明确的第一人称当前意图”保持 PURPLE，
+而被动绝望、模糊措辞等同类别信号可记录为 YELLOW/ORANGE，不阻断聊天：
 
 ```yaml
-- regex: "想死"
-  exemptions:
+- regex: "(?:想|准备|计划).{0,3}(?:自杀|去死)"
+  severity: "PURPLE"
+  false_positive_exemptions:
     # 句首带引号或书名号 → 视为引用
     - context_regex: '[「"《].*想死.*[」"》]'
-      action: "downgrade_to_GREEN"
+      action: "downgrade_to_green"
     # 笑死的语料学常见替代
     - context_regex: '笑(?:得|到)?想死'
-      action: "downgrade_to_GREEN"
+      action: "downgrade_to_green"
     # "想死你了" 这类亲昵语
     - context_regex: '想死(?:你|你们)了?'
-      action: "downgrade_to_GREEN"
+      action: "downgrade_to_green"
 ```
 
-豁免不删除原始命中记录，只调整最终 severity，便于审计反查。
+豁免动作支持 `downgrade_to_green` / `downgrade_to_yellow` /
+`downgrade_to_orange`。豁免不删除原始命中记录，只调整最终 severity，
+便于审计反查。
 
 ### 3.2 Layer 2 二级判定
 
@@ -375,11 +380,11 @@ config/safety/
 | 子类 (正样本，应触发 PURPLE) | 子类 (负样本，应保持 GREEN/YELLOW) |
 | --- | --- |
 | 直接表达 (我想自杀) | 文学引用 ("罗密欧最后想死") |
-| 委婉 (活着没意思) | 玩笑 (笑死，要笑想死) |
-| 方法陈述 (我家有安眠药) | 亲昵语 (想死你了) |
+| 明确方法意图 (我准备吞一瓶安眠药) | 被动低落 (活着没意思) |
+| 已实施自伤 (又割了手腕) | 仅提及药物/遗嘱，无意图 |
 | 多语混杂 (I want to 死) | 歌词引用 (「死にたい夜」)  |
-| 时间表达 (今晚就结束) | 角色扮演讨论 (角色想死的剧本) |
-| 自伤具体 (又割了手腕) | 临床讨论 (患者主诉自伤) |
+| 明确时间+行为 (今晚就去死) | 模糊时间表达 (今晚结束这个项目) |
+| 明确自伤行为 (又割了手腕) | 角色扮演/转述/临床讨论 |
 
 JSONL 格式：
 

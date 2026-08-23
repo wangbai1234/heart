@@ -80,6 +80,14 @@ def test_builtin_display_name_derived_from_soul_spec():
     assert entries[0].is_owner is False
 
 
+def test_seeded_builtin_uses_authored_tagline():
+    rows = [
+        CharacterRow(id="rin", owner_user_id=None, visibility="public", status="active")
+    ]
+    entries = build_catalog_entries(rows, VIEWER, taglines={"rin": "一条数据库里的剧情钩子"})
+    assert entries[0].tagline == "一条数据库里的剧情钩子"
+
+
 # ── Boundary validation ─────────────────────────────────────────────────────
 
 
