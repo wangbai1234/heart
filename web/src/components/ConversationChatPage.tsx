@@ -1181,7 +1181,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
           <div className={`max-w-[80%] px-3 py-1.5 rounded-full text-[13px] italic ${
             isDark
               ? 'bg-[rgba(255,255,255,0.05)] text-[rgba(228,228,231,0.55)]'
-              : 'bg-[rgba(0,0,0,0.04)] text-[rgba(45,50,72,0.55)]'
+              : 'bg-[rgba(78,84,104,0.12)] text-[rgba(45,50,72,0.78)] border border-[rgba(78,84,104,0.16)] shadow-[0_1px_3px_rgba(45,50,72,0.04)]'
           }`}>
             {msg.content}
           </div>
