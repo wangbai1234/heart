@@ -1000,7 +1000,10 @@ export function CharacterProfilePage() {
   const [coverFullH, setCoverFullH] = useState(0)
 
   useEffect(() => {
-    void loadCompanions()
+    // Quick creation updates the catalog store, but the companion store may
+    // still contain the pre-creation snapshot. Refresh it on every detail-page
+    // entry so the new character's default relationship state is available.
+    void loadCompanions(true)
   }, [loadCompanions])
 
   useEffect(() => {
@@ -1025,6 +1028,12 @@ export function CharacterProfilePage() {
     [companions, id],
   )
   const chatted = !!companion && companion.companion_status !== 'locked'
+  // /api/companions intentionally returns a default STRANGER/0 relationship
+  // for visible characters without a relationship_states row. Keep the UI
+  // stable during the first fetch (and resilient to a temporarily empty
+  // response) by rendering that same initial state locally.
+  const relationshipStage = companion?.relationship_stage ?? 'STRANGER'
+  const intimacy = companion?.intimacy ?? 0
 
   // 优先用角色专属 UI 配置(themе + 关系提示),缺省再退回按标签选色。
   const uiConfig = CHARACTER_UI_CONFIGS[id]
@@ -1181,19 +1190,19 @@ export function CharacterProfilePage() {
         {/* 动态 CTA（收藏 + 亲密度 + 开始聊天）——封面下方，nimoo 式内联 */}
         <div className="px-[22px] mt-5">
           <div className="flex items-center gap-3">
-            {chatted && companion && (
+            {profile && (
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between text-[12px] text-[#B4A4AF]">
                   <span>
-                    {isColdWar(companion.relationship_stage)
+                    {isColdWar(relationshipStage)
                       ? '闹别扭'
-                      : stageWithIntimacy(companion.relationship_stage, companion.intimacy)}
+                      : stageWithIntimacy(relationshipStage, intimacy)}
                   </span>
                 </div>
                 <div className="mt-1.5 h-[6px] w-full rounded-full bg-white/10 overflow-hidden">
                   <div
                     className="h-full rounded-full bg-[#C24A63]"
-                    style={{ width: `${intimacyPercent(companion.intimacy)}%` }}
+                    style={{ width: `${intimacyPercent(intimacy)}%` }}
                   />
                 </div>
               </div>
@@ -1379,19 +1388,19 @@ export function CharacterProfilePage() {
 
         {/* intimacy + chat CTA */}
         <div className="mt-5 flex items-center gap-3">
-          {chatted && (
+          {profile && (
             <div className="flex-1 min-w-0">
               <div className="flex items-center justify-between text-[12px] text-[var(--color-text-secondary)]">
                 <span>
-                  {isColdWar(companion!.relationship_stage)
+                  {isColdWar(relationshipStage)
                     ? '闹别扭'
-                    : stageWithIntimacy(companion!.relationship_stage, companion!.intimacy)}
+                    : stageWithIntimacy(relationshipStage, intimacy)}
                 </span>
               </div>
               <div className="mt-1.5 h-[6px] w-full rounded-full bg-[var(--color-glass-55)] overflow-hidden">
                 <div
                   className="h-full rounded-full bg-[var(--color-primary)]"
-                  style={{ width: `${intimacyPercent(companion!.intimacy)}%` }}
+                  style={{ width: `${intimacyPercent(intimacy)}%` }}
                 />
               </div>
             </div>

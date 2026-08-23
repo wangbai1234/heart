@@ -186,8 +186,11 @@ export function CharacterPage() {
   }
 
   useEffect(() => {
-    void loadCharacters()
-    void loadCompanions()
+    // The page can be revisited after quick creation while both stores are
+    // already marked as loaded. Force a fresh snapshot so the new owned
+    // character is immediately available under「我的」without pull-to-refresh.
+    void loadCharacters(true)
+    void loadCompanions(true)
   }, [loadCharacters, loadCompanions])
 
   // PWA users keep the app open for days, so a one-time mount load means a
@@ -562,11 +565,6 @@ export function CharacterPage() {
 
         {/* Discovery grid */}
         <div ref={gridRef} className="relative z-10 mx-auto min-h-0 w-full max-w-[1180px] flex-1 overflow-y-auto overscroll-y-contain px-3.5 pb-[120px] pt-1.5 sm:px-5">
-          <div className="px-1 pb-2 pt-1">
-            <p className="text-[14px] font-semibold text-[var(--color-ink)]">
-              {activeMode === MODE_RECOMMENDED ? '为你推荐' : activeMode}
-            </p>
-          </div>
           {/* Pull-to-refresh indicator — height tracks finger pull, snaps to a
               spinner while refreshing. */}
           {(pull > 0 || refreshing) && (

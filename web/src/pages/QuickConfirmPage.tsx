@@ -366,7 +366,10 @@ export function QuickConfirmPage() {
         )
       }
 
-      await reloadCharacters()
+      // The first catalog load may have started before the POST completed.
+      // Force a post-create snapshot so the new character is present when the
+      // user later returns to「我的」, even if an older request was cached.
+      await reloadCharacters(true)
       showToast(isEdit ? '修改已保存' : '角色创建成功', 'success')
       navigate(`/character/${targetId}`, { replace: true, state: { fromCreate: true } })
     } catch (err) {
