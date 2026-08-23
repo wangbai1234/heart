@@ -11,7 +11,7 @@ export function WenYanqingProfile({ profile }: WenYanqingProfileProps) {
   const name = escapeHtml(profile.display_name || '闻砚清')
   const tags = (profile.tags?.length
     ? profile.tags
-    : ['女性向', 'GB', '限左', '治愈', '病弱'])
+    : ['女性向', 'BG', '限左', '治愈', '病弱'])
     .map((tag) => `<span>${escapeHtml(tag)}</span>`)
     .join('')
 
