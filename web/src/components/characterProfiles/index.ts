@@ -93,3 +93,25 @@ export { HeLinchuanProfile } from './HeLinchuanProfile'
 export { HeLinchuanPremiseCard } from './HeLinchuanPremiseCard'
 export { WenYanqingProfile } from './WenYanqingProfile'
 export { WenYanqingPremiseCard } from './WenYanqingPremiseCard'
+export {
+  CenLiProfile,
+  XieTingyunProfile,
+  XuQichiProfile,
+  XieMingluanProfile,
+  QiWangProfile,
+  YanWujiuProfile,
+  LiYaoProfile,
+  TangJingzhouProfile,
+  PeiZhaoyeProfile,
+} from './BatchNineProfiles'
+export {
+  CenLiPremiseCard,
+  XieTingyunPremiseCard,
+  XuQichiPremiseCard,
+  XieMingluanPremiseCard,
+  QiWangPremiseCard,
+  YanWujiuPremiseCard,
+  LiYaoPremiseCard,
+  TangJingzhouPremiseCard,
+  PeiZhaoyePremiseCard,
+} from './BatchNinePremiseCards'
