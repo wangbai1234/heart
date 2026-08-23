@@ -11,13 +11,13 @@ interface ChatPlusMenuProps {
 // Embedded content for the chat composer surface. The parent owns the glass
 // background and border so the input row and this grid read as one panel.
 export function ChatPlusMenu({ open, isDark, onVoiceChat, onVoiceCall, onTransfer, onMasks, onRestart }: ChatPlusMenuProps) {
-  const tile = `flex h-[58px] w-[58px] items-center justify-center rounded-[14px] border active:scale-95 transition-transform ${
+  const tile = `flex h-[48px] w-[48px] items-center justify-center rounded-[16px] border active:scale-95 transition-transform ${
     isDark
-      ? 'border-white/6 bg-white/7'
-      : 'border-black/[0.035] bg-white/70 shadow-[0_1px_5px_rgba(45,35,40,0.04)]'
+      ? 'border-white/8 bg-white/[0.07]'
+      : 'border-black/[0.045] bg-[var(--color-page-soft)]/70 shadow-[0_2px_8px_rgba(45,35,40,0.045)]'
   }`
-  const label = `mt-2 text-[12px] ${isDark ? 'text-[rgba(236,233,244,0.68)]' : 'text-[rgba(47,54,74,0.64)]'}`
-  const stroke = isDark ? '#F3B9C8' : '#FF7DA1'
+  const label = `mt-1.5 text-[11px] font-medium ${isDark ? 'text-[rgba(236,233,244,0.72)]' : 'text-[rgba(47,54,74,0.68)]'}`
+  const stroke = isDark ? '#E8B7C7' : '#B85C79'
 
   return (
     <div
@@ -27,7 +27,7 @@ export function ChatPlusMenu({ open, isDark, onVoiceChat, onVoiceCall, onTransfe
       aria-hidden={!open}
     >
       <div className="min-h-0 overflow-hidden">
-        <div className={`mx-3 grid grid-cols-4 gap-y-4 border-t px-1 pb-4 pt-4 ${isDark ? 'border-white/8' : 'border-black/[0.055]'}`}>
+        <div className={`grid grid-cols-5 gap-1 border-t px-2 pb-3 pt-3 ${isDark ? 'border-white/8' : 'border-black/[0.055]'}`}>
           <button type="button" disabled={!open} className="flex flex-col items-center" onClick={onVoiceChat}>
             <span className={tile}>
               <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke={stroke} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

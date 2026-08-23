@@ -1503,13 +1503,14 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
         </button>
       </div>
 
-      {/* Unified composer: input row and + menu share one continuous surface. */}
+      {/* Unified composer: input actions and the + menu share one quiet
+          bottom workbench so the chat surface reads as one control. */}
       <div
         ref={composerRef}
-        className={`relative z-20 mx-3 shrink-0 overflow-hidden rounded-[24px] border backdrop-blur-[24px] transition-[background-color,border-color,box-shadow] duration-200 ${
+        className={`relative z-20 mx-3 shrink-0 overflow-hidden rounded-[22px] border backdrop-blur-[24px] transition-[background-color,border-color,box-shadow] duration-200 ${
           isDark
-            ? 'border-white/8 bg-[rgba(26,26,46,0.84)] shadow-[0_12px_36px_rgba(0,0,0,0.26)]'
-            : 'border-white/75 bg-[rgba(255,255,255,0.82)] shadow-[0_10px_32px_rgba(74,48,57,0.13)]'
+            ? 'border-white/10 bg-[rgba(26,26,46,0.88)] shadow-[0_14px_34px_rgba(0,0,0,0.28)]'
+            : 'border-white/80 bg-[rgba(255,255,255,0.88)] shadow-[0_12px_30px_rgba(74,48,57,0.10)]'
         }`}
         style={{ marginBottom: 'calc(12px + var(--safe-bottom))' }}
       >
@@ -1520,7 +1521,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
               type="button"
               onClick={handleInterrupt}
               aria-label="停止回复"
-              className="flex h-[40px] w-[40px] shrink-0 items-center justify-center"
+              className="flex h-[40px] w-[40px] shrink-0 items-center justify-center rounded-[14px] bg-[var(--color-primary)]/10"
             >
               <svg width="22" height="22" viewBox="0 0 24 24" fill="var(--color-primary)">
                 <rect x="6" y="6" width="12" height="12" rx="2" />
@@ -1530,7 +1531,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
             <button
               type="button"
               aria-label="按住说话"
-              className="flex h-[40px] w-[40px] shrink-0 touch-none select-none items-center justify-center"
+              className={`flex h-[40px] w-[40px] shrink-0 touch-none select-none items-center justify-center rounded-[14px] border ${isDark ? 'border-white/8 bg-white/[0.06]' : 'border-black/[0.06] bg-black/[0.035]'}`}
               onPointerDown={handleMicPointerDown}
               onPointerMove={handleMicPointerMove}
               onPointerUp={handleMicPointerUp}
@@ -1560,7 +1561,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
             onClick={handleSend}
             aria-label="发送"
             disabled={isStreaming || !input.trim()}
-            className={`flex h-[40px] w-[40px] shrink-0 items-center justify-center rounded-full bg-gradient-to-r from-[#FFB7C5] to-[#FF8FAB] shadow-[var(--shadow-send)] transition-transform active:scale-90 ${
+            className={`flex h-[40px] w-[40px] shrink-0 items-center justify-center rounded-[14px] bg-[var(--color-primary)] shadow-[0_5px_14px_rgba(194,74,99,0.25)] transition-transform active:scale-90 ${
               isStreaming || !input.trim() ? 'opacity-45' : ''
             }`}
           >
@@ -1573,12 +1574,12 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
             onClick={() => setPlusMenuOpen((v) => !v)}
             aria-label={plusMenuOpen ? '收起更多功能' : '更多功能'}
             aria-expanded={plusMenuOpen}
-            className={`flex h-[40px] w-[40px] shrink-0 items-center justify-center rounded-full transition-[transform,background-color] active:scale-90 ${
+            className={`flex h-[40px] w-[40px] shrink-0 items-center justify-center rounded-[14px] border transition-[transform,background-color] active:scale-90 ${
               plusMenuOpen
-                ? 'bg-[#FF8FAB]/16'
+                ? 'border-[var(--color-primary)]/30 bg-[var(--color-primary)]/10'
                 : isDark
-                  ? 'bg-white/8'
-                  : 'bg-black/[0.045]'
+                  ? 'border-white/8 bg-white/8'
+                  : 'border-black/[0.06] bg-black/[0.035]'
             }`}
           >
             <svg
