@@ -53,12 +53,22 @@ export function ProfileEditPage() {
       setToast({ visible: true, message: '请输入昵称' })
       return
     }
+    if ([...trimmedName].length > 20) {
+      setToast({ visible: true, message: '昵称最多 20 个字符' })
+      return
+    }
+    if (!birthdate) {
+      setToast({ visible: true, message: '请选择出生日期' })
+      return
+    }
     setLoading(true)
     try {
+      const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
       const res = await updateProfile({
         display_name: trimmedName,
         gender,
-        birthdate: birthdate || undefined,
+        birthdate,
+        ...(timezone ? { timezone } : {}),
       })
       if (res.age_verified === false) {
         setUser({ birthdate })

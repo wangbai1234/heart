@@ -6,7 +6,7 @@ import { wrapPCM16AsWAV } from '../services/audioPlayer'
 import { storedAudioFormat } from '../services/audioConcat'
 import { FEEDBACK_COPY, type CharacterId } from '../data/uiContent'
 import { useToastStore } from '../stores/toastStore'
-import { authNavigate } from '../services/navigation'
+import { promptAuthentication } from '../services/navigation'
 
 const WS_BASE = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/api/chat/ws`
 
@@ -482,9 +482,9 @@ export function useWebSocket() {
             return
           }
         } catch {
-          // Refresh failed — clear session, redirect via React Router
+          // Refresh failed — clear session and reauthenticate over the catalog.
           useAuthStore.getState().clearSession()
-          authNavigate('/login')
+          promptAuthentication()
           return
         }
       }

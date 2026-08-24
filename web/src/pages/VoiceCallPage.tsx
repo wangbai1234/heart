@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { useAppStore } from '../stores/appStore'
 import { useChatStore } from '../stores/chatStore'
 import { useAuthStore } from '../stores/authStore'
@@ -230,8 +230,7 @@ export function VoiceCallPage({ isDark: _isDark }: VoiceCallPageProps) {
   }, [endCall])
 
   if (!isAuthenticated()) {
-    navigate('/login', { replace: true })
-    return null
+    return <Navigate to="/character" replace state={{ authRequired: true, from: `/call/${characterId}` }} />
   }
 
   const statusText = isRecording
