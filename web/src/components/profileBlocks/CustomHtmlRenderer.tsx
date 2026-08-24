@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import DOMPurify from 'dompurify'
 import type { ChromePalette } from '../../pages/CharacterProfilePage'
+import { splitCustomHtmlStyles } from './customHtmlStyles'
 
 /**
  * 高级 HTML 渲染（UGC 创建重构批 6 · 分层第二层）
@@ -12,28 +13,11 @@ import type { ChromePalette } from '../../pages/CharacterProfilePage'
  *   无 allow-scripts 时该组合无 XSS 面（脚本永不执行）
  * - 从 ui_chrome 注入 CSS 变量，让用户 HTML 吃到配色
  */
-export function CustomHtmlRenderer({
-  html,
-  chrome,
-  trustedEmbeddedStyles = false,
-}: {
-  html: string
-  chrome: ChromePalette
-  /** First-party seeded profiles may bundle scoped CSS; UGC never may. */
-  trustedEmbeddedStyles?: boolean
-}) {
+export function CustomHtmlRenderer({ html, chrome }: { html: string; chrome: ChromePalette }) {
   const ref = useRef<HTMLIFrameElement>(null)
   const [height, setHeight] = useState(200)
 
-  const styleBlocks = trustedEmbeddedStyles
-    ? Array.from(html.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/gi), (match) => match[1]).join('\n')
-    : ''
-  // Even first-party CSS stays self-contained: no imports, remote URLs or
-  // legacy executable CSS constructs can cross the iframe boundary.
-  const embeddedCss = /@import|url\s*\(|expression\s*\(|javascript\s*:|behavior\s*:|-moz-binding/i.test(styleBlocks)
-    ? ''
-    : styleBlocks
-  const htmlWithoutStyles = html.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+  const { htmlWithoutStyles, embeddedCss } = splitCustomHtmlStyles(html)
 
   const clean = DOMPurify.sanitize(htmlWithoutStyles, {
     FORBID_TAGS: ['script', 'iframe', 'object', 'embed', 'link', 'base'],
@@ -43,6 +27,8 @@ export function CustomHtmlRenderer({
 
   const srcDoc = `<!doctype html><html><head><meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
+<meta name="referrer" content="no-referrer"/>
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self' https: data:; font-src 'self' https: data:; style-src 'unsafe-inline';"/>
 <style>
 :root{
   --theme-accent:${chrome.taglineColor};
