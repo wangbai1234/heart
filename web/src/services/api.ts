@@ -1,5 +1,5 @@
 import { useAuthStore } from '../stores/authStore'
-import { authNavigate } from './navigation'
+import { promptAuthentication } from './navigation'
 
 const BASE_URL = '/api'
 
@@ -65,7 +65,7 @@ async function request<T>(
       res = await fetch(`${BASE_URL}${path}`, { ...options, headers })
     } catch {
       clearSession()
-      authNavigate('/login')
+      promptAuthentication()
       throw new Error('Session expired')
     }
   }
@@ -145,7 +145,21 @@ export function detailToMessage(detail: unknown, fallback: string): string {
   }
   if (Array.isArray(detail)) {
     return (
-      detail.map((d: any) => (d?.msg ?? JSON.stringify(d))).join('; ') || fallback
+      detail.map((d: any) => {
+        if (d?.msg === 'Field required') {
+          const field = Array.isArray(d?.loc) ? d.loc.at(-1) : null
+          const labels: Record<string, string> = {
+            display_name: '昵称',
+            gender: '性别',
+            birthdate: '出生日期',
+            timezone: '时区',
+          }
+          return field && labels[field]
+            ? `请填写${labels[field]}`
+            : '资料提交不完整，请刷新页面后重试'
+        }
+        return d?.msg ?? JSON.stringify(d)
+      }).join('; ') || fallback
     )
   }
   if (detail && typeof detail === 'object') {

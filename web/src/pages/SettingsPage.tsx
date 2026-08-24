@@ -65,7 +65,7 @@ export function SettingsPage() {
     try { await apiLogout(refreshToken || undefined) } catch { /* ignore */ }
     clearSession()
     setShowLogoutDialog(false)
-    navigate('/login', { replace: true })
+    navigate('/character', { replace: true })
   }
 
   const handleClearConversations = async () => {
@@ -117,7 +117,7 @@ export function SettingsPage() {
     try {
       await deleteAccount(user?.email || '')
       clearSession()
-      navigate('/login', { replace: true })
+      navigate('/character', { replace: true })
     } catch {
       setToast({ visible: true, message: '注销失败，请重试' })
     }

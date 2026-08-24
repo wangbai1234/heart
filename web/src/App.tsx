@@ -1,10 +1,9 @@
 import { useEffect, useState } from 'react'
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
 import type { ReactElement } from 'react'
-import { setNavigate } from './services/navigation'
+import { consumePendingAuthentication, setNavigate } from './services/navigation'
 import { AuthGuard } from './components/AuthGuard'
 import { SplashPage } from './pages/SplashPage'
-import { LoginPage } from './pages/LoginPage'
 import { RegisterPage } from './pages/RegisterPage'
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage'
 import { ChangePasswordPage } from './pages/ChangePasswordPage'
@@ -70,6 +69,17 @@ function NotFoundRedirect(): ReactElement {
   return <Navigate to="/character" replace />
 }
 
+function LegacyLoginRedirect(): ReactElement {
+  const location = useLocation()
+  return (
+    <Navigate
+      to={{ pathname: '/character', search: location.search }}
+      replace
+      state={{ authRequired: true, from: '/character' }}
+    />
+  )
+}
+
 const SKIP_SAVE_ROUTES = new Set(['/splash', '/login', '/register', '/forgot-password', '/redeem', '/age-gate', '/'])
 
 export function App() {
@@ -102,7 +112,13 @@ export function App() {
   // without a hard page reload (preserves React state and bfcache).
   useEffect(() => {
     setNavigate(navigate)
+    return () => setNavigate(null)
   }, [navigate])
+
+  useEffect(() => {
+    const returnTo = consumePendingAuthentication()
+    if (returnTo) showAuthPrompt(returnTo)
+  }, [showAuthPrompt])
 
   useEffect(() => {
     const routeState = location.state as { authRequired?: boolean; from?: string } | null
@@ -252,7 +268,7 @@ export function App() {
       <Routes>
         <Route path="/" element={<Navigate to="/character" replace />} />
         <Route path="/splash" element={<SplashPage />} />
-        <Route path="/login" element={<LoginPage />} />
+        <Route path="/login" element={<LegacyLoginRedirect />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/redeem" element={<RedeemPage />} />

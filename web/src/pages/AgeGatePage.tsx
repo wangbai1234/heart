@@ -8,7 +8,7 @@ export function AgeGatePage() {
 
   const handleLogout = () => {
     clearSession()
-    navigate('/login', { replace: true })
+    navigate('/character', { replace: true })
   }
 
   return (

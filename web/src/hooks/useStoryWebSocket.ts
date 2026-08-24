@@ -3,7 +3,7 @@ import { useAuthStore } from '../stores/authStore'
 import { useToastStore } from '../stores/toastStore'
 import { useStoryStore } from '../stores/storyStore'
 import { useCreditsStore } from '../stores/creditsStore'
-import { authNavigate } from '../services/navigation'
+import { promptAuthentication } from '../services/navigation'
 
 /**
  * Story-mode WebSocket (SS09), the real-time turn channel for /story/:runId.
@@ -160,7 +160,7 @@ export function useStoryWebSocket(runId?: string) {
           }
         } catch {
           useAuthStore.getState().clearSession()
-          authNavigate('/login')
+          promptAuthentication()
           return
         }
       }
