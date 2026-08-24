@@ -146,15 +146,15 @@ export function SettingsPage() {
       </AppPageContent>
 
       {/* Scrollable content */}
-      <div className="relative z-10 mx-auto min-h-0 w-full max-w-[860px] flex-1 overflow-y-auto px-4 pb-[120px] sm:px-5">
+      <div className="relative z-10 mx-auto min-h-0 w-full max-w-[860px] flex-1 overflow-y-auto px-3 pb-[120px] min-[360px]:px-4 sm:px-5">
         <button
           onClick={() => navigate('/settings/profile')}
-          className="mb-3 mt-1 w-full px-1 py-5 text-left transition-opacity active:opacity-75"
+          className="mb-3 mt-1 w-full px-1 py-4 text-left transition-opacity active:opacity-75 min-[380px]:py-5"
         >
-          <div className="flex items-center gap-4">
-            <Avatar src={userAvatar || user?.avatar_url || undefined} size={72} border />
+          <div className="flex items-center gap-3 min-[380px]:gap-4">
+            <Avatar src={userAvatar || user?.avatar_url || undefined} size={64} border className="shrink-0" />
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 min-w-0">
+              <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
                 <ScaledText as="p" className="text-[22px] font-semibold text-[var(--color-ink)] truncate">
                   {displayName}
                 </ScaledText>
@@ -177,7 +177,7 @@ export function SettingsPage() {
           </div>
         </button>
 
-        <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
+        <div className="grid grid-cols-1 gap-2.5 min-[520px]:grid-cols-2 sm:gap-3">
           <WalletPanel
             balance={balance}
             onRecharge={() => navigate('/wallet')}
@@ -186,7 +186,7 @@ export function SettingsPage() {
 
           <button
             onClick={() => navigate('/membership')}
-            className={`relative min-h-[148px] w-full overflow-hidden rounded-[14px] border p-4 text-left shadow-[0_6px_22px_rgba(24,24,32,0.10)] transition-opacity active:opacity-90 ${
+            className={`relative h-full min-h-[148px] w-full overflow-hidden rounded-[14px] border p-4 text-left shadow-[0_6px_22px_rgba(24,24,32,0.10)] transition-opacity active:opacity-90 ${
               isDark
                 ? 'border-white/10 bg-[linear-gradient(135deg,#24242B,#39343B_54%,#714A57)]'
                 : 'border-[rgba(255,110,138,0.18)] bg-[linear-gradient(135deg,#FFFFFF,#FFF4F6_55%,#F1D4DA)]'
@@ -196,10 +196,10 @@ export function SettingsPage() {
           <img
             src={memberGemImage}
             alt=""
-            className="pointer-events-none absolute bottom-[-6px] right-[-2px] h-[88px] w-[88px] object-contain drop-shadow-[0_10px_24px_rgba(90,54,68,0.24)]"
+            className="pointer-events-none absolute bottom-[-6px] right-[-2px] h-[78px] w-[78px] object-contain drop-shadow-[0_10px_24px_rgba(90,54,68,0.24)] min-[380px]:h-[88px] min-[380px]:w-[88px]"
           />
           <div className="relative min-h-[116px]">
-            <div className="relative z-10 flex items-center justify-between gap-3">
+            <div className="relative z-10 flex flex-wrap items-center justify-between gap-2.5">
               <div className="flex items-center gap-2 min-w-0">
                 <span className={`w-[34px] h-[34px] rounded-[12px] flex items-center justify-center border ${
                   isDark
@@ -212,7 +212,7 @@ export function SettingsPage() {
                   会员中心
                 </ScaledText>
               </div>
-              <span className={`shrink-0 rounded-full text-[13px] font-semibold px-4 py-2 shadow-[0_8px_20px_rgba(255,255,255,0.18)] ${isDark ? 'bg-white text-[#8C7188]' : 'bg-[#FF9DB6] text-white'}`}>
+              <span className={`shrink-0 rounded-full px-3 py-2 text-[13px] font-semibold shadow-[0_8px_20px_rgba(255,255,255,0.18)] min-[380px]:px-4 ${isDark ? 'bg-white text-[#8C7188]' : 'bg-[#FF9DB6] text-white'}`}>
                 查看权益
               </span>
             </div>
@@ -260,14 +260,14 @@ export function SettingsPage() {
 
           <SectionLabel>外观</SectionLabel>
           <GroupCard>
-            <div className="flex items-center justify-between px-5 h-[56px]">
+            <div className="flex min-h-[56px] flex-wrap items-center justify-between gap-3 px-4 py-3 min-[390px]:flex-nowrap min-[390px]:px-5">
               <div className="flex items-center gap-3">
                 <PaletteIcon />
                 <ScaledText as="span" className="text-[15px] text-[var(--color-ink)]">
                   主题
                 </ScaledText>
               </div>
-              <div className="w-[180px]">
+              <div className="w-full min-[390px]:w-[180px]">
                 <SegmentedControl
                   options={['浅色', '深色', '自动']}
                   value={themeLabel}
@@ -293,8 +293,8 @@ export function SettingsPage() {
 
           <SectionLabel>通知</SectionLabel>
           <GroupCard>
-            <div className="flex items-center justify-between px-5 h-[56px] opacity-50">
-              <div className="flex items-center gap-3">
+            <div className="flex min-h-[56px] items-center justify-between gap-3 px-4 py-3 opacity-50 min-[390px]:px-5">
+              <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
                 <BellIcon />
                 <ScaledText as="span" className="text-[15px] text-[var(--color-ink)]">
                   推送提醒
@@ -479,8 +479,8 @@ function WalletPanel({
   onDetails: () => void
 }) {
   return (
-    <div className="relative min-h-[148px] overflow-hidden rounded-[14px] border border-[var(--color-divider)] bg-[var(--color-page-surface)] p-4 shadow-[0_6px_22px_rgba(24,24,32,0.08)]">
-      <div className="flex items-center justify-between gap-4">
+    <div className="relative h-full min-h-[148px] overflow-hidden rounded-[14px] border border-[var(--color-divider)] bg-[var(--color-page-surface)] p-4 shadow-[0_6px_22px_rgba(24,24,32,0.08)]">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
         <div className="flex items-center gap-2 min-w-0">
           <span className="w-[30px] h-[30px] rounded-[11px] bg-[rgba(255,183,197,0.16)] flex items-center justify-center text-[var(--color-primary)]">
             <WalletIcon />
@@ -550,9 +550,9 @@ function InviteShowcase({
       <img
         src="/assets/settings/invite-mascot.webp"
         alt=""
-        className="pointer-events-none absolute right-[-12px] top-[-66px] h-[280px] w-[204px] object-contain drop-shadow-[0_10px_18px_rgba(232,85,119,0.16)]"
+        className="pointer-events-none absolute right-[-18px] top-[-44px] h-[230px] w-[168px] object-contain drop-shadow-[0_10px_18px_rgba(232,85,119,0.16)] min-[380px]:right-[-12px] min-[380px]:top-[-66px] min-[380px]:h-[280px] min-[380px]:w-[204px]"
       />
-      <div className="relative flex min-h-[124px] flex-col justify-between pr-[145px]">
+      <div className="relative flex min-h-[124px] flex-col justify-between pr-[104px] min-[380px]:pr-[145px]">
         <div>
           <ScaledText as="p" className={`text-[14px] font-semibold ${isDark ? 'text-white/82' : 'text-[#C94A6A]'}`}>
             邀请好友
@@ -627,17 +627,17 @@ function SettingRow({
   return (
     <button
       onClick={onClick}
-      className="w-full flex items-center justify-between px-5 h-[56px] active:bg-[rgba(255,183,197,0.10)] transition-colors"
+      className="flex min-h-[56px] w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors active:bg-[rgba(255,183,197,0.10)] min-[390px]:px-5"
     >
-      <div className="flex items-center gap-3">
-        <span className={danger ? 'text-[var(--color-danger)]' : 'text-[var(--color-primary)]'}>{icon}</span>
+      <div className="flex min-w-0 items-center gap-3">
+        <span className={`shrink-0 ${danger ? 'text-[var(--color-danger)]' : 'text-[var(--color-primary)]'}`}>{icon}</span>
         <ScaledText as="span" className={`text-[15px] ${danger ? 'text-[var(--color-danger)]' : 'text-[var(--color-ink)]'}`}>
           {label}
         </ScaledText>
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex min-w-0 shrink items-center justify-end gap-2">
         {value && (
-          <ScaledText as="span" className="text-[13px] text-[var(--color-text-secondary)]">
+          <ScaledText as="span" className="truncate text-[13px] text-[var(--color-text-secondary)]">
             {value}
           </ScaledText>
         )}

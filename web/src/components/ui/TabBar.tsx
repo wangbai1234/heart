@@ -1,5 +1,7 @@
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAppStore } from '../../stores/appStore'
+import { useAuthStore } from '../../stores/authStore'
+import { useAuthPromptStore } from '../../stores/authPromptStore'
 
 interface TabItem {
   id: string
@@ -100,9 +102,18 @@ export function TabBar() {
   const navigate = useNavigate()
   const location = useLocation()
   const inboxUnreadTotal = useAppStore((s) => s.inboxUnreadTotal)
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
+  const showAuthPrompt = useAuthPromptStore((state) => state.show)
   const isActive = (path: string) =>
     location.pathname === path || location.pathname.startsWith(path + '/')
   const createActive = isActive('/create')
+  const openTab = (path: string) => {
+    if (path === '/character' || isAuthenticated()) {
+      navigate(path)
+      return
+    }
+    showAuthPrompt(path)
+  }
 
   return (
     <div
@@ -111,12 +122,12 @@ export function TabBar() {
     >
       <div className="flex h-[62px] items-center px-2">
         {leftTabs.map((tab) => (
-          <TabButton key={tab.id} tab={tab} active={isActive(tab.path)} onClick={() => navigate(tab.path)} />
+          <TabButton key={tab.id} tab={tab} active={isActive(tab.path)} onClick={() => openTab(tab.path)} />
         ))}
 
         <div className="relative flex h-[58px] flex-1 items-center justify-center">
           <button
-            onClick={() => navigate('/create')}
+            onClick={() => openTab('/create')}
             aria-label="创作"
             className={`relative -mt-[18px] flex h-[58px] w-[58px] items-center justify-center rounded-full border-4 border-[var(--color-page-surface)] transition-all active:scale-95 ${
               createActive
@@ -140,7 +151,7 @@ export function TabBar() {
             key={tab.id}
             tab={tab}
             active={isActive(tab.path)}
-            onClick={() => navigate(tab.path)}
+            onClick={() => openTab(tab.path)}
             badgeCount={tab.id === 'chat' ? inboxUnreadTotal : 0}
           />
         ))}

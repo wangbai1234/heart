@@ -93,20 +93,20 @@ def coerce_tags(raw: object) -> list[str]:
     return []
 
 
-def visible_to(row: CharacterRow, viewer_id: UUID) -> bool:
+def visible_to(row: CharacterRow, viewer_id: UUID | None) -> bool:
     """Whether ``viewer_id`` may see ``row`` in their catalog.
 
     Rules:
     - Non-active rows are never listed.
     - Built-in characters (no owner) are always visible.
-    - Owner always sees their own characters regardless of review status.
+    - An authenticated owner sees their own characters regardless of review status.
     - ``public`` rows with review_status='approved' are visible to everyone.
     - ``unlisted`` / ``private`` rows (or un-approved public) are owner-only.
     """
     if row.owner_user_id is None:
         # Built-in character — always listed (only ever 'active').
         return row.status == "active"
-    if row.owner_user_id == viewer_id:
+    if viewer_id is not None and row.owner_user_id == viewer_id:
         # Owner sees their own characters at any status — including 'disabled',
         # so the creator can find and re-publish them from the creation hub.
         return True
@@ -116,7 +116,7 @@ def visible_to(row: CharacterRow, viewer_id: UUID) -> bool:
 
 def build_catalog_entries(
     rows: Sequence[CharacterRow],
-    viewer_id: UUID,
+    viewer_id: UUID | None,
     avatar_urls: dict[str, str | None] | None = None,
     popularity: dict[str, int] | None = None,
     taglines: dict[str, str | None] | None = None,
@@ -142,7 +142,11 @@ def build_catalog_entries(
     creation_modes = creation_modes or {}
 
     def is_owner_fn(row: CharacterRow) -> bool:
-        return row.owner_user_id is not None and row.owner_user_id == viewer_id
+        return (
+            viewer_id is not None
+            and row.owner_user_id is not None
+            and row.owner_user_id == viewer_id
+        )
 
     entries = [
         CharacterEntry(

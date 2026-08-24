@@ -47,6 +47,37 @@ def test_unlisted_visible_only_to_owner():
     assert visible_to(row, OTHER) is False
 
 
+def test_anonymous_viewer_only_sees_public_approved_characters():
+    rows = [
+        CharacterRow(id="rin", owner_user_id=None, visibility="public", status="active"),
+        CharacterRow(
+            id="public_ugc",
+            owner_user_id=VIEWER,
+            visibility="public",
+            status="active",
+            review_status="approved",
+        ),
+        CharacterRow(
+            id="pending_ugc",
+            owner_user_id=VIEWER,
+            visibility="public",
+            status="active",
+            review_status="pending",
+        ),
+        CharacterRow(
+            id="private_ugc",
+            owner_user_id=VIEWER,
+            visibility="private",
+            status="active",
+        ),
+    ]
+
+    entries = build_catalog_entries(rows, None)
+
+    assert {entry.id for entry in entries} == {"rin", "public_ugc"}
+    assert all(entry.is_owner is False for entry in entries)
+
+
 # ── Catalog shaping ─────────────────────────────────────────────────────────
 
 

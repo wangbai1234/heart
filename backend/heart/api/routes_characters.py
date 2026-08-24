@@ -17,7 +17,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from heart.api.wiring import get_db
-from heart.core.auth import TokenData, get_current_user
+from heart.core.auth import TokenData, get_current_user, get_optional_user
 from heart.ss01_soul.character_catalog import (
     CharacterRow,
     build_catalog_entries,
@@ -58,15 +58,16 @@ async def _require_known_character(character_id: str, db: AsyncSession) -> None:
 
 @router.get("")
 async def list_characters(
-    current_user: TokenData = Depends(get_current_user),
+    current_user: TokenData | None = Depends(get_optional_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
-    """List characters visible to the current user (built-ins + own UGC).
+    """List public characters plus the authenticated user's own UGC.
 
     Display names are derived from the Soul Spec, not stored on the row.
     Avatar URLs are extracted from the draft stored in soul_specs for UGC characters.
+    Anonymous callers only receive active built-ins and public, approved UGC.
     """
-    uid = uuid.UUID(current_user.user_id)
+    uid = uuid.UUID(current_user.user_id) if current_user else None
     result = await db.execute(
         text(
             """

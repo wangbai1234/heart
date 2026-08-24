@@ -34,7 +34,7 @@ export function SplashPage() {
           navigate('/character', { replace: true })
         }
       } else {
-        navigate('/login', { replace: true })
+        navigate('/character', { replace: true })
       }
     }, delay)
 

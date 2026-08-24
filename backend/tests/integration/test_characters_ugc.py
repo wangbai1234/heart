@@ -142,6 +142,23 @@ def _auth_headers(user_id: str | None = None, email: str = "ugc@test.com") -> di
 
 
 class TestUGCCharacterCreate:
+    def test_anonymous_catalog_returns_public_characters(self, client):
+        resp = client.get("/api/characters")
+
+        assert resp.status_code == 200, resp.text
+        characters = resp.json()["characters"]
+        assert characters
+        assert all(character["is_owner"] is False for character in characters)
+        assert all(
+            character["is_builtin"]
+            or (
+                character["status"] == "active"
+                and character["visibility"] == "public"
+                and character["review_status"] == "approved"
+            )
+            for character in characters
+        )
+
     def test_create_character_returns_id_and_name(self, client):
         headers, _ = _auth_headers()
         resp = client.post("/api/characters", json=_make_draft("小雪"), headers=headers)

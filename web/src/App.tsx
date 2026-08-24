@@ -44,10 +44,12 @@ import { useThemeStore } from './stores/themeStore'
 import { useAppStore } from './stores/appStore'
 import { useAuthStore } from './stores/authStore'
 import { useCharactersStore } from './stores/charactersStore'
+import { useAuthPromptStore } from './stores/authPromptStore'
 import { useModelsStore } from './stores/modelsStore'
 import { useAppBadge } from './hooks/useAppBadge'
 import { useInboxBadgeSync } from './hooks/useInboxBadgeSync'
 import { useSwipeNavigation } from './hooks/useSwipeNavigation'
+import { AuthModal } from './components/AuthModal'
 
 function ChatConversationRouter() {
   const { resolvedTheme } = useThemeStore()
@@ -65,8 +67,7 @@ function VoiceCallRouter() {
 // stray unknown path can never fight the SplashPage timer over which route
 // wins (TEST_REPORT_20260712 §7).
 function NotFoundRedirect(): ReactElement {
-  const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
-  return <Navigate to={isAuthenticated() ? '/character' : '/splash'} replace />
+  return <Navigate to="/character" replace />
 }
 
 const SKIP_SAVE_ROUTES = new Set(['/splash', '/login', '/register', '/forgot-password', '/redeem', '/age-gate', '/'])
@@ -90,6 +91,7 @@ export function App() {
   const mergeChatModels = useAppStore((s) => s.mergeChatModels)
   const navigate = useNavigate()
   const location = useLocation()
+  const showAuthPrompt = useAuthPromptStore((state) => state.show)
   const [checkinOpen, setCheckinOpen] = useState(false)
   const [checkinCoins, setCheckinCoins] = useState(0)
   // Character review: queue of unacked terminal results + daily incentive popup.
@@ -101,6 +103,13 @@ export function App() {
   useEffect(() => {
     setNavigate(navigate)
   }, [navigate])
+
+  useEffect(() => {
+    const routeState = location.state as { authRequired?: boolean; from?: string } | null
+    if (!routeState?.authRequired) return
+    showAuthPrompt(routeState.from)
+    navigate('/character', { replace: true, state: null })
+  }, [location.state, navigate, showAuthPrompt])
 
   // Tear down the inline splash overlay from index.html once React has
   // committed its first render.  Previously SplashPage owned this, but any
@@ -232,6 +241,7 @@ export function App() {
   return (
     <AuthGuard>
       <ToastContainer />
+      <AuthModal />
       <UpdatePrompt />
       <DailyCheckinDialog open={checkinOpen} coins={checkinCoins} onClose={() => setCheckinOpen(false)} />
       <ReviewResultDialog item={reviewQueue[0] ?? null} onConfirm={confirmReviewResult} />
@@ -240,7 +250,7 @@ export function App() {
         onClose={() => setIncentiveOpen(false)}
       />
       <Routes>
-        <Route path="/" element={<Navigate to="/splash" replace />} />
+        <Route path="/" element={<Navigate to="/character" replace />} />
         <Route path="/splash" element={<SplashPage />} />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />

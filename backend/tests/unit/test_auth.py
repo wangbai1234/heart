@@ -6,7 +6,7 @@ import jwt
 import pytest
 from fastapi import HTTPException, status
 
-from heart.core.auth import AuthManager, Token, TokenData
+from heart.core.auth import AuthManager, Token, TokenData, get_optional_user
 
 
 @pytest.fixture
@@ -169,3 +169,24 @@ class TestAuthManager:
 
         assert data1.user_id == "user1"
         assert data2.user_id == "user2"
+
+
+@pytest.mark.asyncio
+async def test_optional_user_allows_missing_authorization():
+    assert await get_optional_user(None) is None
+
+
+@pytest.mark.asyncio
+async def test_optional_user_validates_supplied_bearer(monkeypatch, auth_manager_instance):
+    import heart.core.auth as auth_module
+
+    monkeypatch.setattr(auth_module, "auth_manager", auth_manager_instance)
+    token = auth_manager_instance.create_access_token(
+        user_id="optional-user",
+        email="optional@example.com",
+    )
+
+    user = await get_optional_user(f"Bearer {token.access_token}")
+
+    assert user is not None
+    assert user.user_id == "optional-user"

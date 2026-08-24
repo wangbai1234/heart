@@ -174,3 +174,14 @@ async def get_current_user(authorization: Optional[str] = Header(None)) -> Token
             headers={"WWW-Authenticate": "Bearer"},
         )
     return auth_manager.verify_token(parts[1])
+
+
+async def get_optional_user(authorization: Optional[str] = Header(None)) -> Optional[TokenData]:
+    """Return the authenticated user when present, otherwise allow anonymous access.
+
+    A supplied credential is still validated normally. This avoids silently
+    treating an expired or malformed bearer token as an anonymous session.
+    """
+    if not authorization:
+        return None
+    return await get_current_user(authorization)
