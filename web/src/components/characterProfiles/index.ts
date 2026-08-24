@@ -115,3 +115,17 @@ export {
   TangJingzhouPremiseCard,
   PeiZhaoyePremiseCard,
 } from './BatchNinePremiseCards'
+export {
+  ZhouJianPremiseCard,
+  RongZhaoxuePremiseCard,
+  ShenCianPremiseCard,
+  LuZiPremiseCard,
+  XiaoDuPremiseCard,
+  WeinuoPremiseCard,
+  HelianJiPremiseCard,
+  ShangZhaoyePremiseCard,
+  WenHeshengPremiseCard,
+  QiXuPremiseCard,
+  EliasVaynePremiseCard,
+  ZhouJimingPremiseCard,
+} from './BatchTwelvePremiseCards'

@@ -62,7 +62,19 @@ from sqlalchemy import text
 logger = structlog.get_logger(__name__)
 
 _CID_RE = re.compile(r"^[a-z][a-z0-9_]*$")
-_PRESENTATION_KEYS = ("tagline", "archetype_label", "one_liner", "intro", "opening")
+_PRESENTATION_KEYS = (
+    "tagline",
+    "archetype_label",
+    "one_liner",
+    "intro",
+    "opening",
+    "ui_chrome",
+    "profile_blocks",
+    "custom_html",
+    "premise_card",
+    "starter_config",
+    "opening_format",
+)
 
 
 def _to_webp(raw: bytes, *, quality: int, max_width: int) -> bytes:
@@ -148,6 +160,11 @@ async def main() -> None:
     parser.add_argument("--dry-run", action="store_true", help="只校验与打印，不上传不落库")
     parser.add_argument("--force", action="store_true", help="覆盖已存在角色（supersede 旧 spec）")
     parser.add_argument(
+        "--html-only",
+        action="store_true",
+        help="仅刷新现有角色 active draft 的 custom_html，不改 SoulSpec、封面、标签或其它展示字段",
+    )
+    parser.add_argument(
         "--skip-covers",
         action="store_true",
         help="完全不处理封面：不校验/不上传，cover_url 置 NULL 走 COALESCE 保留库中现值"
@@ -178,7 +195,8 @@ async def main() -> None:
     # ── 校验（先全量校验，避免半途落库）────────────────────────────────
     prepared: list[dict] = []
     errors: list[str] = []
-    for i, entry in enumerate(entries):
+    for i, raw_entry in enumerate(entries):
+        entry = dict(raw_entry) if isinstance(raw_entry, dict) else raw_entry
         if not isinstance(entry, dict):
             errors.append(f"[{i}] 条目必须是映射")
             continue
@@ -189,12 +207,19 @@ async def main() -> None:
         if not entry.get("persona"):
             errors.append(f"[{cid}] 缺少 persona")
             continue
+        custom_html_file = entry.get("custom_html_file")
+        if custom_html_file:
+            html_path = manifest_path.parent / str(custom_html_file)
+            if not html_path.is_file():
+                errors.append(f"[{cid}] HTML 文件不存在: {html_path}")
+                continue
+            entry["custom_html"] = html_path.read_text(encoding="utf-8")
         try:
             draft = _build_draft(entry)
         except Exception as exc:  # noqa: BLE001 — 校验期把任何构造错误收集起来
             errors.append(f"[{cid}] draft 构造失败: {exc}")
             continue
-        cover_path = None if args.skip_covers else _resolve_cover_path(entry, cover_dir)
+        cover_path = None if (args.skip_covers or args.html_only) else _resolve_cover_path(entry, cover_dir)
         if cover_path is not None and not cover_path.exists():
             errors.append(f"[{cid}] 封面文件不存在: {cover_path}")
             continue
@@ -225,6 +250,46 @@ async def main() -> None:
         sys.exit(1)
     if not prepared:
         print("\n（无可导入条目）")
+        return
+
+    if args.html_only:
+        from heart.api.wiring import get_db_session_factory
+
+        factory = get_db_session_factory()
+        if factory is None:
+            print("❌ DB session factory 不可用，请检查 DATABASE_URL", file=sys.stderr)
+            sys.exit(1)
+
+        updated = 0
+        async with factory() as db:
+            for p in prepared:
+                cid = p["id"]
+                html = p["entry"].get("custom_html")
+                if not html:
+                    print(f"⏭️  跳过 {cid}：未提供 custom_html")
+                    continue
+                result = await db.execute(
+                    text(
+                        """
+                        UPDATE soul_specs
+                        SET draft = jsonb_set(
+                          COALESCE(draft, '{}'::jsonb),
+                          '{custom_html}',
+                          CAST(:html_json AS jsonb),
+                          true
+                        )
+                        WHERE character_id = :cid AND status = 'active'
+                        """
+                    ),
+                    {"cid": cid, "html_json": json.dumps(html)},
+                )
+                if result.rowcount != 1:
+                    await db.rollback()
+                    print(f"❌ {cid} active SoulSpec 不唯一或不存在，已中止", file=sys.stderr)
+                    sys.exit(1)
+                updated += 1
+            await db.commit()
+        print(f"\n完成！仅更新 custom_html：{updated}/{len(prepared)}")
         return
 
     # ── 依赖 & S3 ───────────────────────────────────────────────────
@@ -291,7 +356,7 @@ async def main() -> None:
                 if cover_url:
                     draft_dict["cover_url"] = cover_url
                 for k in _PRESENTATION_KEYS:
-                    if entry.get(k):
+                    if k in entry and entry[k] is not None:
                         draft_dict[k] = entry[k]
 
                 # characters 行（built-in：owner NULL）—— upsert

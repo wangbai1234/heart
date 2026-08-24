@@ -12,11 +12,30 @@ import type { ChromePalette } from '../../pages/CharacterProfilePage'
  *   无 allow-scripts 时该组合无 XSS 面（脚本永不执行）
  * - 从 ui_chrome 注入 CSS 变量，让用户 HTML 吃到配色
  */
-export function CustomHtmlRenderer({ html, chrome }: { html: string; chrome: ChromePalette }) {
+export function CustomHtmlRenderer({
+  html,
+  chrome,
+  trustedEmbeddedStyles = false,
+}: {
+  html: string
+  chrome: ChromePalette
+  /** First-party seeded profiles may bundle scoped CSS; UGC never may. */
+  trustedEmbeddedStyles?: boolean
+}) {
   const ref = useRef<HTMLIFrameElement>(null)
   const [height, setHeight] = useState(200)
 
-  const clean = DOMPurify.sanitize(html, {
+  const styleBlocks = trustedEmbeddedStyles
+    ? Array.from(html.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/gi), (match) => match[1]).join('\n')
+    : ''
+  // Even first-party CSS stays self-contained: no imports, remote URLs or
+  // legacy executable CSS constructs can cross the iframe boundary.
+  const embeddedCss = /@import|url\s*\(|expression\s*\(|javascript\s*:|behavior\s*:|-moz-binding/i.test(styleBlocks)
+    ? ''
+    : styleBlocks
+  const htmlWithoutStyles = html.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+
+  const clean = DOMPurify.sanitize(htmlWithoutStyles, {
     FORBID_TAGS: ['script', 'iframe', 'object', 'embed', 'link', 'base'],
     FORBID_ATTR: ['srcset'],
     ALLOW_DATA_ATTR: false,
@@ -37,6 +56,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;
   word-break:break-word;overflow-wrap:break-word}
 img{max-width:100%;height:auto;border-radius:12px}
 a{color:var(--theme-accent);pointer-events:none}
+${embeddedCss}
 </style></head><body>${clean}</body></html>`
 
   useEffect(() => {

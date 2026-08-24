@@ -1651,7 +1651,11 @@ export function CharacterProfilePage() {
         {/* UGC 详情页自定义区 —— 有 custom_html 优先，否则渲染 profile_blocks（批 6 互斥） */}
         {profile && profile.custom_html && profile.custom_html.trim() ? (
           <div className="mt-6 rounded-[20px] overflow-hidden bg-[var(--color-glass-55)] border border-[var(--color-border-glass)] p-2">
-            <CustomHtmlRenderer html={profile.custom_html} chrome={chrome} />
+            <CustomHtmlRenderer
+              html={profile.custom_html}
+              chrome={chrome}
+              trustedEmbeddedStyles={profile.source === 'built_in'}
+            />
           </div>
         ) : (
           profile && profile.profile_blocks && profile.profile_blocks.length > 0 && (
