@@ -9,15 +9,32 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   // '/admin' is public to the user-session guard on purpose: the admin console
   // authenticates with its own X-Admin-Key (backend ADMIN_SECRET_KEY), not a
   // logged-in user, so it must not be bounced to /login.
-  const publicPaths = ['/splash', '/login', '/register', '/forgot-password', '/redeem', '/age-gate', '/admin']
-  const isPublic = publicPaths.some((p) => location.pathname.startsWith(p)) || location.pathname.startsWith('/legal/')
+  const exactPublicPaths = new Set([
+    '/',
+    '/splash',
+    '/login',
+    '/register',
+    '/forgot-password',
+    '/redeem',
+    '/age-gate',
+    '/character',
+  ])
+  const isPublic = exactPublicPaths.has(location.pathname)
+    || location.pathname.startsWith('/admin')
+    || location.pathname.startsWith('/legal/')
 
   // Public paths are always accessible
   if (isPublic) return <>{children}</>
 
-  // Not authenticated → login (onboarding removed; registration is now the entry)
+  // Protected deep links return to the public catalog and open auth in place.
   if (!isAuthenticated()) {
-    return <Navigate to="/login" replace />
+    return (
+      <Navigate
+        to="/character"
+        replace
+        state={{ authRequired: true, from: location.pathname + location.search }}
+      />
+    )
   }
 
   // Authenticated but needs profile completion

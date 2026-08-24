@@ -18,6 +18,8 @@ import {
 import { useCharactersStore } from '../stores/charactersStore'
 import { useCompanionsStore } from '../stores/companionsStore'
 import { useFavoritesStore } from '../stores/favoritesStore'
+import { useAuthStore } from '../stores/authStore'
+import { useAuthPromptStore } from '../stores/authPromptStore'
 import type { CompanionDTO } from '../services/api'
 
 /** Visibility badge config for owned UGC character cards. */
@@ -160,6 +162,8 @@ function stableShuffleScore(id: string): number {
 
 export function CharacterPage() {
   const navigate = useNavigate()
+  const isAuthenticated = useAuthStore((s) => !!s.accessToken)
+  const showAuthPrompt = useAuthPromptStore((state) => state.show)
   const { resolvedTheme } = useThemeStore()
   const serverCharacters = useCharactersStore((s) => s.characters)
   const loadCharacters = useCharactersStore((s) => s.load)
@@ -178,12 +182,18 @@ export function CharacterPage() {
   const [linkInput, setLinkInput] = useState('')
   const [query, setQuery] = useState('')
   const scrollRef = useScrollRestore()
+  const requireLogin = useCallback((from: string) => {
+    showAuthPrompt(from)
+  }, [showAuthPrompt])
 
   // Pull-to-refresh: dragging down at the top of the grid force-refreshes the
   // catalog + companions. This is the explicit manual gesture that replaces
   // nagging the user with an "刷新角色页" prompt for newly-approved characters.
   const { bind: pullRef, pull, refreshing, threshold } = usePullToRefresh(async () => {
-    await Promise.all([loadCharacters(true), loadCompanions(true)])
+    await Promise.all([
+      loadCharacters(true),
+      isAuthenticated ? loadCompanions(true) : Promise.resolve(),
+    ])
   })
 
   // Fan one callback ref out to both the scroll-restore and pull-to-refresh
@@ -236,8 +246,8 @@ export function CharacterPage() {
     // already marked as loaded. Force a fresh snapshot so the new owned
     // character is immediately available under「我的」without pull-to-refresh.
     void loadCharacters(true)
-    void loadCompanions(true)
-  }, [loadCharacters, loadCompanions])
+    if (isAuthenticated) void loadCompanions(true)
+  }, [isAuthenticated, loadCharacters, loadCompanions])
 
   // PWA users keep the app open for days, so a one-time mount load means a
   // character approved after they last opened the app never appears (the store
@@ -248,7 +258,7 @@ export function CharacterPage() {
     const refresh = () => {
       if (document.hidden) return
       void loadCharacters(true)
-      void loadCompanions(true)
+      if (isAuthenticated) void loadCompanions(true)
     }
     document.addEventListener('visibilitychange', refresh)
     window.addEventListener('focus', refresh)
@@ -256,7 +266,7 @@ export function CharacterPage() {
       document.removeEventListener('visibilitychange', refresh)
       window.removeEventListener('focus', refresh)
     }
-  }, [loadCharacters, loadCompanions])
+  }, [isAuthenticated, loadCharacters, loadCompanions])
 
   // companion lookup by character_id → overlays intimacy / unread onto catalog rows.
   const companionById = useMemo(() => {
@@ -474,7 +484,14 @@ export function CharacterPage() {
                   </svg>
                 </button>
                 <button
-                  onClick={() => { setLinkInput(''); setShowOpenLink(true) }}
+                  onClick={() => {
+                    if (!isAuthenticated) {
+                      requireLogin('/character')
+                      return
+                    }
+                    setLinkInput('')
+                    setShowOpenLink(true)
+                  }}
                   aria-label="打开分享链接"
                   className="flex h-[40px] w-[40px] items-center justify-center rounded-[10px] bg-[var(--color-page-soft)] text-[var(--color-text-secondary)] transition-colors active:scale-95"
                 >
@@ -484,7 +501,7 @@ export function CharacterPage() {
                   </svg>
                 </button>
                 <button
-                  onClick={() => setShowAnnounce(true)}
+                  onClick={() => isAuthenticated ? setShowAnnounce(true) : requireLogin('/character')}
                   aria-label="公告"
                   className={`relative flex h-[40px] w-[40px] items-center justify-center rounded-[12px] transition-colors active:scale-95 ${headerActionClass}`}
                 >
@@ -507,7 +524,13 @@ export function CharacterPage() {
           {DISCOVERY_MODES.map((mode) => (
             <button
               key={mode}
-              onClick={() => setActiveMode(mode)}
+              onClick={() => {
+                if (!isAuthenticated && (mode === MODE_FAVORITES || mode === MODE_MINE)) {
+                  requireLogin('/character')
+                  return
+                }
+                setActiveMode(mode)
+              }}
               className={`relative shrink-0 pb-2 text-[16px] transition-colors ${
                 activeMode === mode
                   ? `font-bold ${activeModeText}`
@@ -647,7 +670,11 @@ export function CharacterPage() {
                   key={it.id}
                   item={it}
                   heatMap={heatMap}
-                  onOpen={() => navigate(`/character/${it.id}`)}
+                  onOpen={() => {
+                    const profilePath = `/character/${it.id}`
+                    if (isAuthenticated) navigate(profilePath)
+                    else requireLogin(profilePath)
+                  }}
                 />
               ))}
             </div>

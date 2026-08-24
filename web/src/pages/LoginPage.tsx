@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useLocation, useNavigate, Link } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
@@ -99,6 +99,7 @@ export function LoginPage() {
     snap && snap.cooldownEndAt > now ? snap.cooldownEndAt : 0
   )
   const navigate = useNavigate()
+  const location = useLocation()
   const setSession = useAuthStore((s) => s.setSession)
   const acceptLegalVersion = useAuthStore((s) => s.acceptLegalVersion)
   const { keyboardOpen } = useVisualViewport()
@@ -163,14 +164,21 @@ export function LoginPage() {
       // Non-fatal: server will use the stored or default timezone
     }
 
-    const dest = res.needs_profile ? '/settings/profile' : '/character'
+    const requestedPath = (location.state as { from?: unknown } | null)?.from
+    const returnTo = typeof requestedPath === 'string'
+      && requestedPath.startsWith('/')
+      && !requestedPath.startsWith('//')
+      && !requestedPath.startsWith('/login')
+      ? requestedPath
+      : '/character'
+    const dest = res.needs_profile ? '/settings/profile' : returnTo
     if (!res.user.has_password) {
       setPendingDest(dest)
       setShowSetPassword(true)
       return
     }
     navigate(dest, { replace: true })
-  }, [setSession, acceptLegalVersion, navigate])
+  }, [setSession, acceptLegalVersion, navigate, location.state])
 
   const handlePasswordLogin = useCallback(async () => {
     if (loading) return
