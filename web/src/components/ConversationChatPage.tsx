@@ -97,6 +97,20 @@ import {
   TangJingzhouPremiseCard,
   PeiZhaoyePremiseCard,
 } from './characterProfiles/BatchNinePremiseCards'
+import {
+  ZhouJianPremiseCard,
+  RongZhaoxuePremiseCard,
+  ShenCianPremiseCard,
+  LuZiPremiseCard,
+  XiaoDuPremiseCard,
+  WeinuoPremiseCard,
+  HelianJiPremiseCard,
+  ShangZhaoyePremiseCard,
+  WenHeshengPremiseCard,
+  QiXuPremiseCard,
+  EliasVaynePremiseCard,
+  ZhouJimingPremiseCard,
+} from './characterProfiles/BatchTwelvePremiseCards'
 import { getCharacterSettings } from '../services/api'
 
 const EMPTY_MESSAGES: Message[] = []
@@ -167,6 +181,18 @@ const PREMISE_CARDS: Record<string, ComponentType> = {
   li_yao: LiYaoPremiseCard,
   tang_jingzhou: TangJingzhouPremiseCard,
   pei_zhaoye: PeiZhaoyePremiseCard,
+  zhou_jian: ZhouJianPremiseCard,
+  rong_zhaoxue: RongZhaoxuePremiseCard,
+  shen_cian: ShenCianPremiseCard,
+  lu_zi: LuZiPremiseCard,
+  xiao_du: XiaoDuPremiseCard,
+  weinuo: WeinuoPremiseCard,
+  helian_ji: HelianJiPremiseCard,
+  shang_zhaoye: ShangZhaoyePremiseCard,
+  wen_hesheng: WenHeshengPremiseCard,
+  qi_xu: QiXuPremiseCard,
+  elias_vayne: EliasVaynePremiseCard,
+  zhou_jiming: ZhouJimingPremiseCard,
 }
 
 /** 引导回复气泡：首聊时出现在消息区底部，点击直接发送（帮用户破冰）。

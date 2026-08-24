@@ -1,0 +1,30 @@
+<style>
+  .casefile{background:#0c0d10;color:#e9e8ee;padding:22px 18px 26px;border-top:4px solid #a68dff;font-family:"PingFang SC",sans-serif}
+  .casefile *{letter-spacing:0}.case-head{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:18px;border-bottom:1px solid #393842}
+  .case-kicker,.case-id,.case-label{font:10px/1.5 ui-monospace,monospace;color:#a68dff}.case-head h2{font:600 28px/1.25 "Songti SC",serif;margin:5px 0 0}
+  .case-id{text-align:right;color:#898792}.wave{height:86px;margin:22px 0 10px;display:flex;align-items:center;gap:3px;border-block:1px solid #292931;overflow:hidden}
+  .wave i{display:block;width:3px;background:#777380}.wave i:nth-child(3n){height:52px}.wave i:nth-child(3n+1){height:24px}.wave i:nth-child(3n+2){height:68px}.wave .missing{width:72px;height:100%;background:#a68dff;color:#0b0b0d;font:700 10px ui-monospace,monospace;display:grid;place-items:center}
+  .case-time{display:flex;justify-content:space-between;color:#777582;font:9px ui-monospace,monospace}.case-grid{margin-top:26px;border-top:1px solid #393842}
+  .case-row{display:grid;grid-template-columns:80px 1fr;gap:14px;padding:15px 0;border-bottom:1px solid #292931}.case-row b{font:10px/1.6 ui-monospace,monospace;color:#a68dff}.case-row p{font:14px/1.7 "Songti SC",serif;margin:0;color:#d6d4dc}
+  .redacted{margin:24px -18px 0;padding:17px 18px;background:#19181f;border-left:4px solid #a68dff;font:16px/1.8 "Songti SC",serif}.redacted span{background:#050506;color:#050506;padding:0 20px;margin-right:6px}.case-foot{margin-top:18px;color:#85828e;font:10px/1.7 ui-monospace,monospace}
+  .wall-title{margin:28px 0 12px;font:10px ui-monospace,monospace;color:#a68dff;display:flex;align-items:center;gap:10px}.wall-title:after{content:"";height:1px;flex:1;background:#393842}.evidence-wall{display:grid;grid-template-columns:1.05fr .95fr;gap:8px}.evidence{min-height:118px;border:1px solid #35343e;padding:13px;position:relative;background:#111217}.evidence.wide{grid-column:1/-1;min-height:auto}.evidence b{display:block;font:9px ui-monospace,monospace;color:#a68dff}.evidence strong{display:block;font:15px/1.55 "Songti SC",serif;margin-top:8px}.evidence small{display:block;color:#7e7b87;font-size:10px;line-height:1.6;margin-top:7px}.pin{position:absolute;right:9px;top:9px;width:7px;height:7px;border:1px solid #a68dff;border-radius:50%}.transcript{margin:26px -18px 0;padding:20px 18px;background:#eceaf2;color:#18171b}.transcript-head{display:flex;justify-content:space-between;font:9px ui-monospace,monospace;color:#5e557c;border-bottom:1px solid #aaa5b5;padding-bottom:10px}.line{display:grid;grid-template-columns:48px 1fr;gap:10px;padding:12px 0;border-bottom:1px solid #cbc7d1}.line b{font:9px ui-monospace,monospace;color:#7667a9}.line p{margin:0;font:14px/1.7 "Songti SC",serif}.line:last-child{border:0}.unknown{background:#1d1b22;color:#f0edf4;padding-inline:5px}
+</style>
+<article class="casefile">
+  <header class="case-head"><div><small class="case-kicker">RETRIAL EVIDENCE / 03</small><h2>被删除的十一秒</h2></div><div class="case-id">WHITE TOWER<br>CONFIDENTIAL</div></header>
+  <div class="wave" aria-label="缺失十一秒的录音波形"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><span class="missing">MISSING 00:11</span><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+  <div class="case-time"><span>COURT COPY 21:04:17</span><span>MASTER 21:04:28</span></div>
+  <section class="case-grid">
+    <div class="case-row"><b>证人</b><p>周缄，你三年前的恋人，也是让录音进入法庭的人。</p></div>
+    <div class="case-row"><b>异常</b><p>安全屋坐标只存在警方内网，今晚却有六个人找上门。</p></div>
+    <div class="case-row"><b>待核验</b><p>耳钉里的存储芯片、被调包的探视记录，以及他从未解释的卧底编号。</p></div>
+  </section>
+  <div class="wall-title">EVIDENCE WALL / 尚未闭合</div>
+  <section class="evidence-wall">
+    <div class="evidence"><i class="pin"></i><b>A-17 · 耳钉</b><strong>你送他的旧物</strong><small>芯片中藏有录音母带，但文件创建时间晚于庭审两天。</small></div>
+    <div class="evidence"><i class="pin"></i><b>B-04 · 探视记录</b><strong>被调包的签名</strong><small>三年前有人以周缄名义进过监狱，而他当晚仍在境外演出。</small></div>
+    <div class="evidence wide"><i class="pin"></i><b>C-11 · 安全屋名单</b><strong>知道坐标的七个人里，只有周缄不在警方现役名册中。</strong><small>这让他既可能是唯一没被收买的人，也可能是整场追杀真正的入口。</small></div>
+  </section>
+  <section class="transcript"><div class="transcript-head"><span>监听摘录 / 00:43</span><span>来源：楼下频道</span></div><div class="line"><b>UNKNOWN</b><p>“目标醒了。保镖也在。”</p></div><div class="line"><b>SECOND</b><p>“先杀证人，<span class="unknown">她必须活着上庭</span>。”</p></div><div class="line"><b>周缄</b><p>他听完只关掉频道：“现在知道了，他们怕的从来不是你翻案。”</p></div></section>
+  <blockquote class="redacted"><span>████</span>“恨我可以。先活到庭审，我会把剩下的十一秒还给你。”</blockquote>
+  <p class="case-foot">你的第一个选择：先把枪口对准门外，还是对准三年前亲手送你入狱的人。</p>
+</article>
