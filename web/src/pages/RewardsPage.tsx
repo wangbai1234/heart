@@ -240,14 +240,20 @@ function LotteryPanel({ store, spinning, rotation, result, onDraw, onInvite, onT
         </button>
       </div>
 
-      <div className="overflow-hidden rounded-[8px] border border-[#efb2bf]/30 bg-[var(--color-page-surface)] px-3 pb-5 pt-4 shadow-[0_14px_34px_rgba(104,51,67,0.10)] sm:px-6">
-        <div className="mx-auto mb-3 grid max-w-[390px] grid-cols-3 divide-x divide-[var(--color-divider)] border-y border-[var(--color-divider)] py-3">
+      <div className="relative overflow-hidden rounded-[8px] border border-[#dba66f]/45 bg-[var(--color-page-surface)] px-3 pb-5 pt-4 shadow-[0_16px_38px_rgba(104,51,67,0.14)] sm:px-6">
+        <span className="pointer-events-none absolute inset-x-0 top-0 h-[3px] bg-[#e7b873]" aria-hidden="true" />
+        <GiftStageHeader />
+
+        <div className="relative mx-auto mb-3 grid max-w-[390px] grid-cols-3 divide-x divide-[#d6a870]/30 border-y border-dashed border-[#d6a870]/45 py-3">
+          <span className="absolute -left-[18px] top-1/2 h-4 w-4 -translate-y-1/2 rounded-full bg-[var(--color-page-surface)] ring-1 ring-[#d6a870]/35 sm:-left-[30px]" aria-hidden="true" />
+          <span className="absolute -right-[18px] top-1/2 h-4 w-4 -translate-y-1/2 rounded-full bg-[var(--color-page-surface)] ring-1 ring-[#d6a870]/35 sm:-right-[30px]" aria-hidden="true" />
           <RewardPromise value={`${store.lottery?.available_chances ?? 0} 次`} label="当前可抽" accent />
           <RewardPromise value="100%" label="次次有奖" />
           <RewardPromise value="¥69" label="最高价值" />
         </div>
 
-        <div className="mx-auto flex max-w-[420px] flex-col items-center">
+        <div className="relative mx-auto flex max-w-[420px] flex-col items-center">
+          <GiftConfetti />
           <div className="relative aspect-square w-full max-w-[342px]">
             <div className="absolute left-1/2 top-[1.5%] z-30 h-0 w-0 -translate-x-1/2 border-x-[10px] border-t-[19px] border-x-transparent border-t-[#7f4d58] drop-shadow-[0_2px_2px_rgba(0,0,0,0.2)]" />
             <div
@@ -409,6 +415,60 @@ function RewardPromise({ value, label, accent = false }: { value: string; label:
   )
 }
 
+function GiftStageHeader() {
+  return (
+    <div className="relative mx-auto mb-3 flex min-h-[78px] max-w-[390px] items-center justify-center overflow-hidden border-b border-[#d6a870]/25 pb-3 pt-1">
+      <svg className="pointer-events-none absolute left-0 top-2 h-[56px] w-[38%] text-[#e8899f]/60" viewBox="0 0 160 64" fill="none" aria-hidden="true">
+        <path d="M0 29c31-22 54 22 87 1 22-14 41-12 73 7" stroke="currentColor" strokeWidth="5" strokeLinecap="round" />
+        <path d="M5 42c29-11 43 13 67 6" stroke="#e7b873" strokeWidth="2.5" strokeLinecap="round" />
+      </svg>
+      <svg className="pointer-events-none absolute right-0 top-2 h-[56px] w-[38%] -scale-x-100 text-[#e8899f]/60" viewBox="0 0 160 64" fill="none" aria-hidden="true">
+        <path d="M0 29c31-22 54 22 87 1 22-14 41-12 73 7" stroke="currentColor" strokeWidth="5" strokeLinecap="round" />
+        <path d="M5 42c29-11 43 13 67 6" stroke="#e7b873" strokeWidth="2.5" strokeLinecap="round" />
+      </svg>
+
+      <span className="absolute left-[12%] top-1 h-2 w-2 rotate-45 bg-[#e7b873]" aria-hidden="true" />
+      <span className="absolute left-[22%] bottom-3 h-1.5 w-3 rotate-[24deg] rounded-full bg-[#9b84d7]/75" aria-hidden="true" />
+      <span className="absolute right-[13%] top-3 h-3 w-1.5 -rotate-[24deg] rounded-full bg-[#79b9c8]/85" aria-hidden="true" />
+      <span className="absolute right-[25%] bottom-2 h-2 w-2 rotate-45 bg-[#e7b873]" aria-hidden="true" />
+
+      <div className="relative z-10 flex items-center gap-2.5 bg-[var(--color-page-surface)] px-3">
+        <GiftBoxIcon />
+        <div>
+          <p className="text-[10px] font-bold text-[#c89349]">TODAY'S SURPRISE</p>
+          <p className="mt-0.5 text-[16px] font-bold text-[var(--color-ink)]">拆开今天的幸运好礼</p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function GiftBoxIcon() {
+  return (
+    <svg className="h-[46px] w-[52px] shrink-0 drop-shadow-[0_6px_10px_rgba(112,55,67,0.18)]" viewBox="0 0 56 50" fill="none" aria-hidden="true">
+      <path d="M7 20h42v25a3 3 0 0 1-3 3H10a3 3 0 0 1-3-3V20Z" fill="#ef90a7" stroke="#8d5361" strokeWidth="1.5" />
+      <path d="M4 14h48v9H4z" fill="#f7b2c1" stroke="#8d5361" strokeWidth="1.5" />
+      <path d="M24 14h8v34h-8z" fill="#edbd70" stroke="#a87332" strokeWidth="1.2" />
+      <path d="M28 14c-8-1-13-3-13-7 0-3 2-5 5-5 5 0 8 7 8 12Z" fill="#f8d9df" stroke="#8d5361" strokeWidth="1.5" />
+      <path d="M28 14c8-1 13-3 13-7 0-3-2-5-5-5-5 0-8 7-8 12Z" fill="#f8d9df" stroke="#8d5361" strokeWidth="1.5" />
+      <path d="m28 13-6 8M28 13l6 8" stroke="#a87332" strokeWidth="1.5" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function GiftConfetti() {
+  return (
+    <div className="pointer-events-none absolute inset-x-0 top-0 z-0 h-[86%] overflow-hidden" aria-hidden="true">
+      <span className="absolute left-[2%] top-[18%] h-4 w-1.5 rotate-[28deg] rounded-full bg-[#e8899f]/55" />
+      <span className="absolute left-[8%] top-[42%] h-2.5 w-2.5 rotate-45 border border-[#e7b873]/65" />
+      <span className="absolute left-[4%] top-[67%] h-1.5 w-4 -rotate-[18deg] rounded-full bg-[#79b9c8]/55" />
+      <span className="absolute right-[3%] top-[22%] h-3 w-1.5 -rotate-[22deg] rounded-full bg-[#9b84d7]/55" />
+      <span className="absolute right-[8%] top-[48%] h-2.5 w-2.5 rotate-45 bg-[#e7b873]/55" />
+      <span className="absolute right-[3%] top-[72%] h-1.5 w-4 rotate-[18deg] rounded-full bg-[#e8899f]/50" />
+    </div>
+  )
+}
+
 function RewardCard({ code, label }: { code: string; label: string }) {
   const isVip = code.startsWith('vip_')
   const isMonth = code.endsWith('_30d')
@@ -420,6 +480,8 @@ function RewardCard({ code, label }: { code: string; label: string }) {
   return (
     <div className={`relative min-h-[88px] overflow-hidden rounded-[8px] border p-3 ${isGrand ? 'border-[#e8ba68]/65 bg-[#e8ba68]/[0.08] shadow-[0_7px_18px_rgba(174,118,37,0.10)]' : 'border-[var(--color-divider)] bg-[var(--color-page-surface)]'}`}>
       {isGrand && <span className="absolute inset-x-0 top-0 h-[3px] bg-[#e8ba68]" />}
+      <span className={`pointer-events-none absolute bottom-0 right-3 h-7 w-[5px] ${isGrand ? 'bg-[#e8ba68]/35' : 'bg-[#e8899f]/20'}`} aria-hidden="true" />
+      <span className={`pointer-events-none absolute bottom-3 right-0 h-[5px] w-7 ${isGrand ? 'bg-[#e8ba68]/35' : 'bg-[#e8899f]/20'}`} aria-hidden="true" />
       <div className="flex items-start justify-between gap-2">
         <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${isVip ? 'bg-[#9b84d7]/18 text-[#9b84d7]' : 'bg-[#ff8faa]/16 text-[var(--color-primary-600)]'}`}>
           {isVip ? (
