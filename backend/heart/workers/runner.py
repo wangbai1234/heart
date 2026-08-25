@@ -197,6 +197,21 @@ async def start_workers() -> None:  # noqa: C901 — pre-existing complexity, tr
     except Exception as e:
         logger.error("otp_cleanup_worker_start_failed", error=str(e))
 
+    # Start referral commission settlement worker.
+    try:
+        from heart.workers.commission_settle_worker import run_commission_settle_loop
+
+        stop_event = asyncio.Event()
+        _worker_stop_events.append(stop_event)
+        task = asyncio.create_task(
+            run_commission_settle_loop(stop_event),
+            name="commission_settle_worker",
+        )
+        _worker_tasks.append(task)
+        logger.info("commission_settle_worker_started")
+    except Exception as e:
+        logger.error("commission_settle_worker_start_failed", error=str(e))
+
 
 async def stop_workers() -> None:
     """Stop all background workers gracefully."""

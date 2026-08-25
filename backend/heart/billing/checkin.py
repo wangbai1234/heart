@@ -21,7 +21,12 @@ def daily_target_for_tier(tier: str) -> int:
 
 
 async def claim_daily_grant(
-    db: AsyncSession, user_id: uuid.UUID, tier: str, *, day: str | None = None
+    db: AsyncSession,
+    user_id: uuid.UUID,
+    tier: str,
+    *,
+    day: str | None = None,
+    auto_commit: bool = True,
 ) -> dict:
     today = day or (datetime.now(timezone.utc) + timedelta(hours=8)).strftime("%Y-%m-%d")
     daily_total = daily_target_for_tier(tier)
@@ -48,6 +53,7 @@ async def claim_daily_grant(
             idempotency_key=f"{key_prefix}{daily_total}",
             type_str="grant",
             ref_type="checkin",
+            auto_commit=auto_commit,
         )
     else:
         balance = await get_balance(db, user_id)

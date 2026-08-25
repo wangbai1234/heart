@@ -113,10 +113,16 @@ async def get_effective_tier(db: AsyncSession, user_id: uuid.UUID) -> str:
     try:
         result = await db.execute(
             text("""
-                SELECT tier FROM user_memberships
-                WHERE user_id = :uid
-                  AND expires_at > NOW()
-                ORDER BY expires_at DESC
+                SELECT tier FROM (
+                  SELECT tier, expires_at FROM user_memberships
+                  WHERE user_id = :uid AND expires_at > NOW()
+                  UNION ALL
+                  SELECT tier, expires_at FROM membership_reward_coupons
+                  WHERE user_id = :uid AND status = 'activated'
+                    AND starts_at <= NOW() AND expires_at > NOW()
+                ) entitlements
+                ORDER BY CASE tier WHEN 'immersive' THEN 2 WHEN 'plus' THEN 1 ELSE 0 END DESC,
+                         expires_at DESC
                 LIMIT 1
             """),
             {"uid": user_id},
@@ -132,6 +138,24 @@ async def get_effective_tier(db: AsyncSession, user_id: uuid.UUID) -> str:
             return "free"
         logger.exception("get_effective_tier_db_error", user_id=str(user_id))
         raise
+
+
+async def get_paid_checkin_tier(db: AsyncSession, user_id: uuid.UUID) -> str:
+    """Resolve check-in tier from paid memberships only; lottery trials are excluded."""
+    result = await db.execute(
+        text(
+            """
+            SELECT tier FROM user_memberships
+            WHERE user_id = :uid AND expires_at > NOW()
+            ORDER BY CASE tier WHEN 'immersive' THEN 2 WHEN 'plus' THEN 1 ELSE 0 END DESC,
+                     expires_at DESC
+            LIMIT 1
+            """
+        ),
+        {"uid": user_id},
+    )
+    tier = result.scalar_one_or_none()
+    return tier if tier in VALID_TIERS else "free"
 
 
 # ---------------------------------------------------------------------------

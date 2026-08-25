@@ -19,7 +19,6 @@ import { TransactionsPage } from './pages/TransactionsPage'
 import { RedeemPage } from './pages/RedeemPage'
 import { MembershipPage } from './pages/MembershipPage'
 import { WalletPage } from './pages/WalletPage'
-import { InvitePage } from './pages/InvitePage'
 import { AgeGatePage } from './pages/AgeGatePage'
 import { LegalPage } from './pages/LegalPage'
 import { UIStatePreviewPage } from './pages/UIStatePreviewPage'
@@ -31,6 +30,7 @@ import { WorkshopCreatePage } from './pages/WorkshopCreatePage'
 import { ExplorePage } from './pages/ExplorePage'
 import { ScenarioDetailPage } from './pages/ScenarioDetailPage'
 import { StoryPlayerPage } from './pages/StoryPlayerPage'
+import { RewardsPage } from './pages/RewardsPage'
 import { AdminReviewPage } from './pages/AdminReviewPage'
 import { ToastContainer } from './components/ui/ToastContainer'
 import { UpdatePrompt } from './components/UpdatePrompt'
@@ -280,6 +280,7 @@ export function App() {
         <Route path="/explore" element={<ExplorePage />} />
         <Route path="/explore/:scenarioId" element={<ScenarioDetailPage />} />
         <Route path="/story/:runId" element={<StoryPlayerPage />} />
+        <Route path="/rewards" element={<RewardsPage />} />
         <Route path="/character" element={<CharacterPage />} />
         <Route path="/character/:id" element={<CharacterProfilePage />} />
         <Route path="/settings" element={<SettingsPage />} />
@@ -288,7 +289,7 @@ export function App() {
         <Route path="/credits/transactions" element={<TransactionsPage />} />
         <Route path="/membership" element={<MembershipPage />} />
         <Route path="/wallet" element={<WalletPage />} />
-        <Route path="/invite" element={<InvitePage />} />
+        <Route path="/invite" element={<Navigate to="/rewards" replace />} />
         <Route path="/age-gate" element={<AgeGatePage />} />
         <Route path="/legal/:type" element={<LegalPage />} />
         <Route path="/qa/states" element={<UIStatePreviewPage />} />

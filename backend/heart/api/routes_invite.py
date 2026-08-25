@@ -5,14 +5,19 @@ from __future__ import annotations
 import uuid
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from heart.core.auth import TokenData, get_current_user
-from heart.core.config import settings
-from heart.invite.service import get_or_create_code, record_invite_signup
+from heart.invite.service import (
+    daily_chance_limit,
+    get_or_create_code,
+    load_invite_rules,
+    record_invite_signup,
+)
+from heart.membership import get_effective_tier
 
 from .wiring import get_db
 
@@ -36,7 +41,7 @@ async def get_invite_status(
         await db.execute(
             text(
                 "SELECT COUNT(*) FROM user_invite_uses "
-                "WHERE inviter_id = :uid AND first_chat_at IS NOT NULL"
+                "WHERE inviter_id = :uid AND qualified_at IS NOT NULL"
             ),
             {"uid": user_id},
         )
@@ -46,13 +51,13 @@ async def get_invite_status(
         await db.execute(
             text(
                 "SELECT COUNT(*) FROM user_invite_uses "
-                "WHERE inviter_id = :uid AND first_chat_at IS NULL"
+                "WHERE inviter_id = :uid AND qualified_at IS NULL"
             ),
             {"uid": user_id},
         )
     ).scalar_one()
 
-    # Sum all invite-type grants (set via type_str="invite" in handle_first_chat)
+    # Keep the deprecated total_reward field for old clients during rollout.
     total_reward_fen = (
         await db.execute(
             text(
@@ -65,6 +70,55 @@ async def get_invite_status(
 
     invited_count = int(invited_count)
     pending_count = int(pending_count)
+    tier = await get_effective_tier(db, user_id)
+    daily_limit = daily_chance_limit(tier, await load_invite_rules(db))
+    today_granted = int(
+        (
+            await db.execute(
+                text(
+                    """
+                    SELECT COUNT(*) FROM invite_draw_chances
+                    WHERE user_id = :uid
+                      AND grant_day = DATE(NOW() AT TIME ZONE 'Asia/Shanghai')
+                    """
+                ),
+                {"uid": user_id},
+            )
+        ).scalar_one()
+    )
+    chance_row = (
+        (
+            await db.execute(
+                text(
+                    """
+                SELECT COUNT(*) AS available, MIN(expires_at) AS next_expiry
+                FROM invite_draw_chances
+                WHERE user_id = :uid AND consumed_at IS NULL AND expires_at > NOW()
+                """
+                ),
+                {"uid": user_id},
+            )
+        )
+        .mappings()
+        .one()
+    )
+    invitees = (
+        (
+            await db.execute(
+                text(
+                    """
+                SELECT id, status, msg_count, ai_reply_count, qualified_at, created_at
+                FROM user_invite_uses
+                WHERE inviter_id = :uid
+                ORDER BY created_at DESC LIMIT 50
+                """
+                ),
+                {"uid": user_id},
+            )
+        )
+        .mappings()
+        .all()
+    )
 
     return {
         "invite_code": code,
@@ -72,18 +126,13 @@ async def get_invite_status(
         "invited_count": invited_count,
         "pending_count": pending_count,
         "total_reward": int(total_reward_fen) // 100,
-        "stages": [
-            {
-                "threshold": 5,
-                "bonus": settings.invite_milestone_5_coins,
-                "reached": invited_count >= 5,
-            },
-            {
-                "threshold": 10,
-                "bonus": settings.invite_milestone_10_coins,
-                "reached": invited_count >= 10,
-            },
-        ],
+        "stages": [],
+        "available_chances": int(chance_row["available"]),
+        "next_expiry_at": chance_row["next_expiry"],
+        "today_granted": today_granted,
+        "daily_limit": daily_limit,
+        "today_remaining": max(0, daily_limit - today_granted),
+        "invitees": [dict(row) for row in invitees],
     }
 
 
@@ -94,6 +143,7 @@ class BindInviteRequest(BaseModel):
 @router.post("/bind")
 async def bind_invite_code(
     body: BindInviteRequest,
+    request: Request,
     current_user: TokenData = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
@@ -102,7 +152,13 @@ async def bind_invite_code(
         raise HTTPException(status_code=400, detail="invalid_code")
 
     user_id = uuid.UUID(current_user.user_id)
-    result = await record_invite_signup(db, user_id, body.code)
+    result = await record_invite_signup(
+        db,
+        user_id,
+        body.code,
+        device_id=request.headers.get("x-device-id"),
+        ip=request.client.host if request.client else None,
+    )
 
     if result == "ok":
         await db.commit()
@@ -134,6 +190,7 @@ class UseInviteRequest(BaseModel):
 @router.post("/use")
 async def use_invite_code(
     body: UseInviteRequest,
+    request: Request,
     current_user: TokenData = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
@@ -142,7 +199,13 @@ async def use_invite_code(
         raise HTTPException(status_code=400, detail="无效的邀请码")
 
     user_id = uuid.UUID(current_user.user_id)
-    result = await record_invite_signup(db, user_id, body.code)
+    result = await record_invite_signup(
+        db,
+        user_id,
+        body.code,
+        device_id=request.headers.get("x-device-id"),
+        ip=request.client.host if request.client else None,
+    )
     if result == "ok":
         await db.commit()
     return {"accepted": result == "ok"}

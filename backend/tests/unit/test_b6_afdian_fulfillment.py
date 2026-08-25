@@ -8,7 +8,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # resolve_user_by_binding_code
 # ---------------------------------------------------------------------------
@@ -107,9 +106,14 @@ class TestFulfillOrder:
         fulfilled_row.fetchone.return_value = (datetime(2026, 1, 1, tzinfo=timezone.utc),)
         db.execute = AsyncMock(return_value=fulfilled_row)
 
-        ok, msg = await fulfill_order(db, "order-001", "plan-a", "binding: XYZ")
+        with patch(
+            "heart.afdian.fulfillment._try_attribute_commission",
+            new=AsyncMock(return_value=False),
+        ) as retry_commission:
+            ok, msg = await fulfill_order(db, "order-001", "plan-a", "binding: XYZ")
         assert ok is True
         assert msg == "already_fulfilled"
+        retry_commission.assert_awaited_once_with(db, "order-001")
 
     @pytest.mark.asyncio
     async def test_returns_false_when_no_binding_code(self):
@@ -311,9 +315,7 @@ class TestFulfillOrder:
             patch("heart.afdian.fulfillment.activate_or_extend", new=AsyncMock()),
         ):
             # empty remark — resolution must come from custom_order_id
-            ok, msg = await fulfill_order(
-                db, "order-custom-1", "plan-plus30", "", None, "ABCD1234"
-            )
+            ok, msg = await fulfill_order(db, "order-custom-1", "plan-plus30", "", None, "ABCD1234")
 
         assert ok is True
         assert msg == "ok"

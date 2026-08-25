@@ -87,6 +87,15 @@ async def afdian_webhook(
     remark = str(order.get("remark") or "")
     custom_order_id = str(order.get("custom_order_id") or "")
 
+    order_status = str(order.get("status") or "").lower()
+    if order_status in {"refund", "refunded", "closed", "cancelled", "canceled"}:
+        from heart.commission.service import reverse_commission_by_order
+
+        await reverse_commission_by_order(db, out_trade_no)
+        await db.commit()
+        logger.info("afdian_commission_reversed", out_trade_no=out_trade_no)
+        return {"ec": 200, "em": "success"}
+
     from heart.afdian.fulfillment import fulfill_order, record_order
 
     # Idempotent insert for audit (duplicate pushes are expected — Afdian may

@@ -105,6 +105,28 @@ class TestActivateOrExtend:
         claim.assert_awaited_once()
 
     @pytest.mark.asyncio
+    async def test_auto_commit_false_keeps_changes_in_outer_transaction(self):
+        from heart.membership.service import activate_or_extend
+
+        db = AsyncMock()
+        select_result = MagicMock()
+        select_result.scalar_one_or_none.return_value = None
+        db.execute = AsyncMock(side_effect=[select_result, MagicMock()])
+
+        with patch("heart.membership.service.claim_daily_grant", new=AsyncMock()) as claim:
+            await activate_or_extend(
+                db,
+                uuid.uuid4(),
+                "plus",
+                30,
+                granted_by="commission:test-token",
+                auto_commit=False,
+            )
+
+        db.commit.assert_not_awaited()
+        assert claim.await_args.kwargs["auto_commit"] is False
+
+    @pytest.mark.asyncio
     async def test_monthly_grant_not_called_for_free(self):
         from heart.membership.service import activate_or_extend
 
@@ -127,13 +149,16 @@ def _make_db_for_membership(expires_at=None, binding_code="TESTCODE1"):
     """Build an AsyncMock db that handles GET /membership queries."""
     db = AsyncMock()
 
+    paid_tier_mock = MagicMock()
+    paid_tier_mock.scalar_one_or_none.return_value = None
+
     expires_mock = MagicMock()
     expires_mock.scalar_one_or_none.return_value = expires_at
 
     binding_mock = MagicMock()
     binding_mock.scalar_one_or_none.return_value = binding_code
 
-    db.execute = AsyncMock(side_effect=[expires_mock, binding_mock])
+    db.execute = AsyncMock(side_effect=[paid_tier_mock, expires_mock, binding_mock])
     db.commit = AsyncMock()
     return db
 

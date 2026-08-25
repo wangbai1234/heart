@@ -223,6 +223,7 @@ async def fulfill_order(
     )
     existing = row.fetchone()
     if existing and existing[0] is not None:
+        await _try_attribute_commission(db, out_trade_no)
         return True, "already_fulfilled"
 
     # Resolve user: try custom_order_id first (exact match), fallback to remark (fuzzy)
@@ -303,6 +304,7 @@ async def fulfill_order(
                 {"code": code_to_mark},
             )
         await db.commit()
+        await _try_attribute_commission(db, out_trade_no)
         logger.info(
             "afdian_fulfilled",
             out_trade_no=out_trade_no,
@@ -397,6 +399,7 @@ async def admin_fulfill_order(
             {"otn": out_trade_no, "uid": user_id},
         )
         await db.commit()
+        await _try_attribute_commission(db, out_trade_no)
         logger.info(
             "afdian_admin_fulfilled",
             out_trade_no=out_trade_no,
@@ -408,3 +411,17 @@ async def admin_fulfill_order(
         await db.rollback()
         logger.exception("afdian_admin_fulfill_error", out_trade_no=out_trade_no)
         raise
+
+
+async def _try_attribute_commission(db: AsyncSession, out_trade_no: str) -> bool:
+    """Best-effort, idempotent attribution that can be retried after fulfillment."""
+    try:
+        from heart.commission.service import create_commission_from_fulfilled_order
+
+        created = await create_commission_from_fulfilled_order(db, out_trade_no)
+        await db.commit()
+        return created
+    except Exception:
+        await db.rollback()
+        logger.exception("commission_attribution_failed", out_trade_no=out_trade_no)
+        return False

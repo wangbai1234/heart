@@ -20,6 +20,8 @@ async def activate_or_extend(
     tier: str,
     days: int,
     granted_by: str = "manual",
+    *,
+    auto_commit: bool = True,
 ) -> datetime:
     """Grant or extend a membership tier for a user (upsert semantics).
 
@@ -82,7 +84,8 @@ async def activate_or_extend(
 
     # Commit the membership row even when today's daily grant is already at the
     # target and the idempotent grant helper has nothing to commit.
-    await db.commit()
+    if auto_commit:
+        await db.commit()
 
     logger.info(
         "membership_activated",
@@ -97,6 +100,6 @@ async def activate_or_extend(
     # same permanent balance up by 60. If they have not opened the app today,
     # activation grants the full 80 immediately.
     if tier in {"plus", "immersive"}:
-        await claim_daily_grant(db, user_id, tier)
+        await claim_daily_grant(db, user_id, tier, auto_commit=auto_commit)
 
     return new_expires

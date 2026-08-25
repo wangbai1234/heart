@@ -276,10 +276,18 @@ class Settings(BaseSettings):
     # Each entry: {"type":"membership","tier":"plus","days":30} or {"type":"coins","coins":220}
     afdian_sku_map: str = "{}"
 
-    # Invite rewards (display coins; ×100 = fen internally)
-    invite_referral_grant_coins: int = 40  # per inviter + per invitee on first chat
-    invite_milestone_5_coins: int = 50  # bonus after 5 valid invites
-    invite_milestone_10_coins: int = 120  # bonus after 10 valid invites
+    # Invite qualification and draw chances (Asia/Shanghai calendar day).
+    invite_qualification_days: int = 7
+    invite_binding_hours: int = 24
+    invite_min_messages: int = 3
+    invite_min_ai_replies: int = 2
+    invite_min_valid_chars: int = 15
+    invite_min_span_seconds: int = 120
+    invite_chance_expiry_days: int = 30
+    invite_daily_limit_free: int = 5
+    invite_daily_limit_plus: int = 10
+    invite_daily_limit_immersive: int = 20
+    referral_signal_salt: str = ""
 
     # Daily check-in reward (display coins; ×100 = fen internally)
     daily_checkin_coins: int = 20  # granted once per calendar day (Asia/Shanghai)

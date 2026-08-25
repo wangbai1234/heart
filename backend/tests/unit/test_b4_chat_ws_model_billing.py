@@ -199,9 +199,7 @@ def _precheck_mock_db():
 def _ev(provider: str):
     from heart.ss08_voice.voice_resolver import EffectiveVoice
 
-    return EffectiveVoice(
-        provider=provider, voice_type="clone", voice_id="v", reference_ref=None
-    )
+    return EffectiveVoice(provider=provider, voice_type="clone", voice_id="v", reference_ref=None)
 
 
 class TestPrecheckTtsGate:
@@ -758,6 +756,7 @@ class TestUploadTurnAudioFormat:
         url, dur = await routes_chat_ws._upload_turn_audio(session, uuid.uuid4(), "t")
         assert url is None and dur is None
 
+
 class TestTurnEndHasAudio:
     """turn_end must carry has_audio reflecting whether TTS audio persisted, so
     the client only stamps a by-turn pointer when the object actually exists."""
@@ -782,13 +781,21 @@ class TestTurnEndHasAudio:
             patch("sqlalchemy.ext.asyncio.AsyncSession", return_value=db),
             patch("heart.membership.get_effective_tier", new=AsyncMock(return_value="plus")),
             patch("heart.billing.get_balance", new=AsyncMock(return_value=0)),
-            patch("heart.invite.service.handle_first_chat", new=AsyncMock()),
+            patch("heart.invite.service.handle_invite_progress", new=AsyncMock()),
         ):
             db.__aenter__ = AsyncMock(return_value=db)
             db.__aexit__ = AsyncMock(return_value=False)
             await routes_chat_ws._post_turn_billing(
-                ws, uuid.uuid4(), str(uuid.uuid4()), "char1", "hi", ["reply"],
-                "voice", False, stream_session=None, tts_provider="",
+                ws,
+                uuid.uuid4(),
+                str(uuid.uuid4()),
+                "char1",
+                "hi",
+                ["reply"],
+                "voice",
+                False,
+                stream_session=None,
+                tts_provider="",
             )
         ends = [c[0][0] for c in ws.send_json.call_args_list if c[0][0].get("type") == "turn_end"]
         assert ends, "no turn_end emitted"

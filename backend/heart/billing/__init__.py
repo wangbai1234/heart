@@ -52,6 +52,8 @@ async def grant(
     ref_type: Optional[str] = None,
     ref_id: Optional[str] = None,
     metadata: Optional[dict] = None,
+    *,
+    auto_commit: bool = True,
 ) -> int:
     """Grant credits (signup bonus, membership grant, invite reward, etc.).
 
@@ -88,7 +90,8 @@ async def grant(
         )
         new_balance = result.scalar_one_or_none()
         if new_balance is not None:
-            await db.commit()
+            if auto_commit:
+                await db.commit()
             logger.info("credits_granted", user_id=str(user_id), amount=amount, balance=new_balance)
             return new_balance
 

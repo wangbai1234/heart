@@ -46,9 +46,9 @@ async def daily_checkin(
     """
     uid = uuid.UUID(current_user.user_id)
     from heart.billing.checkin import claim_daily_grant
-    from heart.membership import get_effective_tier
+    from heart.membership import get_paid_checkin_tier
 
-    tier = await get_effective_tier(db, uid)
+    tier = await get_paid_checkin_tier(db, uid)
     return await claim_daily_grant(db, uid, tier)
 
 

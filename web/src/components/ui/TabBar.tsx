@@ -11,7 +11,7 @@ interface TabItem {
 }
 
 // Regular tabs flank the raised center 创作 button. Order (per product
-// direction 2026-07-31, Nimoo-style): 角色 · 探索 · [创作] · 消息 · 我的.
+// direction 2026-08-25): 角色 · 福利 · [创作] · 消息 · 我的.
 // The former 首页 tab was removed — the home page carried no unique function,
 // so the app now lands directly on 角色 after login.
 const leftTabs: TabItem[] = [
@@ -27,13 +27,16 @@ const leftTabs: TabItem[] = [
     ),
   },
   {
-    id: 'explore',
-    label: '探索',
-    path: '/explore',
+    id: 'rewards',
+    label: '福利',
+    path: '/rewards',
     icon: (active) => (
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={active ? 'var(--color-tab-active)' : 'var(--color-tab-inactive)'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <circle cx="12" cy="12" r="9" />
-        <polygon points="15.5,8.5 10.5,10.5 8.5,15.5 13.5,13.5" fill={active ? 'var(--color-tab-active)' : 'none'} />
+        <path d="M20 12v9H4v-9" />
+        <path d="M2 7h20v5H2z" />
+        <path d="M12 7v14" />
+        <path d="M12 7H7.5A2.5 2.5 0 1 1 10 4.5C10 6 12 7 12 7Z" />
+        <path d="M12 7h4.5A2.5 2.5 0 1 0 14 4.5C14 6 12 7 12 7Z" />
       </svg>
     ),
   },

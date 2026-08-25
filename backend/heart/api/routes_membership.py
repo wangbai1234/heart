@@ -12,7 +12,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from heart.core.auth import TokenData, get_current_user
-from heart.membership import get_effective_tier, get_entitlements
+from heart.membership import get_effective_tier, get_entitlements, get_paid_checkin_tier
 
 from .wiring import get_db
 
@@ -63,14 +63,24 @@ async def get_membership(
     """Return effective membership per api_contract.md §1.2."""
     uid = uuid.UUID(current_user.user_id)
     tier = await get_effective_tier(db, uid)
+    checkin_tier = await get_paid_checkin_tier(db, uid)
     ent = get_entitlements(tier)
 
     expires_row = (
         await db.execute(
             text(
-                "SELECT expires_at FROM user_memberships "
-                "WHERE user_id = :uid AND expires_at > NOW() "
-                "ORDER BY expires_at DESC LIMIT 1"
+                """
+                SELECT expires_at FROM (
+                  SELECT tier, expires_at FROM user_memberships
+                  WHERE user_id = :uid AND expires_at > NOW()
+                  UNION ALL
+                  SELECT tier, expires_at FROM membership_reward_coupons
+                  WHERE user_id = :uid AND status = 'activated'
+                    AND starts_at <= NOW() AND expires_at > NOW()
+                ) entitlements
+                ORDER BY CASE tier WHEN 'immersive' THEN 2 WHEN 'plus' THEN 1 ELSE 0 END DESC,
+                         expires_at DESC LIMIT 1
+                """
             ),
             {"uid": uid},
         )
@@ -89,7 +99,7 @@ async def get_membership(
         "tier": tier,
         "expires_at": expires_at,
         "monthly_grant": ent.monthly_grant_fen // 100,
-        "daily_checkin_coins": daily_target_for_tier(tier),
+        "daily_checkin_coins": daily_target_for_tier(checkin_tier),
         "daily_coins_permanent": True,
         "entitlements": {
             "models": ent.models,

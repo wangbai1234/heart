@@ -754,15 +754,21 @@ async def _post_turn_billing(
 
             await db.commit()
 
-        # ── Invite first-chat reward (best-effort, errors don't affect billing) ─
+        # ── Invite qualification progress (best-effort; never affects chat) ──
         try:
-            from heart.invite.service import handle_first_chat
+            from heart.invite.service import handle_invite_progress
 
             async with AsyncSession(_get_engine(), expire_on_commit=False) as _invite_db:
-                await handle_first_chat(_invite_db, user_uuid)
+                if not turn_safety_blocked:
+                    await handle_invite_progress(
+                        _invite_db,
+                        user_uuid,
+                        uuid.UUID(turn_id),
+                        user_text,
+                    )
                 await _invite_db.commit()
         except Exception:
-            logger.exception("invite_first_chat_hook_failed", user_id=str(user_uuid))
+            logger.exception("invite_progress_hook_failed", user_id=str(user_uuid))
 
         # ── Send WS events ────────────────────────────────────────────────────
         for i, seg in enumerate(segments):

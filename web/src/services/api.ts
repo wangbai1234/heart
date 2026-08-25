@@ -2,6 +2,32 @@ import { useAuthStore } from '../stores/authStore'
 import { promptAuthentication } from './navigation'
 
 const BASE_URL = '/api'
+let volatileDeviceId: string | null = null
+
+function createDeviceId(): string {
+  if (typeof globalThis.crypto?.randomUUID === 'function') {
+    return globalThis.crypto.randomUUID()
+  }
+  return `fallback-${Date.now()}-${Math.random().toString(36).slice(2)}`
+}
+
+function getDeviceId(): string {
+  const key = 'yuoyuo-device-id'
+  if (typeof globalThis.localStorage === 'undefined') {
+    volatileDeviceId ??= createDeviceId()
+    return volatileDeviceId
+  }
+  try {
+    const existing = globalThis.localStorage.getItem(key)
+    if (existing) return existing
+    const created = createDeviceId()
+    globalThis.localStorage.setItem(key, created)
+    return created
+  } catch {
+    volatileDeviceId ??= createDeviceId()
+    return volatileDeviceId
+  }
+}
 
 // Shared refresh promise — prevents concurrent refresh calls from each
 // firing independently and triggering the reuse-detection revocation.
@@ -43,6 +69,7 @@ async function request<T>(
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
+    'X-Device-Id': getDeviceId(),
     ...(options.headers as Record<string, string>),
   }
 
@@ -579,6 +606,19 @@ export interface InviteStatus {
   pending_count: number
   total_reward: number
   stages: InviteStage[]
+  available_chances: number
+  next_expiry_at: string | null
+  today_granted: number
+  daily_limit: number
+  today_remaining: number
+  invitees: Array<{
+    id: number
+    status: 'pending' | 'qualified' | 'review' | 'rejected'
+    msg_count: number
+    ai_reply_count: number
+    qualified_at: string | null
+    created_at: string
+  }>
 }
 
 export async function getInviteStatus(): Promise<InviteStatus> {
@@ -589,6 +629,94 @@ export async function bindInvite(code: string): Promise<{ ok: boolean }> {
   return request('/invite/bind', {
     method: 'POST',
     body: JSON.stringify({ code }),
+  })
+}
+
+export interface LotteryStatus {
+  available_chances: number
+  next_expiry_at: string | null
+  chances: Array<{ id: number; expires_at: string }>
+  pool_prizes: Array<{
+    code: string
+    kind: 'coins' | 'membership'
+    payload: { coins?: number; tier?: 'plus' | 'immersive'; days?: number }
+    weight: number
+  }>
+}
+
+export interface LotteryDrawResult {
+  id: number
+  chance_id: number
+  prize_code: string
+  prize_kind: 'coins' | 'membership'
+  payload: { coins?: number; tier?: 'plus' | 'immersive'; days?: number }
+  balance: number | null
+}
+
+export async function getLotteryStatus(): Promise<LotteryStatus> {
+  return request('/lottery/status')
+}
+
+export async function drawLottery(chanceId: number): Promise<LotteryDrawResult> {
+  return request('/lottery/draw', {
+    method: 'POST',
+    body: JSON.stringify({ chance_id: chanceId }),
+  })
+}
+
+export interface MembershipRewardCoupon {
+  id: number
+  tier: 'plus' | 'immersive'
+  days: number
+  granted_at: string
+  activate_by: string
+  activated_at: string | null
+  starts_at: string | null
+  expires_at: string | null
+  status: 'active' | 'activated' | 'expired'
+}
+
+export async function getRewardCoupons(): Promise<{ coupons: MembershipRewardCoupon[] }> {
+  return request('/rewards/coupons')
+}
+
+export async function activateRewardCoupon(couponId: number): Promise<MembershipRewardCoupon> {
+  return request(`/rewards/coupons/${couponId}/activate`, { method: 'POST' })
+}
+
+export interface CommissionBalance {
+  balance_fen: number
+  balance_yuan: number
+  entries: Array<{
+    order_id: string
+    paid_fen: number
+    commission_fen: number
+    status: 'pending' | 'settled' | 'cancelled'
+    settle_at: string
+    created_at: string
+    settled_at: string | null
+  }>
+  products: Record<string, {
+    target: 'membership' | 'coins'
+    price_fen: number
+    tier?: string
+    days?: number
+    coins?: number
+  }>
+}
+
+export async function getCommissionBalance(): Promise<CommissionBalance> {
+  return request('/commission/balance')
+}
+
+export async function spendCommission(
+  target: 'membership' | 'coins',
+  sku: string,
+  clientToken: string,
+): Promise<{ ok: boolean; applied: boolean; balance_fen: number; sku: string }> {
+  return request('/commission/spend', {
+    method: 'POST',
+    body: JSON.stringify({ target, sku, client_token: clientToken }),
   })
 }
 

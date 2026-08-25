@@ -796,7 +796,13 @@ async def register(
 
     # Bind invite code if provided
     if body.invite_code:
-        result = await record_invite_signup(db, user_id, body.invite_code)
+        result = await record_invite_signup(
+            db,
+            user_id,
+            body.invite_code,
+            device_id=request.headers.get("x-device-id"),
+            ip=request.client.host if request.client else None,
+        )
         if result != "ok" and result != "already_bound":
             logger.warning("invite_binding_failed", result=result, user_id=str(user_id))
 
