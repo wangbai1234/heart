@@ -240,22 +240,22 @@ function LotteryPanel({ store, spinning, rotation, result, onDraw, onInvite, onT
         </button>
       </div>
 
-      <div className="relative overflow-hidden rounded-[8px] border border-[#dba66f]/45 bg-[var(--color-page-surface)] px-3 pb-5 pt-4 shadow-[0_16px_38px_rgba(104,51,67,0.14)] sm:px-6">
-        <span className="pointer-events-none absolute inset-x-0 top-0 h-[3px] bg-[#e7b873]" aria-hidden="true" />
-        <GiftStageHeader />
+      <div className="relative overflow-hidden rounded-[8px] border border-[#bca7c8]/25 bg-[#18161f] px-3 pb-5 pt-4 shadow-[0_18px_44px_rgba(30,19,38,0.28)] sm:px-6">
+        <MoonlitBackdrop />
+        <WishStageHeader />
 
-        <div className="relative mx-auto mb-3 grid max-w-[390px] grid-cols-3 divide-x divide-[#d6a870]/30 border-y border-dashed border-[#d6a870]/45 py-3">
-          <span className="absolute -left-[18px] top-1/2 h-4 w-4 -translate-y-1/2 rounded-full bg-[var(--color-page-surface)] ring-1 ring-[#d6a870]/35 sm:-left-[30px]" aria-hidden="true" />
-          <span className="absolute -right-[18px] top-1/2 h-4 w-4 -translate-y-1/2 rounded-full bg-[var(--color-page-surface)] ring-1 ring-[#d6a870]/35 sm:-right-[30px]" aria-hidden="true" />
+        <div className="relative z-10 mx-auto mb-3 grid max-w-[390px] grid-cols-3 divide-x divide-[#d8c5dd]/15 border-y border-[#d8c5dd]/15 py-3">
           <RewardPromise value={`${store.lottery?.available_chances ?? 0} 次`} label="当前可抽" accent />
           <RewardPromise value="100%" label="次次有奖" />
           <RewardPromise value="¥69" label="最高价值" />
         </div>
 
-        <div className="relative mx-auto flex max-w-[420px] flex-col items-center">
-          <GiftConfetti />
-          <div className="relative aspect-square w-full max-w-[342px]">
-            <div className="absolute left-1/2 top-[1.5%] z-30 h-0 w-0 -translate-x-1/2 border-x-[10px] border-t-[19px] border-x-transparent border-t-[#7f4d58] drop-shadow-[0_2px_2px_rgba(0,0,0,0.2)]" />
+        <div className="relative z-10 mx-auto flex max-w-[420px] flex-col items-center">
+          <div className="relative aspect-square w-full max-w-[342px] drop-shadow-[0_18px_24px_rgba(7,4,12,0.46)]">
+            <div className="absolute left-1/2 top-[0.5%] z-30 -translate-x-1/2" aria-hidden="true">
+              <span className="block h-4 w-4 rotate-45 border border-[#f4d8ba]/75 bg-[#9a6f96] shadow-[0_0_12px_rgba(236,203,221,0.45)]" />
+              <span className="mx-auto mt-1 block h-4 w-px bg-[#f4d8ba]/60" />
+            </div>
             <div
               className="absolute inset-0 transition-transform duration-[900ms] ease-out motion-reduce:transition-none"
               style={{ transform: `rotate(${rotation}deg)`, willChange: 'transform' }}
@@ -280,7 +280,7 @@ function LotteryPanel({ store, spinning, rotation, result, onDraw, onInvite, onT
                     }}
                   >
                     <span
-                      className="flex items-center justify-center whitespace-nowrap rounded-full bg-[#4b2c35]/78 px-1.5 py-1 font-bold leading-none text-white shadow-[0_2px_6px_rgba(49,24,30,0.25)] transition-transform duration-[900ms] ease-out motion-reduce:transition-none"
+                      className="flex items-center justify-center whitespace-nowrap rounded-full border border-[#f1d9c4]/35 bg-[#241c2d]/78 px-1.5 py-1 font-bold leading-none text-[#fff9f5] shadow-[0_3px_9px_rgba(16,9,22,0.32)] backdrop-blur-[2px] transition-transform duration-[900ms] ease-out motion-reduce:transition-none"
                       style={{
                         fontSize: 'clamp(8px, 2.5vw, 10px)',
                         minWidth: 'clamp(44px, 14vw, 58px)',
@@ -296,19 +296,19 @@ function LotteryPanel({ store, spinning, rotation, result, onDraw, onInvite, onT
             <button
               onClick={onDraw}
               disabled={spinning || !store.lottery?.available_chances}
-              className="absolute left-1/2 top-1/2 z-20 flex h-[25%] w-[25%] -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-transparent text-[15px] font-bold text-[#8d5361] outline-none transition-transform active:scale-95 disabled:cursor-not-allowed disabled:opacity-45 focus-visible:ring-2 focus-visible:ring-white/90 focus-visible:ring-offset-2 focus-visible:ring-offset-[#dfa987]"
+              className="absolute left-1/2 top-1/2 z-20 flex h-[25%] w-[25%] -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-transparent text-[15px] font-bold text-[#70465f] outline-none transition-transform active:scale-95 disabled:cursor-not-allowed disabled:opacity-45 focus-visible:ring-2 focus-visible:ring-[#f5dce9]/90 focus-visible:ring-offset-2 focus-visible:ring-offset-[#50344f]"
             >
               {spinning ? '抽取中' : '抽奖'}
             </button>
           </div>
           <div className="mt-2 min-h-[54px] text-center" aria-live="polite">
-            <p className={`text-[18px] font-bold ${result ? 'text-[var(--color-primary-600)]' : 'text-[var(--color-ink)]'}`}>
+            <p className={`text-[18px] font-bold ${result ? 'text-[#e7a8c2]' : 'text-[#f4edf5]'}`}>
               {result ? `恭喜获得 ${PRIZE_LABELS[result.prize_code] ?? result.prize_code}` : '点击中心，抽取今日好运'}
             </p>
-            <p className="mt-1 text-[11px] text-[var(--color-text-muted)]">
+            <p className="mt-1 text-[11px] text-[#b5a9ba]">
               {result ? '奖励已自动发放到账户' : '悠悠币立即到账，会员奖进入体验卡'}
             </p>
-            <p className="mt-1 text-[10px] text-[var(--color-text-muted)]">机会有效期至 {formatDate(store.lottery?.next_expiry_at ?? null)}</p>
+            <p className="mt-1 text-[10px] text-[#887d8d]">机会有效期至 {formatDate(store.lottery?.next_expiry_at ?? null)}</p>
           </div>
         </div>
       </div>
@@ -409,63 +409,41 @@ function Metric({ value, label }: { value: number; label: string }) {
 function RewardPromise({ value, label, accent = false }: { value: string; label: string; accent?: boolean }) {
   return (
     <div className="text-center">
-      <p className={`text-[17px] font-bold ${accent ? 'text-[var(--color-primary-600)]' : 'text-[var(--color-ink)]'}`}>{value}</p>
-      <p className="mt-1 text-[10px] text-[var(--color-text-muted)]">{label}</p>
+      <p className={`text-[17px] font-bold ${accent ? 'text-[#e7a8c2]' : 'text-[#f4edf5]'}`}>{value}</p>
+      <p className="mt-1 text-[10px] text-[#9d919f]">{label}</p>
     </div>
   )
 }
 
-function GiftStageHeader() {
+function WishStageHeader() {
   return (
-    <div className="relative mx-auto mb-3 flex min-h-[78px] max-w-[390px] items-center justify-center overflow-hidden border-b border-[#d6a870]/25 pb-3 pt-1">
-      <svg className="pointer-events-none absolute left-0 top-2 h-[56px] w-[38%] text-[#e8899f]/60" viewBox="0 0 160 64" fill="none" aria-hidden="true">
-        <path d="M0 29c31-22 54 22 87 1 22-14 41-12 73 7" stroke="currentColor" strokeWidth="5" strokeLinecap="round" />
-        <path d="M5 42c29-11 43 13 67 6" stroke="#e7b873" strokeWidth="2.5" strokeLinecap="round" />
-      </svg>
-      <svg className="pointer-events-none absolute right-0 top-2 h-[56px] w-[38%] -scale-x-100 text-[#e8899f]/60" viewBox="0 0 160 64" fill="none" aria-hidden="true">
-        <path d="M0 29c31-22 54 22 87 1 22-14 41-12 73 7" stroke="currentColor" strokeWidth="5" strokeLinecap="round" />
-        <path d="M5 42c29-11 43 13 67 6" stroke="#e7b873" strokeWidth="2.5" strokeLinecap="round" />
-      </svg>
-
-      <span className="absolute left-[12%] top-1 h-2 w-2 rotate-45 bg-[#e7b873]" aria-hidden="true" />
-      <span className="absolute left-[22%] bottom-3 h-1.5 w-3 rotate-[24deg] rounded-full bg-[#9b84d7]/75" aria-hidden="true" />
-      <span className="absolute right-[13%] top-3 h-3 w-1.5 -rotate-[24deg] rounded-full bg-[#79b9c8]/85" aria-hidden="true" />
-      <span className="absolute right-[25%] bottom-2 h-2 w-2 rotate-45 bg-[#e7b873]" aria-hidden="true" />
-
-      <div className="relative z-10 flex items-center gap-2.5 bg-[var(--color-page-surface)] px-3">
-        <GiftBoxIcon />
-        <div>
-          <p className="text-[10px] font-bold text-[#c89349]">TODAY'S SURPRISE</p>
-          <p className="mt-0.5 text-[16px] font-bold text-[var(--color-ink)]">拆开今天的幸运好礼</p>
-        </div>
+    <div className="relative z-10 mx-auto mb-3 flex min-h-[70px] max-w-[390px] items-center justify-center border-b border-[#d8c5dd]/15 pb-3 pt-1 text-center">
+      <span className="h-px w-10 bg-[#d8b98d]/35 sm:w-16" aria-hidden="true" />
+      <span className="mx-3 h-2.5 w-2.5 rotate-45 border border-[#f0d1a9]/60 bg-[#8d698c] shadow-[0_0_10px_rgba(235,203,222,0.28)]" aria-hidden="true" />
+      <div>
+        <p className="text-[10px] font-bold text-[#c6a77d]">MOONLIT WISH</p>
+        <p className="mt-1 text-[16px] font-bold text-[#f4edf5]">月光落下，心愿即将揭晓</p>
       </div>
+      <span className="mx-3 h-2.5 w-2.5 rotate-45 border border-[#f0d1a9]/60 bg-[#8d698c] shadow-[0_0_10px_rgba(235,203,222,0.28)]" aria-hidden="true" />
+      <span className="h-px w-10 bg-[#d8b98d]/35 sm:w-16" aria-hidden="true" />
     </div>
   )
 }
 
-function GiftBoxIcon() {
+function MoonlitBackdrop() {
   return (
-    <svg className="h-[46px] w-[52px] shrink-0 drop-shadow-[0_6px_10px_rgba(112,55,67,0.18)]" viewBox="0 0 56 50" fill="none" aria-hidden="true">
-      <path d="M7 20h42v25a3 3 0 0 1-3 3H10a3 3 0 0 1-3-3V20Z" fill="#ef90a7" stroke="#8d5361" strokeWidth="1.5" />
-      <path d="M4 14h48v9H4z" fill="#f7b2c1" stroke="#8d5361" strokeWidth="1.5" />
-      <path d="M24 14h8v34h-8z" fill="#edbd70" stroke="#a87332" strokeWidth="1.2" />
-      <path d="M28 14c-8-1-13-3-13-7 0-3 2-5 5-5 5 0 8 7 8 12Z" fill="#f8d9df" stroke="#8d5361" strokeWidth="1.5" />
-      <path d="M28 14c8-1 13-3 13-7 0-3-2-5-5-5-5 0-8 7-8 12Z" fill="#f8d9df" stroke="#8d5361" strokeWidth="1.5" />
-      <path d="m28 13-6 8M28 13l6 8" stroke="#a87332" strokeWidth="1.5" strokeLinecap="round" />
+    <svg className="pointer-events-none absolute inset-0 h-full w-full opacity-55" viewBox="0 0 480 650" preserveAspectRatio="none" fill="none" aria-hidden="true">
+      <ellipse cx="240" cy="350" rx="190" ry="230" stroke="#9b82a6" strokeOpacity=".16" />
+      <ellipse cx="240" cy="350" rx="158" ry="198" stroke="#d8b98d" strokeOpacity=".12" strokeDasharray="2 10" />
+      <path d="M-18 476C45 444 70 393 84 334c12-49 34-76 75-98M498 476c-63-32-88-83-102-142-12-49-34-76-75-98" stroke="#b796ae" strokeOpacity=".2" />
+      <path d="M12 468c34-4 58-23 72-55M468 468c-34-4-58-23-72-55" stroke="#d8b98d" strokeOpacity=".18" />
+      <path d="M38 440c17-4 30 2 40 14-18 5-31 0-40-14ZM442 440c-17-4-30 2-40 14 18 5 31 0 40-14ZM62 394c14-8 28-7 41 3-15 9-29 8-41-3ZM418 394c-14-8-28-7-41 3 15 9 29 8 41-3Z" fill="#a88aa6" fillOpacity=".12" />
+      <path d="m51 185 3 8 8 3-8 3-3 8-3-8-8-3 8-3 3-8Zm378 35 2 6 6 2-6 2-2 6-2-6-6-2 6-2 2-6ZM86 292l2 5 5 2-5 2-2 5-2-5-5-2 5-2 2-5Zm308-18 2 5 5 2-5 2-2 5-2-5-5-2 5-2 2-5Z" fill="#f1d9bd" fillOpacity=".45" />
+      <circle cx="74" cy="242" r="1.5" fill="#e9d8e9" fillOpacity=".55" />
+      <circle cx="414" cy="330" r="1.5" fill="#e9d8e9" fillOpacity=".45" />
+      <circle cx="118" cy="520" r="1" fill="#d8b98d" fillOpacity=".5" />
+      <circle cx="365" cy="536" r="1" fill="#d8b98d" fillOpacity=".5" />
     </svg>
-  )
-}
-
-function GiftConfetti() {
-  return (
-    <div className="pointer-events-none absolute inset-x-0 top-0 z-0 h-[86%] overflow-hidden" aria-hidden="true">
-      <span className="absolute left-[2%] top-[18%] h-4 w-1.5 rotate-[28deg] rounded-full bg-[#e8899f]/55" />
-      <span className="absolute left-[8%] top-[42%] h-2.5 w-2.5 rotate-45 border border-[#e7b873]/65" />
-      <span className="absolute left-[4%] top-[67%] h-1.5 w-4 -rotate-[18deg] rounded-full bg-[#79b9c8]/55" />
-      <span className="absolute right-[3%] top-[22%] h-3 w-1.5 -rotate-[22deg] rounded-full bg-[#9b84d7]/55" />
-      <span className="absolute right-[8%] top-[48%] h-2.5 w-2.5 rotate-45 bg-[#e7b873]/55" />
-      <span className="absolute right-[3%] top-[72%] h-1.5 w-4 rotate-[18deg] rounded-full bg-[#e8899f]/50" />
-    </div>
   )
 }
 
