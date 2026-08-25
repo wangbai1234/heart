@@ -43,6 +43,14 @@ const ShieldIcon = (
   </svg>
 )
 
+const GiftIcon = (
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="8" width="18" height="13" rx="2" />
+    <path d="M12 8v13M2 8h20v4H2z" />
+    <path d="M12 8H7.5A2.5 2.5 0 1 1 10 5.5C10 7 12 8 12 8ZM12 8h4.5A2.5 2.5 0 1 0 14 5.5C14 7 12 8 12 8Z" />
+  </svg>
+)
+
 function safeReturnTo(path: string): string {
   return path.startsWith('/') && !path.startsWith('//') && !path.startsWith('/login')
     ? path
@@ -65,6 +73,7 @@ export function AuthModal() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [inviteCode, setInviteCode] = useState('')
   const [code, setCode] = useState('')
   const [ageConfirmed, setAgeConfirmed] = useState(false)
   const [agreed, setAgreed] = useState(false)
@@ -94,6 +103,12 @@ export function AuthModal() {
       setModalStep('auth')
       setRestorationGraceEnd(null)
     }
+  }, [open])
+
+  useEffect(() => {
+    if (!open) return
+    const pending = sessionStorage.getItem('yuoyuo-pending-invite')
+    if (pending) setInviteCode(pending.toUpperCase())
   }, [open])
 
   if (!open) return null
@@ -202,7 +217,7 @@ export function AuthModal() {
         email.trim().toLowerCase(),
         code,
         password,
-        sessionStorage.getItem('yuoyuo-pending-invite') || undefined,
+        inviteCode.trim().toUpperCase() || undefined,
       )
       sessionStorage.removeItem('yuoyuo-pending-invite')
       await finishAuth(result)
@@ -324,6 +339,12 @@ export function AuthModal() {
                 <CodeRow code={code} setCode={setCode} cooldown={cooldown} loading={loading} onSend={() => void sendCode('register')} />
                 <PasswordInput icon={LockIcon} placeholder="设置密码（至少 8 位）" value={password} onChange={setPassword} autoComplete="new-password" />
                 <PasswordInput icon={LockIcon} placeholder="确认密码" value={confirmPassword} onChange={setConfirmPassword} autoComplete="new-password" />
+                <Input
+                  icon={GiftIcon}
+                  placeholder="邀请码（选填）"
+                  value={inviteCode}
+                  onChange={(value) => setInviteCode(value.replace(/\s/g, '').toUpperCase().slice(0, 16))}
+                />
               </div>
               <Button className="mt-4" variant="primary" size="lg" loading={loading} onClick={() => void handleRegister()}>注册并进入</Button>
             </>

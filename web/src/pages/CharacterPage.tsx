@@ -651,6 +651,38 @@ export function CharacterPage() {
               </svg>
             </div>
           )}
+          <button
+            type="button"
+            onClick={() => {
+              if (isAuthenticated) navigate('/rewards')
+              else requireLogin('/rewards')
+            }}
+            className="group relative mx-auto mb-3 block h-[110px] w-full max-w-[720px] overflow-hidden rounded-[8px] border border-white/10 bg-[#17171a] text-left shadow-[0_8px_24px_rgba(20,16,18,0.14)] outline-none transition-transform active:scale-[0.99] focus-visible:ring-2 focus-visible:ring-[var(--color-primary-400)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-page-canvas)] sm:mb-4 sm:h-[96px]"
+            aria-label="邀请好友双重奖励。好友聊满三条得一次抽奖，好友付费再享百分之十佣金。立即参与"
+          >
+            <img
+              src="/assets/rewards/invite-banner.jpg"
+              alt=""
+              aria-hidden="true"
+              draggable={false}
+              className="absolute inset-0 h-full w-full select-none object-cover object-right"
+            />
+            <span className="absolute inset-y-0 left-0 flex w-[72%] flex-col justify-center px-4 py-2.5 sm:w-[66%] sm:px-6">
+              <span className="text-[10px] font-bold text-[#ffb7c5] sm:text-[11px]">邀请好友 · 双重奖励</span>
+              <span className="mt-1 text-[15px] font-bold leading-[1.25] text-white sm:text-[18px]">
+                好友聊满 3 条，你得 1 次抽奖
+              </span>
+              <span className="mt-1 text-[10px] font-medium leading-[1.4] text-white/68 sm:text-[12px]">
+                好友后续付费，再享实付金额 10% 佣金
+              </span>
+              <span className="mt-1.5 inline-flex w-fit items-center gap-0.5 text-[11px] font-semibold text-white sm:text-[12px]">
+                去邀请
+                <svg className="transition-transform group-hover:translate-x-0.5" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="m6 3 5 5-5 5" />
+                </svg>
+              </span>
+            </span>
+          </button>
           {filtered.length === 0 ? (
             items.length === 0 ? (
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 md:grid-cols-4 xl:grid-cols-5" aria-label="正在加载角色">
