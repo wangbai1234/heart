@@ -304,10 +304,8 @@ async def handle_invite_progress(
             await db.execute(
                 text(
                     """
-                    SELECT iu.id, iu.inviter_id, iu.risk_level, iu.created_at,
-                           u.created_at AS user_created_at, u.age_verified_at
+                    SELECT iu.id, iu.inviter_id, iu.risk_level
                     FROM user_invite_uses iu
-                    JOIN users u ON u.id = iu.invitee_id
                     WHERE iu.invitee_id = :uid AND iu.qualified_at IS NULL
                     """
                 ),
@@ -386,14 +384,14 @@ async def handle_invite_progress(
         },
     )
 
-    span_seconds = (progress["last_msg_at"] - progress["first_msg_at"]).total_seconds()
+    # Qualification intentionally measures meaningful interaction volume only.
+    # Age verification, AI reply count, a 120-second spread, and the original
+    # seven-day registration window made the reward impossible to complete in
+    # normal chat sessions and are no longer eligibility gates.
     qualified = (
-        pending["age_verified_at"] is not None
-        and int(progress["msg_count"]) >= rules["min_messages"]
-        and int(progress["ai_reply_count"]) >= rules["min_ai_replies"]
+        int(progress["msg_count"]) >= rules["min_messages"]
         and int(progress["valid_char_count"]) >= rules["min_valid_chars"]
         and int(progress["distinct_message_count"]) >= 2
-        and span_seconds >= rules["min_span_seconds"]
     )
     if not qualified:
         return
@@ -412,14 +410,11 @@ async def handle_invite_progress(
                     END
                 WHERE id = :use_id
                   AND qualified_at IS NULL
-                  AND NOW() <= :user_created_at + make_interval(days => :window_days)
                 RETURNING inviter_id, risk_level
                 """
             ),
             {
                 "use_id": use_id,
-                "user_created_at": pending["user_created_at"],
-                "window_days": rules["qualification_days"],
             },
         )
     ).fetchone()

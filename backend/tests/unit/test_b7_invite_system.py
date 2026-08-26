@@ -232,6 +232,52 @@ async def test_handle_invite_progress_qualifies_at_boundary():
 
 
 @pytest.mark.asyncio
+async def test_handle_invite_progress_ignores_removed_gates():
+    """Short, unverified chats still qualify once volume thresholds are met."""
+    from heart.invite.service import handle_invite_progress
+
+    now = datetime.now(tz=timezone.utc)
+    inviter_id = uuid.uuid4()
+    invitee_id = uuid.uuid4()
+    db = _mock_db(
+        _mapping_result(
+            {
+                "id": 8,
+                "inviter_id": inviter_id,
+                "risk_level": "low",
+                "created_at": now - timedelta(days=30),
+                "user_created_at": now - timedelta(days=30),
+                "age_verified_at": None,
+            }
+        ),
+        _scalar_result({}),
+        _fetchone_result((202,)),
+        _one_mapping_result(
+            {
+                "msg_count": 3,
+                "ai_reply_count": 0,
+                "valid_char_count": 15,
+                "distinct_message_count": 2,
+                "first_msg_at": now,
+                "last_msg_at": now,
+            }
+        ),
+        MagicMock(),
+        _fetchone_result((inviter_id, "low")),
+    )
+
+    with (
+        patch(
+            "heart.invite.service._grant_chance", new_callable=AsyncMock, return_value=True
+        ) as grant_chance,
+        patch("heart.commission.service.backfill_commissions_for_invitee", new_callable=AsyncMock),
+    ):
+        await handle_invite_progress(db, invitee_id, uuid.uuid4(), "第三条有效消息")
+
+    grant_chance.assert_awaited_once_with(db, inviter_id, 8)
+
+
+@pytest.mark.asyncio
 async def test_handle_invite_progress_duplicate_turn_is_idempotent():
     from heart.invite.service import handle_invite_progress
 
