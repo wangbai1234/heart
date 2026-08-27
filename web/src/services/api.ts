@@ -399,8 +399,9 @@ export interface ChatModelInfo {
   description: string
   cost_coins: number
   failover: string[]
-  status: 'smooth' | 'slow' | 'available' | 'unavailable'
-  status_label: '流畅' | '稍慢' | '可用' | '暂不可用'
+  status: 'smooth' | 'slow' | 'unstable' | 'available' | 'unavailable'
+  status_label: '流畅' | '稍慢' | '近期波动' | '可用' | '暂不可用'
+  selectable?: boolean
   success_rate: number | null
   avg_latency_ms: number | null
   sample_count: number
