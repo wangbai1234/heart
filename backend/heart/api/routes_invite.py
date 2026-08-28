@@ -41,7 +41,7 @@ async def get_invite_status(
         await db.execute(
             text(
                 "SELECT COUNT(*) FROM user_invite_uses "
-                "WHERE inviter_id = :uid AND qualified_at IS NOT NULL"
+                "WHERE inviter_id = :uid AND status = 'qualified'"
             ),
             {"uid": user_id},
         )
@@ -51,7 +51,7 @@ async def get_invite_status(
         await db.execute(
             text(
                 "SELECT COUNT(*) FROM user_invite_uses "
-                "WHERE inviter_id = :uid AND qualified_at IS NULL"
+                "WHERE inviter_id = :uid AND status = 'pending'"
             ),
             {"uid": user_id},
         )
