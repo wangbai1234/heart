@@ -384,13 +384,11 @@ async def handle_invite_progress(
         },
     )
 
-    # Qualification intentionally measures meaningful interaction volume only.
-    # Age verification, AI reply count, a 120-second spread, and the original
-    # seven-day registration window made the reward impossible to complete in
-    # normal chat sessions and are no longer eligibility gates.
+    # Qualification intentionally measures interaction count and uniqueness
+    # only. Message length is not a gate: three distinct, successfully answered
+    # chat turns are sufficient for the invitation reward.
     qualified = (
         int(progress["msg_count"]) >= rules["min_messages"]
-        and int(progress["valid_char_count"]) >= rules["min_valid_chars"]
         and int(progress["distinct_message_count"]) >= 2
     )
     if not qualified:

@@ -256,7 +256,7 @@ async def test_handle_invite_progress_ignores_removed_gates():
             {
                 "msg_count": 3,
                 "ai_reply_count": 0,
-                "valid_char_count": 15,
+                "valid_char_count": 2,
                 "distinct_message_count": 2,
                 "first_msg_at": now,
                 "last_msg_at": now,
@@ -272,7 +272,7 @@ async def test_handle_invite_progress_ignores_removed_gates():
         ) as grant_chance,
         patch("heart.commission.service.backfill_commissions_for_invitee", new_callable=AsyncMock),
     ):
-        await handle_invite_progress(db, invitee_id, uuid.uuid4(), "第三条有效消息")
+        await handle_invite_progress(db, invitee_id, uuid.uuid4(), "好")
 
     grant_chance.assert_awaited_once_with(db, inviter_id, 8)
 

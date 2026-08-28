@@ -107,7 +107,12 @@ async def get_invite_status(
             await db.execute(
                 text(
                     """
-                SELECT id, status, msg_count, ai_reply_count, qualified_at, created_at
+                SELECT id,
+                       CASE WHEN status IN ('review', 'rejected')
+                            THEN '疑似刷账号行为'
+                            ELSE status
+                       END AS status,
+                       msg_count, ai_reply_count, qualified_at, created_at
                 FROM user_invite_uses
                 WHERE inviter_id = :uid
                 ORDER BY created_at DESC LIMIT 50
