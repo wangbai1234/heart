@@ -38,7 +38,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from heart.api.wiring import get_db
 from heart.core.auth import TokenData, get_current_user
-from heart.ss01_soul.character_catalog import CharacterRow, build_catalog_entries, coerce_tags
+from heart.ss01_soul.character_catalog import (
+    CharacterRow,
+    build_catalog_entries,
+    coerce_tags,
+    display_name_from_spec,
+)
 from heart.ss04_relationship.stage_engine import STAGE_ORDER, RelationshipStage
 
 logger = structlog.get_logger(__name__)
@@ -149,12 +154,13 @@ async def list_companions(
 
     # Avatar URLs for UGC characters live in soul_specs.draft
     avatar_urls: dict[str, str | None] = {}
+    display_names: dict[str, str | None] = {}
     ugc_ids = [r.id for r in rows if r.owner_user_id is not None]
     if ugc_ids:
         avatar_result = await db.execute(
             text(
                 """
-                SELECT character_id, draft->>'avatar_url' AS avatar_url
+                SELECT character_id, spec, draft->>'avatar_url' AS avatar_url
                 FROM soul_specs
                 WHERE character_id = ANY(:ids) AND status = 'active'
                 """
@@ -162,10 +168,11 @@ async def list_companions(
             {"ids": ugc_ids},
         )
         for r in avatar_result:
+            display_names[r.character_id] = display_name_from_spec(r.spec, r.character_id)
             if r.avatar_url:
                 avatar_urls[r.character_id] = r.avatar_url
 
-    entries = build_catalog_entries(rows, uid, avatar_urls)
+    entries = build_catalog_entries(rows, uid, avatar_urls, display_names=display_names)
     if not entries:
         return {"companions": []}
 

@@ -8,9 +8,11 @@ from __future__ import annotations
 
 import json
 import uuid
+from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 import structlog
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,13 +20,302 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from heart.billing import grant
 from heart.core.config import settings
 from heart.membership.service import activate_or_extend
-from heart.ss01_soul.character_catalog import coerce_tags
+from heart.ss01_soul.character_catalog import coerce_tags, display_name_from_spec
 
 from .wiring import get_db
 
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
+
+
+async def require_admin(x_admin_key: str = Header(..., alias="X-Admin-Key")) -> None:
+    if not settings.admin_secret_key:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Admin API disabled"
+        )
+    if x_admin_key != settings.admin_secret_key:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid admin key")
+
+
+def _json_rows(result) -> list[dict]:
+    """Convert SQLAlchemy mappings to JSON-safe primitive rows."""
+    rows = []
+    for row in result.mappings().all():
+        item = {}
+        for key, value in row.items():
+            if hasattr(value, "isoformat"):
+                value = value.isoformat()
+            item[key] = value
+        rows.append(item)
+    return rows
+
+
+@router.get("/analytics")
+async def admin_analytics(
+    start: date | None = Query(None, description="统计开始日期（上海时区）"),
+    end: date | None = Query(None, description="统计结束日期（上海时区）"),
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Return aggregate product-health metrics for the admin dashboard.
+
+    All activity is derived from persisted user/chat/story/payment/character
+    records. No PII or message content is selected. ``end`` is inclusive and
+    dates are interpreted in Asia/Shanghai to match the product reports.
+    """
+    today = datetime.now(ZoneInfo("Asia/Shanghai")).date()
+    end = end or today
+    start = start or end - timedelta(days=29)
+    if start > end:
+        raise HTTPException(status_code=422, detail="start 不能晚于 end")
+    if (end - start).days > 180:
+        raise HTTPException(status_code=422, detail="统计区间不能超过 181 天")
+    params = {"start": start, "end": end, "end_exclusive": end + timedelta(days=1)}
+
+    # Canonical activity: user-authored chat turns and story player turns.
+    activity_cte = """
+        SELECT user_id, created_at, (created_at AT TIME ZONE 'Asia/Shanghai')::date AS day,
+               'chat' AS mode
+        FROM chat_messages
+        WHERE role = 'user' AND rewound_at IS NULL
+        UNION ALL
+        SELECT user_id, created_at, (created_at AT TIME ZONE 'Asia/Shanghai')::date,
+               'story' AS mode
+        FROM story_messages
+        WHERE role = 'player'
+    """
+
+    scope = (
+        (
+            await db.execute(
+                text(
+                    """
+                SELECT
+                  (SELECT count(*) FROM users) AS total_users,
+                  (SELECT count(*) FROM users WHERE status = 'active') AS active_users,
+                  (SELECT count(*) FROM users WHERE (created_at AT TIME ZONE 'Asia/Shanghai')::date >= :start
+                    AND (created_at AT TIME ZONE 'Asia/Shanghai')::date < :end_exclusive) AS new_users,
+                  (SELECT count(DISTINCT user_id) FROM chat_messages
+                    WHERE role='user' AND rewound_at IS NULL
+                    AND (created_at AT TIME ZONE 'Asia/Shanghai')::date >= :start AND (created_at AT TIME ZONE 'Asia/Shanghai')::date < :end_exclusive) AS chat_users,
+                  (SELECT count(DISTINCT user_id) FROM story_messages
+                    WHERE role='player' AND (created_at AT TIME ZONE 'Asia/Shanghai')::date >= :start
+                    AND (created_at AT TIME ZONE 'Asia/Shanghai')::date < :end_exclusive) AS story_users,
+                  (SELECT count(DISTINCT user_id) FROM ("""
+                    + activity_cte
+                    + """ ) a WHERE day >= :start AND day < :end_exclusive) AS active_users_in_range,
+                  (SELECT count(*) FROM sessions
+                    WHERE (last_activity_at AT TIME ZONE 'Asia/Shanghai')::date >= :start
+                    AND (last_activity_at AT TIME ZONE 'Asia/Shanghai')::date < :end_exclusive) AS sessions_in_range,
+                  (SELECT count(DISTINCT resolved_user_id) FROM afdian_orders
+                    WHERE fulfilled_at IS NOT NULL AND resolved_user_id IS NOT NULL
+                    AND total_amount > 0 AND (received_at AT TIME ZONE 'Asia/Shanghai')::date >= :start
+                    AND (received_at AT TIME ZONE 'Asia/Shanghai')::date < :end_exclusive) AS paid_users,
+                  (SELECT coalesce(sum(total_amount), 0) FROM afdian_orders
+                    WHERE fulfilled_at IS NOT NULL AND resolved_user_id IS NOT NULL
+                    AND total_amount > 0 AND (received_at AT TIME ZONE 'Asia/Shanghai')::date >= :start
+                    AND (received_at AT TIME ZONE 'Asia/Shanghai')::date < :end_exclusive) AS revenue_cny
+                """
+                ),
+                params,
+            )
+        )
+        .mappings()
+        .one()
+    )
+
+    daily = _json_rows(
+        await db.execute(
+            text(
+                """
+                WITH days AS (
+                  SELECT generate_series(CAST(:start AS date), CAST(:end AS date), interval '1 day')::date AS day
+                ), activity AS ("""
+                + activity_cte
+                + """), ad AS (SELECT DISTINCT user_id, day FROM activity)
+                SELECT d.day,
+                  (SELECT count(*) FROM ad WHERE day=d.day) AS dau,
+                  (SELECT count(*) FROM ad WHERE day BETWEEN d.day-6 AND d.day) AS wau,
+                  (SELECT count(*) FROM ad WHERE day BETWEEN d.day-29 AND d.day) AS mau,
+                  (SELECT count(DISTINCT user_id) FROM activity WHERE day=d.day AND mode='chat') AS chat_dau,
+                  (SELECT count(DISTINCT user_id) FROM activity WHERE day=d.day AND mode='story') AS story_dau,
+                  (SELECT count(*) FROM activity WHERE day=d.day) AS user_turns,
+                  round(100.0 * (SELECT count(*) FROM ad WHERE day=d.day)
+                    / nullif((SELECT count(*) FROM ad WHERE day BETWEEN d.day-29 AND d.day),0), 2) AS dau_mau_pct
+                FROM days d ORDER BY d.day
+                """
+            ),
+            params,
+        )
+    )
+
+    retention = _json_rows(
+        await db.execute(
+            text(
+                """
+                WITH cohort AS (
+                  SELECT id, (created_at AT TIME ZONE 'Asia/Shanghai')::date AS reg_day
+                  FROM users WHERE (created_at AT TIME ZONE 'Asia/Shanghai')::date >= :start AND (created_at AT TIME ZONE 'Asia/Shanghai')::date < :end_exclusive
+                ), activity AS (
+                  SELECT DISTINCT user_id, (created_at AT TIME ZONE 'Asia/Shanghai')::date AS day
+                  FROM chat_messages WHERE role='user' AND rewound_at IS NULL
+                  UNION
+                  SELECT DISTINCT user_id, (created_at AT TIME ZONE 'Asia/Shanghai')::date
+                  FROM story_messages WHERE role='player'
+                )
+                SELECT reg_day, count(*) AS cohort_users,
+                  count(*) FILTER (WHERE EXISTS (SELECT 1 FROM activity a WHERE a.user_id=c.id AND a.day=reg_day)) AS d0_users,
+                  count(*) FILTER (WHERE EXISTS (SELECT 1 FROM activity a WHERE a.user_id=c.id AND a.day=reg_day+1)) AS d1_users,
+                  count(*) FILTER (WHERE EXISTS (SELECT 1 FROM activity a WHERE a.user_id=c.id AND a.day=reg_day+3)) AS d3_users,
+                  count(*) FILTER (WHERE EXISTS (SELECT 1 FROM activity a WHERE a.user_id=c.id AND a.day=reg_day+7)) AS d7_users,
+                  round(100.0*count(*) FILTER (WHERE EXISTS (SELECT 1 FROM activity a WHERE a.user_id=c.id AND a.day=reg_day))/count(*),2) AS d0_pct,
+                  CASE WHEN reg_day+1 <= (now() AT TIME ZONE 'Asia/Shanghai')::date THEN round(100.0*count(*) FILTER (WHERE EXISTS (SELECT 1 FROM activity a WHERE a.user_id=c.id AND a.day=reg_day+1))/count(*),2) END AS d1_pct,
+                  CASE WHEN reg_day+3 <= (now() AT TIME ZONE 'Asia/Shanghai')::date THEN round(100.0*count(*) FILTER (WHERE EXISTS (SELECT 1 FROM activity a WHERE a.user_id=c.id AND a.day=reg_day+3))/count(*),2) END AS d3_pct,
+                  CASE WHEN reg_day+7 <= (now() AT TIME ZONE 'Asia/Shanghai')::date THEN round(100.0*count(*) FILTER (WHERE EXISTS (SELECT 1 FROM activity a WHERE a.user_id=c.id AND a.day=reg_day+7))/count(*),2) END AS d7_pct
+                FROM cohort c GROUP BY reg_day ORDER BY reg_day
+                """
+            ),
+            params,
+        )
+    )
+
+    depth = _json_rows(
+        await db.execute(
+            text(
+                """
+                WITH turns AS (
+                  SELECT user_id, count(*) AS turns, count(DISTINCT (created_at AT TIME ZONE 'Asia/Shanghai')::date) AS active_days
+                  FROM chat_messages WHERE role='user' AND rewound_at IS NULL
+                    AND (created_at AT TIME ZONE 'Asia/Shanghai')::date >= :start AND (created_at AT TIME ZONE 'Asia/Shanghai')::date < :end_exclusive
+                  GROUP BY user_id
+                )
+                SELECT count(*) AS active_chat_users, coalesce(sum(turns),0) AS user_turns,
+                  round(coalesce(avg(turns),0),2) AS avg_turns_per_user,
+                  round(coalesce(percentile_cont(.5) within group (order by turns),0)::numeric,2) AS median_turns,
+                  round(coalesce(avg(active_days),0),2) AS avg_active_days,
+                  count(*) FILTER (WHERE turns >= 10) AS ten_turn_users,
+                  count(*) FILTER (WHERE turns >= 30) AS thirty_turn_users
+                FROM turns
+                """
+            ),
+            params,
+        )
+    )
+
+    characters = _json_rows(
+        await db.execute(
+            text(
+                """
+                WITH pairs AS (
+                  SELECT character_id, user_id,
+                    count(*) FILTER (WHERE role='user') AS user_turns,
+                    count(DISTINCT (created_at AT TIME ZONE 'Asia/Shanghai')::date) FILTER (WHERE role='user') AS active_days
+                  FROM chat_messages WHERE rewound_at IS NULL
+                    AND (created_at AT TIME ZONE 'Asia/Shanghai')::date >= :start AND (created_at AT TIME ZONE 'Asia/Shanghai')::date < :end_exclusive
+                  GROUP BY character_id, user_id
+                ), specs AS (
+                  SELECT DISTINCT ON (character_id) character_id,
+                    coalesce(nullif(CASE WHEN jsonb_typeof(spec->'display_name')='object' THEN spec->'display_name'->>'zh' ELSE spec->>'display_name' END,''), character_id) AS character_name
+                  FROM soul_specs ORDER BY character_id, created_at DESC
+                )
+                SELECT coalesce(s.character_name, p.character_id) AS character_name,
+                  count(*) AS entered_users, count(*) FILTER (WHERE user_turns > 0) AS chat_users,
+                  sum(user_turns) AS user_turns,
+                  round(coalesce(avg(user_turns) FILTER (WHERE user_turns > 0),0),2) AS avg_turns,
+                  round(100.0*count(*) FILTER (WHERE user_turns > 0 AND active_days >= 2)
+                    / nullif(count(*) FILTER (WHERE user_turns > 0),0),2) AS return_rate_pct,
+                  round(100.0*count(*) FILTER (WHERE user_turns > 0)/nullif(count(*),0),2) AS entry_to_chat_pct
+                FROM pairs p LEFT JOIN specs s ON s.character_id=p.character_id
+                GROUP BY p.character_id, s.character_name
+                ORDER BY chat_users DESC, user_turns DESC LIMIT 20
+                """
+            ),
+            params,
+        )
+    )
+
+    churn = _json_rows(
+        await db.execute(
+            text(
+                """
+                WITH activity AS (
+                  SELECT DISTINCT user_id, (created_at AT TIME ZONE 'Asia/Shanghai')::date AS day
+                  FROM chat_messages WHERE role='user' AND rewound_at IS NULL
+                  UNION
+                  SELECT DISTINCT user_id, (created_at AT TIME ZONE 'Asia/Shanghai')::date
+                  FROM story_messages WHERE role='player'
+                ), users AS (SELECT DISTINCT user_id FROM activity)
+                SELECT count(*) FILTER (WHERE EXISTS (SELECT 1 FROM activity a WHERE a.user_id=u.user_id AND a.day BETWEEN CAST(:end AS date)-6 AND CAST(:end AS date))) AS active_last_7d,
+                  count(*) FILTER (WHERE EXISTS (SELECT 1 FROM activity a WHERE a.user_id=u.user_id AND a.day BETWEEN CAST(:end AS date)-13 AND CAST(:end AS date)-7)
+                    AND NOT EXISTS (SELECT 1 FROM activity a WHERE a.user_id=u.user_id AND a.day BETWEEN CAST(:end AS date)-6 AND CAST(:end AS date))) AS lapsed_7_to_13d,
+                  count(*) FILTER (WHERE EXISTS (SELECT 1 FROM activity a WHERE a.user_id=u.user_id AND a.day < CAST(:end AS date)-13)
+                    AND NOT EXISTS (SELECT 1 FROM activity a WHERE a.user_id=u.user_id AND a.day BETWEEN CAST(:end AS date)-13 AND CAST(:end AS date))) AS lapsed_14d_plus
+                FROM users u
+                """
+            ),
+            params,
+        )
+    )
+
+    payments = _json_rows(
+        await db.execute(
+            text(
+                """
+                SELECT (received_at AT TIME ZONE 'Asia/Shanghai')::date AS day,
+                  count(*) AS orders, count(DISTINCT resolved_user_id) AS paid_users,
+                  coalesce(sum(total_amount),0) AS revenue_cny
+                FROM afdian_orders
+                WHERE fulfilled_at IS NOT NULL AND resolved_user_id IS NOT NULL AND total_amount > 0
+                  AND (received_at AT TIME ZONE 'Asia/Shanghai')::date >= :start AND (received_at AT TIME ZONE 'Asia/Shanghai')::date < :end_exclusive
+                GROUP BY 1 ORDER BY 1
+                """
+            ),
+            params,
+        )
+    )
+
+    ai_cost = _json_rows(
+        await db.execute(
+            text(
+                """
+                SELECT count(*) AS llm_transactions, count(DISTINCT user_id) AS llm_users,
+                  coalesce(sum(abs(delta)),0)::numeric / 100 AS llm_credits_spent
+                FROM credit_transactions
+                WHERE type IN ('consume_llm', 'spend')
+                  AND (ref_type='message' OR ref_type='llm' OR ref_type ILIKE '%llm%')
+                  AND (created_at AT TIME ZONE 'Asia/Shanghai')::date >= :start AND (created_at AT TIME ZONE 'Asia/Shanghai')::date < :end_exclusive
+                """
+            ),
+            params,
+        )
+    )
+
+    return {
+        "window": {"start": start.isoformat(), "end": end.isoformat(), "timezone": "Asia/Shanghai"},
+        "scope": dict(scope),
+        "daily": daily,
+        "retention": retention,
+        "depth": depth[0] if depth else {},
+        "characters": characters,
+        "churn": churn[0] if churn else {},
+        "payments": payments,
+        "ai_cost": {
+            **(ai_cost[0] if ai_cost else {}),
+            "token_tracking": "not_recorded",
+            "tracked_usd": None,
+            "note": "当前数据库未持久化每次 LLM 的 token usage 与供应商成本；积分消耗为真实账本数据。",
+        },
+        "data_quality": {
+            "activity_sources": [
+                "chat_messages.user",
+                "story_messages.player",
+                "sessions.last_activity_at",
+            ],
+            "behavior_log": "未单独建行为事件表；会话表与聊天/剧情持久化记录作为行为事实源",
+            "current_day_partial": end == today,
+        },
+    }
 
 
 def _coerce_draft(raw: object) -> dict:
@@ -43,15 +334,6 @@ def _coerce_str_list(raw: object) -> list[str]:
     if not isinstance(raw, list):
         return []
     return [s.strip() for s in raw if isinstance(s, str) and s.strip()]
-
-
-async def require_admin(x_admin_key: str = Header(..., alias="X-Admin-Key")) -> None:
-    if not settings.admin_secret_key:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Admin API disabled"
-        )
-    if x_admin_key != settings.admin_secret_key:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Invalid admin key")
 
 
 async def _resolve_user(db: AsyncSession, user_id: str | None, email: str | None) -> dict:
@@ -769,30 +1051,51 @@ async def admin_update_lottery_prize(
     return dict(row)
 
 
-async def _grant_approval_rewards(db: AsyncSession, character_id: str, owner_id: uuid.UUID) -> dict:
-    """Grant the per-approval coin reward and, at the 5-approved milestone, Plus.
+async def _grant_approval_rewards(
+    db: AsyncSession,
+    character_id: str,
+    owner_id: uuid.UUID,
+    visibility: str,
+) -> dict:
+    """Grant rewards only when an approved character is public.
 
     - Coins: idempotent per character (idempotency_key = char_review:{cid}).
-    - Milestone: guarded by user_reward_milestones so Plus is granted at most once.
+    - Link-only (unlisted) approval: moderation succeeds, but grants no reward.
+    - Existing 5-approved milestone behavior is unchanged and remains guarded.
     Returns a summary of what was granted (for the admin response / logs).
     """
-    # 100 coins, idempotent on character id.
-    await grant(
-        db,
-        owner_id,
-        _REVIEW_APPROVE_COINS * 100,  # display → internal fen
-        idempotency_key=f"char_review:{character_id}",
-        type_str="grant",
-        ref_type="character_review",
-        ref_id=character_id,
-    )
+    reward_eligible = visibility == "public"
+    coins_granted = 0
+    if reward_eligible:
+        # Avoid calling grant() on an idempotency hit: grant() rolls the current
+        # transaction back on conflict, which would also undo this approval.
+        already_rewarded = (
+            await db.execute(
+                text("SELECT 1 FROM credit_transactions" " WHERE idempotency_key = :key LIMIT 1"),
+                {"key": f"char_review:{character_id}"},
+            )
+        ).scalar_one_or_none()
+        if already_rewarded is None:
+            await grant(
+                db,
+                owner_id,
+                _REVIEW_APPROVE_COINS * 100,  # display → internal fen
+                idempotency_key=f"char_review:{character_id}",
+                type_str="grant",
+                ref_type="character_review",
+                ref_id=character_id,
+            )
+            coins_granted = _REVIEW_APPROVE_COINS
 
-    # Count this user's approved characters (this one is already 'approved').
+    # Preserve the existing milestone rule: all approved characters count,
+    # regardless of whether their visibility is public or link-only.
     cnt_row = await db.execute(
         text(
             """
             SELECT COUNT(*) FROM characters
-            WHERE owner_user_id = :uid AND status = 'active' AND review_status = 'approved'
+            WHERE owner_user_id = :uid
+              AND status = 'active'
+              AND review_status = 'approved'
             """
         ),
         {"uid": owner_id},
@@ -824,7 +1127,8 @@ async def _grant_approval_rewards(db: AsyncSession, character_id: str, owner_id:
             milestone_granted = True
 
     return {
-        "coins_granted": _REVIEW_APPROVE_COINS,
+        "reward_eligible": reward_eligible,
+        "coins_granted": coins_granted,
         "approved_count": approved_count,
         "milestone_plus_granted": milestone_granted,
     }
@@ -836,15 +1140,13 @@ async def admin_list_pending_characters(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """列出所有待审核（pending）的用户角色，含头像、封面、简介，供审核台展示。"""
-    from heart.ss01_soul.character_content import get_display_name
-
     result = await db.execute(
         text(
             """
             SELECT c.id, c.owner_user_id, c.visibility, c.cover_url, c.submitted_at,
                    c.tags,
                    u.email AS owner_email,
-                   s.draft AS draft
+                   s.draft AS draft, s.spec AS spec
             FROM characters c
             LEFT JOIN users u ON u.id = c.owner_user_id
             LEFT JOIN soul_specs s ON s.character_id = c.id AND s.status = 'active'
@@ -859,7 +1161,7 @@ async def admin_list_pending_characters(
         items.append(
             {
                 "id": row["id"],
-                "display_name": get_display_name(row["id"]),
+                "display_name": display_name_from_spec(row["spec"], row["id"]),
                 "owner_user_id": str(row["owner_user_id"]) if row["owner_user_id"] else None,
                 "owner_email": row["owner_email"],
                 "visibility": row["visibility"],
@@ -892,7 +1194,7 @@ async def admin_approve_character(
     _: None = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
-    """通过审核：角色进入公开目录，并发放奖励（100 币 + 满 5 个送 1 月进阶版）。"""
+    """通过审核：公开角色发放奖励；链接可见角色仅通过审核。"""
     row = await db.execute(
         text(
             """
@@ -903,18 +1205,20 @@ async def admin_approve_character(
                    result_ack_at = NULL
              WHERE id = :cid AND status = 'active'
                AND review_status IN ('pending','rejected')
-             RETURNING owner_user_id
+             RETURNING owner_user_id, visibility
             """
         ),
         {"cid": character_id},
     )
-    owner_id = row.scalar_one_or_none()
-    if owner_id is None:
+    approved = row.mappings().one_or_none()
+    if approved is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="角色不存在或不在可审核状态"
         )
 
-    rewards = await _grant_approval_rewards(db, character_id, owner_id)
+    owner_id = approved["owner_user_id"]
+    visibility = approved["visibility"]
+    rewards = await _grant_approval_rewards(db, character_id, owner_id, visibility)
     await db.commit()
     logger.info("character_approved", character_id=character_id, owner_id=str(owner_id), **rewards)
     return {"ok": True, "id": character_id, **rewards}

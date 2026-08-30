@@ -83,8 +83,7 @@ def _apply_birthdate(
     return False
 
 
-@router.patch("")
-async def update_profile(
+async def _update_profile(
     body: ProfileUpdate,
     current_user: TokenData = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -132,6 +131,32 @@ async def update_profile(
         return {"age_verified": False, "message": "未满 18 周岁，无法使用本产品"}
 
     return {"ok": True, "age_verified": age_verified}
+
+
+@router.patch("")
+async def update_profile(
+    body: ProfileUpdate,
+    current_user: TokenData = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Update profile fields (legacy PATCH endpoint)."""
+    return await _update_profile(body, current_user, db)
+
+
+@router.post("/complete")
+async def complete_profile(
+    body: ProfileUpdate,
+    current_user: TokenData = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Complete onboarding via POST for mobile/PWA clients.
+
+    A small number of embedded WebViews have been observed sending a PATCH
+    request while dropping its JSON body.  Keep PATCH for existing clients,
+    but give onboarding a POST endpoint so a fully completed form cannot be
+    rejected as an entirely missing request body.
+    """
+    return await _update_profile(body, current_user, db)
 
 
 @router.post("/avatar")
