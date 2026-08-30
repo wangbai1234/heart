@@ -29,6 +29,12 @@ function brandFor(modelId: string): Brand {
   return 'gpt'
 }
 
+function isSelectable(model: ChatModelInfo): boolean {
+  // Keep rolling deploys compatible with an older API response that does not
+  // yet contain `selectable`.
+  return model.selectable ?? model.status !== 'unavailable'
+}
+
 function ModelBrandIcon({ brand, size = 42 }: { brand: Brand; size?: number }) {
   const meta = BRAND_META[brand]
   return (
@@ -47,7 +53,11 @@ function ModelBrandIcon({ brand, size = 42 }: { brand: Brand; size?: number }) {
 
 function SignalBadge({ model }: { model: ChatModelInfo }) {
   const smooth = model.status === 'smooth' || model.status === 'available'
-  const color = model.status === 'unavailable' ? '#A79B9F' : model.status === 'slow' ? '#F0B46B' : '#56DCA0'
+  const color = model.status === 'unavailable'
+    ? '#A79B9F'
+    : model.status === 'slow' || model.status === 'unstable'
+      ? '#F0B46B'
+      : '#56DCA0'
   return (
     <span
       className="inline-flex h-6 shrink-0 items-end gap-[2px] rounded-[5px] px-2 pb-[5px] pt-1 text-[11px] font-medium"
@@ -72,7 +82,7 @@ function ModelRow({
   selected: boolean
   onSelect: () => void
 }) {
-  const unavailable = model.status === 'unavailable'
+  const unavailable = !isSelectable(model)
   return (
     <button
       type="button"
@@ -158,7 +168,7 @@ export function ModelSelectorSheet({ open, onClose, characterId }: ModelSelector
   )
   const openBrand = expandedBrand && brands.includes(expandedBrand) ? expandedBrand : brands[0]
   const selected = models.find((model) => model.id === candidate)
-  const canConfirm = Boolean(selected && selected.status !== 'unavailable')
+  const canConfirm = Boolean(selected && isSelectable(selected))
 
   const confirm = async () => {
     if (!canConfirm) return
@@ -223,7 +233,7 @@ export function ModelSelectorSheet({ open, onClose, characterId }: ModelSelector
               const brandModels = visibleModels.filter((model) => brandFor(model.id) === brand)
               const isOpen = openBrand === brand
               const smooth = brandModels.some((model) => model.status === 'smooth')
-              const selectableCount = brandModels.filter((model) => model.status !== 'unavailable').length
+              const selectableCount = brandModels.filter(isSelectable).length
               return (
                 <section key={brand}>
                   <button

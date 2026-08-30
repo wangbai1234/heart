@@ -34,6 +34,7 @@ interface CharactersState {
   loaded: boolean
   loading: boolean
   load: (force?: boolean) => Promise<void>
+  resetCatalog: () => void
 
   // Per-id profile cache for /character/:id. Mirrors storyStore.detailById so a
   // re-entry is instant (no ~1s spinner). System characters never change their
@@ -57,6 +58,9 @@ let inflight: Promise<void> | null = null
 // once more after that request settles; otherwise quick creation can reuse a
 // pre-create catalog response and leave「我的」stale until pull-to-refresh.
 let forcedRefresh: Promise<void> | null = null
+// Incremented whenever the authenticated account changes. Responses started
+// for the previous account are discarded even if they finish later.
+let catalogGeneration = 0
 // Per-id inflight dedup for profile fetches (two components mounting the same
 // /character/:id at once share one request).
 const profileInflight: Record<string, Promise<CharacterProfileDTO | null>> = {}
@@ -66,6 +70,11 @@ export const useCharactersStore = create<CharactersState>((set, get) => ({
   loaded: false,
   loading: false,
   profileById: {},
+
+  resetCatalog: () => {
+    catalogGeneration += 1
+    set({ characters: [], loaded: false, loading: false, profileById: {} })
+  },
 
   loadProfile: async (id, force = false) => {
     const cached = get().profileById[id]
@@ -106,12 +115,15 @@ export const useCharactersStore = create<CharactersState>((set, get) => ({
     }
     if (inflight) return inflight
 
+    const requestGeneration = catalogGeneration
     set({ loading: true })
     inflight = getCharacters()
       .then(({ characters }) => {
+        if (requestGeneration !== catalogGeneration) return
         set({ characters, loaded: true, loading: false })
       })
       .catch(() => {
+        if (requestGeneration !== catalogGeneration) return
         // Keep whatever we have; consumers fall back to CHARACTER_PROFILES.
         set({ loading: false })
       })

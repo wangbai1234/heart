@@ -70,6 +70,17 @@ class TestProfileUpdate:
         )
         assert response.status_code == 400
 
+    def test_complete_without_auth(self, client):
+        response = client.post(
+            "/api/profile/complete",
+            json={
+                "display_name": "New User",
+                "gender": "undisclosed",
+                "birthdate": "2000-01-01",
+            },
+        )
+        assert response.status_code == 401
+
 
 class TestProfileAvatar:
     def test_avatar_without_auth(self, client):

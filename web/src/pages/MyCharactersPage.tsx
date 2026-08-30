@@ -260,6 +260,9 @@ export function MyCharactersPage() {
   }, [loaded, load])
 
   const myChars = characters.filter((c) => c.is_owner && !c.is_builtin)
+  const publishableCount = myChars.filter(
+    (c) => c.status !== 'disabled' && (c.visibility === 'public' || c.visibility === 'unlisted'),
+  ).length
 
   async function handleVisibility(id: string, vis: 'public' | 'unlisted' | 'private') {
     try {
@@ -319,7 +322,7 @@ export function MyCharactersPage() {
           <>
             {/* Character count hint */}
             <p className="text-[13px] text-[var(--color-text-muted)] px-1 mb-4 mt-2">
-              {myChars.length} / 5 个角色
+              {publishableCount} / 10 个公开或链接可见角色 · 私密角色不限量
             </p>
 
             <div className="flex flex-col gap-3">
@@ -338,7 +341,7 @@ export function MyCharactersPage() {
       </div>
 
       {/* Bottom create button */}
-      {myChars.length > 0 && myChars.length < 5 && (
+      {myChars.length > 0 && (
         <div
           className="fixed bottom-0 left-0 right-0 z-30 px-4 pt-3"
           style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 34px), 20px)' }}

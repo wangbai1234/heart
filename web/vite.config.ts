@@ -27,7 +27,11 @@ export default defineConfig({
       // dialog and only activates on user confirm, instead of silently reloading
       // mid-conversation. The confirm handler also drops the cover caches so a
       // re-seeded cover shows immediately on that reload (see UpdatePrompt.tsx).
-      registerType: 'prompt',
+      // One-release rescue: clients that cached a pre-admin-route shell can
+      // redirect /admin/analytics before the new page ever mounts, so they
+      // cannot reliably reach the normal update prompt. Auto-activate this
+      // worker to move those clients onto the route fix on their next load.
+      registerType: 'autoUpdate',
       // Precache the built app shell; SPA routes fall back to index.html offline.
       // Precache the app-shell icons + the small decorative webp art used on
       // the first screens (login/character logo, settings crown + mascot, the

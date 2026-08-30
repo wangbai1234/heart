@@ -28,6 +28,30 @@ from heart.ss01_soul.registry import get_soul_registry
 logger = structlog.get_logger()
 
 
+def display_name_from_spec(spec: object, fallback_id: str) -> str:
+    """Read zh → ja → en from a persisted Soul Spec.
+
+    API presentation must be database-authoritative. The in-memory registry is
+    still the fallback for built-ins and malformed legacy rows, but a freshly
+    created UGC name must not depend on which Uvicorn worker serves the request.
+    """
+    if isinstance(spec, str):
+        import json
+
+        try:
+            spec = json.loads(spec)
+        except (TypeError, ValueError):
+            spec = None
+    if isinstance(spec, dict):
+        raw = spec.get("display_name")
+        if isinstance(raw, dict):
+            for locale in ("zh", "ja", "en"):
+                value = raw.get(locale)
+                if isinstance(value, str) and value.strip():
+                    return value.strip()
+    return get_display_name(fallback_id)
+
+
 @dataclass(frozen=True)
 class CharacterRow:
     """A raw row from the ``characters`` table."""
@@ -121,6 +145,7 @@ def build_catalog_entries(
     popularity: dict[str, int] | None = None,
     taglines: dict[str, str | None] | None = None,
     creation_modes: dict[str, str | None] | None = None,
+    display_names: dict[str, str | None] | None = None,
 ) -> list[CharacterEntry]:
     """Shape visible rows into API entries, built-ins first then by popularity.
 
@@ -135,11 +160,17 @@ def build_catalog_entries(
         taglines: Optional mapping of character_id → one-line plot hook (from draft).
         creation_modes: Optional mapping of character_id → 'quick' | 'workshop'.
             Drives the edit route in CharacterCard.
+        display_names: Optional DB-authoritative mapping of character_id → name.
+            Production runs multiple API workers, so a newly-created character
+            may not yet be present in every worker's in-memory SoulRegistry.
+            Passing names read from ``soul_specs`` prevents a transient fallback
+            to the technical ``char_xxx`` id on those workers.
     """
     avatar_urls = avatar_urls or {}
     popularity = popularity or {}
     taglines = taglines or {}
     creation_modes = creation_modes or {}
+    display_names = display_names or {}
 
     def is_owner_fn(row: CharacterRow) -> bool:
         return (
@@ -151,7 +182,7 @@ def build_catalog_entries(
     entries = [
         CharacterEntry(
             id=row.id,
-            display_name=get_display_name(row.id),
+            display_name=display_names.get(row.id) or get_display_name(row.id),
             visibility=row.visibility,
             is_builtin=row.owner_user_id is None,
             is_owner=is_owner_fn(row),

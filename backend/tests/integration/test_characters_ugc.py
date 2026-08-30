@@ -2,7 +2,7 @@
 Integration tests for UGC character creation/management (C5a endpoints).
 
 Coverage:
-  - POST /api/characters    → create, quota limit
+  - POST /api/characters    → create, publishable quota limit
   - PATCH /api/characters/{id}  → edit + version bump
   - PATCH /api/characters/{id}/visibility
   - POST /api/characters/{id}/disable
@@ -15,6 +15,7 @@ Requires testcontainers (pip install testcontainers).
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 from pathlib import Path
 from uuid import uuid4
@@ -26,8 +27,6 @@ try:
     HAS_TESTCONTAINERS = True
 except ImportError:
     HAS_TESTCONTAINERS = False
-
-pytestmark = pytest.mark.asyncio
 
 # ── Minimal draft payload ───────────────────────────────────────────
 
@@ -66,8 +65,11 @@ def postgres_container():
         dbname="heart_test",
     )
     c.start()
-    db_url = c.get_connection_url().replace("postgresql://", "postgresql+asyncpg://")
-    os.environ["TEST_DATABASE_URL"] = c.get_connection_url()
+    raw_url = c.get_connection_url()
+    db_url = re.sub(r"^postgresql(?:\+psycopg2)?://", "postgresql+asyncpg://", raw_url)
+    os.environ["TEST_DATABASE_URL"] = re.sub(
+        r"^postgresql(?:\+psycopg2)?://", "postgresql+psycopg2://", raw_url
+    )
     os.environ["TEST_ASYNC_DATABASE_URL"] = db_url
     yield c
     c.stop()
@@ -91,7 +93,7 @@ def redis_container():
 @pytest.fixture(scope="module")
 def setup_db(postgres_container):
     result = subprocess.run(
-        ["python3", "-m", "alembic", "upgrade", "head"],
+        ["python3.11", "-m", "alembic", "upgrade", "heads"],
         capture_output=True,
         text=True,
         cwd=str(Path(__file__).parent.parent.parent),
@@ -118,6 +120,18 @@ def app(setup_db, redis_container):
     os.environ["ANTHROPIC_API_KEY"] = "test-fake-key"
     os.environ["SAFETY_ENABLED"] = "false"  # skip LLM safety screen in tests
 
+    # ``settings`` may have been imported during pytest collection, before the
+    # container URLs existed. Make the container config authoritative and reset
+    # the cached engine/session factory so asyncpg connections belong to the
+    # TestClient lifespan loop.
+    from heart.api import wiring
+    from heart.core.config import settings
+
+    settings.database_url = os.environ["TEST_ASYNC_DATABASE_URL"]
+    settings.redis_url = os.environ["TEST_REDIS_URL"]
+    wiring._engine = None
+    wiring._session_factory = None
+
     from heart.api.main import create_app
 
     return create_app()
@@ -127,14 +141,37 @@ def app(setup_db, redis_container):
 def client(app):
     from fastapi.testclient import TestClient
 
-    return TestClient(app)
+    # Keep one lifespan/event-loop portal for the whole test. Returning a bare
+    # TestClient makes separate requests reuse asyncpg pool connections across
+    # different loops, producing "another operation is in progress" failures.
+    with TestClient(app) as test_client:
+        yield test_client
 
 
-def _auth_headers(user_id: str | None = None, email: str = "ugc@test.com") -> dict:
+def _auth_headers(
+    user_id: str | None = None,
+    email: str | None = None,
+) -> tuple[dict[str, str], str]:
+    from sqlalchemy import create_engine, text
+
     from heart.core.auth import auth_manager
 
     uid = user_id or str(uuid4())
-    token = auth_manager.create_access_token(user_id=uid, email=email)
+    resolved_email = email or f"ugc-{uid}@test.com"
+    engine = create_engine(os.environ["TEST_DATABASE_URL"])
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                INSERT INTO users (id, email, status)
+                VALUES (:uid, :email, 'active')
+                ON CONFLICT (id) DO NOTHING
+                """
+            ),
+            {"uid": uid, "email": resolved_email},
+        )
+    engine.dispose()
+    token = auth_manager.create_access_token(user_id=uid, email=resolved_email)
     return {"Authorization": f"Bearer {token.access_token}"}, uid
 
 
@@ -192,6 +229,16 @@ class TestUGCCharacterCreate:
         assert char_entry is not None
         assert char_entry["is_owner"] is True
 
+    def test_created_character_profile_uses_persisted_name(self, client):
+        headers, _ = _auth_headers()
+        create_resp = client.post("/api/characters", json=_make_draft("持久化姓名"), headers=headers)
+        assert create_resp.status_code == 200, create_resp.text
+        char_id = create_resp.json()["id"]
+
+        profile_resp = client.get(f"/api/characters/{char_id}/profile", headers=headers)
+        assert profile_resp.status_code == 200, profile_resp.text
+        assert profile_resp.json()["display_name"] == "持久化姓名"
+
     def test_builtin_characters_is_owner_false(self, client):
         headers, _ = _auth_headers()
         catalog_resp = client.get("/api/characters", headers=headers)
@@ -200,15 +247,25 @@ class TestUGCCharacterCreate:
             if c.get("is_builtin"):
                 assert c["is_owner"] is False
 
-    def test_quota_limit_enforced(self, client):
-        """Creating more than 5 UGC characters per user should fail."""
+    def test_private_character_creation_is_unlimited(self, client):
+        """Private characters do not consume the public/unlisted quota."""
         headers, _ = _auth_headers()
-        for i in range(5):
+        for i in range(11):
             resp = client.post("/api/characters", json=_make_draft(f"测试角色{i}"), headers=headers)
             assert resp.status_code == 200, f"Failed to create char {i}: {resp.text}"
-        over_limit = client.post("/api/characters", json=_make_draft("超额角色"), headers=headers)
+
+    def test_public_and_unlisted_characters_share_ten_character_limit(self, client):
+        headers, _ = _auth_headers()
+        for i in range(10):
+            draft = _make_draft(f"发布角色{i}")
+            draft["visibility"] = "unlisted"
+            resp = client.post("/api/characters", json=draft, headers=headers)
+            assert resp.status_code == 200, f"Failed to create char {i}: {resp.text}"
+        over_limit_draft = _make_draft("超额发布角色")
+        over_limit_draft["visibility"] = "unlisted"
+        over_limit = client.post("/api/characters", json=over_limit_draft, headers=headers)
         assert over_limit.status_code == 422
-        assert "最多创建" in over_limit.json()["detail"]
+        assert "最多 10 个" in over_limit.json()["detail"]
 
     def test_create_without_auth_returns_401(self, client):
         resp = client.post("/api/characters", json=_make_draft())

@@ -48,14 +48,26 @@ ${embeddedCss}
   useEffect(() => {
     const iframe = ref.current
     if (!iframe) return
+    let observer: ResizeObserver | null = null
     const measure = () => {
       const body = iframe.contentDocument?.body
       if (body) setHeight(body.scrollHeight + 8)
     }
-    iframe.addEventListener('load', measure)
-    const t = setTimeout(measure, 120)
+    const attach = () => {
+      observer?.disconnect()
+      measure()
+      const body = iframe.contentDocument?.body
+      if (body && typeof ResizeObserver !== 'undefined') {
+        const nextObserver = new ResizeObserver(measure)
+        nextObserver.observe(body)
+        observer = nextObserver
+      }
+    }
+    iframe.addEventListener('load', attach)
+    const t = setTimeout(attach, 120)
     return () => {
-      iframe.removeEventListener('load', measure)
+      iframe.removeEventListener('load', attach)
+      observer?.disconnect()
       clearTimeout(t)
     }
   }, [srcDoc])

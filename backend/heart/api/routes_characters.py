@@ -22,6 +22,7 @@ from heart.ss01_soul.character_catalog import (
     CharacterRow,
     build_catalog_entries,
     coerce_tags,
+    display_name_from_spec,
     ensure_character_loaded,
 )
 from heart.ss01_soul.character_content import CharacterContent, get_display_name
@@ -33,6 +34,7 @@ router = APIRouter(prefix="/api/characters", tags=["characters"])
 
 # Valid character_id pattern (same as SoulSpec)
 _CID_RE = re.compile(r"^[a-z][a-z0-9_]*$")
+_PUBLISHABLE_CHARACTER_LIMIT = 10
 
 
 class VoiceSettingUpdate(BaseModel):
@@ -54,6 +56,50 @@ async def _require_known_character(character_id: str, db: AsyncSession) -> None:
     """
     if not await ensure_character_loaded(character_id, db):
         raise HTTPException(status_code=404, detail=f"未知角色: {character_id}")
+
+
+async def _ensure_publishable_quota(
+    db: AsyncSession,
+    uid: uuid.UUID,
+    *,
+    exclude_character_id: str | None = None,
+) -> int:
+    """Reserve one of the user's public/unlisted slots for this transaction.
+
+    Private and disabled characters do not consume a slot. The transaction
+    advisory lock keeps the count plus following write safe when two publish
+    requests for the same user arrive concurrently.
+    """
+    await db.execute(
+        text("SELECT pg_advisory_xact_lock(hashtextextended(CAST(:uid AS text), 0))"),
+        {"uid": str(uid)},
+    )
+    result = await db.execute(
+        text(
+            """
+            SELECT COUNT(*)
+            FROM characters
+            WHERE owner_user_id = :uid
+              AND status = 'active'
+              AND visibility IN ('public', 'unlisted')
+              AND (
+                    CAST(:exclude_cid AS TEXT) IS NULL
+                    OR id <> CAST(:exclude_cid AS TEXT)
+                  )
+            """
+        ),
+        {"uid": uid, "exclude_cid": exclude_character_id},
+    )
+    current_count = int(result.scalar() or 0)
+    if current_count >= _PUBLISHABLE_CHARACTER_LIMIT:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"公开或链接可见的角色最多 {_PUBLISHABLE_CHARACTER_LIMIT} 个。"
+                "请先将一个角色改为私密或停用后再试。"
+            ),
+        )
+    return current_count
 
 
 @router.get("")
@@ -104,6 +150,7 @@ async def list_characters(
     avatar_urls: dict[str, str | None] = {}
     taglines: dict[str, str | None] = {}
     creation_modes: dict[str, str | None] = {}
+    display_names: dict[str, str | None] = {}
     visible_ids = [row.id for row in rows]
     ugc_ids = {row.id for row in rows if row.owner_user_id is not None}
     if visible_ids:
@@ -111,6 +158,7 @@ async def list_characters(
             text(
                 """
                 SELECT character_id,
+                       spec,
                        draft->>'avatar_url' AS avatar_url,
                        draft->>'tagline' AS tagline,
                        draft->>'creation_mode' AS creation_mode
@@ -121,6 +169,7 @@ async def list_characters(
             {"ids": visible_ids},
         )
         for row in content_result:
+            display_names[row.character_id] = display_name_from_spec(row.spec, row.character_id)
             if row.character_id in ugc_ids and row.avatar_url:
                 avatar_urls[row.character_id] = row.avatar_url
             if row.tagline:
@@ -142,7 +191,15 @@ async def list_characters(
     for row in pop_result:
         popularity[row.character_id] = int(row.cnt)
 
-    entries = build_catalog_entries(rows, uid, avatar_urls, popularity, taglines, creation_modes)
+    entries = build_catalog_entries(
+        rows,
+        uid,
+        avatar_urls,
+        popularity,
+        taglines,
+        creation_modes,
+        display_names,
+    )
     result_list = []
     for e in entries:
         entry_dict = asdict(e)
@@ -356,7 +413,7 @@ async def get_character_profile(
 
     return {
         "id": row["id"],
-        "display_name": get_display_name(character_id),
+        "display_name": display_name_from_spec(spec_json, character_id),
         "creator_name": creator_name,
         "avatar_url": draft_json.get("avatar_url"),
         "cover_url": row["cover_url"],
@@ -588,7 +645,7 @@ async def _require_owner(
     """
     result = await db.execute(
         text(
-            "SELECT id, owner_user_id, visibility, status, soul_spec_version"
+            "SELECT id, owner_user_id, visibility, status, soul_spec_version, review_status"
             " FROM characters WHERE id = :cid"
         ),
         {"cid": character_id},
@@ -779,7 +836,8 @@ async def create_character(
     Visibility is taken from the draft (public/unlisted/private).
     public/unlisted characters enter the review pipeline immediately;
     private characters are live immediately with no review and no reward.
-    Character creation is no longer capped per user.
+    Private character creation is unlimited; active public/unlisted characters
+    share a 10-character per-user cap.
     """
     from heart.ss01_soul.content_store import upsert_content
     from heart.ss01_soul.reload import reload_character
@@ -798,6 +856,7 @@ async def create_character(
     # Determine initial review state based on visibility.
     vis = draft.visibility or "private"
     if vis in ("public", "unlisted"):
+        await _ensure_publishable_quota(db, uid)
         initial_review_status = "pending"
         submitted_at_sql = "NOW()"
     else:
@@ -898,7 +957,7 @@ async def create_character(
         "id": character_id,
         "display_name": spec.display_name.zh or spec.display_name.ja or spec.display_name.en,
         "spec_version": spec.spec_version,
-        "visibility": "private",
+        "visibility": vis,
     }
 
 
@@ -1037,6 +1096,8 @@ async def update_character(
     # disabled character (status → active). Private characters stay live.
     vis = row.get("visibility") or "private"
     was_disabled = row.get("status") == "disabled"
+    if was_disabled and vis in ("public", "unlisted"):
+        await _ensure_publishable_quota(db, uid, exclude_character_id=character_id)
     if vis in ("public", "unlisted"):
         review_sql = (
             ", status = 'active', review_status = 'pending',"
@@ -1092,7 +1153,7 @@ async def set_character_visibility(
     uid = uuid.UUID(current_user.user_id)
     if body.visibility not in ("public", "unlisted", "private"):
         raise HTTPException(status_code=422, detail="visibility 必须是 public / unlisted / private")
-    await _require_owner(character_id, uid, db)
+    row = await _require_owner(character_id, uid, db)
 
     # Batch 1: 快速创建模式不得切换到 public
     if body.visibility == "public":
@@ -1113,25 +1174,36 @@ async def set_character_visibility(
             )
 
     if body.visibility in ("public", "unlisted"):
+        current_visibility = row.get("visibility") or "private"
+        current_status = row.get("status") or "active"
+        current_review_status = row.get("review_status") or "not_required"
+        if current_status == "active" and current_visibility not in ("public", "unlisted"):
+            await _ensure_publishable_quota(db, uid, exclude_character_id=character_id)
+
+        # Moving an approved link-only character into the public catalog is a
+        # new publication decision and must be reviewed as public before it can
+        # receive the public-character reward. Moving public -> unlisted is a
+        # reduction in exposure and may keep the existing approval.
+        needs_review = current_review_status != "approved" or (
+            body.visibility == "public" and current_visibility != "public"
+        )
         await db.execute(
             text(
                 """
                 UPDATE characters
                    SET visibility      = :vis,
-                       review_status   = CASE
-                                           WHEN review_status = 'approved' THEN 'approved'
-                                           ELSE 'pending'
-                                         END,
-                       submitted_at    = CASE
-                                           WHEN review_status NOT IN ('approved','pending')
-                                           THEN NOW()
-                                           ELSE submitted_at
-                                         END,
+                       review_status   = :review_status,
+                       submitted_at    = CASE WHEN :needs_review THEN NOW() ELSE submitted_at END,
                        result_ack_at   = NULL
                  WHERE id = :cid
                 """
             ),
-            {"vis": body.visibility, "cid": character_id},
+            {
+                "vis": body.visibility,
+                "cid": character_id,
+                "review_status": "pending" if needs_review else "approved",
+                "needs_review": needs_review,
+            },
         )
     else:
         # Switching to private: exit pipeline, go live immediately.
@@ -1168,13 +1240,16 @@ async def get_review_updates(
     result = await db.execute(
         text(
             """
-            SELECT id, visibility, review_status, review_reason,
-                   submitted_at, reviewed_at,
-                   (review_status IN ('approved','rejected')
-                    AND result_ack_at IS NULL) AS needs_ack
-            FROM characters
-            WHERE owner_user_id = :uid AND status = 'active'
-            ORDER BY reviewed_at DESC NULLS LAST, submitted_at DESC NULLS LAST
+            SELECT c.id, c.visibility, c.review_status, c.review_reason,
+                   c.submitted_at, c.reviewed_at,
+                   (c.review_status IN ('approved','rejected')
+                    AND c.result_ack_at IS NULL) AS needs_ack,
+                   s.spec
+            FROM characters c
+            LEFT JOIN soul_specs s
+              ON s.character_id = c.id AND s.status = 'active'
+            WHERE c.owner_user_id = :uid AND c.status = 'active'
+            ORDER BY c.reviewed_at DESC NULLS LAST, c.submitted_at DESC NULLS LAST
             """
         ),
         {"uid": uid},
@@ -1187,7 +1262,7 @@ async def get_review_updates(
         items.append(
             {
                 "id": row["id"],
-                "display_name": get_display_name(row["id"]),
+                "display_name": display_name_from_spec(row["spec"], row["id"]),
                 "visibility": row["visibility"],
                 "review_status": row["review_status"],
                 "review_reason": row["review_reason"],
@@ -1259,6 +1334,7 @@ async def reactivate_character(
     vis = row.get("visibility") or "private"
 
     if vis in ("public", "unlisted"):
+        await _ensure_publishable_quota(db, uid, exclude_character_id=character_id)
         await db.execute(
             text(
                 """

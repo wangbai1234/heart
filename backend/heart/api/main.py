@@ -49,6 +49,7 @@ from .routes_lottery import router as lottery_router
 from .routes_masks import router as masks_router
 from .routes_membership import router as membership_router
 from .routes_models import router as models_router
+from .routes_notices import router as notices_router
 from .routes_proactive import router as proactive_router
 from .routes_profile import router as profile_router
 from .routes_state import dev_router, memory_router
@@ -290,6 +291,7 @@ def create_app() -> FastAPI:
     app.include_router(membership_router)  # /api/membership (GET tier + entitlements)
     app.include_router(masks_router)  # /api/masks (user-owned conversation personas)
     app.include_router(models_router)  # /api/models (catalog, status, preferences)
+    app.include_router(notices_router)  # /api/notices (account-scoped announcements)
     app.include_router(invite_router)  # /api/invite (GET code, POST /use)
     app.include_router(lottery_router)  # /api/lottery + /api/rewards/coupons
     app.include_router(commission_router)  # /api/commission (store-credit balance/spend)

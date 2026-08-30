@@ -979,7 +979,16 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
   const renderStarterGuide = () => {
     if (isHidden || isCleared) return null
     if (!(historyLoaded && !isStreaming && messages.every((m) => m.role !== 'user'))) return null
-    const branches = CHARACTER_UI_CONFIGS[currentCharacterId]?.starterBranches
+    const builtinBranches = CHARACTER_UI_CONFIGS[currentCharacterId]?.starterBranches
+    const authoredStarter = fullProfile?.starter_config
+    const branches = builtinBranches ?? (
+      authoredStarter?.type === 'branched'
+        ? authoredStarter.branches.map((branch) => ({
+            label: branch.label,
+            options: branch.lines,
+          }))
+        : undefined
+    )
     const chipCls = isDark
       ? 'bg-[rgba(255,255,255,0.07)] text-[rgba(248,242,250,0.9)] border border-[rgba(255,255,255,0.14)] active:bg-[rgba(255,255,255,0.12)]'
       : 'bg-[rgba(255,255,255,0.7)] text-[rgba(33,35,57,0.92)] border border-[rgba(0,0,0,0.06)] active:bg-white'

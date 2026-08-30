@@ -113,6 +113,26 @@ async function request<T>(
   return res.json()
 }
 
+export interface ActiveNoticeDTO {
+  id: string
+  eyebrow?: string
+  title: string
+  summary: string
+  content: string
+  starts_at: string
+  ends_at: string | null
+  confirm_label?: string
+  qr_image_url?: string | null
+}
+
+export async function getActiveNotice(): Promise<{ notice: ActiveNoticeDTO | null }> {
+  return request('/notices/active')
+}
+
+export async function acknowledgeNotice(noticeId: string): Promise<{ ok: boolean }> {
+  return request(`/notices/${encodeURIComponent(noticeId)}/ack`, { method: 'POST' })
+}
+
 /**
  * Stable backend error signals → friendly Chinese copy.
  *
@@ -399,8 +419,9 @@ export interface ChatModelInfo {
   description: string
   cost_coins: number
   failover: string[]
-  status: 'smooth' | 'slow' | 'available' | 'unavailable'
-  status_label: '流畅' | '稍慢' | '可用' | '暂不可用'
+  status: 'smooth' | 'slow' | 'unstable' | 'available' | 'unavailable'
+  status_label: '流畅' | '稍慢' | '近期波动' | '可用' | '暂不可用'
+  selectable?: boolean
   success_rate: number | null
   avg_latency_ms: number | null
   sample_count: number
@@ -732,8 +753,12 @@ export async function updateProfile(data: {
   birthdate?: string
   timezone?: string
 }): Promise<{ ok: boolean; age_verified: boolean | null; message?: string }> {
-  return request('/profile', {
-    method: 'PATCH',
+  // Use POST for onboarding/profile completion. Some embedded mobile WebViews
+  // can dispatch PATCH while silently dropping its JSON body, which FastAPI
+  // correctly reports as a wholly missing request body even though the form is
+  // complete. The backend keeps PATCH /profile for older deployed clients.
+  return request('/profile/complete', {
+    method: 'POST',
     body: JSON.stringify(data),
   })
 }
@@ -1698,6 +1723,76 @@ export interface PendingCharacterDTO {
   submitted_at: string | null
 }
 
+export interface AdminAnalyticsDTO {
+  window: { start: string; end: string; timezone: string }
+  scope: {
+    total_users: number
+    active_users: number
+    new_users: number
+    active_users_in_range: number
+    sessions_in_range: number
+    chat_users: number
+    story_users: number
+    paid_users: number
+    revenue_cny: number
+  }
+  daily: Array<{
+    day: string
+    dau: number
+    wau: number
+    mau: number
+    chat_dau: number
+    story_dau: number
+    user_turns: number
+    dau_mau_pct: number | null
+  }>
+  retention: Array<{
+    reg_day: string
+    cohort_users: number
+    d0_users: number
+    d1_users: number
+    d3_users: number
+    d7_users: number
+    d0_pct: number
+    d1_pct: number | null
+    d3_pct: number | null
+    d7_pct: number | null
+  }>
+  depth: {
+    active_chat_users: number
+    user_turns: number
+    avg_turns_per_user: number
+    median_turns: number
+    avg_active_days: number
+    ten_turn_users: number
+    thirty_turn_users: number
+  }
+  characters: Array<{
+    character_name: string
+    entered_users: number
+    chat_users: number
+    user_turns: number
+    avg_turns: number
+    return_rate_pct: number | null
+    entry_to_chat_pct: number | null
+  }>
+  churn: { active_last_7d: number; lapsed_7_to_13d: number; lapsed_14d_plus: number }
+  payments: Array<{ day: string; orders: number; paid_users: number; revenue_cny: number }>
+  ai_cost: {
+    llm_transactions: number
+    llm_users: number
+    llm_credits_spent: number
+    token_tracking: string
+    tracked_usd: number | null
+    note: string
+  }
+  data_quality: {
+    activity_sources: string[]
+    behavior_log: string
+    current_day_partial: boolean
+  }
+}
+
 async function adminRequest<T>(path: string, adminKey: string, options: RequestInit = {}): Promise<T> {
   const res = await fetch(`${BASE_URL}${path}`, {
     ...options,
@@ -1721,10 +1816,25 @@ export async function adminListPendingCharacters(
   return adminRequest('/admin/characters/pending', adminKey)
 }
 
+export async function adminGetAnalytics(
+  start: string,
+  end: string,
+  adminKey: string,
+): Promise<AdminAnalyticsDTO> {
+  const params = new URLSearchParams({ start, end })
+  return adminRequest(`/admin/analytics?${params}`, adminKey)
+}
+
 export async function adminApproveCharacter(
   characterId: string,
   adminKey: string,
-): Promise<{ ok: boolean; id: string; coins_granted: number; milestone_plus_granted: boolean }> {
+): Promise<{
+  ok: boolean
+  id: string
+  reward_eligible: boolean
+  coins_granted: number
+  milestone_plus_granted: boolean
+}> {
   return adminRequest(`/admin/characters/${encodeURIComponent(characterId)}/approve`, adminKey, {
     method: 'POST',
   })

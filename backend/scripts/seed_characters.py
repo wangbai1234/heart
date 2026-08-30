@@ -63,6 +63,7 @@ logger = structlog.get_logger(__name__)
 
 _CID_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 _PRESENTATION_KEYS = (
+    "age_range",
     "tagline",
     "archetype_label",
     "one_liner",
@@ -104,17 +105,40 @@ def _build_draft(entry: dict):
     if not isinstance(dn, dict):
         raise ValueError("display_name 必须是含 zh/ja/en 的映射")
 
+    workshop_fields = ("custom_html", "profile_blocks", "premise_card", "starter_config")
+    inferred_mode = "workshop" if any(entry.get(field) for field in workshop_fields) else "quick"
     kwargs: dict = {
         "display_name": DisplayNameDraft(zh=dn.get("zh"), ja=dn.get("ja"), en=dn.get("en")),
         "persona": entry["persona"],
         "tags": list(entry.get("tags") or []),
+        "creation_mode": entry.get("creation_mode", inferred_mode),
     }
     if entry.get("backstory"):
         kwargs["backstory"] = entry["backstory"]
+    for field in ("catchphrases", "speech_samples", "hard_never_user"):
+        if field in entry:
+            kwargs[field] = entry[field]
     if entry.get("gender") in ("male", "female"):
         kwargs["gender"] = entry["gender"]
     if entry.get("greeting_style"):
         kwargs["greeting_style"] = GreetingStyle(entry["greeting_style"])
+    if entry.get("age_range"):
+        kwargs["age_range"] = entry["age_range"]
+    for field in (
+        "opening",
+        "intro",
+        "tagline",
+        "one_liner",
+        "archetype_label",
+        "ui_chrome",
+        "profile_blocks",
+        "custom_html",
+        "premise_card",
+        "starter_config",
+        "opening_format",
+    ):
+        if field in entry and entry[field] is not None:
+            kwargs[field] = entry[field]
     if isinstance(entry.get("sliders"), dict):
         kwargs["sliders"] = SliderSet(**entry["sliders"])
     return CharacterDraft(**kwargs)
@@ -160,6 +184,13 @@ async def main() -> None:
     parser.add_argument("--dry-run", action="store_true", help="只校验与打印，不上传不落库")
     parser.add_argument("--force", action="store_true", help="覆盖已存在角色（supersede 旧 spec）")
     parser.add_argument(
+        "--only",
+        action="append",
+        default=[],
+        metavar="CHARACTER_ID",
+        help="仅处理指定角色；可重复传入，适合安全修复单个第一方角色",
+    )
+    parser.add_argument(
         "--html-only",
         action="store_true",
         help="仅刷新现有角色 active draft 的 custom_html，不改 SoulSpec、封面、标签或其它展示字段",
@@ -189,6 +220,14 @@ async def main() -> None:
     if not isinstance(entries, list) or not entries:
         print("❌ manifest 顶层必须是非空列表", file=sys.stderr)
         sys.exit(1)
+    if args.only:
+        requested = set(args.only)
+        entries = [entry for entry in entries if isinstance(entry, dict) and entry.get("id") in requested]
+        found = {str(entry["id"]) for entry in entries}
+        missing = requested - found
+        if missing:
+            print(f"❌ --only 指定的角色不存在: {', '.join(sorted(missing))}", file=sys.stderr)
+            sys.exit(1)
 
     cover_dir = Path(args.covers)
 
@@ -219,7 +258,9 @@ async def main() -> None:
         except Exception as exc:  # noqa: BLE001 — 校验期把任何构造错误收集起来
             errors.append(f"[{cid}] draft 构造失败: {exc}")
             continue
-        cover_path = None if (args.skip_covers or args.html_only) else _resolve_cover_path(entry, cover_dir)
+        cover_path = (
+            None if (args.skip_covers or args.html_only) else _resolve_cover_path(entry, cover_dir)
+        )
         if cover_path is not None and not cover_path.exists():
             errors.append(f"[{cid}] 封面文件不存在: {cover_path}")
             continue

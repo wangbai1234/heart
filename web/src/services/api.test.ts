@@ -23,8 +23,8 @@ describe('updateProfile', () => {
       timezone: 'Asia/Shanghai',
     })
 
-    expect(fetchMock).toHaveBeenCalledWith('/api/profile', expect.objectContaining({
-      method: 'PATCH',
+    expect(fetchMock).toHaveBeenCalledWith('/api/profile/complete', expect.objectContaining({
+      method: 'POST',
       headers: expect.objectContaining({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({
         display_name: '测试用户',

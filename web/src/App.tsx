@@ -32,6 +32,7 @@ import { ScenarioDetailPage } from './pages/ScenarioDetailPage'
 import { StoryPlayerPage } from './pages/StoryPlayerPage'
 import { RewardsPage } from './pages/RewardsPage'
 import { AdminReviewPage } from './pages/AdminReviewPage'
+import { AdminAnalyticsPage } from './pages/AdminAnalyticsPage'
 import { ToastContainer } from './components/ui/ToastContainer'
 import { UpdatePrompt } from './components/UpdatePrompt'
 import { DailyCheckinDialog } from './components/DailyCheckinDialog'
@@ -43,12 +44,15 @@ import { useThemeStore } from './stores/themeStore'
 import { useAppStore } from './stores/appStore'
 import { useAuthStore } from './stores/authStore'
 import { useCharactersStore } from './stores/charactersStore'
+import { useCompanionsStore } from './stores/companionsStore'
 import { useAuthPromptStore } from './stores/authPromptStore'
 import { useModelsStore } from './stores/modelsStore'
 import { useAppBadge } from './hooks/useAppBadge'
 import { useInboxBadgeSync } from './hooks/useInboxBadgeSync'
 import { useSwipeNavigation } from './hooks/useSwipeNavigation'
 import { AuthModal } from './components/AuthModal'
+import { RecoveryNoticeDialog } from './components/RecoveryNoticeDialog'
+import type { ActiveNoticeDTO } from './services/api'
 
 function ChatConversationRouter() {
   const { resolvedTheme } = useThemeStore()
@@ -97,6 +101,9 @@ export function App() {
   // priority=1 handler (HomePage blocks, ConversationChatPage overrides target).
   useSwipeNavigation({ priority: 0 })
   const loadCharacters = useCharactersStore((s) => s.load)
+  const resetCharacterCatalog = useCharactersStore((s) => s.resetCatalog)
+  const loadCompanions = useCompanionsStore((s) => s.load)
+  const resetCompanions = useCompanionsStore((s) => s.reset)
   const refreshModels = useModelsStore((s) => s.refresh)
   const mergeChatModels = useAppStore((s) => s.mergeChatModels)
   const navigate = useNavigate()
@@ -107,6 +114,7 @@ export function App() {
   // Character review: queue of unacked terminal results + daily incentive popup.
   const [reviewQueue, setReviewQueue] = useState<ReviewUpdateDTO[]>([])
   const [incentiveOpen, setIncentiveOpen] = useState(false)
+  const [recoveryNotice, setRecoveryNotice] = useState<ActiveNoticeDTO | null>(null)
 
   // Wire module-level navigate so api.ts / useWebSocket.ts can redirect
   // without a hard page reload (preserves React state and bfcache).
@@ -146,10 +154,19 @@ export function App() {
 
   useProactivePolling()
 
-  // Load the server character catalog once the user is authenticated (UGC C4).
+  // Character visibility is account-scoped: private and pending UGC only reach
+  // their owner. Clear the previous snapshot whenever auth changes, then force
+  // an authenticated reload. Without this, a logout/login or restored PWA
+  // session could keep an anonymous/previous-account catalog marked `loaded`
+  // and make a persisted character appear to have vanished.
   useEffect(() => {
-    if (accessToken) void loadCharacters()
-  }, [accessToken, loadCharacters])
+    resetCharacterCatalog()
+    resetCompanions()
+    if (accessToken) {
+      void loadCharacters(true)
+      void loadCompanions(true)
+    }
+  }, [accessToken, loadCharacters, loadCompanions, resetCharacterCatalog, resetCompanions])
 
   // Hydrate the server catalog and cross-device per-character selections.
   // An empty server map leaves migrated local choices intact; characters with
@@ -180,6 +197,32 @@ export function App() {
     sessionStorage.removeItem('yuoyuo-pending-invite')
     void import('./services/api').then(({ bindInvite }) => bindInvite(code).catch(() => {}))
   }, [accessToken])
+
+  // The server receipt is the source of truth so acknowledgement follows the
+  // account across browsers and devices.
+  useEffect(() => {
+    if (!accessToken) {
+      setRecoveryNotice(null)
+      return
+    }
+    let cancelled = false
+    void import('./services/api').then(({ getActiveNotice }) =>
+      getActiveNotice()
+        .then((result) => {
+          if (!cancelled) setRecoveryNotice(result.notice)
+        })
+        .catch(() => {}),
+    )
+    return () => {
+      cancelled = true
+    }
+  }, [accessToken])
+
+  const confirmRecoveryNotice = async (noticeId: string) => {
+    const { acknowledgeNotice } = await import('./services/api')
+    await acknowledgeNotice(noticeId)
+    setRecoveryNotice(null)
+  }
 
   // Daily check-in: on first authenticated load of the day, claim the reward
   // (server is idempotent per calendar day) and show the notification dialog
@@ -242,7 +285,7 @@ export function App() {
       void import('./services/api').then(({ ackReviewResult }) =>
         ackReviewResult(current.id).catch(() => {}),
       )
-      if (current.review_status === 'approved') {
+      if (current.review_status === 'approved' && current.visibility === 'public') {
         void useCreditsStore.getState().refresh()
       }
     }
@@ -254,11 +297,27 @@ export function App() {
     document.documentElement.style.setProperty('--app-font-scale', nextScale)
   }, [fontScale])
 
+  // The analytics console has its own X-Admin-Key authentication and must stay
+  // completely outside the end-user session guard. Keeping this as an early
+  // route also prevents profile-completion / age-gate redirects from ever
+  // affecting the bookmarked admin URL.
+  if (location.pathname === '/admin/analytics') {
+    return (
+      <>
+        <UpdatePrompt />
+        <Routes>
+          <Route path="/admin/analytics" element={<AdminAnalyticsPage />} />
+        </Routes>
+      </>
+    )
+  }
+
   return (
     <AuthGuard>
       <ToastContainer />
       <AuthModal />
       <UpdatePrompt />
+      <RecoveryNoticeDialog notice={recoveryNotice} onAcknowledge={confirmRecoveryNotice} />
       <DailyCheckinDialog open={checkinOpen} coins={checkinCoins} onClose={() => setCheckinOpen(false)} />
       <ReviewResultDialog item={reviewQueue[0] ?? null} onConfirm={confirmReviewResult} />
       <PublishIncentiveDialog

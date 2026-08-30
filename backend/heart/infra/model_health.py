@@ -35,6 +35,7 @@ def _recent(model_id: str) -> list[Sample]:
 
 def model_status(model_id: str, *, configured: bool) -> dict:
     empty_metrics = {
+        "selectable": configured,
         "success_rate": None,
         "avg_latency_ms": None,
         "sample_count": 0,
@@ -51,6 +52,7 @@ def model_status(model_id: str, *, configured: bool) -> dict:
         sum(sample.duration_ms for sample in successes) / len(successes) if successes else None
     )
     metrics = {
+        "selectable": True,
         "success_rate": round(rate, 4),
         "avg_latency_ms": round(avg_latency) if avg_latency is not None else None,
         "sample_count": len(samples),
@@ -61,8 +63,13 @@ def model_status(model_id: str, *, configured: bool) -> dict:
         if sample.success:
             break
         consecutive_failures += 1
+    # Runtime failures are advisory health signals, not proof that the model is
+    # unusable. The router can still retry the requested model and fail over to
+    # its configured chain, so keep it selectable and describe the temporary
+    # degradation honestly. Only a missing provider configuration above is a
+    # hard unavailable state.
     if consecutive_failures >= 3 or (len(samples) >= 5 and rate < 0.8):
-        return {"status": "unavailable", "status_label": "暂不可用", **metrics}
+        return {"status": "unstable", "status_label": "近期波动", **metrics}
     ttfts = sorted(sample.ttft_ms for sample in successes if sample.ttft_ms is not None)
     median_ttft = ttfts[len(ttfts) // 2] if ttfts else None
     metrics["congested"] = bool(median_ttft is not None and median_ttft > 6000)

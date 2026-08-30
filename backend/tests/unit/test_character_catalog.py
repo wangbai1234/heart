@@ -8,14 +8,21 @@ the integration tier; here we pin the rules that decide *what* a viewer sees and
 
 from __future__ import annotations
 
+from pathlib import Path
 from uuid import uuid4
+
+import pytest
+import yaml
 
 from heart.ss01_soul.character_catalog import (
     CharacterRow,
     build_catalog_entries,
+    display_name_from_spec,
+    ensure_character_loaded,
     is_known_character,
     visible_to,
 )
+from heart.ss01_soul.schema_validator import SoulSpec
 
 VIEWER = uuid4()
 OTHER = uuid4()
@@ -119,6 +126,31 @@ def test_seeded_builtin_uses_authored_tagline():
     assert entries[0].tagline == "一条数据库里的剧情钩子"
 
 
+def test_db_display_name_overrides_missing_worker_registry():
+    row = CharacterRow(
+        id="char_fresh123",
+        owner_user_id=VIEWER,
+        visibility="private",
+        status="active",
+    )
+    entries = build_catalog_entries(
+        [row],
+        VIEWER,
+        display_names={"char_fresh123": "数据库里的名字"},
+    )
+    assert entries[0].display_name == "数据库里的名字"
+
+
+def test_display_name_from_persisted_spec_prefers_locale_order():
+    spec = {"display_name": {"zh": "  云深  ", "ja": "クモ", "en": "Cloud"}}
+    assert display_name_from_spec(spec, "char_fallback") == "云深"
+
+
+def test_display_name_from_persisted_json_string():
+    spec = '{"display_name":{"en":"Persisted Name"}}'
+    assert display_name_from_spec(spec, "char_fallback") == "Persisted Name"
+
+
 # ── Boundary validation ─────────────────────────────────────────────────────
 
 
@@ -133,13 +165,6 @@ def test_is_known_character_false_for_unknown():
 
 
 # ── ensure_character_loaded (multi-worker lazy hydration) ────────────────────
-
-import pytest  # noqa: E402
-import yaml  # noqa: E402
-from pathlib import Path  # noqa: E402
-
-from heart.ss01_soul.character_catalog import ensure_character_loaded  # noqa: E402
-from heart.ss01_soul.schema_validator import SoulSpec  # noqa: E402
 
 _SOUL_SPECS_DIR = Path(__file__).resolve().parent.parent.parent.parent / "soul_specs"
 
