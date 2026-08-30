@@ -21,6 +21,8 @@ import { useFavoritesStore } from '../stores/favoritesStore'
 import { useAuthStore } from '../stores/authStore'
 import { useAuthPromptStore } from '../stores/authPromptStore'
 import type { CompanionDTO } from '../services/api'
+import { buildCharacterHeatMap } from '../utils/characterHeat'
+import { isDiscoverableCharacter } from '../utils/characterVisibility'
 
 /** Visibility badge config for owned UGC character cards. */
 const VIS_BADGE: Record<string, { label: string; color: string; bg: string }> = {
@@ -77,18 +79,35 @@ interface GridItem {
 
 /**
  * Whether a grid item may appear in the discovery (广场) list. Rule:
- * built-ins and public+approved characters are visible to everyone; anything
- * else (own private / pending / unlisted / rejected UGC) is hidden here and
- * managed only in「我的角色」. A character the user has actually interacted with
- * (companioned/encountered) still shows so an existing bond never vanishes.
+ * built-ins and public+approved characters are visible to everyone. The
+ * creator always sees their own characters, including private and pending
+ * entries, so leaving the creation flow never makes a saved character appear
+ * to vanish. A character the viewer has actually interacted with also remains
+ * visible so an existing bond never disappears.
  */
-function isDiscoverable(it: GridItem): boolean {
-  if (it.isBuiltin) return true
-  if (it.visibility === 'public' && it.reviewStatus === 'approved') return true
-  return !!it.companion && it.companion.companion_status !== 'locked'
-}
-
 const FEATURED_CHARACTERS = [
+  // 2026-08-30 editorial launch: newly authored characters lead 推荐 in this
+  // exact product-defined order. Keep qi_wang_arena separate from the legacy
+  // qi_wang record; they are distinct characters with different content.
+  { id: 'chi_yang', name: '迟漾' },
+  { id: 'gu_huiming', name: '顾晦明' },
+  { id: 'yan_jibai', name: '严既白' },
+  { id: 'he_yuting', name: '贺聿庭' },
+  { id: 'cen_wu', name: '岑雾' },
+  { id: 'shen_yanhui', name: '沈雁回' },
+  { id: 'shang_xu', name: '商序' },
+  { id: 'qi_wang_arena', name: '祁妄' },
+  { id: 'rong_hexue', name: '容鹤雪' },
+  { id: 'shen_yanli', name: '沈砚礼' },
+  { id: 'yan_jin', name: '晏烬' },
+  { id: 'mi_luo', name: '弥洛' },
+  { id: 'ji_xuandu', name: '姬玄度' },
+  { id: 'jialuo', name: '迦珞' },
+  { id: 'pei_zhaoxue', name: '裴照雪' },
+  { id: 'xie_wujiu', name: '谢无咎' },
+  { id: 'su_jin', name: '夙烬' },
+  { id: 'xia_mier', name: '夏弥尔' },
+  { id: 'lu_guiye', name: '陆归野' },
   { id: 'char_b8ed4c9b', name: '祝淮昭' },
   { id: 'char_ae43cbad', name: '裴承望' },
   { id: 'zhou_jian', name: '周缄' },
@@ -124,6 +143,26 @@ const FEATURED_CHARACTERS = [
   { id: 'gu_xingzhou', name: '顾行舟' },
   { id: 'jiang_ye', name: '江野' },
 ] as const
+
+// Restored legacy catalog batch (2026-08-27). These characters remain fully
+// discoverable, but must follow newly authored characters in every discovery
+// view. Keep this separate from FEATURED_CHARACTERS: a few legacy IDs used to
+// be editorially pinned, which otherwise pulled the restored batch back to the
+// front after upload.
+const RESTORED_LEGACY_CHARACTER_IDS = new Set([
+  'gu_xingmian', 'lin_xiaoman', 'linyuan_manor', 'su_yun', 'su_nian',
+  'free_muse', 'gu_qingwan', 'fu_mingxiu', 'gu_beichen', 'gu_nanqiao',
+  'gu_xingzhou', 'gu_yanli', 'huo_shiyu', 'jiang_li', 'jiang_ran',
+  'jiang_ye', 'jiang_yueze', 'li_jue', 'lu_wenjing', 'lu_tingsheng',
+  'lu_zhao', 'luo_fei', 'pei_jue', 'pei_tinglan', 'qin_xiao',
+  'qingyu_band', 'shen_liao', 'shen_yichen', 'shen_yuchuan', 'song_ye',
+  'su_wan', 'su_yueyao', 'vito_rosetti', 'xie_ci', 'xize', 'xu_zhihan',
+  'zhou_jin',
+])
+
+function restoredLegacyRank(item: GridItem): number {
+  return RESTORED_LEGACY_CHARACTER_IDS.has(item.id) ? 1 : 0
+}
 const FEATURED_CHARACTER_INDEX = new Map<string, number>(
   FEATURED_CHARACTERS.map((character, index) => [character.id, index]),
 )
@@ -321,6 +360,8 @@ export function CharacterPage() {
 
   const rankedItems = useMemo(() => {
     return [...items].sort((left, right) => {
+      const legacyDifference = restoredLegacyRank(left) - restoredLegacyRank(right)
+      if (legacyDifference !== 0) return legacyDifference
       const leftFeatured = featuredCharacterIndex(left)
       const rightFeatured = featuredCharacterIndex(right)
       if (leftFeatured !== undefined || rightFeatured !== undefined) {
@@ -338,24 +379,13 @@ export function CharacterPage() {
   // Extra tags for the「筛选」popup — fixed, hardcoded list (see EXTRA_FILTER_TAGS).
   const extraFilterChips = useMemo(() => [...EXTRA_FILTER_TAGS], [])
 
-  // Editorial heat mapping: featured characters are fixed at the front, the
-  // remainder follow a stable pseudo-random order.
-  const heatMap = useMemo(() => {
-    const withHeat = rankedItems.map((it) => ({ id: it.id }))
-    const map = new Map<string, number>()
-    const n = withHeat.length
-    if (n === 0) return map
-    withHeat.forEach((x, rank) => {
-      const override = EDITORIAL_HEAT_OVERRIDES.get(x.id)
-      if (override !== undefined) {
-        map.set(x.id, override)
-        return
-      }
-      const virtual = n === 1 ? 2750 : Math.round(5000 - (rank / (n - 1)) * 4500)
-      map.set(x.id, virtual)
-    })
-    return map
-  }, [rankedItems])
+  // System-authored characters keep editorial/virtual heat. Every user-created
+  // character — including characters published before this release — uses the
+  // backend's real distinct-chat-user count with no synthetic increment.
+  const heatMap = useMemo(
+    () => buildCharacterHeatMap(rankedItems, EDITORIAL_HEAT_OVERRIDES),
+    [rankedItems],
+  )
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -366,10 +396,10 @@ export function CharacterPage() {
       // 推荐 = 全部可发现角色（public+approved + built-ins + own）。编辑精选只作为
       //「排序」体现（featured 置顶 + 女性向优先，见下方 SORT），不再作为「过滤」把
       // 别的用户公开+审核通过的角色挡在外面——否则 推荐+全部 下这些角色永远不出现。
-      base = rankedItems.filter(isDiscoverable)
+      base = rankedItems.filter(isDiscoverableCharacter)
     } else if (activeMode === MODE_NEWEST) {
       // 新角色 = 所有可见角色（内置+UGC）按 created_at DESC
-      base = rankedItems.filter((it) => isDiscoverable(it))
+      base = rankedItems.filter(isDiscoverableCharacter)
     } else if (activeMode === MODE_FAVORITES) {
       // 收藏 = user's favorited characters (can include private/unlisted own UGC)
       base = rankedItems.filter((it) => isFavorite(it.id))
@@ -377,7 +407,7 @@ export function CharacterPage() {
       // 我的 = all own characters (public + unlisted + private), bypass discovery gate
       base = rankedItems.filter((it) => it.isOwner)
     } else {
-      base = rankedItems.filter(isDiscoverable)
+      base = rankedItems.filter(isDiscoverableCharacter)
     }
 
     // **TIER-2: TAG** — apply tag filter on top of mode set
@@ -397,6 +427,8 @@ export function CharacterPage() {
     if (activeMode === MODE_NEWEST && !q) {
       // Sort by created_at DESC for「新角色」
       base.sort((a, b) => {
+        const legacyDifference = restoredLegacyRank(a) - restoredLegacyRank(b)
+        if (legacyDifference !== 0) return legacyDifference
         const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0
         const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0
         return bTime - aTime
@@ -404,6 +436,8 @@ export function CharacterPage() {
     } else if (activeMode === MODE_RECOMMENDED && !q) {
       // 推荐: 精选置顶优先级最高（不受性向影响），其余角色再按「女性向」靠前。
       base.sort((a, b) => {
+        const legacyDifference = restoredLegacyRank(a) - restoredLegacyRank(b)
+        if (legacyDifference !== 0) return legacyDifference
         const aFeatured = featuredCharacterIndex(a)
         const bFeatured = featuredCharacterIndex(b)
         if (aFeatured !== undefined || bFeatured !== undefined) {
@@ -834,7 +868,7 @@ function DiscoveryCard({
             </p>
           )}
           <div className="flex items-center justify-between gap-2 min-w-0">
-            {/* Heat indicator (editorial overrides + virtual value, preserves real ranking) */}
+            {/* System roles use editorial heat; user roles use real engagement. */}
             {virtualHeat !== undefined && (
               <div className="flex items-center gap-1 flex-shrink-0">
                 <svg className="text-white/85" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">

@@ -84,9 +84,13 @@ export function AdminReviewPage() {
         try {
           const r = await adminApproveCharacter(c.id, adminKey.trim())
           showToast(
-            r.milestone_plus_granted
-              ? `已通过，作者 +${r.coins_granted} 币并解锁进阶版`
-              : `已通过，作者 +${r.coins_granted} 币`,
+            !r.reward_eligible
+              ? '已通过，链接可见角色不发放公开奖励'
+              : r.coins_granted === 0
+                ? '已通过，该公开角色奖励之前已发放'
+              : r.milestone_plus_granted
+                ? `已通过，作者 +${r.coins_granted} 币并解锁进阶版`
+                : `已通过，作者 +${r.coins_granted} 币`,
             'success',
           )
           setItems((prev) => prev.filter((x) => x.id !== c.id))
@@ -359,4 +363,3 @@ function PendingCard({
     </div>
   )
 }
-

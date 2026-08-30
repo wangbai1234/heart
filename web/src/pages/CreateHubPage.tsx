@@ -19,7 +19,7 @@ function useToast() {
  * management (moved from /my-characters, which was secondary UI). The center tab
  * now deep-links here.
  *
- * Structure: 顶部大号「+ 创建新角色」主 CTA，下方「我的创造 (n/5)」列表 +
+ * Structure: 顶部大号「+ 创建新角色」主 CTA，下方「我的创造」列表 +
  * 编辑/可见范围/停用菜单，空态兜底。(2026-07-31 product direction: put creator
  * actions front-and-center as we prepare to ship publishing features.)
  */
@@ -41,7 +41,9 @@ export function CreateHubPage() {
   }, [loaded, load])
 
   const myChars = characters.filter((c) => c.is_owner && !c.is_builtin)
-  const atLimit = myChars.length >= 5
+  const publishableCount = myChars.filter(
+    (c) => c.status !== 'disabled' && (c.visibility === 'public' || c.visibility === 'unlisted'),
+  ).length
 
   async function handleVisibility(id: string, vis: 'public' | 'unlisted' | 'private') {
     try {
@@ -111,16 +113,18 @@ export function CreateHubPage() {
       </AppPageContent>
 
       <div ref={scrollRef} className="relative z-10 mx-auto min-h-0 w-full max-w-[860px] flex-1 overflow-y-auto px-4 pb-[120px] pt-2 sm:px-5">
-        <CreatorHero atLimit={atLimit} isDark={isDark} onStart={() => navigate('/characters/new/quick')} />
+        <CreatorHero isDark={isDark} onStart={() => navigate('/characters/new/quick')} />
         {myChars.length === 0 ? (
           <EmptyState />
         ) : (
           <>
-            <ModeSelector atLimit={atLimit} />
+            <ModeSelector />
 
             <div className="mb-4">
               <p className="text-[15px] font-semibold text-[var(--color-ink)] px-1 mb-1">我的创造</p>
-              <p className="text-[13px] text-[var(--color-text-muted)] px-1">{myChars.length} / 5 个角色</p>
+              <p className="text-[13px] text-[var(--color-text-muted)] px-1">
+                {publishableCount} / 10 个公开或链接可见角色 · 私密角色不限量
+              </p>
             </div>
 
             <div className="flex flex-col gap-3">
@@ -214,17 +218,15 @@ function EmptyState() {
     <div className="flex flex-col px-1 pb-12 pt-3 text-left">
       <h2 className="text-[18px] font-semibold text-[var(--color-ink)]">开始你的角色创作</h2>
       <p className="mt-1 text-[13px] leading-[1.5] text-[var(--color-text-secondary)]">从一句想法开始，把 Ta 的性格和故事交给你决定。</p>
-      <ModeSelector atLimit={false} />
+      <ModeSelector />
     </div>
   )
 }
 
 function CreatorHero({
-  atLimit,
   isDark,
   onStart,
 }: {
-  atLimit: boolean
   isDark: boolean
   onStart: () => void
 }) {
@@ -248,10 +250,9 @@ function CreatorHero({
         </p>
         <button
           onClick={onStart}
-          disabled={atLimit}
-          className={`mt-4 inline-flex h-[36px] items-center justify-center rounded-full px-4 text-[13px] font-semibold transition-transform active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-60 ${isDark ? 'bg-white text-[#A14C68]' : 'bg-[var(--color-primary-500)] text-white shadow-[var(--shadow-btn)]'}`}
+          className={`mt-4 inline-flex h-[36px] items-center justify-center rounded-full px-4 text-[13px] font-semibold transition-transform active:scale-[0.97] ${isDark ? 'bg-white text-[#A14C68]' : 'bg-[var(--color-primary-500)] text-white shadow-[var(--shadow-btn)]'}`}
         >
-          {atLimit ? '角色名额已满' : '开始创建'}
+          开始创建
         </button>
       </div>
       <div className="pointer-events-none absolute -bottom-4 right-[-12px] flex items-end" aria-hidden="true">
@@ -264,16 +265,8 @@ function CreatorHero({
 }
 
 /** 批3: 两档入口 - 快速创建 vs 角色创作 */
-function ModeSelector({ atLimit }: { atLimit: boolean }) {
+function ModeSelector() {
   const navigate = useNavigate()
-
-  if (atLimit) {
-    return (
-      <div className="mb-6 flex h-[58px] w-full items-center justify-center rounded-[12px] border border-[var(--color-divider)] bg-[var(--color-page-soft)] text-[16px] font-semibold text-[var(--color-text-muted)]">
-        已达上限(5个角色)
-      </div>
-    )
-  }
 
   return (
     <div className="mb-6 flex w-full flex-col gap-3 sm:grid sm:grid-cols-2">

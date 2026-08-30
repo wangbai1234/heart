@@ -15,6 +15,7 @@ interface CompanionsState {
   loaded: boolean
   loading: boolean
   load: (force?: boolean) => Promise<void>
+  reset: () => void
 }
 
 let inflight: Promise<void> | null = null
@@ -22,11 +23,17 @@ let inflight: Promise<void> | null = null
 // once more after that request settles; otherwise quick creation can reuse a
 // pre-create companion snapshot and hide the initial intimacy state.
 let forcedRefresh: Promise<void> | null = null
+let catalogGeneration = 0
 
 export const useCompanionsStore = create<CompanionsState>((set, get) => ({
   companions: [],
   loaded: false,
   loading: false,
+
+  reset: () => {
+    catalogGeneration += 1
+    set({ companions: [], loaded: false, loading: false })
+  },
 
   load: async (force = false) => {
     if (!force && (get().loaded || get().loading)) return
@@ -49,12 +56,15 @@ export const useCompanionsStore = create<CompanionsState>((set, get) => ({
     }
     if (inflight) return inflight
 
+    const requestGeneration = catalogGeneration
     set({ loading: true })
     inflight = getCompanions()
       .then(({ companions }) => {
+        if (requestGeneration !== catalogGeneration) return
         set({ companions, loaded: true, loading: false })
       })
       .catch(() => {
+        if (requestGeneration !== catalogGeneration) return
         set({ loading: false })
       })
       .finally(() => {
