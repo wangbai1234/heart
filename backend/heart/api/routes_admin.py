@@ -1071,7 +1071,7 @@ async def _grant_approval_rewards(
         # transaction back on conflict, which would also undo this approval.
         already_rewarded = (
             await db.execute(
-                text("SELECT 1 FROM credit_transactions" " WHERE idempotency_key = :key LIMIT 1"),
+                text("SELECT 1 FROM credit_transactions WHERE idempotency_key = :key LIMIT 1"),
                 {"key": f"char_review:{character_id}"},
             )
         ).scalar_one_or_none()
