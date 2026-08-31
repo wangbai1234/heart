@@ -88,11 +88,31 @@ def test_anonymous_viewer_only_sees_public_approved_characters():
 # ── Catalog shaping ─────────────────────────────────────────────────────────
 
 
-def test_builtins_come_first_then_by_id():
+def test_catalog_orders_by_recommendation_then_real_views():
     rows = [
-        CharacterRow(id="zeta", owner_user_id=VIEWER, visibility="private", status="active"),
-        CharacterRow(id="rin", owner_user_id=None, visibility="public", status="active"),
-        CharacterRow(id="dorothy", owner_user_id=None, visibility="public", status="active"),
+        CharacterRow(
+            id="zeta",
+            owner_user_id=VIEWER,
+            visibility="private",
+            status="active",
+            recommendation_score=0.7,
+        ),
+        CharacterRow(
+            id="rin",
+            owner_user_id=None,
+            visibility="public",
+            status="active",
+            recommendation_score=0.8,
+            real_view_count=2,
+        ),
+        CharacterRow(
+            id="dorothy",
+            owner_user_id=None,
+            visibility="public",
+            status="active",
+            recommendation_score=0.8,
+            real_view_count=5,
+        ),
     ]
     entries = build_catalog_entries(rows, VIEWER)
     assert [e.id for e in entries] == ["dorothy", "rin", "zeta"]
@@ -119,9 +139,7 @@ def test_builtin_display_name_derived_from_soul_spec():
 
 
 def test_seeded_builtin_uses_authored_tagline():
-    rows = [
-        CharacterRow(id="rin", owner_user_id=None, visibility="public", status="active")
-    ]
+    rows = [CharacterRow(id="rin", owner_user_id=None, visibility="public", status="active")]
     entries = build_catalog_entries(rows, VIEWER, taglines={"rin": "一条数据库里的剧情钩子"})
     assert entries[0].tagline == "一条数据库里的剧情钩子"
 

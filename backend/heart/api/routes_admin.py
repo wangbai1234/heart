@@ -1202,7 +1202,21 @@ async def admin_approve_character(
                SET review_status = 'approved',
                    review_reason = NULL,
                    reviewed_at   = NOW(),
-                   result_ack_at = NULL
+                   result_ack_at = NULL,
+                   display_heat = display_heat + CASE
+                       WHEN owner_user_id IS NOT NULL
+                        AND visibility = 'public'
+                        AND heat_initialized_at IS NULL
+                       THEN 100 + FLOOR(random() * 301)::integer
+                       ELSE 0
+                   END,
+                   heat_initialized_at = CASE
+                       WHEN owner_user_id IS NOT NULL
+                        AND visibility = 'public'
+                        AND heat_initialized_at IS NULL
+                       THEN NOW()
+                       ELSE heat_initialized_at
+                   END
              WHERE id = :cid AND status = 'active'
                AND review_status IN ('pending','rejected')
              RETURNING owner_user_id, visibility

@@ -967,6 +967,12 @@ export interface CharacterDTO {
   tags?: string[]
   /** Engagement heat: distinct user count who chatted with this character. */
   chat_user_count?: number
+  /** Cover heat shown on the discovery card. Includes launch/support heat. */
+  display_heat?: number
+  /** Actual profile-page entries; synthetic heat never increments this. */
+  real_view_count?: number
+  /** Persisted real-behaviour recommendation score, refreshed daily. */
+  recommendation_score?: number
   /** Lifecycle state: active | disabled. A disabled row only reaches its owner. */
   status?: string
   /** Moderation state: not_required | pending | approved | rejected. Owner-only meaning. */
@@ -1072,6 +1078,14 @@ export type StarterConfig =
 
 export async function getCharacterProfile(id: string): Promise<CharacterProfileDTO> {
   return request(`/characters/${encodeURIComponent(id)}/profile`)
+}
+
+export async function recordCharacterView(id: string): Promise<{
+  id: string
+  display_heat: number
+  real_view_count: number
+}> {
+  return request(`/characters/${encodeURIComponent(id)}/view`, { method: 'POST' })
 }
 
 // ── 批4: 快速创建 AI 预填 ──

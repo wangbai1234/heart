@@ -118,7 +118,8 @@ async def list_characters(
         text(
             """
             SELECT id, owner_user_id, visibility, status, has_voice,
-                   tags, cover_url, review_status, review_reason, created_at
+                   tags, cover_url, review_status, review_reason, created_at,
+                   display_heat, real_view_count, real_play_uv, recommendation_score
             FROM characters
             WHERE owner_user_id = :uid
                OR (status = 'active' AND visibility = 'public' AND review_status = 'approved')
@@ -138,6 +139,10 @@ async def list_characters(
             tags=coerce_tags(row.get("tags")),
             cover_url=row.get("cover_url"),
             created_at=(row["created_at"].isoformat() if row.get("created_at") else None),
+            display_heat=int(row.get("display_heat") or 0),
+            real_view_count=int(row.get("real_view_count") or 0),
+            recommendation_score=float(row.get("recommendation_score") or 0),
+            real_play_uv=int(row.get("real_play_uv") or 0),
         )
         for row in raw_rows
     ]
@@ -177,25 +182,10 @@ async def list_characters(
             if row.character_id in ugc_ids and row.creation_mode:
                 creation_modes[row.character_id] = row.creation_mode
 
-    # Compute popularity by counting distinct chat users per character
-    popularity: dict[str, int] = {}
-    pop_result = await db.execute(
-        text(
-            """
-            SELECT character_id, COUNT(DISTINCT user_id) AS cnt
-            FROM chat_messages
-            GROUP BY character_id
-            """
-        )
-    )
-    for row in pop_result:
-        popularity[row.character_id] = int(row.cnt)
-
     entries = build_catalog_entries(
         rows,
         uid,
         avatar_urls,
-        popularity,
         taglines,
         creation_modes,
         display_names,
@@ -429,6 +419,47 @@ async def get_character_profile(
         "starter_config": draft_json.get("starter_config"),
         "opening_format": draft_json.get("opening_format", "plain"),
         **presentation,
+    }
+
+
+@router.post("/{character_id}/view")
+async def record_character_view(
+    character_id: str,
+    current_user: TokenData = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Record one actual profile-page entry, with no user deduplication.
+
+    One successful navigation permanently increments the real view counter by
+    one and the cover heat by a random 100..400. Synthetic support never touches
+    ``real_view_count`` and therefore cannot influence real-data ranking.
+    """
+    uid = uuid.UUID(current_user.user_id)
+    result = await db.execute(
+        text(
+            """
+            UPDATE characters
+               SET real_view_count = real_view_count + 1,
+                   display_heat = display_heat + 100 + FLOOR(random() * 301)::integer
+             WHERE id = :cid
+               AND status = 'active'
+               AND (
+                    owner_user_id = :uid
+                    OR (visibility IN ('public', 'unlisted') AND review_status = 'approved')
+               )
+            RETURNING display_heat, real_view_count
+            """
+        ),
+        {"cid": character_id, "uid": uid},
+    )
+    row = result.mappings().one_or_none()
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"角色不存在或不可见: {character_id}")
+    await db.commit()
+    return {
+        "id": character_id,
+        "display_heat": int(row["display_heat"]),
+        "real_view_count": int(row["real_view_count"]),
     }
 
 

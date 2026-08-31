@@ -66,6 +66,10 @@ class CharacterRow:
     cover_url: Optional[str] = None
     # ISO-8601 creation timestamp; drives the "新角色" (newest) discovery sort.
     created_at: Optional[str] = None
+    display_heat: int = 0
+    real_view_count: int = 0
+    recommendation_score: float = 0.0
+    real_play_uv: int = 0
 
 
 @dataclass(frozen=True)
@@ -87,6 +91,9 @@ class CharacterEntry:
     tags: list[str] = field(default_factory=list)
     cover_url: Optional[str] = None
     chat_user_count: int = 0
+    display_heat: int = 0
+    real_view_count: int = 0
+    recommendation_score: float = 0.0
     # One-line public plot hook shown under the name on the discovery card
     # (display-only, ≤60 chars). Sourced from the active draft for both seeded
     # first-party characters and UGC.
@@ -142,12 +149,11 @@ def build_catalog_entries(
     rows: Sequence[CharacterRow],
     viewer_id: UUID | None,
     avatar_urls: dict[str, str | None] | None = None,
-    popularity: dict[str, int] | None = None,
     taglines: dict[str, str | None] | None = None,
     creation_modes: dict[str, str | None] | None = None,
     display_names: dict[str, str | None] | None = None,
 ) -> list[CharacterEntry]:
-    """Shape visible rows into API entries, built-ins first then by popularity.
+    """Shape visible rows into API entries ordered by persisted recommendation score.
 
     Display names are derived from the Soul Spec (single source of truth for
     identity) rather than stored on the row.
@@ -155,8 +161,6 @@ def build_catalog_entries(
     Args:
         avatar_urls: Optional mapping of character_id → avatar_url (from draft).
             Built-in characters don't have UGC avatars; they're resolved client-side.
-        popularity: Optional mapping of character_id → chat user count.
-            Higher count = more engagement. Used to sort UGC characters.
         taglines: Optional mapping of character_id → one-line plot hook (from draft).
         creation_modes: Optional mapping of character_id → 'quick' | 'workshop'.
             Drives the edit route in CharacterCard.
@@ -167,7 +171,6 @@ def build_catalog_entries(
             to the technical ``char_xxx`` id on those workers.
     """
     avatar_urls = avatar_urls or {}
-    popularity = popularity or {}
     taglines = taglines or {}
     creation_modes = creation_modes or {}
     display_names = display_names or {}
@@ -193,7 +196,12 @@ def build_catalog_entries(
             avatar_url=avatar_urls.get(row.id),
             tags=list(row.tags or []),
             cover_url=row.cover_url,
-            chat_user_count=popularity.get(row.id, 0),
+            # Legacy response field retained for old clients; it now mirrors the
+            # persisted 30-day real play UV instead of running a live aggregate.
+            chat_user_count=max(0, row.real_play_uv),
+            display_heat=max(0, row.display_heat),
+            real_view_count=max(0, row.real_view_count),
+            recommendation_score=max(0.0, row.recommendation_score),
             tagline=taglines.get(row.id),
             created_at=row.created_at,
             creation_mode=creation_modes.get(row.id),
@@ -202,15 +210,7 @@ def build_catalog_entries(
         if visible_to(row, viewer_id)
     ]
 
-    # Built-ins first (stable, familiar ordering), then user characters by engagement (chat user count).
-    # Exclude rin/dorothy from popularity sorting as they were the only characters available at launch.
-    def sort_key(e):
-        # Rin and dorothy stay in their natural builtin position, not sorted by popularity
-        if e.id in ("rin", "dorothy"):
-            return (False, 0, e.id)  # Builtin, zero popularity sort, then by id
-        return (not e.is_builtin, -popularity.get(e.id, 0), e.id)
-
-    entries.sort(key=sort_key)
+    entries.sort(key=lambda e: (-e.recommendation_score, -e.real_view_count, e.id))
     return entries
 
 

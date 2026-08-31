@@ -212,6 +212,21 @@ async def start_workers() -> None:  # noqa: C901 — pre-existing complexity, tr
     except Exception as e:
         logger.error("commission_settle_worker_start_failed", error=str(e))
 
+    # Daily character recommendation metrics + low-heat creator support.
+    try:
+        from heart.workers.character_metrics_worker import run_character_metrics_loop
+
+        stop_event = asyncio.Event()
+        _worker_stop_events.append(stop_event)
+        task = asyncio.create_task(
+            run_character_metrics_loop(stop_event),
+            name="character_metrics_worker",
+        )
+        _worker_tasks.append(task)
+        logger.info("character_metrics_worker_registered")
+    except Exception as e:
+        logger.error("character_metrics_worker_start_failed", error=str(e))
+
 
 async def stop_workers() -> None:
     """Stop all background workers gracefully."""

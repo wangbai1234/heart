@@ -74,6 +74,9 @@ interface GridItem {
   reviewStatus?: string
   companion?: CompanionDTO
   chatUserCount?: number
+  displayHeat?: number
+  realViewCount?: number
+  recommendationScore?: number
   createdAt?: string | null
 }
 
@@ -173,24 +176,6 @@ const FEATURED_CHARACTER_NAME_INDEX = new Map<string, number>(
 function featuredCharacterIndex(item: GridItem): number | undefined {
   return FEATURED_CHARACTER_INDEX.get(item.id) ?? FEATURED_CHARACTER_NAME_INDEX.get(item.profile.name)
 }
-const EDITORIAL_HEAT_OVERRIDES = new Map<string, number>([
-  ['char_b8ed4c9b', 6388], // 祝淮昭
-  ['char_ae43cbad', 6216], // 裴承望
-  ['zhou_jin', 5867],
-  ['song_ye', 4218],
-  ['pei_tinglan', 5732],
-  ['vito_rosetti', 3976],
-  ['xie_ci', 5421],
-  ['fu_mingxiu', 5894],
-  ['shen_liao', 4685],
-  ['xize', 3512],
-  ['lu_wenjing', 5238],
-  ['luo_fei', 4879],
-  ['jiang_ran', 4356],
-  ['gu_yanli', 5608],
-  ['xu_zhihan', 3167],
-])
-
 function stableShuffleScore(id: string): number {
   let hash = 0
   for (let i = 0; i < id.length; i += 1) {
@@ -329,6 +314,9 @@ export function CharacterPage() {
           reviewStatus: c.review_status,
           companion: companionById.get(c.id),
           chatUserCount: c.chat_user_count,
+          displayHeat: c.display_heat,
+          realViewCount: c.real_view_count,
+          recommendationScore: c.recommendation_score,
           createdAt: c.created_at,
           profile: resolveCharacterProfile(c.id, c.display_name, c.avatar_url, {
             isOwner,
@@ -379,11 +367,8 @@ export function CharacterPage() {
   // Extra tags for the「筛选」popup — fixed, hardcoded list (see EXTRA_FILTER_TAGS).
   const extraFilterChips = useMemo(() => [...EXTRA_FILTER_TAGS], [])
 
-  // System-authored characters keep editorial/virtual heat. Every user-created
-  // character — including characters published before this release — uses the
-  // backend's real distinct-chat-user count with no synthetic increment.
   const heatMap = useMemo(
-    () => buildCharacterHeatMap(rankedItems, EDITORIAL_HEAT_OVERRIDES),
+    () => buildCharacterHeatMap(rankedItems),
     [rankedItems],
   )
 
@@ -434,20 +419,14 @@ export function CharacterPage() {
         return bTime - aTime
       })
     } else if (activeMode === MODE_RECOMMENDED && !q) {
-      // 推荐: 精选置顶优先级最高（不受性向影响），其余角色再按「女性向」靠前。
+      // 推荐只使用服务端每日预计算的真实行为分；展示热度、UGC 初始化
+      // 和每日扶持均不会进入该分数。
       base.sort((a, b) => {
-        const legacyDifference = restoredLegacyRank(a) - restoredLegacyRank(b)
-        if (legacyDifference !== 0) return legacyDifference
-        const aFeatured = featuredCharacterIndex(a)
-        const bFeatured = featuredCharacterIndex(b)
-        if (aFeatured !== undefined || bFeatured !== undefined) {
-          if (aFeatured === undefined) return 1
-          if (bFeatured === undefined) return -1
-          return aFeatured - bFeatured
-        }
-        const aFem = (a.profile.tags ?? []).includes('女性向') ? 0 : 1
-        const bFem = (b.profile.tags ?? []).includes('女性向') ? 0 : 1
-        return aFem - bFem
+        const scoreDiff = (b.recommendationScore ?? 0) - (a.recommendationScore ?? 0)
+        if (scoreDiff !== 0) return scoreDiff
+        const viewDiff = (b.realViewCount ?? 0) - (a.realViewCount ?? 0)
+        if (viewDiff !== 0) return viewDiff
+        return stableShuffleScore(a.id) - stableShuffleScore(b.id)
       })
     }
 
@@ -868,7 +847,7 @@ function DiscoveryCard({
             </p>
           )}
           <div className="flex items-center justify-between gap-2 min-w-0">
-            {/* System roles use editorial heat; user roles use real engagement. */}
+            {/* Server-authoritative cover heat. */}
             {virtualHeat !== undefined && (
               <div className="flex items-center gap-1 flex-shrink-0">
                 <svg className="text-white/85" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">

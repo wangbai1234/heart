@@ -1210,6 +1210,24 @@ export function CharacterProfilePage() {
     }
   }, [id, loadProfile])
 
+  // Count every real navigation into the profile. This deliberately sits
+  // outside loadProfile(): cached profile reads must still count, while React
+  // renders and background catalog refreshes must not. One mounted route entry
+  // issues exactly one increment request; a later re-entry or reload counts again.
+  useEffect(() => {
+    if (!id) return
+    void import('../services/api')
+      .then(({ recordCharacterView }) => recordCharacterView(id))
+      .then(({ display_heat }) => {
+        useCharactersStore.setState((state) => ({
+          characters: state.characters.map((character) =>
+            character.id === id ? { ...character, display_heat } : character,
+          ),
+        }))
+      })
+      .catch(() => {})
+  }, [id])
+
   const companion = useMemo(
     () => companions.find((c) => c.character_id === id),
     [companions, id],

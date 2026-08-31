@@ -2,25 +2,21 @@ import { describe, expect, it } from 'vitest'
 import { buildCharacterHeatMap } from './characterHeat'
 
 describe('buildCharacterHeatMap', () => {
-  it('uses real counts for every user-created character, including historical ones', () => {
+  it('uses persisted server heat for every character', () => {
     const heat = buildCharacterHeatMap(
       [
-        { id: 'system-role', isBuiltin: true, chatUserCount: 2 },
-        { id: 'old-user-role', isBuiltin: false, chatUserCount: 7 },
-        { id: 'new-user-role', isBuiltin: false },
+        { id: 'system-role', displayHeat: 6388 },
+        { id: 'user-role', displayHeat: 307 },
       ],
-      new Map([['system-role', 6388]]),
     )
 
     expect(heat.get('system-role')).toBe(6388)
-    expect(heat.get('old-user-role')).toBe(7)
-    expect(heat.get('new-user-role')).toBe(0)
+    expect(heat.get('user-role')).toBe(307)
   })
 
-  it('never exposes a negative real count', () => {
+  it('never exposes a negative heat value', () => {
     const heat = buildCharacterHeatMap(
-      [{ id: 'user-role', isBuiltin: false, chatUserCount: -5 }],
-      new Map(),
+      [{ id: 'user-role', displayHeat: -5 }],
     )
     expect(heat.get('user-role')).toBe(0)
   })
