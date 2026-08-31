@@ -481,9 +481,9 @@ export function QuickConfirmPage() {
             <label className="block text-[14px] font-medium text-[var(--color-ink)] mb-2">角色描述</label>
             <textarea
               value={persona}
-              onChange={(e) => setPersona(e.target.value.slice(0, 1500))}
+              onChange={(e) => setPersona(e.target.value.slice(0, 5000))}
               placeholder="一句话介绍你的角色，包括性格、背景、说话方式。"
-              maxLength={1500}
+              maxLength={5000}
               rows={4}
               className="w-full px-3.5 py-2.5 rounded-[12px] text-[14px] leading-[1.6] resize-none bg-[var(--color-glass-55)] border border-[var(--color-border-glass)] text-[var(--color-ink)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-primary)] transition-colors"
             />
@@ -491,7 +491,7 @@ export function QuickConfirmPage() {
               <span className={persona.length > 0 && persona.length < 20 ? 'text-[var(--color-error)]' : 'text-transparent'}>
                 {persona.length > 0 && persona.length < 20 ? `还需 ${20 - persona.length} 字` : '·'}
               </span>
-              <span className="text-[var(--color-text-muted)]">{persona.length}/1500</span>
+              <span className="text-[var(--color-text-muted)]">{persona.length}/5000</span>
             </div>
           </div>
         </div>

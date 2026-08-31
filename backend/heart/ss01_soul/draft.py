@@ -86,7 +86,7 @@ class CharacterDraft(BaseModel, extra="forbid"):
     Fields:
         display_name:       At least one locale name.
         avatar_url:         Optional user-supplied avatar URL.
-        persona:            Free-text description of who this character is (20–1500 chars).
+        persona:            Free-text description of who this character is (20–5000 chars).
         backstory:          Optional background history (0–1500 chars).
         catchphrases:       Up to 5 signature phrases (each ≤50 chars).
         hard_never_user:    Up to 10 extra hard-never rules from the creator.
@@ -106,7 +106,7 @@ class CharacterDraft(BaseModel, extra="forbid"):
     cover_url: Optional[str] = Field(None, max_length=500)
     # Style/category tags used by the discovery filter chips.
     tags: list[Annotated[str, Field(max_length=20)]] = Field(default_factory=list, max_length=10)
-    persona: Annotated[str, Field(min_length=20, max_length=1500)]
+    persona: Annotated[str, Field(min_length=20, max_length=5000)]
     backstory: Optional[str] = Field(None, max_length=1500)
     catchphrases: list[Annotated[str, Field(max_length=50)]] = Field(
         default_factory=list, max_length=5

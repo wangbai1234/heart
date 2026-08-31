@@ -157,9 +157,9 @@ export function QuickCreatePage() {
       <FieldCard label="角色描述" required hint="至少 20 字">
         <textarea
           value={persona}
-          onChange={(e) => setPersona(e.target.value.slice(0, 1500))}
+          onChange={(e) => setPersona(e.target.value.slice(0, 5000))}
           placeholder="一句话介绍你的角色，包括性格、背景、说话方式。例：清冷孤傲的剑修，话少但护短……"
-          maxLength={1500}
+          maxLength={5000}
           rows={4}
           className="w-full px-3.5 py-2.5 rounded-[12px] text-[14px] leading-[1.6] resize-none bg-[var(--color-glass-55)] border border-[var(--color-border-glass)] text-[var(--color-ink)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-primary)] transition-colors"
         />
@@ -167,7 +167,7 @@ export function QuickCreatePage() {
           <span className={personaLen > 0 && personaLen < 20 ? 'text-[var(--color-error)]' : 'text-transparent'}>
             {personaLen > 0 && personaLen < 20 ? `还需 ${20 - personaLen} 字` : '·'}
           </span>
-          <span className="text-[var(--color-text-muted)]">{personaLen}/1500</span>
+          <span className="text-[var(--color-text-muted)]">{personaLen}/5000</span>
         </div>
       </FieldCard>
     </CreateShell>

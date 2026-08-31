@@ -366,7 +366,7 @@ generic 分支原本用固定样式，改为读 `chrome` 的对应槽位（`bg` 
 | 封面 | 3:4 竖图，走既有 `POST /characters/cover`（`:654`） | `cover_url` |
 | 名字 | 1–20 字 | `display_name.zh` |
 | 性别 | 男/女 | `gender` |
-| 人设描述 | **20–1500 字**（`persona` 有 `min_length=20`，UI 要拦并提示） | `persona` |
+| 人设描述 | **20–5000 字**（`persona` 有 `min_length=20`，UI 要拦并提示） | `persona` |
 
 可见性选择放在确认页（默认 `private`），文案按 §3.1。
 
@@ -636,4 +636,3 @@ const PremiseCard = PREMISE_CARDS[currentCharacterId]
 | §12 的 5 项 | **未验证**，开工先查 |
 
 行号会随代码变动漂移。接手时先复核，发现不符以实际代码为准并回头更新本文档。
-

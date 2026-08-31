@@ -102,6 +102,26 @@ def test_availability_model_chain_starts_with_gemini_and_ascends_by_coin_cost():
     assert costs == sorted(costs)
 
 
+def test_quick_prefill_persona_accepts_5000_chars_and_rejects_5001():
+    from pydantic import ValidationError
+
+    from heart.api.routes_characters import QuickPrefillRequest
+
+    assert len(
+        QuickPrefillRequest(
+            display_name="沈砚",
+            gender="male",
+            persona="人" * 5000,
+        ).persona
+    ) == 5000
+    with pytest.raises(ValidationError):
+        QuickPrefillRequest(
+            display_name="沈砚",
+            gender="male",
+            persona="人" * 5001,
+        )
+
+
 @pytest.mark.asyncio
 async def test_quick_prefill_uses_gemini_first_availability_chain(monkeypatch):
     import heart.api.wiring as wiring

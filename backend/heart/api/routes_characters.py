@@ -1440,7 +1440,7 @@ class QuickPrefillRequest(BaseModel):
 
     display_name: str = Field(min_length=1, max_length=20)
     gender: Literal["male", "female"]
-    persona: str = Field(min_length=20, max_length=1500)
+    persona: str = Field(min_length=20, max_length=5000)
 
 
 class QuickPrefillResponse(BaseModel):
