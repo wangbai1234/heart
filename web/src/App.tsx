@@ -156,14 +156,15 @@ export function App() {
 
   // Character visibility is account-scoped: private and pending UGC only reach
   // their owner. Clear the previous snapshot whenever auth changes, then force
-  // an authenticated reload. Without this, a logout/login or restored PWA
-  // session could keep an anonymous/previous-account catalog marked `loaded`
-  // and make a persisted character appear to have vanished.
+  // a reload for both anonymous and authenticated sessions. CharacterPage may
+  // already have started its mount request before this parent effect runs; the
+  // reset invalidates that response, so skipping the anonymous reload leaves a
+  // first-time visitor on the loading skeleton until pull-to-refresh.
   useEffect(() => {
     resetCharacterCatalog()
     resetCompanions()
+    void loadCharacters(true)
     if (accessToken) {
-      void loadCharacters(true)
       void loadCompanions(true)
     }
   }, [accessToken, loadCharacters, loadCompanions, resetCharacterCatalog, resetCompanions])

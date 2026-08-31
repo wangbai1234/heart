@@ -891,13 +891,25 @@ function formatPlays(n: number): string {
 function CoverFill({ cover, alt }: { cover?: string | null; alt: string }) {
   const [loaded, setLoaded] = useState(false)
   const src = cover || DEFAULT_COVER
+  useEffect(() => {
+    setLoaded(false)
+  }, [src])
+
+  const syncCachedImage = useCallback((image: HTMLImageElement | null) => {
+    // A cached image can finish before React attaches onLoad. In that case the
+    // old implementation kept it permanently transparent until a re-render.
+    if (image?.complete && image.naturalWidth > 0) setLoaded(true)
+  }, [])
+
   return (
     <img
+      ref={syncCachedImage}
       src={src}
       alt={alt}
       loading="lazy"
       decoding="async"
       onLoad={() => setLoaded(true)}
+      onError={() => setLoaded(true)}
       className={`absolute inset-0 w-full h-full object-cover filter brightness-[0.96] contrast-[0.92] transition-opacity duration-300 ${
         loaded ? 'opacity-100' : 'opacity-0'
       }`}
