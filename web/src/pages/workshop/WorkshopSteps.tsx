@@ -657,10 +657,10 @@ export function Step2({ state, updateField }: StepProps) {
   return (
     <div className="max-w-[560px] mx-auto">
       <SectionHeading title="人设与介绍" hint="人设至少 20 字，介绍和标签显示在详情页顶部" />
-      <FieldCard label="人设描述" required hint={`${len}/1500 · 最少 20 字`}>
+      <FieldCard label="人设描述" required hint={`${len}/5000 · 最少 20 字`}>
         <textarea
           value={state.persona}
-          onChange={(e) => updateField('persona', e.target.value.slice(0, 1500))}
+          onChange={(e) => updateField('persona', e.target.value.slice(0, 5000))}
           placeholder="性格、特质、说话风格、核心设定……"
           rows={6}
           className="w-full px-4 py-3 rounded-[14px] text-[15px] leading-[1.7] resize-none bg-[var(--color-glass-55)] border border-[var(--color-border-glass)] text-[var(--color-ink)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-primary)] transition-colors"

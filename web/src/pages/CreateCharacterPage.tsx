@@ -61,7 +61,7 @@ const GREETING_STYLES: { value: GreetingStyle; label: string; desc: string }[] =
   { value: 'intense',  label: '浓烈',   desc: '情感丰沛，全情投入' },
 ]
 
-const MAX_PERSONA = 1500
+const MAX_PERSONA = 5000
 const MIN_PERSONA = 20
 const MAX_INTRO = 500
 const MIN_INTRO = 10

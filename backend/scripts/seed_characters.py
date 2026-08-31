@@ -16,7 +16,7 @@ Manifest 格式（YAML，顶层是列表）::
       tags: [启元赋灵, 女性向, 年上]     # 发现页筛选 chips
       cover: xuyan.png               # --covers 目录下的封面文件（或绝对路径）
       greeting_style: intense        # 可选 warm|cool|playful|reserved|intense
-      persona: |                     # 必填 20–1500 字
+      persona: |                     # 必填 20–5000 字
         ...
       backstory: |                   # 可选 ≤1500 字
         ...

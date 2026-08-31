@@ -1159,6 +1159,7 @@ export interface CharacterDraftDTO {
   cover_url?: string
   /** Up to 10 role/category tags for the discovery filter. */
   tags?: string[]
+  /** Core character persona (20–5000 chars). */
   persona: string
   greeting_style: 'warm' | 'cool' | 'playful' | 'reserved' | 'intense'
   speech_samples?: string[]

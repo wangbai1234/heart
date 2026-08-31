@@ -62,6 +62,12 @@ def test_draft_intro_max_length():
         _draft(intro="超" * 501)
 
 
+def test_draft_persona_accepts_5000_chars_and_rejects_5001():
+    assert len(_draft(persona="人" * 5000).persona) == 5000
+    with pytest.raises(ValueError):
+        _draft(persona="人" * 5001)
+
+
 def test_spec_builder_ignores_opening_and_intro():
     """opening/intro are presentation fields — the spec builder must not consume
     them into the persona, and must not raise on their presence."""
