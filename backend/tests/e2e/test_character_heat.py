@@ -37,7 +37,10 @@ def test_profile_entries_each_increment_real_view_and_random_heat(api_context, p
         after_heat, after_views = cursor.fetchone()
 
     assert after_views == before_views + 2
-    assert before_heat + 200 <= after_heat <= before_heat + 800
+    increment = after_heat - before_heat
+    # A pair of visits may straddle the threshold (one 100..400 increment,
+    # followed by one 10..40 increment), so the combined range is 20..800.
+    assert 20 <= increment <= 800
 
     catalog = api_context.get("/api/characters", headers=headers)
     assert catalog.ok, catalog.text()

@@ -431,8 +431,9 @@ async def record_character_view(
     """Record one actual profile-page entry, with no user deduplication.
 
     One successful navigation permanently increments the real view counter by
-    one and the cover heat by a random 100..400. Synthetic support never touches
-    ``real_view_count`` and therefore cannot influence real-data ranking.
+    one. Cover heat grows by a random 100..400 below 60,000 and a steadier
+    random 10..40 once the character has reached 60,000. Synthetic support
+    never touches ``real_view_count`` and therefore cannot influence ranking.
     """
     uid = uuid.UUID(current_user.user_id)
     result = await db.execute(
@@ -440,7 +441,11 @@ async def record_character_view(
             """
             UPDATE characters
                SET real_view_count = real_view_count + 1,
-                   display_heat = display_heat + 100 + FLOOR(random() * 301)::integer
+                   display_heat = display_heat + CASE
+                       WHEN display_heat >= 60000
+                       THEN 10 + FLOOR(random() * 31)::integer
+                       ELSE 100 + FLOOR(random() * 301)::integer
+                   END
              WHERE id = :cid
                AND status = 'active'
                AND (
