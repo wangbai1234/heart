@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import uuid
 from io import BytesIO
+from urllib.parse import unquote, urlparse
 
 import structlog
 
@@ -263,6 +264,41 @@ async def head_s3_object(key: str) -> tuple[str, str]:
         return etag, resp.get("ContentType", "application/octet-stream")
 
     return await asyncio.to_thread(_head)
+
+
+def object_key_from_storage_url(value: str) -> str | None:
+    """Resolve a persisted S3/MinIO URL or ``s3://`` handle to its object key."""
+    from heart.core.config import settings
+
+    raw = value.strip()
+    if not raw or raw.startswith("data:"):
+        return None
+    if raw.startswith("s3://"):
+        return unquote(raw.removeprefix("s3://").lstrip("/")) or None
+
+    parsed = urlparse(raw)
+    path = unquote(parsed.path).lstrip("/")
+    bucket_prefix = f"{settings.s3_bucket_name}/"
+    if path.startswith(bucket_prefix):
+        return path.removeprefix(bucket_prefix) or None
+
+    public_base = (settings.s3_public_base_url or "").rstrip("/")
+    if public_base and raw.startswith(f"{public_base}/"):
+        return unquote(raw.removeprefix(f"{public_base}/")) or None
+    return None
+
+
+async def delete_s3_object(key: str) -> None:
+    """Delete one object from the configured bucket."""
+    from heart.core.config import settings
+
+    client = _get_s3_client()
+    await asyncio.to_thread(
+        client.delete_object,
+        Bucket=settings.s3_bucket_name,
+        Key=key,
+    )
+    logger.info("file_deleted", key=key)
 
 
 def is_s3_configured() -> bool:

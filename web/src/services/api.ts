@@ -1930,6 +1930,18 @@ export async function adminListPendingPromotions(adminKey: string): Promise<{ pe
   return adminRequest('/admin/promotions/pending', adminKey)
 }
 
+export async function adminGetPromotionImage(id: string, adminKey: string): Promise<Blob> {
+  const res = await fetch(`${BASE_URL}/admin/promotions/${encodeURIComponent(id)}/image`, {
+    headers: { 'X-Admin-Key': adminKey },
+  })
+  if (!res.ok) {
+    const fallback = statusFallback(res.status)
+    const body = await res.json().catch(() => ({ detail: fallback }))
+    throw new ApiError(res.status, detailToMessage(body?.detail, fallback))
+  }
+  return res.blob()
+}
+
 export async function adminApprovePromotion(id: string, adminKey: string): Promise<{ ok: boolean; id: string; reward_coins: number }> {
   return adminRequest(`/admin/promotions/${encodeURIComponent(id)}/approve`, adminKey, { method: 'POST' })
 }

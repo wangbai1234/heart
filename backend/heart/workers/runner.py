@@ -169,6 +169,21 @@ async def start_workers() -> None:  # noqa: C901 — pre-existing complexity, tr
     except Exception as e:
         logger.error("account_purge_worker_start_failed", error=str(e))
 
+    # Delete approved promotion review records and evidence after three days.
+    try:
+        from heart.workers.promotion_cleanup_worker import run_promotion_cleanup_loop
+
+        stop_event = asyncio.Event()
+        _worker_stop_events.append(stop_event)
+        task = asyncio.create_task(
+            run_promotion_cleanup_loop(stop_event),
+            name="promotion_cleanup_worker",
+        )
+        _worker_tasks.append(task)
+        logger.info("promotion_cleanup_worker_started")
+    except Exception as e:
+        logger.error("promotion_cleanup_worker_start_failed", error=str(e))
+
     # Start credit reconciliation worker
     try:
         from heart.workers.credit_reconciliation_worker import run_credit_reconciliation_loop
