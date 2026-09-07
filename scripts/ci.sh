@@ -80,14 +80,11 @@ stage_frontend() {
 
     cd "$web_dir"
     if [ ! -d node_modules ]; then
-        # 用 npm install（不用 npm ci）：vite 8 的 rolldown 打包器依赖平台原生二进制
-        # （@rolldown/binding-<os>-<arch>，作为 optionalDependencies）。单平台机器生成的
-        # package-lock.json 只会锁定该平台的 binding（如 darwin-arm64），CI（linux-x64）
-        # 用它安装会缺 linux binding → vite build 报 MODULE_NOT_FOUND。
-        # 删除任何残留 lockfile 后 npm install，让 npm 按当前平台重新解析并装对原生二进制。
-        rm -f package-lock.json
-        log "→ npm install (fresh per-platform resolve)"
-        npm install --no-audit --no-fund 2>&1 | tail -3
+        # package-lock.json now contains the cross-platform optional bindings used
+        # by Vite/Rolldown. Keep installs deterministic; deleting the lockfile and
+        # resolving from scratch can crash npm Arborist (edgesOut) on CI runners.
+        log "→ npm ci"
+        npm ci --no-audit --no-fund 2>&1 | tail -3
     fi
 
     log "→ tsc -b"
