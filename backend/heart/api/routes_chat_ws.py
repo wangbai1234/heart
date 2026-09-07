@@ -1890,6 +1890,7 @@ async def create_transfer(
         decide_transfer,
         normalize_amount,
     )
+    from heart.infra.model_catalog import DEFAULT_CHAT_MODEL, get_model_spec, normalize_model_id
     from heart.ss05_composer.message_splitter import split_response
     from heart.ss10_opening.generator import (
         _resolve_backstory,
@@ -1947,6 +1948,21 @@ async def create_transfer(
     backstory = _resolve_backstory(spec) if spec else None
     history = await _load_recent_conversation_history(db, uid, body.character_id)
 
+    # Transfers are user-facing chat behavior: honor the model selected for this
+    # user×character, just like normal chat and proactive messages.  A missing or
+    # stale preference falls back to the catalog default; ``call_for`` then
+    # applies that model's configured failover chain and JSON validation.
+    preference = await db.execute(
+        sql_text(
+            "SELECT model_id FROM user_character_model_preferences "
+            "WHERE user_id = :uid AND character_id = :cid"
+        ),
+        {"uid": uid, "cid": body.character_id},
+    )
+    selected_model = normalize_model_id(preference.scalar_one_or_none() or DEFAULT_CHAT_MODEL)
+    if get_model_spec(selected_model) is None:
+        selected_model = DEFAULT_CHAT_MODEL
+
     decision = await decide_transfer(
         model_router=get_model_router(),
         name=name,
@@ -1955,6 +1971,7 @@ async def create_transfer(
         amount=amount,
         note=note,
         history=history,
+        model=selected_model,
     )
     status = "accepted" if decision.accept else "declined"
 

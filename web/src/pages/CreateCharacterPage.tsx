@@ -1625,7 +1625,7 @@ export function CreateCharacterPage() {
             </GlassCard>
             {(form.visibility === 'public' || form.visibility === 'unlisted') && (
               <p className="text-[12px] text-[var(--color-text-secondary)] leading-relaxed px-1 mt-2">
-                该角色审核后会被公开，所有人可见你的角色。审核通过可获得 100 yuoyuo 币；累计通过 5 个角色，额外赠送一个月进阶版会员。
+                公开角色需经过审核，审核通过后会进入发现页，所有人可见。
               </p>
             )}
           </>

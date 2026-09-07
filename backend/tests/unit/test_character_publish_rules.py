@@ -28,7 +28,7 @@ async def test_publishable_quota_rejects_eleventh_active_public_or_unlisted_char
 
 
 @pytest.mark.asyncio
-async def test_unlisted_approval_grants_no_coins_and_no_milestone():
+async def test_unlisted_approval_grants_no_promotional_rewards():
     db = AsyncMock()
     db.execute.return_value = _scalar_result(4)
 
@@ -45,23 +45,16 @@ async def test_unlisted_approval_grants_no_coins_and_no_milestone():
 
 
 @pytest.mark.asyncio
-async def test_public_approval_grants_one_hundred_coins():
+async def test_public_approval_grants_no_promotional_rewards():
     db = AsyncMock()
-    db.execute.side_effect = [_scalar_result(None), _scalar_result(1)]
+    db.execute.return_value = _scalar_result(1)
     owner_id = uuid4()
 
     with patch("heart.api.routes_admin.grant", new=AsyncMock()) as grant_mock:
         result = await _grant_approval_rewards(db, "char_public", owner_id, "public")
 
-    grant_mock.assert_awaited_once_with(
-        db,
-        owner_id,
-        10_000,
-        idempotency_key="char_review:char_public",
-        type_str="grant",
-        ref_type="character_review",
-        ref_id="char_public",
-    )
-    assert result["reward_eligible"] is True
-    assert result["coins_granted"] == 100
+    grant_mock.assert_not_awaited()
+    assert result["reward_eligible"] is False
+    assert result["coins_granted"] == 0
+    assert result["milestone_plus_granted"] is False
     assert result["approved_count"] == 1

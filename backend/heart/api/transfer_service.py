@@ -20,6 +20,8 @@ from typing import Any, Optional
 
 import structlog
 
+from heart.infra.model_catalog import DEFAULT_CHAT_MODEL
+
 logger = structlog.get_logger(__name__)
 
 TRANSFER_KIND = "transfer"
@@ -199,8 +201,15 @@ async def decide_transfer(
     amount: float,
     note: str,
     history: list[dict[str, str]],
+    model: str = DEFAULT_CHAT_MODEL,
 ) -> TransferDecision:
-    """Run the one-shot LLM decision. Safe-declines if the router is unavailable."""
+    """Run the one-shot LLM decision using the user's selected chat model.
+
+    Transfers are user-facing chat behavior, so they must use the same model
+    preference and failover path as normal chat/proactive messages.  In
+    particular, do not route this through the legacy fixed ``call_cheap`` slot:
+    deployments may configure that slot to an unreliable provider/model.
+    """
     if model_router is None:
         return TransferDecision(accept=False, reply="（愣了一下）现在……先别转钱给我。")
     messages = build_decision_prompt(
@@ -212,7 +221,8 @@ async def decide_transfer(
         history=history,
     )
     try:
-        raw = await model_router.call_cheap(
+        raw, _served_model = await model_router.call_for(
+            model,
             messages=messages,
             temperature=0.8,
             max_tokens=600,

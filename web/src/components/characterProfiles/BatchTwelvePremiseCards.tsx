@@ -2,7 +2,7 @@ import { useThemeStore } from '../../stores/themeStore'
 import type { CSSProperties } from 'react'
 
 type PremiseArtifactProps = {
-  variant: 'surveillance' | 'letter' | 'chart' | 'ledger' | 'edict' | 'catalog' | 'map' | 'stage' | 'memory' | 'system' | 'contract' | 'transcript'
+  variant: 'surveillance' | 'letter' | 'chart' | 'ledger' | 'edict' | 'catalog' | 'map' | 'stage' | 'memory' | 'system' | 'contract' | 'transcript' | 'file'
   accent: string
   eyebrow: string
   title: string
@@ -78,3 +78,9 @@ export function EliasVaynePremiseCard() {
 export function ZhouJimingPremiseCard() {
   return <PremiseArtifact variant="transcript" accent="#8d6052" eyebrow="DIVORCE CASE 2026-117" title="代理律师：丈夫的亲哥哥" hook="周既明替你起诉自己的弟弟，却正是他当年亲手起草婚前协议把你困进这场婚姻。" facts={[["新证据","婚礼前他已知道弟弟长期出轨"],["今晚","丈夫正在楼下要求销毁账本"],["利益冲突","他既能让你赢，也会因此失去整个家族"]]} quote="“婚姻是我帮他赢来的。现在由我帮你结束。然后你再审我。”" />
 }
+
+export function PeiJinchuanPremiseCard() { return <PremiseArtifact variant="transcript" accent="#c56d58" eyebrow="BLACK RIVER / RAID 04" title="仇家的婚礼？新娘今晚归我" hook="火拼后你落到世仇手里，他卸了你的枪，却把唯一出口留给你。" facts={[["证物","一颗刻着两家旧码的子弹"],["异常","他早已知道世仇由第三方操盘"],["此刻","车门只听他的指纹"]]} quote="“别叫我仇人。看着我选。”" /> }
+export function BaiYaoPremiseCard() { return <PremiseArtifact variant="stage" accent="#e47da7" eyebrow="BACKSTAGE / 00:17" title="姐姐，解开项圈，再摸一下" hook="散场后他把钥匙塞回你掌心，等你替他解开最后一格。" facts={[["身份","地下乐队主唱"],["私线","只有你能听见的返场音轨"],["反差","台上挑衅，台下只认你"]]} quote="“别把我还给人群。”" /> }
+export function YeLinchuanPremiseCard() { return <PremiseArtifact variant="system" accent="#8ecfc8" eyebrow="CONTRACT / NIGHT 13" title="再喂一口，我就不忍了" hook="契约可以解除，他却把你的体温藏成唯一成瘾。" facts={[["禁制","不得触碰獠牙"],["异常","解除方法被他藏起"],["实时","你的脉搏正在升高"]]} quote="“别把手收回去。我还在忍。”" /> }
+export function ShenFengchuanPremiseCard() { return <PremiseArtifact variant="file" accent="#d07a6d" eyebrow="HOSPITAL BACK DOOR / 02:13" title="别报警，先把我藏起来" hook="死亡证明两年后，他浑身缠着绷带把病历卡压进你手里。" facts={[["身份","失踪归来的继承人"],["记录","死亡证明由他亲手伪造"],["风险","带走他，你也会被盯上"]]} quote="“你救的是少爷，还是现在的我？”" /> }
+export function HuoYanshenPremiseCard() { return <PremiseArtifact variant="ledger" accent="#c89c5d" eyebrow="PRIVATE ROOM / TABLE 09" title="赢了我，今晚我归你" hook="庄家把最后一张牌压在你手背，债务与欲望只剩一次翻牌。" facts={[["赌注","你的全部债务"],["异常","他从不亲自下注"],["底牌","背面写着你的名字"]]} quote="“这局只算我们。”" /> }

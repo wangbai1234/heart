@@ -16,6 +16,16 @@ from heart.api.transfer_service import (
 )
 
 
+class _Router:
+    def __init__(self, raw: str):
+        self.raw = raw
+        self.calls = []
+
+    async def call_for(self, model, **kwargs):
+        self.calls.append((model, kwargs))
+        return self.raw, model
+
+
 def test_normalize_amount_valid():
     assert normalize_amount(5.2) == 5.2
     assert normalize_amount("13.14") == 13.14
@@ -137,3 +147,24 @@ def test_build_decision_prompt_caps_history():
 def test_to_json_rounds_amount():
     t = TransferData(transfer_id="t", amount=5.1999, note="", status="pending")
     assert json.loads(t.to_json())["amount"] == 5.2
+
+
+@pytest.mark.asyncio
+async def test_decide_transfer_uses_selected_model_call_for():
+    from heart.api.transfer_service import decide_transfer
+
+    router = _Router('{"accept": true, "reply": "好，我收下了。"}')
+    decision = await decide_transfer(
+        model_router=router,
+        name="小北",
+        persona="温柔",
+        backstory=None,
+        amount=5.2,
+        note="奶茶",
+        history=[],
+        model="grok-4.5",
+    )
+
+    assert decision.accept is True
+    assert router.calls[0][0] == "grok-4.5"
+    assert router.calls[0][1]["json_mode"] is True

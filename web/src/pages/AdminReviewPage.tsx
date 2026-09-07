@@ -82,15 +82,9 @@ export function AdminReviewPage() {
       onApprove={async (c) => {
         setBusyId(c.id)
         try {
-          const r = await adminApproveCharacter(c.id, adminKey.trim())
+          await adminApproveCharacter(c.id, adminKey.trim())
           showToast(
-            !r.reward_eligible
-              ? '已通过，链接可见角色不发放公开奖励'
-              : r.coins_granted === 0
-                ? '已通过，该公开角色奖励之前已发放'
-              : r.milestone_plus_granted
-                ? `已通过，作者 +${r.coins_granted} 币并解锁进阶版`
-                : `已通过，作者 +${r.coins_granted} 币`,
+            '角色已通过审核，推广奖励请前往福利页参加活动',
             'success',
           )
           setItems((prev) => prev.filter((x) => x.id !== c.id))

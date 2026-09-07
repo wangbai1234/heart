@@ -11,7 +11,7 @@ import { stageWithIntimacy, isColdWar, intimacyPercent, stageLabel, stageOrderIn
 import { buildShareLink } from '../utils/characterShare'
 import { useSafeBack } from '../hooks/useSafeBack'
 import { CHARACTER_UI_CONFIGS, type CharacterTheme } from '../data/characterUIConfig'
-import { JiYuProfile, LiShenProfile, ChengXuProfile, LilithProfile, GuBeichenProfile, QinXiaoProfile, JiangYuezeProfile, JiangYeProfile, GuXingzhouProfile, LiJueProfile, ShenYichenProfile, ShenYuchuanProfile, LuoFeiProfile, PeiTinglanProfile, FuMingxiuProfile, XizeProfile, JiangLiProfile, PeiJueProfile, HuoChengProfile, ZhouJinProfile, BaiQinghuanProfile, ChengZhiProfile, LuTingshengProfile, GuNanqiaoProfile, YunZhiProfile, SuWanProfile, LinXiaomanProfile, LuZhaoProfile, SuYueyaoProfile, HuoShiyuProfile, SuNianProfile, SuYunProfile, GuQingwanProfile, GuXingmianProfile, SongYeProfile, VitoRosettiProfile, XieCiProfile, ShenLiaoProfile, LuWenjingProfile, JiangRanProfile, GuYanliProfile, XuZhihanProfile, LinyuanManorProfile, FreeMuseProfile, QingyuBandProfile, GuiBaiProfile, YinCiProfile, HeZhuoProfile, WenYiningProfile, WeiHengProfile, QiFeiProfile, ShiyanProfile, ChuRanProfile, HeLinchuanProfile, WenYanqingProfile, CenLiProfile, XieTingyunProfile, XuQichiProfile, XieMingluanProfile, QiWangProfile, YanWujiuProfile, LiYaoProfile, TangJingzhouProfile, PeiZhaoyeProfile } from '../components/characterProfiles'
+import { JiYuProfile, LiShenProfile, ChengXuProfile, LilithProfile, GuBeichenProfile, QinXiaoProfile, JiangYuezeProfile, JiangYeProfile, GuXingzhouProfile, LiJueProfile, ShenYichenProfile, ShenYuchuanProfile, LuoFeiProfile, PeiTinglanProfile, FuMingxiuProfile, XizeProfile, JiangLiProfile, PeiJueProfile, HuoChengProfile, ZhouJinProfile, BaiQinghuanProfile, ChengZhiProfile, LuTingshengProfile, GuNanqiaoProfile, YunZhiProfile, SuWanProfile, LinXiaomanProfile, LuZhaoProfile, SuYueyaoProfile, HuoShiyuProfile, SuNianProfile, SuYunProfile, GuQingwanProfile, GuXingmianProfile, SongYeProfile, VitoRosettiProfile, XieCiProfile, ShenLiaoProfile, LuWenjingProfile, JiangRanProfile, GuYanliProfile, XuZhihanProfile, LinyuanManorProfile, FreeMuseProfile, QingyuBandProfile, GuiBaiProfile, YinCiProfile, HeZhuoProfile, WenYiningProfile, WeiHengProfile, QiFeiProfile, ShiyanProfile, ChuRanProfile, HeLinchuanProfile, WenYanqingProfile, CenLiProfile, XieTingyunProfile, XuQichiProfile, XieMingluanProfile, QiWangProfile, YanWujiuProfile, LiYaoProfile, TangJingzhouProfile, PeiZhaoyeProfile, QinJingzhouProfile, YeJinghengProfile, LuoZhiyeProfile, HanJingmoProfile, XuYanzhiProfile, ShangYanliProfile, ShenLiProfile, FuYichenProfile, XuChangyeProfile, SuChenProfile, PeiJinchuanProfile, BaiYaoProfile, YeLinchuanProfile, ShenFengchuanProfile, HuoYanshenProfile } from '../components/characterProfiles'
 import type { ComponentType } from 'react'
 import { BlockRenderer } from '../components/profileBlocks/BlockRenderer'
 import { CustomHtmlRenderer } from '../components/profileBlocks/CustomHtmlRenderer'
@@ -85,6 +85,21 @@ const BESPOKE_PROFILES: Record<string, ComponentType<{ profile: CharacterProfile
   li_yao: LiYaoProfile,
   tang_jingzhou: TangJingzhouProfile,
   pei_zhaoye: PeiZhaoyeProfile,
+  qin_jingzhou: QinJingzhouProfile,
+  ye_jingheng: YeJinghengProfile,
+  luo_zhiye: LuoZhiyeProfile,
+  han_jingmo: HanJingmoProfile,
+  xu_yanzhi: XuYanzhiProfile,
+  shang_yanli: ShangYanliProfile,
+  shen_li: ShenLiProfile,
+  fu_yichen: FuYichenProfile,
+  xu_changye: XuChangyeProfile,
+  su_chen: SuChenProfile,
+  pei_jinchuan: PeiJinchuanProfile,
+  bai_yao: BaiYaoProfile,
+  ye_linchuan: YeLinchuanProfile,
+  shen_fengchuan: ShenFengchuanProfile,
+  huo_yanshen: HuoYanshenProfile,
 }
 
 /** Chrome 视觉调色盘 registry（React 外层chrome，非 iframe 内层） */
@@ -1130,6 +1145,21 @@ const CHROME_PALETTES: Record<string, ChromePalette> = {
     ctaGradient: 'linear-gradient(105deg,#4f8999,#a24f58)',
     ctaShadow: '0 10px 26px rgba(79,137,153,.36)',
   },
+  qin_jingzhou: { bg:'#ece9e1',coverBg:'#d7d5d0',scrimGradient:'linear-gradient(to top,#ece9e1 4%,rgba(236,233,225,.2),transparent)',nameColor:'#302f31',ageColor:'#77736d',taglineColor:'#555256',chipActiveBg:'rgba(80,80,84,.1)',chipActiveBorder:'rgba(80,80,84,.3)',chipActiveText:'#454448',chipInactiveBg:'rgba(255,255,255,.28)',chipInactiveBorder:'rgba(80,80,84,.15)',chipInactiveText:'#6d6964',ctaGradient:'linear-gradient(105deg,#66666a,#3f4044)',ctaShadow:'0 10px 24px rgba(50,50,54,.25)' },
+  ye_jingheng: { bg:'#080d17',coverBg:'#111a28',scrimGradient:'linear-gradient(to top,#080d17 4%,rgba(8,13,23,.3),transparent)',nameColor:'#eee9dc',ageColor:'#8ca0b5',taglineColor:'#c44a4f',chipActiveBg:'rgba(166,38,43,.15)',chipActiveBorder:'rgba(196,74,79,.4)',chipActiveText:'#df777b',chipInactiveBg:'rgba(64,102,140,.12)',chipInactiveBorder:'rgba(109,151,194,.22)',chipInactiveText:'#90a8bf',ctaGradient:'linear-gradient(105deg,#a62b30,#294b70)',ctaShadow:'0 10px 26px rgba(100,35,50,.38)' },
+  luo_zhiye: { bg:'#080808',coverBg:'#121212',scrimGradient:'linear-gradient(to top,#080808 4%,rgba(8,8,8,.3),transparent)',nameColor:'#e4e4e4',ageColor:'#777',taglineColor:'#d04a4f',chipActiveBg:'rgba(190,45,53,.15)',chipActiveBorder:'rgba(205,65,72,.38)',chipActiveText:'#e36e73',chipInactiveBg:'rgba(255,255,255,.05)',chipInactiveBorder:'rgba(255,255,255,.12)',chipInactiveText:'#888',ctaGradient:'linear-gradient(105deg,#ad3036,#641c20)',ctaShadow:'0 10px 26px rgba(173,48,54,.38)' },
+  han_jingmo: { bg:'#09291f',coverBg:'#10362a',scrimGradient:'linear-gradient(to top,#09291f 4%,rgba(9,41,31,.25),transparent)',nameColor:'#f0e4cc',ageColor:'#b79561',taglineColor:'#d2ae6d',chipActiveBg:'rgba(184,139,67,.17)',chipActiveBorder:'rgba(205,168,101,.38)',chipActiveText:'#e0bd7a',chipInactiveBg:'rgba(255,255,255,.05)',chipInactiveBorder:'rgba(217,188,133,.14)',chipInactiveText:'#aa9672',ctaGradient:'linear-gradient(105deg,#a97d3f,#705129)',ctaShadow:'0 10px 26px rgba(169,125,63,.35)' },
+  xu_yanzhi: { bg:'#f4f0df',coverBg:'#e4e7e3',scrimGradient:'linear-gradient(to top,#f4f0df 4%,rgba(244,240,223,.2),transparent)',nameColor:'#293744',ageColor:'#71808a',taglineColor:'#9f5358',chipActiveBg:'rgba(103,135,157,.13)',chipActiveBorder:'rgba(103,135,157,.35)',chipActiveText:'#4f7188',chipInactiveBg:'rgba(255,255,255,.3)',chipInactiveBorder:'rgba(103,135,157,.18)',chipInactiveText:'#71818b',ctaGradient:'linear-gradient(105deg,#6f8ea4,#4f6d82)',ctaShadow:'0 10px 24px rgba(82,112,132,.28)' },
+  shang_yanli: { bg:'#151515',coverBg:'#202020',scrimGradient:'linear-gradient(to top,#151515 4%,rgba(21,21,21,.3),transparent)',nameColor:'#e8e3dc',ageColor:'#8d857b',taglineColor:'#c4a474',chipActiveBg:'rgba(191,155,102,.13)',chipActiveBorder:'rgba(191,155,102,.35)',chipActiveText:'#d4b484',chipInactiveBg:'rgba(255,255,255,.05)',chipInactiveBorder:'rgba(255,255,255,.11)',chipInactiveText:'#8f8981',ctaGradient:'linear-gradient(105deg,#aa8759,#735b3e)',ctaShadow:'0 10px 26px rgba(170,135,89,.34)' },
+  shen_li: { bg:'#e9eeee',coverBg:'#cfd7d8',scrimGradient:'linear-gradient(to top,#e9eeee 4%,rgba(233,238,238,.15),transparent)',nameColor:'#252b2d',ageColor:'#707b7e',taglineColor:'#56666b',chipActiveBg:'rgba(91,108,113,.13)',chipActiveBorder:'rgba(91,108,113,.34)',chipActiveText:'#45575c',chipInactiveBg:'rgba(255,255,255,.3)',chipInactiveBorder:'rgba(91,108,113,.17)',chipInactiveText:'#6e7d81',ctaGradient:'linear-gradient(105deg,#657579,#444f52)',ctaShadow:'0 10px 24px rgba(75,89,93,.28)' },
+  fu_yichen: { bg:'#071a14',coverBg:'#0c281e',scrimGradient:'linear-gradient(to top,#071a14 4%,rgba(7,26,20,.28),transparent)',nameColor:'#eee5d5',ageColor:'#a68559',taglineColor:'#d0a568',chipActiveBg:'rgba(189,139,73,.14)',chipActiveBorder:'rgba(189,139,73,.38)',chipActiveText:'#dfb97e',chipInactiveBg:'rgba(255,255,255,.05)',chipInactiveBorder:'rgba(255,255,255,.12)',chipInactiveText:'#9f8a6d',ctaGradient:'linear-gradient(105deg,#ad7d3e,#735029)',ctaShadow:'0 10px 26px rgba(173,125,62,.36)' },
+  xu_changye: { bg:'#101116',coverBg:'#181a23',scrimGradient:'linear-gradient(to top,#101116 4%,rgba(16,17,22,.3),transparent)',nameColor:'#e7e8ec',ageColor:'#858a97',taglineColor:'#73ce9d',chipActiveBg:'rgba(84,194,143,.13)',chipActiveBorder:'rgba(84,194,143,.35)',chipActiveText:'#7addaa',chipInactiveBg:'rgba(255,255,255,.05)',chipInactiveBorder:'rgba(255,255,255,.11)',chipInactiveText:'#878d9c',ctaGradient:'linear-gradient(105deg,#4fa879,#326d51)',ctaShadow:'0 10px 26px rgba(79,168,121,.34)' },
+  su_chen: { bg:'#1a1b1d',coverBg:'#252629',scrimGradient:'linear-gradient(to top,#1a1b1d 4%,rgba(26,27,29,.3),transparent)',nameColor:'#e7e2da',ageColor:'#91887d',taglineColor:'#cc5a5c',chipActiveBg:'rgba(154,47,49,.15)',chipActiveBorder:'rgba(190,70,72,.38)',chipActiveText:'#df7779',chipInactiveBg:'rgba(255,255,255,.05)',chipInactiveBorder:'rgba(255,255,255,.11)',chipInactiveText:'#8f8a83',ctaGradient:'linear-gradient(105deg,#963033,#5f2022)',ctaShadow:'0 10px 26px rgba(150,48,51,.37)' },
+  pei_jinchuan: { bg:'#171211',coverBg:'#211816',scrimGradient:'linear-gradient(to top,#171211 4%,rgba(23,18,17,.3),transparent)',nameColor:'#f0e6d9',ageColor:'#a99a8d',taglineColor:'#d88b6c',chipActiveBg:'rgba(196,94,72,.15)',chipActiveBorder:'rgba(216,139,108,.4)',chipActiveText:'#e5a087',chipInactiveBg:'rgba(255,255,255,.05)',chipInactiveBorder:'rgba(255,255,255,.1)',chipInactiveText:'#a8988d',ctaGradient:'linear-gradient(105deg,#b65a45,#6f3029)',ctaShadow:'0 10px 26px rgba(182,90,69,.35)' },
+  bai_yao: { bg:'#160e1b',coverBg:'#24152f',scrimGradient:'linear-gradient(to top,#160e1b 4%,rgba(22,14,27,.3),transparent)',nameColor:'#f4e8f3',ageColor:'#b69db7',taglineColor:'#ff8fb9',chipActiveBg:'rgba(228,125,167,.15)',chipActiveBorder:'rgba(228,125,167,.42)',chipActiveText:'#ff9fc3',chipInactiveBg:'rgba(255,255,255,.05)',chipInactiveBorder:'rgba(255,255,255,.11)',chipInactiveText:'#b89db8',ctaGradient:'linear-gradient(105deg,#cf4f93,#72306d)',ctaShadow:'0 10px 26px rgba(207,79,147,.38)' },
+  ye_linchuan: { bg:'#08141d',coverBg:'#102534',scrimGradient:'linear-gradient(to top,#08141d 4%,rgba(8,20,29,.25),transparent)',nameColor:'#e8f0f2',ageColor:'#8daab7',taglineColor:'#a9dfd8',chipActiveBg:'rgba(142,207,200,.14)',chipActiveBorder:'rgba(142,207,200,.4)',chipActiveText:'#b4ebe3',chipInactiveBg:'rgba(255,255,255,.05)',chipInactiveBorder:'rgba(142,207,200,.18)',chipInactiveText:'#88a8b2',ctaGradient:'linear-gradient(105deg,#3d918e,#285c72)',ctaShadow:'0 10px 26px rgba(61,145,142,.35)' },
+  shen_fengchuan: { bg:'#0e181d',coverBg:'#1b3038',scrimGradient:'linear-gradient(to top,#0e181d 4%,rgba(14,24,29,.25),transparent)',nameColor:'#edf0ed',ageColor:'#9aafb0',taglineColor:'#f0a28a',chipActiveBg:'rgba(208,122,109,.14)',chipActiveBorder:'rgba(208,122,109,.4)',chipActiveText:'#f0ad99',chipInactiveBg:'rgba(255,255,255,.05)',chipInactiveBorder:'rgba(142,177,170,.2)',chipInactiveText:'#91aaa7',ctaGradient:'linear-gradient(105deg,#c0675a,#6c3940)',ctaShadow:'0 10px 26px rgba(192,103,90,.35)' },
+  huo_yanshen: { bg:'#071712',coverBg:'#103223',scrimGradient:'linear-gradient(to top,#071712 4%,rgba(7,23,18,.25),transparent)',nameColor:'#f0e6d4',ageColor:'#aa9b7a',taglineColor:'#d4af70',chipActiveBg:'rgba(200,156,93,.15)',chipActiveBorder:'rgba(200,156,93,.4)',chipActiveText:'#e1bf82',chipInactiveBg:'rgba(255,255,255,.05)',chipInactiveBorder:'rgba(200,156,93,.18)',chipInactiveText:'#aa9c80',ctaGradient:'linear-gradient(105deg,#a8793e,#4d5730)',ctaShadow:'0 10px 26px rgba(168,121,62,.35)' },
 }
 
 type Theme = { accent: string; deep: string; deep2: string; hero: string }
@@ -1373,7 +1403,6 @@ export function CharacterProfilePage() {
         <div className="relative -mt-[50px] px-[22px] z-[3]">
           <h1 className="text-[34px] font-semibold leading-[1.1]" style={{ fontFamily: '"Songti SC","STSong","Noto Serif SC",Georgia,serif', color: chrome.nameColor }}>
             {profile.display_name || '季屿'}
-            {profile.age_range && <span className="text-[12px] ml-2.5 align-middle" style={{ color: chrome.ageColor }}>{profile.age_range}</span>}
           </h1>
           {profile.tagline && <p className="text-[16px] mt-2.5 leading-[1.7] italic" style={{ fontFamily: '"Songti SC","STSong","Noto Serif SC",Georgia,serif', color: chrome.taglineColor }}>{profile.tagline}</p>}
           {profile.tags.length > 0 && (
@@ -1556,15 +1585,6 @@ export function CharacterProfilePage() {
           <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">by @{profile.creator_name}</p>
         )}
 
-        {profile?.age_range && (
-          <span
-            className="mt-2 inline-flex h-[24px] items-center rounded-full bg-[var(--color-glass-75)] border border-[var(--color-border-glass)] px-3 text-[12px] font-medium tabular-nums"
-            style={{ color: chrome.ageColor }}
-          >
-            {profile.age_range} 岁
-          </span>
-        )}
-
         {profile?.tagline && (
           <p className="mt-3 text-[15px] leading-relaxed" style={{ color: chrome.taglineColor }}>
             {profile.tagline}
@@ -1733,7 +1753,7 @@ export function CharacterProfilePage() {
       </div>
 
       {/* ── 叙引 dossier card (premium dark)（高级 HTML 模式下隐藏，交给创作者自排） ── */}
-      {!hasCustomHtml && profile && (profile.one_liner || profile.archetype_label || profile.age_range || profile.tags.length > 0) && (
+      {!hasCustomHtml && profile && (profile.one_liner || profile.archetype_label || profile.tags.length > 0) && (
         <div
           className="mx-4 mb-4 rounded-[22px] border p-6 relative overflow-hidden"
           style={{
@@ -1764,7 +1784,7 @@ export function CharacterProfilePage() {
           )}
 
           {/* Identity namecard */}
-          {(profile.archetype_label || profile.age_range || profile.tags.length > 0) && (
+          {(profile.archetype_label || profile.tags.length > 0) && (
             <div className="mt-5 rounded-[16px] bg-white/5 border border-white/10 p-4">
               <div className="text-[12px] font-medium mb-3" style={{ color: theme.accent }}>
                 身份档案
@@ -1776,14 +1796,6 @@ export function CharacterProfilePage() {
                     style={{ background: theme.accent + '20', color: theme.accent }}
                   >
                     {profile.archetype_label}
-                  </span>
-                )}
-                {profile.age_range && (
-                  <span
-                    className="inline-flex h-[26px] items-center rounded-full px-3 text-[12px] font-medium tabular-nums"
-                    style={{ background: 'rgba(255,255,255,0.08)', color: '#D4C7BA' }}
-                  >
-                    {profile.age_range} 岁
                   </span>
                 )}
                 {profile.tags.slice(0, 3).map((t) => (

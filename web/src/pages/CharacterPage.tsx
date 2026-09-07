@@ -51,6 +51,12 @@ const EXTRA_FILTER_TAGS = [
   '忠犬', '高自由', 'BG', '洁',
 ] as const
 
+// Keep the discovery page responsive on mobile networks. The catalog can
+// contain hundreds of characters, but only a small window needs to be in the
+// DOM at first; more cards are appended as the user approaches the bottom.
+const INITIAL_VISIBLE_ITEMS = 24
+const VISIBLE_ITEMS_BATCH = 24
+
 /**
  * 角色发现页 (Nimoo-style discovery catalog).
  *
@@ -89,6 +95,23 @@ interface GridItem {
  * visible so an existing bond never disappears.
  */
 const FEATURED_CHARACTERS = [
+  // 2026-09-04 launch batches: first-party authored characters lead the
+  // recommendation rail. The first two positions are product-fixed.
+  { id: 'fu_yichen', name: '傅亦辰' },
+  { id: 'shen_li', name: '沈砺' },
+  { id: 'qin_jingzhou', name: '秦景舟' },
+  { id: 'ye_jingheng', name: '叶景衡' },
+  { id: 'luo_zhiye', name: '罗执野' },
+  { id: 'han_jingmo', name: '韩靖墨' },
+  { id: 'xu_yanzhi', name: '许砚之' },
+  { id: 'shang_yanli', name: '商言礼' },
+  { id: 'xu_changye', name: '许常夜' },
+  { id: 'su_chen', name: '苏沉' },
+  { id: 'pei_jinchuan', name: '裴烬川' },
+  { id: 'bai_yao', name: '白曜' },
+  { id: 'ye_linchuan', name: '夜临川' },
+  { id: 'shen_fengchuan', name: '沈逢川' },
+  { id: 'huo_yanshen', name: '霍砚深' },
   // 2026-08-30 editorial launch: newly authored characters lead 推荐 in this
   // exact product-defined order. Keep qi_wang_arena separate from the legacy
   // qi_wang record; they are distinct characters with different content.
@@ -172,6 +195,20 @@ const FEATURED_CHARACTER_INDEX = new Map<string, number>(
 const FEATURED_CHARACTER_NAME_INDEX = new Map<string, number>(
   FEATURED_CHARACTERS.map((character, index) => [character.name, index]),
 )
+
+/**
+ * Batch 11 + 12 launch rail. These IDs receive an editorial cold-start
+ * position, but the recommendation score / real view count still orders the
+ * characters within the rail after the two fixed lead slots.
+ */
+const LAUNCH_BATCH_CHARACTER_INDEX = new Map<string, number>([
+  ['fu_yichen', 0], ['shen_li', 1],
+  ['qin_jingzhou', 2], ['ye_jingheng', 3], ['luo_zhiye', 4],
+  ['han_jingmo', 5], ['xu_yanzhi', 6], ['shang_yanli', 7],
+  ['xu_changye', 8], ['su_chen', 9],
+  ['pei_jinchuan', 10], ['bai_yao', 11], ['ye_linchuan', 12],
+  ['shen_fengchuan', 13], ['huo_yanshen', 14],
+])
 
 function featuredCharacterIndex(item: GridItem): number | undefined {
   return FEATURED_CHARACTER_INDEX.get(item.id) ?? FEATURED_CHARACTER_NAME_INDEX.get(item.profile.name)
@@ -422,6 +459,15 @@ export function CharacterPage() {
       // 推荐只使用服务端每日预计算的真实行为分；展示热度、UGC 初始化
       // 和每日扶持均不会进入该分数。
       base.sort((a, b) => {
+        const aLaunch = LAUNCH_BATCH_CHARACTER_INDEX.get(a.id)
+        const bLaunch = LAUNCH_BATCH_CHARACTER_INDEX.get(b.id)
+        // Product-fixed lead slots. The rest of both launch batches remain
+        // eligible for real-behaviour ranking below these two positions.
+        if (aLaunch !== undefined || bLaunch !== undefined) {
+          if (aLaunch === undefined) return 1
+          if (bLaunch === undefined) return -1
+          if (aLaunch < 2 || bLaunch < 2) return aLaunch - bLaunch
+        }
         const scoreDiff = (b.recommendationScore ?? 0) - (a.recommendationScore ?? 0)
         if (scoreDiff !== 0) return scoreDiff
         const viewDiff = (b.realViewCount ?? 0) - (a.realViewCount ?? 0)
@@ -432,6 +478,27 @@ export function CharacterPage() {
 
     return base
   }, [rankedItems, activeMode, activeTag, query, isFavorite])
+
+  const [visibleCount, setVisibleCount] = useState(INITIAL_VISIBLE_ITEMS)
+
+  // Changing mode/tag/search should start at the top of the new result set.
+  // The scroll-restore hook still owns the actual scroll position; this only
+  // controls how many cards are mounted and therefore how many images can be
+  // requested by the browser.
+  useEffect(() => {
+    setVisibleCount(INITIAL_VISIBLE_ITEMS)
+  }, [activeMode, activeTag, query])
+
+  const visibleItems = useMemo(
+    () => filtered.slice(0, visibleCount),
+    [filtered, visibleCount],
+  )
+
+  const handleGridScroll = useCallback((event: React.UIEvent<HTMLDivElement>) => {
+    const element = event.currentTarget
+    if (element.scrollTop + element.clientHeight < element.scrollHeight - 900) return
+    setVisibleCount((current) => Math.min(current + VISIBLE_ITEMS_BATCH, filtered.length))
+  }, [filtered.length])
 
   const isDark = resolvedTheme === 'dark'
   const activeModeText = isDark ? 'text-[var(--color-ink)]' : 'text-[#3A3A4A]'
@@ -646,7 +713,7 @@ export function CharacterPage() {
         </div>
 
         {/* Discovery grid */}
-        <div ref={gridRef} className="relative z-10 mx-auto min-h-0 w-full max-w-[1180px] flex-1 overflow-y-auto overscroll-y-contain px-3.5 pb-[120px] pt-1.5 sm:px-5">
+        <div ref={gridRef} onScroll={handleGridScroll} className="relative z-10 mx-auto min-h-0 w-full max-w-[1180px] flex-1 overflow-y-auto overscroll-y-contain px-3.5 pb-[120px] pt-1.5 sm:px-5">
           {/* Pull-to-refresh indicator — height tracks finger pull, snaps to a
               spinner while refreshing. */}
           {(pull > 0 || refreshing) && (
@@ -709,20 +776,27 @@ export function CharacterPage() {
               </div>
             )
           ) : (
-            <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-4 md:grid-cols-4 xl:grid-cols-5">
-              {filtered.map((it) => (
-                <DiscoveryCard
-                  key={it.id}
-                  item={it}
-                  heatMap={heatMap}
-                  onOpen={() => {
-                    const profilePath = `/character/${it.id}`
-                    if (isAuthenticated) navigate(profilePath)
-                    else requireLogin(profilePath)
-                  }}
-                />
-              ))}
-            </div>
+            <>
+              <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 sm:gap-4 md:grid-cols-4 xl:grid-cols-5">
+                {visibleItems.map((it) => (
+                  <DiscoveryCard
+                    key={it.id}
+                    item={it}
+                    heatMap={heatMap}
+                    onOpen={() => {
+                      const profilePath = `/character/${it.id}`
+                      if (isAuthenticated) navigate(profilePath)
+                      else requireLogin(profilePath)
+                    }}
+                  />
+                ))}
+              </div>
+              {visibleItems.length < filtered.length && (
+                <div className="flex items-center justify-center py-5 text-[12px] text-[var(--color-text-muted)]" aria-live="polite">
+                  下滑加载更多角色
+                </div>
+              )}
+            </>
           )}
         </div>
 

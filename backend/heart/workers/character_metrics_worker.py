@@ -52,7 +52,11 @@ async def refresh_character_metrics(session) -> int:
                      CASE WHEN MAX(LN(1 + COALESCE(a.return_uv, 0))) OVER () > 0
                           THEN LN(1 + COALESCE(a.return_uv, 0))
                                / MAX(LN(1 + COALESCE(a.return_uv, 0))) OVER ()
-                          ELSE 0 END AS return_score
+                          ELSE 0 END AS return_score,
+                     CASE WHEN MAX(LN(1 + c.real_view_count)) OVER () > 0
+                          THEN LN(1 + c.real_view_count)
+                               / MAX(LN(1 + c.real_view_count)) OVER ()
+                          ELSE 0 END AS view_score
                FROM characters c
                 LEFT JOIN aggregates a ON a.character_id = c.id
                WHERE c.status = 'active'
@@ -65,9 +69,21 @@ async def refresh_character_metrics(session) -> int:
                SET real_play_uv = s.play_uv,
                    return_user_uv = s.return_uv,
                    smoothed_return_rate = s.return_rate,
-                   recommendation_score = 0.55 * s.play_score
-                                        + 0.30 * s.return_score
-                                        + 0.15 * s.return_rate,
+                   recommendation_score = 0.42 * s.play_score
+                                        + 0.25 * s.return_score
+                                        + 0.13 * s.return_rate
+                                        + 0.20 * s.view_score
+                                        + CASE
+                                            WHEN c.id IN (
+                                              'qin_jingzhou','ye_jingheng','luo_zhiye',
+                                              'han_jingmo','xu_yanzhi','shang_yanli',
+                                              'shen_li','fu_yichen','xu_changye','su_chen',
+                                              'pei_jinchuan','bai_yao','ye_linchuan',
+                                              'shen_fengchuan','huo_yanshen'
+                                            )
+                                            THEN GREATEST(0.0, 0.22 - c.real_view_count / 20000.0)
+                                            ELSE 0.0
+                                          END,
                    metrics_calculated_at = NOW()
               FROM scored s
              WHERE c.id = s.id
