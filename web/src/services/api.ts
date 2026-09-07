@@ -741,6 +741,66 @@ export async function spendCommission(
   })
 }
 
+// ── Social promotion tasks ────────────────────────────────────────
+
+export interface PromotionSubmission {
+  id: string
+  user_id?: string
+  owner_email?: string | null
+  task_type: 'ambassador' | 'creator' | 'likes'
+  platform: 'douyin' | 'xiaohongshu'
+  screenshot_url: string | null
+  post_url: string | null
+  title: string | null
+  likes_count: number | null
+  status: 'pending' | 'approved' | 'needs_info' | 'rejected'
+  review_reason: string | null
+  reward_coins: number
+  milestone_300_granted: boolean
+  milestone_1000_granted: boolean
+  submitted_at: string
+  reviewed_at: string | null
+}
+
+export interface PromotionStatus {
+  daily_limit: number
+  today_submitted: number
+  today_remaining: number
+  submissions: PromotionSubmission[]
+}
+
+export async function getPromotionStatus(): Promise<PromotionStatus> {
+  return request('/promotions/status')
+}
+
+export async function submitPromotion(input: {
+  taskType: 'ambassador' | 'creator' | 'likes'
+  platform: 'douyin' | 'xiaohongshu'
+  file?: File | null
+  postUrl?: string
+  sourceSubmissionId?: string
+  title?: string
+  likesCount?: number
+}): Promise<{ ok: boolean; id: string; today_remaining: number }> {
+  const form = new FormData()
+  form.append('task_type', input.taskType)
+  form.append('platform', input.platform)
+  if (input.file) form.append('file', input.file)
+  if (input.postUrl) form.append('post_url', input.postUrl)
+  if (input.sourceSubmissionId) form.append('source_submission_id', input.sourceSubmissionId)
+  if (input.title) form.append('title', input.title)
+  if (input.likesCount != null) form.append('likes_count', String(input.likesCount))
+  const { accessToken } = useAuthStore.getState()
+  const res = await fetch(`${BASE_URL}/promotions/submit`, {
+    method: 'POST',
+    headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+    body: form,
+  })
+  const data = await res.json().catch(() => null)
+  if (!res.ok || !data) throw new ApiError(res.status, detailToMessage(data?.detail, '提交失败'))
+  return data
+}
+
 // ── Profile API ────────────────────────────────────────────────────
 
 export async function getProfile(): Promise<{ user: AuthUser }> {
@@ -1863,5 +1923,25 @@ export async function adminRejectCharacter(
   return adminRequest(`/admin/characters/${encodeURIComponent(characterId)}/reject`, adminKey, {
     method: 'POST',
     body: JSON.stringify({ reason }),
+  })
+}
+
+export async function adminListPendingPromotions(adminKey: string): Promise<{ pending: PromotionSubmission[]; count: number }> {
+  return adminRequest('/admin/promotions/pending', adminKey)
+}
+
+export async function adminApprovePromotion(id: string, adminKey: string): Promise<{ ok: boolean; id: string; reward_coins: number }> {
+  return adminRequest(`/admin/promotions/${encodeURIComponent(id)}/approve`, adminKey, { method: 'POST' })
+}
+
+export async function adminRejectPromotion(id: string, reason: string, adminKey: string): Promise<{ ok: boolean; id: string }> {
+  return adminRequest(`/admin/promotions/${encodeURIComponent(id)}/reject`, adminKey, {
+    method: 'POST', body: JSON.stringify({ reason }),
+  })
+}
+
+export async function adminNeedsInfoPromotion(id: string, reason: string, adminKey: string): Promise<{ ok: boolean; id: string }> {
+  return adminRequest(`/admin/promotions/${encodeURIComponent(id)}/needs-info`, adminKey, {
+    method: 'POST', body: JSON.stringify({ reason }),
   })
 }

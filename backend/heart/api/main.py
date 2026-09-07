@@ -52,6 +52,8 @@ from .routes_models import router as models_router
 from .routes_notices import router as notices_router
 from .routes_proactive import router as proactive_router
 from .routes_profile import router as profile_router
+from .routes_promotions import admin_router as promotions_admin_router
+from .routes_promotions import router as promotions_router
 from .routes_state import dev_router, memory_router
 from .routes_state import router as state_router
 from .routes_story import router as story_router
@@ -295,6 +297,8 @@ def create_app() -> FastAPI:
     app.include_router(invite_router)  # /api/invite (GET code, POST /use)
     app.include_router(lottery_router)  # /api/lottery + /api/rewards/coupons
     app.include_router(commission_router)  # /api/commission (store-credit balance/spend)
+    app.include_router(promotions_router)  # /api/promotions (social promotion tasks)
+    app.include_router(promotions_admin_router)  # /api/admin/promotions (moderation)
     app.include_router(admin_router)  # /api/admin/* (admin operations, requires X-Admin-Key)
     app.include_router(webhooks_router)  # /api/webhooks/* (afdian)
     app.include_router(profile_router)  # /api/profile/* (GET/PATCH profile, avatar)

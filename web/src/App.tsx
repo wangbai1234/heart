@@ -31,12 +31,14 @@ import { ExplorePage } from './pages/ExplorePage'
 import { ScenarioDetailPage } from './pages/ScenarioDetailPage'
 import { StoryPlayerPage } from './pages/StoryPlayerPage'
 import { RewardsPage } from './pages/RewardsPage'
+import { PromotionPage } from './pages/PromotionPage'
 import { AdminReviewPage } from './pages/AdminReviewPage'
+import { AdminPromotionReviewPage } from './pages/AdminPromotionReviewPage'
 import { AdminAnalyticsPage } from './pages/AdminAnalyticsPage'
 import { ToastContainer } from './components/ui/ToastContainer'
 import { UpdatePrompt } from './components/UpdatePrompt'
 import { DailyCheckinDialog } from './components/DailyCheckinDialog'
-import { ReviewResultDialog, PublishIncentiveDialog } from './components/ReviewDialogs'
+import { ReviewResultDialog } from './components/ReviewDialogs'
 import type { ReviewUpdateDTO } from './services/api'
 import { useCreditsStore } from './stores/creditsStore'
 import { useProactivePolling } from './hooks/useProactivePolling'
@@ -53,6 +55,7 @@ import { useSwipeNavigation } from './hooks/useSwipeNavigation'
 import { AuthModal } from './components/AuthModal'
 import { RecoveryNoticeDialog } from './components/RecoveryNoticeDialog'
 import type { ActiveNoticeDTO } from './services/api'
+import { NoticeDialog } from './components/ui/NoticeDialog'
 
 function ChatConversationRouter() {
   const { resolvedTheme } = useThemeStore()
@@ -85,11 +88,13 @@ function LegacyLoginRedirect(): ReactElement {
 }
 
 const SKIP_SAVE_ROUTES = new Set(['/splash', '/login', '/register', '/forgot-password', '/redeem', '/age-gate', '/'])
+const PROMOTION_NOTICE_VERSION = 'v1'
 
 export function App() {
   const { fontScale } = useAppStore()
   const inboxUnreadTotal = useAppStore((s) => s.inboxUnreadTotal)
   const accessToken = useAuthStore((s) => s.accessToken)
+  const authUser = useAuthStore((s) => s.user)
 
   // Global badge: drives navigator.setAppBadge regardless of which page is active.
   useAppBadge(inboxUnreadTotal)
@@ -111,10 +116,10 @@ export function App() {
   const showAuthPrompt = useAuthPromptStore((state) => state.show)
   const [checkinOpen, setCheckinOpen] = useState(false)
   const [checkinCoins, setCheckinCoins] = useState(0)
-  // Character review: queue of unacked terminal results + daily incentive popup.
+  // Character review: queue of unacked terminal results.
   const [reviewQueue, setReviewQueue] = useState<ReviewUpdateDTO[]>([])
-  const [incentiveOpen, setIncentiveOpen] = useState(false)
   const [recoveryNotice, setRecoveryNotice] = useState<ActiveNoticeDTO | null>(null)
+  const [promotionNoticeOpen, setPromotionNoticeOpen] = useState(false)
 
   // Wire module-level navigate so api.ts / useWebSocket.ts can redirect
   // without a hard page reload (preserves React state and bfcache).
@@ -199,6 +204,31 @@ export function App() {
     void import('./services/api').then(({ bindInvite }) => bindInvite(code).catch(() => {}))
   }, [accessToken])
 
+  // Campaign announcement: show once per account and campaign version. A short
+  // delay lets recovery, check-in and review-result notices claim priority.
+  useEffect(() => {
+    if (!accessToken || !authUser?.id || location.pathname === '/rewards/content' || location.pathname.startsWith('/admin/')) {
+      setPromotionNoticeOpen(false)
+      return
+    }
+    const key = `yuoyuo-promotion-notice-${PROMOTION_NOTICE_VERSION}-${authUser.id}`
+    if (localStorage.getItem(key) === '1') return
+    const timer = window.setTimeout(() => setPromotionNoticeOpen(true), 1500)
+    return () => window.clearTimeout(timer)
+  }, [accessToken, authUser?.id, location.pathname])
+
+  const dismissPromotionNotice = () => {
+    if (authUser?.id) {
+      localStorage.setItem(`yuoyuo-promotion-notice-${PROMOTION_NOTICE_VERSION}-${authUser.id}`, '1')
+    }
+    setPromotionNoticeOpen(false)
+  }
+
+  const openPromotion = () => {
+    dismissPromotionNotice()
+    navigate('/rewards/content')
+  }
+
   // The server receipt is the source of truth so acknowledgement follows the
   // account across browsers and devices.
   useEffect(() => {
@@ -266,14 +296,6 @@ export function App() {
             setReviewQueue(pending)
             return
           }
-          // No result to confirm — consider the daily incentive popup.
-          if (res.approved_count === 0) {
-            const day = new Date().toISOString().slice(0, 10)
-            if (localStorage.getItem('yuoyuo-publish-incentive-day') !== day) {
-              localStorage.setItem('yuoyuo-publish-incentive-day', day)
-              setIncentiveOpen(true)
-            }
-          }
         })
         .catch(() => {}),
     )
@@ -321,10 +343,19 @@ export function App() {
       <RecoveryNoticeDialog notice={recoveryNotice} onAcknowledge={confirmRecoveryNotice} />
       <DailyCheckinDialog open={checkinOpen} coins={checkinCoins} onClose={() => setCheckinOpen(false)} />
       <ReviewResultDialog item={reviewQueue[0] ?? null} onConfirm={confirmReviewResult} />
-      <PublishIncentiveDialog
-        open={incentiveOpen && reviewQueue.length === 0}
-        onClose={() => setIncentiveOpen(false)}
-      />
+      <NoticeDialog
+        open={promotionNoticeOpen && !recoveryNotice && !checkinOpen && reviewQueue.length === 0}
+        onClose={dismissPromotionNotice}
+        title="安利与创作福利上线"
+        actionLabel="去参加"
+        onAction={openPromotion}
+      >
+        在抖音或小红书分享真实的 yuoyuo 使用体验
+        <br />
+        每日安利得 20 币，原创作品得 100 币
+        <br />
+        点赞达标还可累计领取两档 VIP
+      </NoticeDialog>
       <Routes>
         <Route path="/" element={<Navigate to="/character" replace />} />
         <Route path="/splash" element={<SplashPage />} />
@@ -341,6 +372,7 @@ export function App() {
         <Route path="/explore/:scenarioId" element={<ScenarioDetailPage />} />
         <Route path="/story/:runId" element={<StoryPlayerPage />} />
         <Route path="/rewards" element={<RewardsPage />} />
+        <Route path="/rewards/content" element={<PromotionPage />} />
         <Route path="/character" element={<CharacterPage />} />
         <Route path="/character/:id" element={<CharacterProfilePage />} />
         <Route path="/settings" element={<SettingsPage />} />
@@ -359,6 +391,7 @@ export function App() {
         <Route path="/characters/new/workshop" element={<WorkshopCreatePage />} />
         <Route path="/my-characters" element={<MyCharactersPage />} />
         <Route path="/admin/review" element={<AdminReviewPage />} />
+        <Route path="/admin/promotion-review" element={<AdminPromotionReviewPage />} />
         <Route path="*" element={<NotFoundRedirect />} />
       </Routes>
     </AuthGuard>

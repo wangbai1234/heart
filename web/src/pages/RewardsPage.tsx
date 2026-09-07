@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { AppPageContent, AppPageShell } from '../components/ui/AppPageShell'
 import { Skeleton } from '../components/ui/Skeleton'
 import { TabBar } from '../components/ui/TabBar'
@@ -7,7 +8,7 @@ import { useCreditsStore } from '../stores/creditsStore'
 import { useRewardsStore } from '../stores/rewardsStore'
 import { useToastStore } from '../stores/toastStore'
 
-type RewardsView = 'invite' | 'lottery' | 'commission'
+type RewardsView = 'content' | 'invite' | 'lottery' | 'commission'
 type RewardsState = ReturnType<typeof useRewardsStore.getState>
 
 const WHEEL_PRIZE_CODES = [
@@ -48,7 +49,10 @@ function formatDate(value: string | null): string {
 }
 
 export function RewardsPage() {
-  const [view, setView] = useState<RewardsView>('lottery')
+  const location = useLocation()
+  const navigate = useNavigate()
+  const requestedView = new URLSearchParams(location.search).get('view')
+  const [view, setView] = useState<RewardsView>(requestedView === 'invite' || requestedView === 'lottery' || requestedView === 'commission' ? requestedView : 'content')
   const [spinning, setSpinning] = useState(false)
   const [rotation, setRotation] = useState(0)
   const [result, setResult] = useState<LotteryDrawResult | null>(null)
@@ -100,31 +104,61 @@ export function RewardsPage() {
       <div className="relative z-10 flex h-full flex-col bg-transparent">
         <div style={{ height: 'var(--safe-top)' }} />
         <AppPageContent className="flex h-[58px] shrink-0 items-center justify-between px-4 sm:px-5">
-          <h1 className="text-[23px] font-bold text-[var(--color-ink)]">福利</h1>
-          <span className="text-[12px] text-[var(--color-text-muted)]">
-            {store.lottery?.available_chances ?? 0} 次可用
+          <div>
+            <p className="text-[11px] font-semibold tracking-[0.08em] text-[var(--color-primary-600)]">YUOYUO REWARDS</p>
+            <h1 className="mt-0.5 text-[23px] font-bold text-[var(--color-ink)]">福利</h1>
+          </div>
+          <span className="rounded-full bg-[var(--color-page-surface)] px-3 py-1.5 text-[12px] text-[var(--color-text-secondary)] shadow-[var(--shadow-soft)]">
+            {store.lottery?.available_chances ?? 0} 次抽奖机会
           </span>
         </AppPageContent>
 
-        <AppPageContent className="px-4 sm:px-5">
-          <div className="grid h-[38px] grid-cols-3 rounded-[8px] bg-[var(--color-page-soft)] p-1" role="tablist">
+        <AppPageContent className="min-h-0 flex-1 overflow-y-auto px-4 pb-[116px] pt-3 sm:px-5">
+          <button
+            onClick={() => navigate('/rewards/content')}
+            className="group w-full overflow-hidden rounded-[8px] border border-[var(--color-primary-300)] bg-[var(--color-page-surface)] text-left shadow-[0_10px_28px_rgba(95,56,69,0.10)] transition active:scale-[0.99]"
+          >
+            <span className="flex items-start gap-3 border-l-4 border-[var(--color-primary-500)] px-4 py-4">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[8px] bg-[var(--color-primary-100)] text-[var(--color-primary-700)]" aria-hidden="true">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M20 12v9H4v-9"/><path d="M2 7h20v5H2z"/><path d="M12 7v14"/><path d="M12 7H7.5A2.5 2.5 0 1 1 10 4.5C10 6 12 7 12 7Z"/><path d="M12 7h4.5A2.5 2.5 0 1 0 14 4.5C14 6 12 7 12 7Z"/></svg>
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span className="text-[11px] font-bold text-[var(--color-primary-600)]">重点活动</span>
+                  <span className="rounded-[4px] bg-[var(--color-primary-100)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--color-primary-700)]">每日可参加</span>
+                </span>
+                <span className="mt-1 block text-[20px] font-bold leading-[1.3] text-[var(--color-ink)]">安利与创作福利</span>
+                <span className="mt-1 block text-[12px] leading-relaxed text-[var(--color-text-secondary)]">分享真实体验，领取币与累计 VIP 奖励</span>
+              </span>
+              <span className="mt-7 flex shrink-0 items-center gap-1 text-[12px] font-semibold text-[var(--color-primary-600)]">
+                进入
+                <svg className="transition-transform group-hover:translate-x-0.5" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+              </span>
+            </span>
+            <span className="grid grid-cols-3 divide-x divide-[var(--color-divider)] border-t border-[var(--color-divider)] bg-[var(--color-page-soft)]/60 py-2.5 text-center">
+              <span><strong className="block text-[16px] font-bold text-[var(--color-ink)]">+20 币</strong><small className="text-[10px] text-[var(--color-text-muted)]">每日截图</small></span>
+              <span><strong className="block text-[16px] font-bold text-[var(--color-ink)]">+100 币</strong><small className="text-[10px] text-[var(--color-text-muted)]">原创作品</small></span>
+              <span><strong className="block text-[16px] font-bold text-[var(--color-ink)]">2 档 VIP</strong><small className="text-[10px] text-[var(--color-text-muted)]">累计领取</small></span>
+            </span>
+          </button>
+
+          <div className="mb-2 mt-5 flex items-center justify-between px-0.5">
+            <span className="text-[12px] font-semibold text-[var(--color-text-secondary)]">其他福利</span>
+            <span className="text-[11px] text-[var(--color-text-muted)]">邀请 · 抽奖 · 佣金</span>
+          </div>
+          <div className="grid grid-cols-3 rounded-[8px] border border-[var(--color-divider)] bg-[var(--color-page-soft)] p-1" role="tablist">
             {([['invite', '邀请'], ['lottery', '抽奖'], ['commission', '佣金']] as const)
               .map(([id, label]) => (
-                <button
-                  key={id}
-                  role="tab"
-                  aria-selected={view === id}
-                  onClick={() => setView(id)}
-                  className={`rounded-[6px] text-[13px] font-medium transition-colors ${view === id ? 'bg-[var(--color-page-surface)] text-[var(--color-ink)] shadow-[var(--shadow-soft)]' : 'text-[var(--color-text-muted)]'}`}
-                >
+                <button key={id} role="tab" aria-selected={view === id} onClick={() => setView(id)} className={`h-10 rounded-[6px] text-[13px] font-semibold transition ${view === id ? 'bg-[var(--color-page-surface)] text-[var(--color-primary-700)] shadow-[var(--shadow-soft)]' : 'text-[var(--color-text-secondary)]'}`}>
                   {label}
                 </button>
               ))}
           </div>
-        </AppPageContent>
 
-        <AppPageContent className="min-h-0 flex-1 overflow-y-auto px-4 pb-[116px] pt-4 sm:px-5">
-          {store.loading && !store.invite ? <RewardsSkeleton /> : store.error && !store.invite ? (
+          <div className="mt-4">
+            {view === 'content' ? (
+            <section className="space-y-4"><div className="rounded-[16px] border border-[var(--color-divider)] bg-[var(--color-page-surface)] p-4"><div className="flex items-center justify-between"><h2 className="text-[16px] font-semibold text-[var(--color-ink)]">活动怎么拿奖励</h2><span className="text-[11px] text-[var(--color-primary-600)]">累计发放</span></div><div className="mt-4 space-y-3"><RewardStep index="01" title="每日安利" detail="上传真实截图，通过审核得 20 币" value="+20" /><RewardStep index="02" title="原创作品" detail="发布包含 yuoyuo 的公开作品" value="+100" /><RewardStep index="03" title="点赞里程碑" detail="300 赞与 1000 赞分别解锁 VIP" value="VIP" /></div><button onClick={() => navigate('/rewards/content')} className="mt-5 h-[46px] w-full rounded-[12px] bg-[var(--color-primary-500)] text-[14px] font-semibold text-white">立即参加活动</button></div><p className="px-1 text-[12px] leading-relaxed text-[var(--color-text-muted)]">所有材料由专属渠道人工核验，同一用户每日最多提交 5 次。</p></section>
+          ) : store.loading && !store.invite ? <RewardsSkeleton /> : store.error && !store.invite ? (
             <LoadError onRetry={() => void store.refresh()} />
           ) : view === 'invite' ? (
             <InvitePanel
@@ -144,7 +178,8 @@ export function RewardsPage() {
             />
           ) : (
             <CommissionPanel store={store} pendingFen={pendingCommission} onToast={showToast} />
-          )}
+            )}
+          </div>
         </AppPageContent>
         <TabBar />
       </div>
@@ -214,6 +249,10 @@ function InvitePanel({ store, onCopyCode, onCopyLink }: {
       </div>
     </section>
   )
+}
+
+function RewardStep({ index, title, detail, value }: { index: string; title: string; detail: string; value: string }) {
+  return <div className="flex items-center gap-3 rounded-[8px] bg-[var(--color-page-soft)]/75 px-3 py-3"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[6px] bg-[var(--color-primary-100)] font-[var(--font-latin)] text-[11px] font-bold text-[var(--color-primary-700)]">{index}</span><span className="min-w-0 flex-1"><strong className="block text-[13px] text-[var(--color-ink)]">{title}</strong><small className="mt-0.5 block text-[11px] leading-relaxed text-[var(--color-text-muted)]">{detail}</small></span><strong className="shrink-0 text-[15px] font-bold text-[var(--color-primary-600)]">{value}</strong></div>
 }
 
 function LotteryPanel({ store, spinning, rotation, result, onDraw, onInvite, onToast }: {

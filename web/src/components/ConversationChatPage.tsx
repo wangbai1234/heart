@@ -110,7 +110,24 @@ import {
   QiXuPremiseCard,
   EliasVaynePremiseCard,
   ZhouJimingPremiseCard,
+  PeiJinchuanPremiseCard,
+  BaiYaoPremiseCard,
+  YeLinchuanPremiseCard,
+  ShenFengchuanPremiseCard,
+  HuoYanshenPremiseCard,
 } from './characterProfiles/BatchTwelvePremiseCards'
+import {
+  QinJingzhouPremiseCard,
+  YeJinghengPremiseCard,
+  LuoZhiyePremiseCard,
+  HanJingmoPremiseCard,
+  XuYanzhiPremiseCard,
+  ShangYanliPremiseCard,
+  ShenLiPremiseCard,
+  FuYichenPremiseCard,
+  XuChangyePremiseCard,
+  SuChenPremiseCard,
+} from './characterProfiles/BatchElevenPremiseCards'
 import { getCharacterSettings } from '../services/api'
 
 const EMPTY_MESSAGES: Message[] = []
@@ -193,6 +210,21 @@ const PREMISE_CARDS: Record<string, ComponentType> = {
   qi_xu: QiXuPremiseCard,
   elias_vayne: EliasVaynePremiseCard,
   zhou_jiming: ZhouJimingPremiseCard,
+  qin_jingzhou: QinJingzhouPremiseCard,
+  ye_jingheng: YeJinghengPremiseCard,
+  luo_zhiye: LuoZhiyePremiseCard,
+  han_jingmo: HanJingmoPremiseCard,
+  xu_yanzhi: XuYanzhiPremiseCard,
+  shang_yanli: ShangYanliPremiseCard,
+  shen_li: ShenLiPremiseCard,
+  fu_yichen: FuYichenPremiseCard,
+  xu_changye: XuChangyePremiseCard,
+  su_chen: SuChenPremiseCard,
+  pei_jinchuan: PeiJinchuanPremiseCard,
+  bai_yao: BaiYaoPremiseCard,
+  ye_linchuan: YeLinchuanPremiseCard,
+  shen_fengchuan: ShenFengchuanPremiseCard,
+  huo_yanshen: HuoYanshenPremiseCard,
 }
 
 /** 引导回复气泡：首聊时出现在消息区底部，点击直接发送（帮用户破冰）。

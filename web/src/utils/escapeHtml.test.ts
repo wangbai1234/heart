@@ -4,7 +4,6 @@ import { escapeHtml, escapeHtmlAllowBr } from './escapeHtml'
 
 // escapeHtml 存在的唯一理由是 PremiseCardBase 把角色数据拼进 iframe srcDoc。
 // UGC 角色创作会让用户编辑那些字段，所以注入向量必须被锁住。
-// 见 docs/UGC_PRESENTATION_GAPS.md 第 3 节。
 
 describe('escapeHtml', () => {
   it('中和 script 标签', () => {

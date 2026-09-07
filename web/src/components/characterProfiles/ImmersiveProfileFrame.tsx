@@ -57,7 +57,7 @@ export function ImmersiveProfileFrame({
         display: 'block',
         background: 'transparent',
       }}
-      sandbox="allow-same-origin"
+      sandbox="allow-scripts allow-same-origin"
     />
   )
 }

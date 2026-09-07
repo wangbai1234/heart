@@ -575,11 +575,6 @@ async def admin_grant_membership(
 # Character review (human moderation of UGC public/unlisted characters)
 # ─────────────────────────────────────────────────────────────────────────────
 
-# Reward config for approved characters.
-_REVIEW_APPROVE_COINS = 100  # display credits per approved character
-_MILESTONE_APPROVED_COUNT = 5  # approved characters that unlock the Plus reward
-_MILESTONE_PLUS_DAYS = 30  # length of the milestone Plus membership
-
 
 class RejectRequest(BaseModel):
     reason: str = Field(..., min_length=1, max_length=500, description="驳回原因（用户可见）")
@@ -1057,38 +1052,12 @@ async def _grant_approval_rewards(
     owner_id: uuid.UUID,
     visibility: str,
 ) -> dict:
-    """Grant rewards only when an approved character is public.
+    """Character moderation no longer grants promotional rewards.
 
-    - Coins: idempotent per character (idempotency_key = char_review:{cid}).
-    - Link-only (unlisted) approval: moderation succeeds, but grants no reward.
-    - Existing 5-approved milestone behavior is unchanged and remains guarded.
-    Returns a summary of what was granted (for the admin response / logs).
+    The approval response keeps the legacy shape for older clients, but all
+    reward fields are deliberately zero/false. Promotion rewards are handled
+    exclusively by the social promotion task workflow.
     """
-    reward_eligible = visibility == "public"
-    coins_granted = 0
-    if reward_eligible:
-        # Avoid calling grant() on an idempotency hit: grant() rolls the current
-        # transaction back on conflict, which would also undo this approval.
-        already_rewarded = (
-            await db.execute(
-                text("SELECT 1 FROM credit_transactions WHERE idempotency_key = :key LIMIT 1"),
-                {"key": f"char_review:{character_id}"},
-            )
-        ).scalar_one_or_none()
-        if already_rewarded is None:
-            await grant(
-                db,
-                owner_id,
-                _REVIEW_APPROVE_COINS * 100,  # display → internal fen
-                idempotency_key=f"char_review:{character_id}",
-                type_str="grant",
-                ref_type="character_review",
-                ref_id=character_id,
-            )
-            coins_granted = _REVIEW_APPROVE_COINS
-
-    # Preserve the existing milestone rule: all approved characters count,
-    # regardless of whether their visibility is public or link-only.
     cnt_row = await db.execute(
         text(
             """
@@ -1102,35 +1071,11 @@ async def _grant_approval_rewards(
     )
     approved_count = int(cnt_row.scalar() or 0)
 
-    milestone_granted = False
-    if approved_count >= _MILESTONE_APPROVED_COUNT:
-        # Guard: insert the milestone marker; only the first insert wins.
-        ins = await db.execute(
-            text(
-                """
-                INSERT INTO user_reward_milestones (user_id, milestone)
-                VALUES (:uid, 'approved_5_plus')
-                ON CONFLICT (user_id, milestone) DO NOTHING
-                RETURNING user_id
-                """
-            ),
-            {"uid": owner_id},
-        )
-        if ins.scalar_one_or_none() is not None:
-            await activate_or_extend(
-                db,
-                owner_id,
-                "plus",
-                _MILESTONE_PLUS_DAYS,
-                granted_by=f"milestone:approved_5:{uuid.uuid4()}",
-            )
-            milestone_granted = True
-
     return {
-        "reward_eligible": reward_eligible,
-        "coins_granted": coins_granted,
+        "reward_eligible": False,
+        "coins_granted": 0,
         "approved_count": approved_count,
-        "milestone_plus_granted": milestone_granted,
+        "milestone_plus_granted": False,
     }
 
 

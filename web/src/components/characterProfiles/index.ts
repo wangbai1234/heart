@@ -104,6 +104,38 @@ export {
   TangJingzhouProfile,
   PeiZhaoyeProfile,
 } from './BatchNineProfiles'
+// Nimoo 成品级媒介叙引：每个角色采用独立页面媒介与阅读动作
+export {
+  QinJingzhouProfile,
+  YeJinghengProfile,
+  LuoZhiyeProfile,
+  HanJingmoProfile,
+  XuYanzhiProfile,
+  ShangYanliProfile,
+  ShenLiProfile,
+  FuYichenProfile,
+  XuChangyeProfile,
+  SuChenProfile,
+} from './NimooFinalProfiles'
+export {
+  PeiJinchuanProfile,
+  BaiYaoProfile,
+  YeLinchuanProfile,
+  ShenFengchuanProfile,
+  HuoYanshenProfile,
+} from './BatchTwelveNewProfiles'
+export {
+  QinJingzhouPremiseCard,
+  YeJinghengPremiseCard,
+  LuoZhiyePremiseCard,
+  HanJingmoPremiseCard,
+  XuYanzhiPremiseCard,
+  ShangYanliPremiseCard,
+  ShenLiPremiseCard,
+  FuYichenPremiseCard,
+  XuChangyePremiseCard,
+  SuChenPremiseCard,
+} from './BatchElevenPremiseCards'
 export {
   CenLiPremiseCard,
   XieTingyunPremiseCard,
@@ -128,4 +160,9 @@ export {
   QiXuPremiseCard,
   EliasVaynePremiseCard,
   ZhouJimingPremiseCard,
+  PeiJinchuanPremiseCard,
+  BaiYaoPremiseCard,
+  YeLinchuanPremiseCard,
+  ShenFengchuanPremiseCard,
+  HuoYanshenPremiseCard,
 } from './BatchTwelvePremiseCards'
