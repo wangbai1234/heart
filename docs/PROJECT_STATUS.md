@@ -9,6 +9,9 @@
 **当前分支**：main（PR #128–#158 全部合并）
 
 > 📖 **启动/部署/手机端测试/启用语义召回，一律看 [`docs/EXECUTION_MANUAL.md`](EXECUTION_MANUAL.md)（单一操作手册）。**
+> 🚀 **生产发布看 [`docs/PRODUCTION_DEPLOYMENT.md`](PRODUCTION_DEPLOYMENT.md)**。当前服务器为
+> `deploy@103.69.128.125:22`，部署目录 `/home/deploy/heart`。2026-09-07 已恢复 Git 元数据，
+> 但线上历史直传改动尚未完全归并 `origin/main`，后端 Git 发布暂由脚本安全阻止；详见该文档“当前阻塞”。
 > 📖 **拉取最新代码后如何 bring-up 本地环境**，直接看下方 §0.5「拉取最新代码后必做清单」。
 
 ---

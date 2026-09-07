@@ -4,6 +4,9 @@
 > 状态类信息以本文件与 `docs/PROJECT_STATUS.md` 为准；旧的阶段性文档（TEST_RESULTS / MEMORY_FIX_PLAN 等）为历史记录。
 > **最后更新：2026-07-06**
 
+> 生产服务器发布已迁移到 `deploy@103.69.128.125:22`。生产操作统一参见
+> [`PRODUCTION_DEPLOYMENT.md`](PRODUCTION_DEPLOYMENT.md)，不要再使用旧 IP/端口或临时拼接 rsync 命令。
+
 ---
 
 ## 1. 架构与技术栈

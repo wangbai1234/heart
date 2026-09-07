@@ -12,8 +12,8 @@
 #
 # 可覆盖环境变量：
 #   SRC_DIR=/path/to/scenarios   # 本地 .txt 目录（默认 ~/Downloads/剧情设定）
-#   HEART_PROD_SSH=deploy@1.2.3.4   # ssh 目标（默认 deploy@167.104.96.125）
-#   HEART_PROD_PORT=52200           # ssh 端口（默认 52200）
+#   HEART_PROD_SSH=deploy@1.2.3.4   # ssh 目标（默认 deploy@103.69.128.125）
+#   HEART_PROD_PORT=22              # ssh 端口（默认 22）
 #   HEART_PROD_DIR=/home/deploy/heart  # 服务器上仓库检出路径
 #
 # 前置：
@@ -32,8 +32,8 @@ die()  { printf "${c_red}[error]${c_reset} %s\n" "$*" >&2; exit 1; }
 
 # ── 参数 ──────────────────────────────────────────────────────────────────
 SRC_DIR="${SRC_DIR:-/Users/wanglixun/Downloads/剧情设定}"
-HEART_PROD_SSH="${HEART_PROD_SSH:-deploy@167.104.96.125}"
-HEART_PROD_PORT="${HEART_PROD_PORT:-52200}"
+HEART_PROD_SSH="${HEART_PROD_SSH:-deploy@103.69.128.125}"
+HEART_PROD_PORT="${HEART_PROD_PORT:-22}"
 HEART_PROD_DIR="${HEART_PROD_DIR:-/home/deploy/heart}"
 REMOTE_DIR="$HEART_PROD_DIR/scenarios_src"
 

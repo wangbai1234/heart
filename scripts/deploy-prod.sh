@@ -68,6 +68,30 @@ api_is_live() {
         &>/dev/null
 }
 
+# Production backend deploys must come from a clean, reviewed main branch.
+# Untracked operational assets are allowed; tracked drift is not. This prevents
+# a `git pull` from silently mixing old rsync/direct-upload changes with main.
+sync_main_safely() {
+    command -v git &>/dev/null || die "git 未安装"
+    [[ -d "$REPO_ROOT/.git" ]] || die "$REPO_ROOT 不是 Git 仓库，禁止继续后端部署"
+
+    local branch tracked_dirty
+    branch=$(git -C "$REPO_ROOT" branch --show-current)
+    [[ "$branch" == "main" ]] || die \
+        "生产仓库当前分支是 '$branch'，不是 main。先按 docs/PRODUCTION_DEPLOYMENT.md 完成生产快照归并，禁止自动覆盖。"
+
+    tracked_dirty=$(git -C "$REPO_ROOT" status --porcelain=v1 --untracked-files=no)
+    [[ -z "$tracked_dirty" ]] || {
+        git -C "$REPO_ROOT" status --short --untracked-files=no >&2
+        die "生产仓库存在受跟踪文件漂移，禁止 git pull；先保存/归并这些线上改动"
+    }
+
+    log "获取 origin/main..."
+    git -C "$REPO_ROOT" fetch --prune origin main
+    git -C "$REPO_ROOT" merge --ff-only origin/main
+    info "✓ 生产代码已快进到 $(git -C "$REPO_ROOT" rev-parse --short HEAD)"
+}
+
 # ──────────────────────────────────────────────────────────────────────────────
 # --stop / --restart / --status / --logs
 # ──────────────────────────────────────────────────────────────────────────────
@@ -318,8 +342,7 @@ main() {
     case "$MODE" in
         --update)
             log "增量更新模式（拉代码 + 重建 + 重启，保留数据）"
-            cd "$REPO_ROOT"
-            git pull
+            sync_main_safely
             build_frontend
             DC build api encoder-worker
             DC up -d
@@ -334,8 +357,7 @@ main() {
             #   并重读 .env.prod。若在 up 前 `DC exec ... alembic upgrade`，exec 进的是【旧
             #   容器】，跑的是旧迁移文件 + 旧代码，新拉的迁移根本不生效（撒谎式绿灯）。
             log "后端增量更新（前端已本机 rsync，跳过服务器构建；顺序 build→up→migrate）"
-            cd "$REPO_ROOT"
-            git pull --ff-only origin main
+            sync_main_safely
             [[ -d "$REPO_ROOT/web/dist" ]] || warn "web/dist 不存在——前端是否已本机构建 + rsync？"
             DC build api encoder-worker
             DC up -d                 # 先 up：换新镜像 + 重读 .env.prod
