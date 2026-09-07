@@ -23,5 +23,16 @@ jobs:
           python-version: "3.11"
           cache: pip
 
+      # ubuntu-latest's bundled npm has intermittently crashed in Arborist with
+      # "Cannot read properties of null (reading 'edgesOut')" before tsc starts.
+      # Pin the same Node/npm toolchain used by the local release build.
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Pin npm
+        run: npm install --global npm@10.9.2
+
       - name: Run scripts/ci.sh all
         run: bash scripts/ci.sh all
