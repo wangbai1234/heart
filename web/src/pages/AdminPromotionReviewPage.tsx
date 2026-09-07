@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ApiError, adminApprovePromotion, adminListPendingPromotions, adminNeedsInfoPromotion, adminRejectPromotion, type PromotionSubmission } from '../services/api'
+import { ApiError, adminApprovePromotion, adminGetPromotionImage, adminListPendingPromotions, adminNeedsInfoPromotion, adminRejectPromotion, type PromotionSubmission } from '../services/api'
 import { useToastStore } from '../stores/toastStore'
 
 const ADMIN_KEY_STORAGE = 'heart_admin_key'
@@ -34,5 +34,35 @@ export function AdminPromotionReviewPage() {
 
   if (!authed) return <div className="flex min-h-full items-center justify-center px-6"><div className="w-full max-w-[360px] rounded-[18px] border border-[var(--color-divider)] bg-[var(--color-page-surface)] p-6"><h1 className="text-[20px] font-semibold text-[var(--color-ink)]">推广审核台</h1><input type="password" value={key} onChange={(e) => setKey(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void load(key.trim())} placeholder="管理密钥" className="mt-4 h-[46px] w-full rounded-[10px] border border-[var(--color-divider)] bg-transparent px-3" /><button disabled={!key.trim() || loading} onClick={() => void load(key.trim())} className="mt-4 h-[46px] w-full rounded-[10px] bg-[var(--color-primary-500)] text-white">{loading ? '验证中…' : '进入审核台'}</button></div></div>
 
-  return <div className="min-h-full bg-[var(--color-bg-page)]"><div style={{ height: 'var(--safe-top)' }} /><div className="flex h-[58px] items-center justify-between px-5"><h1 className="text-[18px] font-semibold text-[var(--color-ink)]">推广待审核 · {items.length}</h1><button onClick={() => void load(key)} className="text-[13px] text-[var(--color-primary-600)]">刷新</button></div><div className="space-y-3 px-4 pb-10">{items.length === 0 && <p className="pt-20 text-center text-[14px] text-[var(--color-text-muted)]">暂无待审核内容</p>}{items.map((item) => <article key={item.id} className="rounded-[16px] border border-[var(--color-divider)] bg-[var(--color-page-surface)] p-4"><div className="flex items-start justify-between gap-3"><div><p className="text-[15px] font-semibold text-[var(--color-ink)]">{taskLabel[item.task_type]} · {platformLabel[item.platform]}</p><p className="mt-1 text-[12px] text-[var(--color-text-muted)]">{item.owner_email || item.user_id} · {new Date(item.submitted_at).toLocaleString('zh-CN')}</p></div><span className="text-[12px] text-[var(--color-text-secondary)]">{item.likes_count != null ? `${item.likes_count} 赞` : ''}</span></div>{item.screenshot_url && <img src={item.screenshot_url} alt="提交截图" className="mt-3 max-h-[360px] w-full rounded-[10px] object-contain" />}{item.post_url && <p className="mt-3 break-all text-[12px] text-[var(--color-primary-700)]">{item.post_url}</p>}{item.title && <p className="mt-2 text-[13px] text-[var(--color-text-secondary)]">{item.title}</p>}<div className="mt-4 grid grid-cols-3 gap-2"><button onClick={() => void action(item, 'approve')} className="h-[40px] rounded-[9px] bg-[var(--color-primary-500)] text-[13px] font-semibold text-white">通过</button><button onClick={() => { setReasonId(item.id); setReason('') }} className="h-[40px] rounded-[9px] bg-[var(--color-page-soft)] text-[13px] text-[var(--color-ink)]">驳回/补充</button><button onClick={() => navigator.clipboard.writeText(item.post_url || '')} className="h-[40px] rounded-[9px] bg-[var(--color-page-soft)] text-[13px] text-[var(--color-ink)]">复制链接</button></div>{reasonId === item.id && <div className="mt-3"><textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder="填写驳回或补充说明" rows={3} className="w-full rounded-[9px] border border-[var(--color-divider)] bg-transparent p-2 text-[13px]" /><div className="mt-2 flex gap-2"><button disabled={!reason.trim()} onClick={() => void action(item, 'needs')} className="h-[38px] flex-1 rounded-[9px] bg-[var(--color-page-soft)] text-[12px]">要求补充</button><button disabled={!reason.trim()} onClick={() => void action(item, 'reject')} className="h-[38px] flex-1 rounded-[9px] bg-[var(--color-error)] text-[12px] text-white">确认驳回</button></div></div>}</article>)}</div></div>
+  return <div className="min-h-full bg-[var(--color-bg-page)]"><div style={{ height: 'var(--safe-top)' }} /><div className="flex h-[58px] items-center justify-between px-5"><h1 className="text-[18px] font-semibold text-[var(--color-ink)]">推广待审核 · {items.length}</h1><button onClick={() => void load(key)} className="text-[13px] text-[var(--color-primary-600)]">刷新</button></div><div className="space-y-3 px-4 pb-10">{items.length === 0 && <p className="pt-20 text-center text-[14px] text-[var(--color-text-muted)]">暂无待审核内容</p>}{items.map((item) => <article key={item.id} className="rounded-[16px] border border-[var(--color-divider)] bg-[var(--color-page-surface)] p-4"><div className="flex items-start justify-between gap-3"><div><p className="text-[15px] font-semibold text-[var(--color-ink)]">{taskLabel[item.task_type]} · {platformLabel[item.platform]}</p><p className="mt-1 text-[12px] text-[var(--color-text-muted)]">{item.owner_email || item.user_id} · {new Date(item.submitted_at).toLocaleString('zh-CN')}</p></div><span className="text-[12px] text-[var(--color-text-secondary)]">{item.likes_count != null ? `${item.likes_count} 赞` : ''}</span></div>{item.screenshot_url && <AdminEvidenceImage submissionId={item.id} adminKey={key} />}{item.post_url && <p className="mt-3 break-all text-[12px] text-[var(--color-primary-700)]">{item.post_url}</p>}{item.title && <p className="mt-2 text-[13px] text-[var(--color-text-secondary)]">{item.title}</p>}<div className="mt-4 grid grid-cols-3 gap-2"><button onClick={() => void action(item, 'approve')} className="h-[40px] rounded-[9px] bg-[var(--color-primary-500)] text-[13px] font-semibold text-white">通过</button><button onClick={() => { setReasonId(item.id); setReason('') }} className="h-[40px] rounded-[9px] bg-[var(--color-page-soft)] text-[13px] text-[var(--color-ink)]">驳回/补充</button><button onClick={() => navigator.clipboard.writeText(item.post_url || '')} className="h-[40px] rounded-[9px] bg-[var(--color-page-soft)] text-[13px] text-[var(--color-ink)]">复制链接</button></div>{reasonId === item.id && <div className="mt-3"><textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder="填写驳回或补充说明" rows={3} className="w-full rounded-[9px] border border-[var(--color-divider)] bg-transparent p-2 text-[13px]" /><div className="mt-2 flex gap-2"><button disabled={!reason.trim()} onClick={() => void action(item, 'needs')} className="h-[38px] flex-1 rounded-[9px] bg-[var(--color-page-soft)] text-[12px]">要求补充</button><button disabled={!reason.trim()} onClick={() => void action(item, 'reject')} className="h-[38px] flex-1 rounded-[9px] bg-[var(--color-error)] text-[12px] text-white">确认驳回</button></div></div>}</article>)}</div></div>
+}
+
+function AdminEvidenceImage({ submissionId, adminKey }: { submissionId: string; adminKey: string }) {
+  const [imageUrl, setImageUrl] = useState<string | null>(null)
+  const [failed, setFailed] = useState(false)
+
+  useEffect(() => {
+    let active = true
+    let objectUrl: string | null = null
+    setFailed(false)
+    void adminGetPromotionImage(submissionId, adminKey)
+      .then((blob) => {
+        if (!active) return
+        objectUrl = URL.createObjectURL(blob)
+        setImageUrl(objectUrl)
+      })
+      .catch(() => { if (active) setFailed(true) })
+    return () => {
+      active = false
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
+    }
+  }, [adminKey, submissionId])
+
+  if (failed) {
+    return <div className="mt-3 flex min-h-[120px] items-center justify-center rounded-[10px] border border-dashed border-[var(--color-divider)] text-[12px] text-[var(--color-error)]">截图加载失败，请刷新重试</div>
+  }
+  if (!imageUrl) {
+    return <div className="mt-3 flex min-h-[120px] items-center justify-center rounded-[10px] bg-[var(--color-page-soft)] text-[12px] text-[var(--color-text-muted)]">截图加载中…</div>
+  }
+  return <img src={imageUrl} alt="提交截图" className="mt-3 max-h-[360px] w-full rounded-[10px] object-contain" />
 }

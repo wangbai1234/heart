@@ -149,7 +149,9 @@ export function PromotionPage() {
               <TaskTab active={mode === 'creator'} onClick={() => changeMode('creator')}>原创作品 · 100 币</TaskTab>
             </div>
 
-            <div className="mt-5">
+            {mode === 'ambassador' ? <AmbassadorGuide /> : <CreatorGuide />}
+
+            <div className="mt-6 border-t border-[var(--color-divider)] pt-5">
               <p className="mb-2 text-[12px] font-semibold text-[var(--color-ink)]">发布平台</p>
               <div className="grid grid-cols-2 overflow-hidden rounded-[8px] border border-[var(--color-divider)]">
                 {(Object.keys(PLATFORM_LABELS) as Array<keyof typeof PLATFORM_LABELS>).map((key) => (
@@ -165,22 +167,18 @@ export function PromotionPage() {
               </div>
             </div>
 
-            <div className="mt-4 border-l-2 border-[var(--color-secondary)] bg-[var(--color-page-soft)]/60 px-3 py-2.5 text-[11px] leading-relaxed text-[var(--color-text-secondary)]">
-              {mode === 'ambassador'
-                ? '上传能看出平台、分享内容和真实体验的完整截图，审核通过后 20 币自动到账。'
-                : '提交公开作品链接供审核；作品通过先得 100 币，点赞达标后可继续申请累计 VIP。'}
-            </div>
-
             {mode === 'ambassador' ? (
-              <div className="mt-5">
-                <h3 className="text-[14px] font-semibold text-[var(--color-ink)]">安利内容截图</h3>
-                <p className="mt-1 text-[12px] leading-relaxed text-[var(--color-text-muted)]">同一用户每日最多提交 5 次，请确保截图完整清晰。</p>
+              <div className="mt-5 border-t border-[var(--color-divider)] pt-5">
+                <p className="text-[11px] font-bold text-[var(--color-primary-600)]">提交材料</p>
+                <h3 className="mt-1 text-[15px] font-semibold text-[var(--color-ink)]">上传 1 张完整安利截图</h3>
+                <p className="mt-1 text-[12px] leading-relaxed text-[var(--color-text-muted)]">截图中需同时看清发布平台、安利内容和 yuoyuo 关键词。</p>
                 <ScreenshotUpload key={`ambassador-${fileInputVersion}`} file={file} onFile={selectFile} title="上传安利截图" required />
               </div>
             ) : (
-              <div className="mt-5">
-                <h3 className="text-[14px] font-semibold text-[var(--color-ink)]">公开作品资料</h3>
-                <p className="mt-1 text-[12px] leading-relaxed text-[var(--color-text-muted)]">作品正文或画面需包含 yuoyuo，审核人员会复制链接核验。</p>
+              <div className="mt-5 border-t border-[var(--color-divider)] pt-5">
+                <p className="text-[11px] font-bold text-[var(--color-primary-600)]">提交材料</p>
+                <h3 className="mt-1 text-[15px] font-semibold text-[var(--color-ink)]">粘贴公开作品链接</h3>
+                <p className="mt-1 text-[12px] leading-relaxed text-[var(--color-text-muted)]">审核人员会复制链接打开作品，请确认链接有效且无需关注即可查看。</p>
                 <input
                   value={postUrl}
                   onChange={(event) => setPostUrl(event.target.value)}
@@ -193,11 +191,13 @@ export function PromotionPage() {
                   placeholder="作品标题（可选）"
                   className="mt-2 h-[46px] w-full rounded-[8px] border border-[var(--color-divider)] bg-[var(--color-page-soft)]/45 px-3 text-[14px] text-[var(--color-ink)] outline-none placeholder:text-[var(--color-text-placeholder)] focus:border-[var(--color-primary-400)]"
                 />
-                <ScreenshotUpload key={`creator-${fileInputVersion}`} file={file} onFile={selectFile} title="上传作品截图" />
-                <div className="mt-4 divide-y divide-[var(--color-divider)] border-y border-[var(--color-divider)]">
+                <ScreenshotUpload key={`creator-${fileInputVersion}`} file={file} onFile={selectFile} title="上传作品截图（可选）" />
+                <p className="mt-5 text-[11px] font-bold text-[var(--color-primary-600)]">作品通过后可继续领取</p>
+                <div className="mt-2 divide-y divide-[var(--color-divider)] border-y border-[var(--color-divider)]">
                   <MilestoneRow value="300 赞" reward="额外领取 29 元档 VIP" />
                   <MilestoneRow value="1000 赞" reward="再领取 69 元档 VIP 30 天" />
                 </div>
+                <p className="mt-3 text-[11px] leading-relaxed text-[var(--color-text-muted)]">作品审核通过后，在“我的提交”找到该作品并提交最新点赞数与截图。两档奖励累计发放。</p>
               </div>
             )}
 
@@ -265,6 +265,107 @@ export function PromotionPage() {
         <TabBar />
       </div>
     </AppPageShell>
+  )
+}
+
+function AmbassadorGuide() {
+  return (
+    <div className="mt-5">
+      <RewardSummary eyebrow="每日安利任务" value="+20 币" description="每条有效安利审核通过后自动到账" />
+      <GuideHeading title="怎么完成" />
+      <div className="mt-1 divide-y divide-[var(--color-divider)]">
+        <GuideStep number="01" title="发布真实安利">
+          在抖音或小红书分享你使用 yuoyuo 的真实体验，可发布评论、图文或动态，内容中需明确出现“yuoyuo”。
+        </GuideStep>
+        <GuideStep number="02" title="保留完整截图">
+          截图需看清发布平台、完整安利内容和 yuoyuo 关键词。请勿裁掉关键信息，也不要提交他人的内容。
+        </GuideStep>
+        <GuideStep number="03" title="上传并等待审核">
+          回到本页选择对应平台并上传截图。审核通过后，20 币自动发放到余额。
+        </GuideStep>
+      </div>
+      <RuleNote lines={[
+        '抖音与小红书合计每日最多提交 5 次',
+        '重复截图、无关内容或无法辨认的截图不发奖',
+        '每次安利请使用自然、真实且不同的表达',
+      ]} />
+    </div>
+  )
+}
+
+function CreatorGuide() {
+  return (
+    <div className="mt-5">
+      <RewardSummary eyebrow="原创作品任务" value="+100 币" description="每篇有效原创作品审核通过后自动到账" />
+      <GuideHeading title="发布要求" />
+      <div className="mt-1 divide-y divide-[var(--color-divider)]">
+        <GuideStep number="01" title="创作公开作品">
+          在抖音或小红书发布原创图文或视频，正文、话题或画面中需明确出现“yuoyuo”。
+        </GuideStep>
+        <GuideStep number="02" title="分享真实使用体验">
+          内容需围绕 yuoyuo 展开，例如角色互动、聊天记录、好用的人设指令、功能体验或创意玩法。
+        </GuideStep>
+        <GuideStep number="03" title="复制链接回来提交">
+          作品发布后复制公开链接，在下方粘贴并提交审核；作品截图可一并上传，便于快速核验。
+        </GuideStep>
+      </div>
+      <div className="mt-4 border-y border-[var(--color-divider)] py-3">
+        <p className="text-[12px] font-semibold text-[var(--color-ink)]">推荐选题</p>
+        <div className="mt-2 flex flex-wrap gap-x-2 gap-y-1.5 text-[11px] leading-relaxed text-[var(--color-text-secondary)]">
+          <span>角色聊天实录</span><span>·</span><span>原创人设分享</span><span>·</span>
+          <span>功能体验</span><span>·</span><span>创意玩法</span><span>·</span><span>使用心得</span>
+        </div>
+      </div>
+      <RuleNote lines={[
+        '作品需保持公开，至少到审核完成后再调整可见范围',
+        '同一作品只能领取 1 次原创奖励，请勿重复提交',
+        '搬运、抄袭或与 yuoyuo 无关的内容不发奖',
+      ]} />
+    </div>
+  )
+}
+
+function RewardSummary({ eyebrow, value, description }: { eyebrow: string; value: string; description: string }) {
+  return (
+    <div className="border-l-4 border-[var(--color-primary-500)] bg-[var(--color-primary-50)]/45 px-4 py-3.5">
+      <p className="text-[11px] font-semibold text-[var(--color-text-secondary)]">{eyebrow}</p>
+      <div className="mt-1 flex items-baseline justify-between gap-3">
+        <strong className="shrink-0 text-[25px] font-bold text-[var(--color-primary-600)]">{value}</strong>
+        <span className="text-right text-[11px] leading-relaxed text-[var(--color-text-secondary)]">{description}</span>
+      </div>
+    </div>
+  )
+}
+
+function GuideHeading({ title }: { title: string }) {
+  return (
+    <div className="mt-5 flex items-center gap-2">
+      <span className="h-4 w-[3px] bg-[var(--color-primary-500)]" aria-hidden="true" />
+      <h3 className="text-[15px] font-semibold text-[var(--color-ink)]">{title}</h3>
+    </div>
+  )
+}
+
+function GuideStep({ number, title, children }: { number: string; title: string; children: string }) {
+  return (
+    <div className="grid grid-cols-[30px_minmax(0,1fr)] gap-2 py-3.5">
+      <span className="pt-0.5 text-[11px] font-bold text-[var(--color-primary-600)]">{number}</span>
+      <div>
+        <h4 className="text-[14px] font-semibold text-[var(--color-ink)]">{title}</h4>
+        <p className="mt-1 text-[12px] leading-[1.75] text-[var(--color-text-secondary)]">{children}</p>
+      </div>
+    </div>
+  )
+}
+
+function RuleNote({ lines }: { lines: string[] }) {
+  return (
+    <div className="mt-3 border-l-2 border-[var(--color-secondary)] bg-[var(--color-page-soft)]/60 px-3 py-3">
+      <p className="text-[12px] font-semibold text-[var(--color-ink)]">审核说明</p>
+      <ul className="mt-1.5 space-y-1 text-[11px] leading-relaxed text-[var(--color-text-secondary)]">
+        {lines.map((line) => <li key={line}>· {line}</li>)}
+      </ul>
+    </div>
   )
 }
 

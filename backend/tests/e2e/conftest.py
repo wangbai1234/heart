@@ -16,6 +16,7 @@ from __future__ import annotations
 import os
 import socket
 import subprocess
+import tempfile
 import time
 from pathlib import Path
 from typing import Iterator
@@ -89,6 +90,7 @@ def e2e_server() -> Iterator[str]:
     # Stable JWT secret for the run
     env.setdefault("JWT_SECRET_KEY", "e2e-test-secret-not-for-prod-do-not-reuse")
 
+    server_log = tempfile.TemporaryFile()
     proc = subprocess.Popen(
         [
             "uvicorn",
@@ -103,19 +105,21 @@ def e2e_server() -> Iterator[str]:
         ],
         cwd=str(backend_dir),
         env=env,
-        stdout=subprocess.PIPE,
+        stdout=server_log,
         stderr=subprocess.STDOUT,
     )
 
     try:
         _wait_ready(base_url)
-    except Exception:
+    except Exception as exc:
         proc.terminate()
         try:
-            out = proc.stdout.read().decode("utf-8", errors="replace") if proc.stdout else ""
+            server_log.seek(0)
+            out = server_log.read().decode("utf-8", errors="replace")
         except Exception:
             out = ""
-        raise RuntimeError(f"uvicorn failed to start.\n--- server output ---\n{out}")
+        server_log.close()
+        raise RuntimeError(f"uvicorn failed to start.\n--- server output ---\n{out}") from exc
 
     yield base_url
 
@@ -124,6 +128,7 @@ def e2e_server() -> Iterator[str]:
         proc.wait(timeout=5)
     except subprocess.TimeoutExpired:
         proc.kill()
+    server_log.close()
 
 
 @pytest.fixture(scope="session")

@@ -7,7 +7,7 @@ import uuid
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile, status
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,6 +25,11 @@ admin_router = APIRouter(prefix="/api/admin/promotions", tags=["admin-promotions
 DAILY_LIMIT = 5
 ALLOWED_PLATFORMS = {"douyin", "xiaohongshu"}
 TASK_TYPES = {"ambassador", "creator", "likes"}
+CONTENT_TYPE_EXTENSIONS = {
+    "image/jpeg": "jpg",
+    "image/png": "png",
+    "image/webp": "webp",
+}
 
 
 def _today_start() -> datetime:
@@ -121,15 +126,15 @@ async def submit_promotion(  # noqa: C901
         if len(data) > 8 * 1024 * 1024:
             raise HTTPException(400, "截图不能超过 8MB")
         try:
-            from heart.infra.storage import is_s3_configured, upload_file
+            from heart.infra.storage import _upload_to_s3, is_s3_configured
 
             if is_s3_configured():
-                screenshot_url = await upload_file(
-                    data,
+                key = (
                     f"promotion-evidence/{uid}/{uuid.uuid4().hex}."
-                    + (file.filename or "jpg").split(".")[-1],
-                    file.content_type,
+                    f"{CONTENT_TYPE_EXTENSIONS[file.content_type]}"
                 )
+                await _upload_to_s3(key, data, file.content_type)
+                screenshot_url = f"s3://{key}"
             else:
                 screenshot_url = (
                     "data:" + file.content_type + ";base64," + base64.b64encode(data).decode()
@@ -218,6 +223,48 @@ async def admin_pending_promotions(
 ) -> dict:
     rows = await _admin_rows(db)
     return {"pending": rows, "count": len(rows)}
+
+
+@admin_router.get("/{submission_id}/image")
+async def admin_promotion_image(
+    submission_id: str,
+    _: None = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+) -> Response:
+    """Proxy private promotion evidence to an authenticated administrator."""
+    sid = _parse_uuid(submission_id, "submission_id")
+    screenshot_url = (
+        await db.execute(
+            text("SELECT screenshot_url FROM promotion_submissions WHERE id=:id"),
+            {"id": sid},
+        )
+    ).scalar_one_or_none()
+    if not screenshot_url:
+        raise HTTPException(404, "截图不存在")
+
+    if screenshot_url.startswith("data:"):
+        try:
+            metadata, encoded = screenshot_url.split(",", 1)
+            content_type = metadata.removeprefix("data:").split(";", 1)[0]
+            data = base64.b64decode(encoded, validate=True)
+        except (ValueError, TypeError) as exc:
+            raise HTTPException(404, "截图数据已损坏") from exc
+    else:
+        from heart.infra.storage import get_s3_object, object_key_from_storage_url
+
+        key = object_key_from_storage_url(screenshot_url)
+        if not key:
+            raise HTTPException(404, "截图地址无效")
+        try:
+            data, content_type, _etag = await get_s3_object(key)
+        except Exception as exc:
+            raise HTTPException(404, "截图文件不存在") from exc
+
+    return Response(
+        content=data,
+        media_type=content_type,
+        headers={"Cache-Control": "private, max-age=300"},
+    )
 
 
 @admin_router.post("/{submission_id}/approve")
