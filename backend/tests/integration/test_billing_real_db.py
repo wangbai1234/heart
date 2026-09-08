@@ -88,12 +88,34 @@ class TestGrant:
         assert balance == 50
 
     async def test_grant_idempotent(self, db, user_id):
-        from heart.billing import grant
+        from heart.billing import grant_with_result
 
         key = f"grant-idem:{uuid.uuid4()}"
-        b1 = await grant(db, user_id, 100, idempotency_key=key)
-        b2 = await grant(db, user_id, 100, idempotency_key=key)
-        assert b1 == b2 == 100
+        first = await grant_with_result(db, user_id, 100, idempotency_key=key)
+        replay = await grant_with_result(db, user_id, 100, idempotency_key=key)
+        assert first.balance == replay.balance == 100
+        assert first.applied is True
+        assert replay.applied is False
+
+    async def test_grant_rejects_key_reused_for_another_user(self, db, user_id, engine):
+        from heart.billing import IdempotencyConflictError, get_balance, grant
+
+        other_user_id = uuid.uuid4()
+        async with engine.begin() as conn:
+            await conn.execute(
+                __import__("sqlalchemy").text(
+                    "INSERT INTO users (id, email, credits_balance) VALUES (:id, :email, 0)"
+                ),
+                {"id": other_user_id, "email": f"billing-other-{other_user_id.hex[:8]}@test.com"},
+            )
+
+        key = f"grant-owner:{uuid.uuid4()}"
+        await grant(db, user_id, 100, idempotency_key=key)
+
+        with pytest.raises(IdempotencyConflictError):
+            await grant(db, other_user_id, 100, idempotency_key=key)
+
+        assert await get_balance(db, other_user_id) == 0
 
     async def test_grant_creates_ledger_entry(self, db, user_id, engine):
         from heart.billing import grant

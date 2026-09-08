@@ -17,7 +17,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from heart.billing import grant
+from heart.billing import IdempotencyConflictError, grant, grant_with_result  # noqa: F401
 from heart.core.config import settings
 from heart.membership.service import activate_or_extend
 from heart.ss01_soul.character_catalog import coerce_tags, display_name_from_spec
@@ -385,6 +385,8 @@ class GrantCreditsResponse(BaseModel):
     email: str | None
     credited: int
     new_balance: float
+    already_applied: bool
+    idempotency_key: str
 
 
 @router.post("/credits/grant", response_model=GrantCreditsResponse)
@@ -397,7 +399,8 @@ async def admin_grant_credits(
 
     - 传 user_id 或 email（二选一，同时传以 user_id 为准）
     - amount 单位：display credits（前端显示的数字）
-    - 幂等：相同 idempotency_key 重复调用不重复加分
+    - 合法重试：credited=0、already_applied=true，不重复加分
+    - 幂等键已属于其他交易：返回 HTTP 409
     """
     user = await _resolve_user(db, body.user_id, body.email)
     uid = user["id"]
@@ -405,29 +408,41 @@ async def admin_grant_credits(
     amount_fen = body.amount * 100  # display → internal fen
     idem_key = body.idempotency_key or f"admin_grant:{uuid.uuid4()}"
 
-    new_balance_fen = await grant(
-        db,
-        uid,
-        amount_fen,
-        idempotency_key=idem_key,
-        ref_type=body.note,
-    )
+    try:
+        grant_result = await grant_with_result(
+            db,
+            uid,
+            amount_fen,
+            idempotency_key=idem_key,
+            ref_type=body.note,
+        )
+    except IdempotencyConflictError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "code": "idempotency_conflict",
+                "message": "幂等键已被另一笔积分交易使用，请核对后更换唯一键",
+            },
+        ) from exc
 
     logger.info(
         "admin_credits_granted",
         user_id=str(uid),
         email=user["email"],
-        amount=body.amount,
+        amount=body.amount if grant_result.applied else 0,
         note=body.note,
         idem_key=idem_key,
+        already_applied=not grant_result.applied,
     )
 
     return GrantCreditsResponse(
         ok=True,
         user_id=str(uid),
         email=user["email"],
-        credited=body.amount,
-        new_balance=new_balance_fen / 100,
+        credited=body.amount if grant_result.applied else 0,
+        new_balance=grant_result.balance / 100,
+        already_applied=not grant_result.applied,
+        idempotency_key=idem_key,
     )
 
 
