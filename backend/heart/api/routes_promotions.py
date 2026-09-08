@@ -30,6 +30,10 @@ CONTENT_TYPE_EXTENSIONS = {
     "image/png": "png",
     "image/webp": "webp",
 }
+MEMBERSHIP_REWARDS = (
+    {"threshold": 300, "tier": "plus", "label": "29 元档 VIP", "days": 30},
+    {"threshold": 1000, "tier": "immersive", "label": "69 元档 VIP", "days": 30},
+)
 
 
 def _today_start() -> datetime:
@@ -46,6 +50,22 @@ def _parse_uuid(value: str, field_name: str) -> uuid.UUID:
         return uuid.UUID(value)
     except (TypeError, ValueError) as exc:
         raise HTTPException(422, f"{field_name} 格式无效") from exc
+
+
+def _pending_membership_rewards(
+    likes_count: int,
+    milestone_300_granted: bool,
+    milestone_1000_granted: bool,
+) -> list[dict]:
+    granted_by_threshold = {
+        300: milestone_300_granted,
+        1000: milestone_1000_granted,
+    }
+    return [
+        dict(reward)
+        for reward in MEMBERSHIP_REWARDS
+        if likes_count >= reward["threshold"] and not granted_by_threshold[reward["threshold"]]
+    ]
 
 
 async def _current_submission_count(db: AsyncSession, uid: uuid.UUID) -> int:
@@ -202,8 +222,15 @@ async def _admin_rows(db: AsyncSession, status_value: str | None = None) -> list
             await db.execute(
                 text(
                     f"""
-                SELECT p.*, u.email AS owner_email FROM promotion_submissions p
-                LEFT JOIN users u ON u.id=p.user_id {clause}
+                SELECT p.*, u.email AS owner_email,
+                       COALESCE(source.milestone_300_granted, p.milestone_300_granted)
+                         AS source_milestone_300_granted,
+                       COALESCE(source.milestone_1000_granted, p.milestone_1000_granted)
+                         AS source_milestone_1000_granted
+                FROM promotion_submissions p
+                LEFT JOIN users u ON u.id=p.user_id
+                LEFT JOIN promotion_submissions source ON source.id=p.source_submission_id
+                {clause}
                 ORDER BY p.submitted_at ASC LIMIT 500
                 """
                 ),
@@ -298,34 +325,56 @@ async def admin_approve_promotion(
             ref_id=str(sid),
             auto_commit=False,
         )
+    granted_memberships: list[dict] = []
     if row["task_type"] == "likes" and row["likes_count"] is not None:
         source = row["source_submission_id"] or sid
-        if row["likes_count"] >= 300 and not row["milestone_300_granted"]:
+        milestone_300_granted = bool(row["milestone_300_granted"])
+        milestone_1000_granted = bool(row["milestone_1000_granted"])
+        if source != sid:
+            source_row = (
+                (
+                    await db.execute(
+                        text(
+                            "SELECT milestone_300_granted, milestone_1000_granted "
+                            "FROM promotion_submissions WHERE id=:id FOR UPDATE"
+                        ),
+                        {"id": source},
+                    )
+                )
+                .mappings()
+                .first()
+            )
+            if source_row:
+                milestone_300_granted = bool(source_row["milestone_300_granted"])
+                milestone_1000_granted = bool(source_row["milestone_1000_granted"])
+
+        pending_rewards = _pending_membership_rewards(
+            row["likes_count"], milestone_300_granted, milestone_1000_granted
+        )
+        milestone_updates = {
+            300: text(
+                "UPDATE promotion_submissions SET milestone_300_granted=TRUE "
+                "WHERE id IN (:source, :submission)"
+            ),
+            1000: text(
+                "UPDATE promotion_submissions SET milestone_1000_granted=TRUE "
+                "WHERE id IN (:source, :submission)"
+            ),
+        }
+        for reward in pending_rewards:
             await grant_coupon(
                 db,
                 row["user_id"],
-                "plus",
-                30,
-                "promotion_likes_300",
-                f"promotion:{source}:likes300",
+                reward["tier"],
+                reward["days"],
+                f"promotion_likes_{reward['threshold']}",
+                f"promotion:{source}:likes{reward['threshold']}",
             )
             await db.execute(
-                text("UPDATE promotion_submissions SET milestone_300_granted=TRUE WHERE id=:id"),
-                {"id": source},
+                milestone_updates[reward["threshold"]],
+                {"source": source, "submission": sid},
             )
-        if row["likes_count"] >= 1000 and not row["milestone_1000_granted"]:
-            await grant_coupon(
-                db,
-                row["user_id"],
-                "immersive",
-                30,
-                "promotion_likes_1000",
-                f"promotion:{source}:likes1000",
-            )
-            await db.execute(
-                text("UPDATE promotion_submissions SET milestone_1000_granted=TRUE WHERE id=:id"),
-                {"id": source},
-            )
+            granted_memberships.append(reward)
     await db.execute(
         text(
             "UPDATE promotion_submissions SET status='approved', reward_coins=reward_coins+:coins, reviewed_at=NOW(), review_reason=NULL, updated_at=NOW() WHERE id=:id"
@@ -333,7 +382,12 @@ async def admin_approve_promotion(
         {"id": sid, "coins": reward_coins},
     )
     await db.commit()
-    return {"ok": True, "id": submission_id, "reward_coins": reward_coins}
+    return {
+        "ok": True,
+        "id": submission_id,
+        "reward_coins": reward_coins,
+        "granted_memberships": granted_memberships,
+    }
 
 
 @admin_router.post("/{submission_id}/reject")

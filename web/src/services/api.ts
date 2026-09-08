@@ -758,8 +758,17 @@ export interface PromotionSubmission {
   reward_coins: number
   milestone_300_granted: boolean
   milestone_1000_granted: boolean
+  source_milestone_300_granted?: boolean
+  source_milestone_1000_granted?: boolean
   submitted_at: string
   reviewed_at: string | null
+}
+
+export interface PromotionMembershipReward {
+  threshold: 300 | 1000
+  tier: 'plus' | 'immersive'
+  label: string
+  days: number
 }
 
 export interface PromotionStatus {
@@ -1942,7 +1951,12 @@ export async function adminGetPromotionImage(id: string, adminKey: string): Prom
   return res.blob()
 }
 
-export async function adminApprovePromotion(id: string, adminKey: string): Promise<{ ok: boolean; id: string; reward_coins: number }> {
+export async function adminApprovePromotion(id: string, adminKey: string): Promise<{
+  ok: boolean
+  id: string
+  reward_coins: number
+  granted_memberships?: PromotionMembershipReward[]
+}> {
   return adminRequest(`/admin/promotions/${encodeURIComponent(id)}/approve`, adminKey, { method: 'POST' })
 }
 
