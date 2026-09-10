@@ -12,7 +12,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from heart.core.auth import TokenData, get_current_user
-from heart.membership import get_effective_tier, get_entitlements, get_paid_checkin_tier
+from heart.membership import get_checkin_tier, get_effective_tier, get_entitlements
 
 from .wiring import get_db
 
@@ -63,7 +63,7 @@ async def get_membership(
     """Return effective membership per api_contract.md §1.2."""
     uid = uuid.UUID(current_user.user_id)
     tier = await get_effective_tier(db, uid)
-    checkin_tier = await get_paid_checkin_tier(db, uid)
+    checkin_tier = await get_checkin_tier(db, uid)
     ent = get_entitlements(tier)
 
     expires_row = (

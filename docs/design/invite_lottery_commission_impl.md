@@ -18,7 +18,7 @@
 | 付费订单履约 | `fulfill_order()` → `_apply_sku()`（membership/coins），afdian webhook 调用 | `heart/afdian/fulfillment.py:203,320` |
 | 现有邀请 | `record_invite_signup()`（绑定）、`handle_first_chat()`（首聊发双方 40 币 + 5/10 里程碑） | `heart/invite/service.py` |
 | 首聊触发点 | chat WS turn 提交后 best-effort 调 `handle_first_chat` | `heart/api/routes_chat_ws.py:759` |
-| 会员定价/命名 | `plus`=29 元、`immersive`=69 元；签到 plus/immersive 均 80 币/天 | `heart/core/config.py:272-287` |
+| 会员定价/命名 | `plus`=29 元、`immersive`=69 元；正式会员签到均为 80 币/天；进阶体验卡 80 币/天，沉浸体验卡 20 币/天 | `heart/core/config.py:272-287`、`heart/membership/__init__.py` |
 | 成年门禁 | `users.age_verified_at` / `users.birthdate` | `heart/api/routes_auth.py:422` |
 | 注册赠币 | `signup_grant_credits=4000` fen = 40 币 | `config.py:206` |
 | 前端底部 Tab | 角色·探索·[创作]·消息·我的 | `web/src/components/ui/TabBar.tsx:14` |
@@ -399,4 +399,3 @@ V1 可用信号（无手机号/实名）：设备指纹、IP、注册时序、�
 - ❌ 佣金任何形式的现金提现（合规红线）。
 - ❌ `except Exception: pass` 静默吞异常（CLAUDE.md 铁律）。
 - ❌ 已 active 奖池直接改概率（必须发新版本）。
-

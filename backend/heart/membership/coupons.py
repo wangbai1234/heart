@@ -104,4 +104,11 @@ async def activate_coupon(db: AsyncSession, user_id: uuid.UUID, coupon_id: int) 
         .mappings()
         .one()
     )
+
+    now = datetime.now(tz=timezone.utc)
+    if activated["tier"] == "plus" and activated["starts_at"] <= now < activated["expires_at"]:
+        from heart.billing.checkin import claim_daily_grant
+
+        await claim_daily_grant(db, user_id, "plus", auto_commit=False)
+
     return dict(activated)

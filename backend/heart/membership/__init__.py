@@ -140,13 +140,25 @@ async def get_effective_tier(db: AsyncSession, user_id: uuid.UUID) -> str:
         raise
 
 
-async def get_paid_checkin_tier(db: AsyncSession, user_id: uuid.UUID) -> str:
-    """Resolve check-in tier from paid memberships only; lottery trials are excluded."""
+async def get_checkin_tier(db: AsyncSession, user_id: uuid.UUID) -> str:
+    """Resolve the daily grant tier.
+
+    Paid memberships always qualify. An active plus experience coupon also
+    qualifies because its core benefit is the larger daily coin grant;
+    immersive experience coupons keep the free-tier daily grant because their
+    value comes from complimentary usage entitlements.
+    """
     result = await db.execute(
         text(
             """
-            SELECT tier FROM user_memberships
-            WHERE user_id = :uid AND expires_at > NOW()
+            SELECT tier FROM (
+              SELECT tier, expires_at FROM user_memberships
+              WHERE user_id = :uid AND expires_at > NOW()
+              UNION ALL
+              SELECT tier, expires_at FROM membership_reward_coupons
+              WHERE user_id = :uid AND tier = 'plus' AND status = 'activated'
+                AND starts_at <= NOW() AND expires_at > NOW()
+            ) checkin_entitlements
             ORDER BY CASE tier WHEN 'immersive' THEN 2 WHEN 'plus' THEN 1 ELSE 0 END DESC,
                      expires_at DESC
             LIMIT 1
@@ -156,6 +168,11 @@ async def get_paid_checkin_tier(db: AsyncSession, user_id: uuid.UUID) -> str:
     )
     tier = result.scalar_one_or_none()
     return tier if tier in VALID_TIERS else "free"
+
+
+async def get_paid_checkin_tier(db: AsyncSession, user_id: uuid.UUID) -> str:
+    """Backward-compatible alias for callers using the original helper name."""
+    return await get_checkin_tier(db, user_id)
 
 
 # ---------------------------------------------------------------------------
