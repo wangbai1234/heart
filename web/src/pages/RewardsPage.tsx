@@ -347,6 +347,9 @@ function LotteryPanel({ store, spinning, rotation, result, onDraw, onInvite, onT
             <p className="mt-1 text-[11px] text-[#b5a9ba]">
               {result ? '奖励已自动发放到账户' : '悠悠币立即到账，会员奖进入体验卡'}
             </p>
+            <p className="mx-auto mt-2 max-w-[310px] text-[10px] leading-relaxed text-[#887d8d]">
+              进阶版体验卡激活后签到 80 币/日；沉浸版体验卡不含签到加成，仍为 20 币/日。
+            </p>
             <p className="mt-1 text-[10px] text-[#887d8d]">机会有效期至 {formatDate(store.lottery?.next_expiry_at ?? null)}</p>
           </div>
         </div>
@@ -376,6 +379,9 @@ function LotteryPanel({ store, spinning, rotation, result, onDraw, onInvite, onT
       {!!store.coupons.length && (
         <div className="mt-6">
           <h2 className="mb-2 text-[15px] font-semibold text-[var(--color-ink)]">体验卡</h2>
+          <p className="mb-2 text-[11px] leading-relaxed text-[var(--color-text-muted)]">
+            进阶版体验卡激活后签到 80 币/日；沉浸版体验卡不含签到加成，仍为 20 币/日。
+          </p>
           <div className="divide-y divide-[var(--color-divider)] border-y border-[var(--color-divider)]">
             {store.coupons.map((coupon) => (
               <div key={coupon.id} className="flex min-h-[62px] items-center justify-between py-2">

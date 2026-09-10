@@ -67,11 +67,20 @@ async def lottery_status(
                     """
                 SELECT code, kind, payload, weight
                 FROM lottery_prizes
-                WHERE pool_id = (SELECT id FROM lottery_pool_versions WHERE status = 'active')
+                WHERE pool_id = COALESCE(
+                  (
+                    SELECT pool_id FROM invite_draw_chances
+                    WHERE user_id = :uid AND consumed_at IS NULL AND expires_at > NOW()
+                    ORDER BY expires_at, id
+                    LIMIT 1
+                  ),
+                  (SELECT id FROM lottery_pool_versions WHERE status = 'active')
+                )
                   AND enabled = TRUE
                 ORDER BY id
                 """
-                )
+                ),
+                {"uid": uid},
             )
         )
         .mappings()

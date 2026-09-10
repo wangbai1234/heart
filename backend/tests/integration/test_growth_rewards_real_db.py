@@ -87,6 +87,35 @@ async def test_seeded_pool_has_exact_weight_and_prize_count(growth_engine):
     assert int(row["prize_count"]) == 10
     assert int(row["total_weight"]) == 10_000
 
+    async with growth_engine.connect() as conn:
+        weights = dict(
+            (
+                await conn.execute(
+                    text(
+                        """
+                        SELECT p.code, p.weight
+                        FROM lottery_prizes p
+                        JOIN lottery_pool_versions v ON v.id = p.pool_id
+                        WHERE v.status = 'active' AND p.enabled = TRUE
+                        """
+                    )
+                )
+            ).all()
+        )
+
+    assert weights == {
+        "coin_20": 8_000,
+        "coin_40": 1_200,
+        "coin_60": 400,
+        "coin_80": 180,
+        "coin_100": 100,
+        "coin_200": 20,
+        "vip_plus_3d": 50,
+        "vip_immersive_3d": 30,
+        "vip_plus_30d": 15,
+        "vip_immersive_30d": 5,
+    }
+
 
 async def test_concurrent_same_chance_creates_one_draw_and_reward(
     growth_engine, growth_user_factory, monkeypatch
@@ -254,6 +283,51 @@ async def test_coupon_activation_schedules_after_existing_entitlements(
 
     assert first["starts_at"] >= paid_expires
     assert second["starts_at"] == first["expires_at"]
+
+
+async def test_only_plus_experience_coupon_gets_80_coin_daily_grant(
+    growth_engine, growth_user_factory
+):
+    from heart.billing.checkin import claim_daily_grant
+    from heart.membership import get_checkin_tier
+    from heart.membership.coupons import activate_coupon, grant_coupon
+
+    plus_user = await growth_user_factory()
+    immersive_user = await growth_user_factory()
+    session_factory = async_sessionmaker(growth_engine, class_=AsyncSession, expire_on_commit=False)
+
+    async with session_factory() as session, session.begin():
+        plus_coupon_id = await grant_coupon(
+            session, plus_user, "plus", 3, "integration", f"coupon:{uuid.uuid4()}"
+        )
+        await activate_coupon(session, plus_user, plus_coupon_id)
+
+        immersive_coupon_id = await grant_coupon(
+            session,
+            immersive_user,
+            "immersive",
+            3,
+            "integration",
+            f"coupon:{uuid.uuid4()}",
+        )
+        await activate_coupon(session, immersive_user, immersive_coupon_id)
+
+    async with session_factory() as session, session.begin():
+        plus_tier = await get_checkin_tier(session, plus_user)
+        immersive_tier = await get_checkin_tier(session, immersive_user)
+        plus_result = await claim_daily_grant(
+            session, plus_user, plus_tier, auto_commit=False
+        )
+        immersive_result = await claim_daily_grant(
+            session, immersive_user, immersive_tier, auto_commit=False
+        )
+
+    assert plus_tier == "plus"
+    assert plus_result["daily_total"] == 80
+    assert plus_result["already"] is True
+    assert immersive_tier == "free"
+    assert immersive_result["daily_total"] == 20
+    assert immersive_result["coins"] == 20
 
 
 async def test_commission_settle_reverse_and_spend_are_idempotent(
