@@ -7,6 +7,7 @@ in the same DB transaction. Balance never goes negative (CHECK constraint).
 from __future__ import annotations
 
 import uuid
+from dataclasses import dataclass
 from typing import Optional
 
 import structlog
@@ -29,6 +30,14 @@ class InsufficientCreditsError(Exception):
 
 class IdempotencyConflictError(Exception):
     """Raised when an idempotency key already exists with different data."""
+
+
+@dataclass(frozen=True)
+class GrantResult:
+    """Outcome of an idempotent credit grant."""
+
+    balance: int
+    applied: bool
 
 
 async def get_balance(db: AsyncSession, user_id: uuid.UUID) -> int:
@@ -57,8 +66,40 @@ async def grant(
 ) -> int:
     """Grant credits (signup bonus, membership grant, invite reward, etc.).
 
-    Returns new balance. Idempotent — duplicate key returns existing balance.
+    Returns new balance. An exact duplicate returns the current balance; reusing
+    a key for a different transaction raises ``IdempotencyConflictError``.
     type_str must be one of the contract §0.1 enum values (grant/invite/membership_grant/…).
+    """
+    result = await grant_with_result(
+        db,
+        user_id,
+        amount,
+        idempotency_key,
+        type_str=type_str,
+        ref_type=ref_type,
+        ref_id=ref_id,
+        metadata=metadata,
+        auto_commit=auto_commit,
+    )
+    return result.balance
+
+
+async def grant_with_result(
+    db: AsyncSession,
+    user_id: uuid.UUID,
+    amount: int,
+    idempotency_key: str,
+    type_str: str = "grant",
+    ref_type: Optional[str] = None,
+    ref_id: Optional[str] = None,
+    metadata: Optional[dict] = None,
+    *,
+    auto_commit: bool = True,
+) -> GrantResult:
+    """Grant credits and report whether this call created the ledger entry.
+
+    A key may only be replayed for the same user, amount, and transaction type.
+    Reusing a key for a different grant raises ``IdempotencyConflictError``.
     """
     import json
 
@@ -93,11 +134,45 @@ async def grant(
             if auto_commit:
                 await db.commit()
             logger.info("credits_granted", user_id=str(user_id), amount=amount, balance=new_balance)
-            return new_balance
+            return GrantResult(balance=new_balance, applied=True)
 
-        # Idempotency hit — return current balance
+        # The data-modifying CTE updated the balance before the insert found the
+        # conflict. Roll back that attempted update before inspecting the winner.
         await db.rollback()
-        return await get_balance(db, user_id)
+        existing_result = await db.execute(
+            text(
+                """
+                SELECT user_id, delta, type
+                FROM credit_transactions
+                WHERE idempotency_key = :key
+                """
+            ),
+            {"key": idempotency_key},
+        )
+        existing = existing_result.mappings().one_or_none()
+        if existing is None:
+            return GrantResult(balance=await get_balance(db, user_id), applied=False)
+
+        if (
+            existing["user_id"] != user_id
+            or existing["delta"] != amount
+            or existing["type"] != type_str
+        ):
+            logger.warning(
+                "credit_grant_idempotency_conflict",
+                idempotency_key=idempotency_key,
+                requested_user_id=str(user_id),
+                existing_user_id=str(existing["user_id"]),
+                requested_amount=amount,
+                existing_delta=existing["delta"],
+                requested_type=type_str,
+                existing_type=existing["type"],
+            )
+            raise IdempotencyConflictError(
+                "idempotency key is already associated with a different credit transaction"
+            )
+
+        return GrantResult(balance=await get_balance(db, user_id), applied=False)
     except Exception:
         await db.rollback()
         raise
