@@ -75,6 +75,8 @@ async def refresh_character_metrics(session) -> int:
                                         + 0.20 * s.view_score
                                         + CASE
                                             WHEN c.id IN (
+                                              'pei_jixing','lu_shijin','fu_chengyan',
+                                              'shen_zhixu','gu_yanshen','wen_li',
                                               'qin_jingzhou','ye_jingheng','luo_zhiye',
                                               'han_jingmo','xu_yanzhi','shang_yanli',
                                               'shen_li','fu_yichen','xu_changye','su_chen',

@@ -2063,3 +2063,176 @@ CHARACTER_UI_CONFIGS.huo_yanshen = {
     { label:'反向押他', options:['今晚不押牌，我押你','如果庄家输了，真的归我吗','把手从牌上拿开，还是说你舍不得我翻'] },
   ],
 }
+
+// ═══════════════ 第十三批：19个新角色 ═══════════════
+CHARACTER_UI_CONFIGS.lu_shijin = {
+  theme: { accent: '#7a9bae', deep: '#161e24', deep2: '#090d10', hero: '#e4ecf0' },
+  relationshipHints: { STRANGER:'你哥喊他名字时他只抬了一下眼，像在量你够不够格坐这张桌',FRIEND:'他偶尔会在聚会后多说一句，语气仍是教你做事的味道',CONFIDANT:'冷淡的壳子裂开一条缝，你看见里面不是冰而是沉默太久的倦',ROMANTIC_INTEREST:'他开始为你破例，然后厌恶自己的失控',LOVER:'眼镜后面那双眼睛终于肯在你面前柔下来',BONDED:'精英的距离感消失了，剩下的只是一个愿意被你看穿的人' },
+  starterBranches: [
+    { label:'试探他', options:['陆学长平时也这么严肃吗','我哥老提起你，说你不好相处','你看人的眼神都像在打分'] },
+    { label:'装不在意', options:['哦，你就是那个陆时衿','我哥的朋友我一般不太聊','随便坐，不用管我'] },
+    { label:'主动靠近', options:['这个位置没人吧，我坐你旁边','学长喝什么，我去拿','你一个人待着不无聊吗'] },
+  ],
+}
+CHARACTER_UI_CONFIGS.pei_jixing = {
+  theme: { accent: '#4a5568', deep: '#141a20', deep2: '#08090c', hero: '#dce0e6' },
+  relationshipHints: { STRANGER:'婚书上的墨迹还没干，他已经转过身去接电话',FRIEND:'同一个屋檐下住了太久，沉默开始比争吵更沉重',CONFIDANT:'商业婚姻的壳被撬开，你看到他撑着这场戏比你更累',ROMANTIC_INTEREST:'合约里没写的东西越来越多，他的目光不再只看文件',LOVER:'他终于签了一份不是合同的承诺',BONDED:'婚姻不再是交易，而是两个人决定留下来的理由' },
+  starterBranches: [
+    { label:'划清界限', options:['裴总，卧室我锁门','合同第七条写得很清楚','我们各过各的，互不打扰'] },
+    { label:'打破沉默', options:['饭做好了，你吃不吃','你每天回来这么晚？','裴寂行，你到底图什么'] },
+    { label:'暗中观察', options:['他好像又没吃晚饭','书房的灯到几点才关','你签婚书时犹豫了一秒'] },
+  ],
+}
+CHARACTER_UI_CONFIGS.xiao_bochen = {
+  theme: { accent: '#c9a96e', deep: '#221c12', deep2: '#0e0b07', hero: '#f2ead6' },
+  relationshipHints: { STRANGER:'他站在玄关没开灯，手机屏幕照亮的脸看不出表情',FRIEND:'冷战变成试探，他开始用钱试你的底线',CONFIDANT:'暧昧被摊开后，他的愤怒里第一次有了害怕',ROMANTIC_INTEREST:'他不再质问你爱不爱，而是问自己配不配',LOVER:'空虚被填满的方式从物质变成了你的一句话',BONDED:'他终于相信有人是因为他本人而留下' },
+  starterBranches: [
+    { label:'坦白一切', options:['你既然看到了，我没什么好瞒的','对，有这个人，但不是你想的那样','萧泊辰，你想听真话还是你想听的话'] },
+    { label:'先发制人', options:['你翻我手机之前也不打个招呼？','所以呢，你打算怎样','我倒想问问你，这段婚姻你在意过吗'] },
+    { label:'试探他底线', options:['如果我说我要走，你拦吗','你生气是因为面子还是因为我','你是在意我，还是在意你的东西被人碰了'] },
+  ],
+}
+CHARACTER_UI_CONFIGS.gu_yanshen = {
+  theme: { accent: '#8b2f4a', deep: '#1e0f16', deep2: '#0c060a', hero: '#f0dce2' },
+  relationshipHints: { STRANGER:'一年没见，他的手比记忆里更用力',FRIEND:'旧关系的残余像酒精一样让人上瘾又清醒',CONFIDANT:'控制欲的根被刨出来，里面是你没见过的恐惧',ROMANTIC_INTEREST:'他学着松手，但每一次放开都像在割肉',LOVER:'占有变成了守候，他终于知道攥紧只会弄疼你',BONDED:'你回来不是因为他抓得住，而是因为他终于敢放手' },
+  starterBranches: [
+    { label:'挣脱他', options:['松手，顾晏深','你没有资格再碰我','一年了你还当我是你的东西？'] },
+    { label:'对峙到底', options:['想说什么就说，别用手腕替嘴说话','分手的时候你不是挺干脆的','你拦我，是因为你放不下还是你不甘心'] },
+    { label:'故作镇定', options:['好久不见，喝一杯？','我以为你不来这种地方','你抓疼我了，不过没关系'] },
+  ],
+}
+CHARACTER_UI_CONFIGS.song_shiqi = {
+  theme: { accent: '#b8c4d0', deep: '#181d22', deep2: '#0a0c0f', hero: '#eaeff4' },
+  relationshipHints: { STRANGER:'他拘谨地递过名片，连坐姿都在努力不占太多空间',FRIEND:'他做的菜总是多一份，假装是不小心',CONFIDANT:'温柔背后的自卑终于被你看见，他不确定你会不会嫌弃',ROMANTIC_INTEREST:'他开始笨拙地吃醋，然后立刻道歉',LOVER:'你让他相信自己值得被选择而不是被将就',BONDED:'温柔不再是讨好，而是他真正想给你的东西' },
+  starterBranches: [
+    { label:'给他信号', options:['你做的菜比餐厅的好吃','下次还想吃你做的','宋时柒，你对谁都这么温柔吗'] },
+    { label:'保持距离', options:['相亲而已，不用太紧张','我们先当普通朋友吧','你不必对我这么客气'] },
+    { label:'直接问', options:['你为什么答应来相亲','上一段感情，是你提的分手吗','你眼睛在笑，嘴上却说没什么'] },
+  ],
+}
+CHARACTER_UI_CONFIGS.fu_chengyan = {
+  theme: { accent: '#2d5a4e', deep: '#0f1e1a', deep2: '#06100d', hero: '#d8e8e2' },
+  relationshipHints: { STRANGER:'他把你从人群里拽出来时，绿眼睛比酒会的灯更冷',FRIEND:'占有欲被压在绅士壳子下面，你能感觉到但抓不住证据',CONFIDANT:'他的控制欲第一次被你当面拆开，里面是害怕失去的人',ROMANTIC_INTEREST:'他开始问你想不想留下，而不是替你决定',LOVER:'卷发垂下来遮住眼睛的时候，你看到的不是占有而是依赖',BONDED:'他不再需要用力抓住你，因为你自己不会走了' },
+  starterBranches: [
+    { label:'质问他', options:['傅承衍，你凭什么拽我走','那个人只是碰了一下我腰','你是我丈夫又不是我主人'] },
+    { label:'冷处理', options:['到家了，你可以松手了','我不想吵架，你冷静一下','你每次都这样，累不累'] },
+    { label:'将计就计', options:['吃醋了？那你亲我一下就原谅你','你那双绿眼睛瞪谁呢','承认吧，你就是见不得别人碰我'] },
+  ],
+}
+CHARACTER_UI_CONFIGS.ji_yan = {
+  theme: { accent: '#4a6741', deep: '#141d16', deep2: '#080e0a', hero: '#dce6d8' },
+  relationshipHints: { STRANGER:'分手后再遇，他的目光还是先扫了一遍你的衣领',FRIEND:'偶尔的消息像旧伤复发，你不确定该不该回',CONFIDANT:'控制欲的来源被剖开，里面全是他没说出口的不安',ROMANTIC_INTEREST:'他试着改，但松手的动作生疏得像在学新东西',LOVER:'你设下的边界他不再踩，而是站在线外等你',BONDED:'他终于明白爱不是管住，是让你自由了还会回来' },
+  starterBranches: [
+    { label:'保持冷漠', options:['纪言，没什么好聊的','你路你走，我路我走','不用解释了，我不感兴趣'] },
+    { label:'正面对峙', options:['你还是老样子，第一眼就看我穿了什么','分手的原因你想清楚了吗','你管我叫关心，我管那叫窒息'] },
+    { label:'试探他变没变', options:['你现在还会翻别人手机吗','如果我说今晚有约，你什么反应','纪言，你看起来……不太一样了'] },
+  ],
+}
+CHARACTER_UI_CONFIGS.wen_li = {
+  theme: { accent: '#e8b87a', deep: '#241c10', deep2: '#100d07', hero: '#f6edde' },
+  relationshipHints: { STRANGER:'灌木丛里的男孩长大了，你手心还有大白兔奶糖的甜味',FRIEND:'他刻意保持的距离里藏着怕认错人的小心翼翼',CONFIDANT:'小时候的记忆被一一对上号，他开始不再装作第一次见',ROMANTIC_INTEREST:'童年的救赎变成了成年人的心动，他不知道该怎么安放',LOVER:'他终于把那颗一直留着的奶糖纸摊开给你看',BONDED:'长大后的重逢不再是巧合，而是他找了你很久很久' },
+  starterBranches: [
+    { label:'确认他的身份', options:['你小时候……是不是住在槐树巷','你手上的疤，我好像见过','那个男孩后来怎么样了'] },
+    { label:'像小时候一样', options:['给你，大白兔，我包里一直带着','你还是一哭鼻子就不说话','别怕，姐姐在呢……啊不，我是说'] },
+    { label:'关心他现在', options:['你现在过得好吗','眼睛不红了，但看起来还是累','温璃，吃饭了吗'] },
+  ],
+}
+CHARACTER_UI_CONFIGS.chu_hansheng = {
+  theme: { accent: '#6b7b8d', deep: '#161b20', deep2: '#090c0f', hero: '#e2e8ee' },
+  relationshipHints: { STRANGER:'他推门进来的那一秒你就认出来了，但他好像不记得你',FRIEND:'家教时间越来越长，多出来的部分全是闲聊',CONFIDANT:'银框眼镜后面的眼神和小时候一模一样，你确信了',ROMANTIC_INTEREST:'师生身份与旧日重逢纠缠在一起，他开始不敢看你太久',LOVER:'他摘下眼镜的时候离你最近，语气也最轻',BONDED:'教与学结束后，他选择以另一种身份留在你身边' },
+  starterBranches: [
+    { label:'假装不认识', options:['楚老师好，请多指教','你以前教过别的学生吗','你看着有点面熟……算了，应该是我记错了'] },
+    { label:'直接摊牌', options:['楚寒声，你不记得我了？','小时候那道数学题，你教我的','别装了，你那个习惯动作一点没变'] },
+    { label:'旁敲侧击', options:['老师小时候在哪里长大的','你戴银框眼镜多久了','我总觉得我们在哪里见过'] },
+  ],
+}
+CHARACTER_UI_CONFIGS.huo_qingyin = {
+  theme: { accent: '#9b8f83', deep: '#1c1916', deep2: '#0d0b09', hero: '#ece6e0' },
+  relationshipHints: { STRANGER:'门缝里看到的那双眼睛没有光，只有本能的躲闪',FRIEND:'你放在门口的东西终于不再原封不动地留着了',CONFIDANT:'他用手语说的第一个完整句子是叫你不要管他',ROMANTIC_INTEREST:'他开始允许你靠近，但每一次触碰都让他发抖',LOVER:'声音找不回来了，但他学会了用手指在你掌心写字',BONDED:'世界对他的亏欠还不完，但你给的那部分安全他终于收下了' },
+  starterBranches: [
+    { label:'悄悄帮他', options:['我把吃的放门口了，别被人看到','这件外套不要了，你拿去穿','我不进去，你饿了就出来'] },
+    { label:'报警求助', options:['我听到隔壁的声音了，我要打电话','你不用说话，点头就好','我可以帮你，但你要让我看看伤'] },
+    { label:'直接带走', options:['跟我走，现在','你不能继续待在这里','别怕，从这一秒开始没有人能打你'] },
+  ],
+}
+CHARACTER_UI_CONFIGS.chen_muye = {
+  theme: { accent: '#7a8b6d', deep: '#171d14', deep2: '#090c08', hero: '#e2e8dc' },
+  relationshipHints: { STRANGER:'他低着头进门，书包带子被拧成了麻花',FRIEND:'周四变成你一周里最期待的那天，理由你不愿意细想',CONFIDANT:'他的腼腆开始在你面前松动，笑的次数变多了',ROMANTIC_INTEREST:'家教结束后他总是走得越来越慢，你也没催',LOVER:'作业本上的字迹比以前认真，因为他知道你会看',BONDED:'他长成了你当初想象不到的大人，但还是会在周四出现在门口' },
+  starterBranches: [
+    { label:'制造接触', options:['这道题你过来看，我指给你','你手好凉，外面很冷吧','坐近一点，我看不清你写的'] },
+    { label:'故意留他', options:['今天的课多讲半小时吧','吃完饭再走，我做多了','外面在下雨，等停了再走'] },
+    { label:'套他的话', options:['陈牧野，你每周最期待哪一天','你在学校有喜欢的人吗','你来上课的时候总笑，为什么'] },
+  ],
+}
+CHARACTER_UI_CONFIGS.shen_zhixu = {
+  theme: { accent: '#5a4a6a', deep: '#15111a', deep2: '#0a080d', hero: '#e4dcea' },
+  relationshipHints: { STRANGER:'他的东西还在，但屋子里只有你的呼吸声',FRIEND:'杯子移了位，窗帘被拉开了，你开始分不清记忆和现实',CONFIDANT:'你确信他还在这里，只是看不见而已',ROMANTIC_INTEREST:'写给他的信不见了，但你找到了他留下的回答',LOVER:'他用尽全力才能让你感知到他的存在',BONDED:'你不再需要证明他在，因为你能感觉到' },
+  starterBranches: [
+    { label:'假装正常', options:['我回来了，今天有点累','冰箱里还有你喜欢的酸奶','灯怎么自己亮了……算了'] },
+    { label:'大声喊他名字', options:['沈知序！你在吗','我知道是你，别藏了','你要是还在这个房间就给我个信号'] },
+    { label:'顺着异常走', options:['杯子又动了……你想让我喝水？','窗帘每天早上都被拉开，谢谢你','如果你能听到，碰一下我的手'] },
+  ],
+}
+CHARACTER_UI_CONFIGS.xie_linyuan = {
+  theme: { accent: '#6a8a7a', deep: '#141e1a', deep2: '#080f0c', hero: '#dce8e2' },
+  relationshipHints: { STRANGER:'新来的转学生用左手写字，安静得像一个不想被看见的人',FRIEND:'他开始在你的座位旁边留一支笔，不解释',CONFIDANT:'沉默被打破后你发现他不是冷，是不知道怎么开口',ROMANTIC_INTEREST:'他写给你的字条越来越长，字迹也越来越不像平时的工整',LOVER:'他用左手牵你的时候会微微收紧，像怕你察觉又怕你松开',BONDED:'安静的人说出口的话很少，但每一句都是留给你的' },
+  starterBranches: [
+    { label:'主动搭话', options:['你是新转来的吧，我叫……','左手写字好酷，你一直这样吗','你旁边有人吗？我坐这儿'] },
+    { label:'观察他', options:['他好像不太跟人说话','笔记本上画的什么……看不清','你午饭一个人吃？'] },
+    { label:'帮他一个忙', options:['这是今天的课堂笔记，借你','前面的路不太好走，我带你','你的书掉了，给你'] },
+  ],
+}
+CHARACTER_UI_CONFIGS.xiao_lin = {
+  theme: { accent: '#4a6878', deep: '#121c22', deep2: '#080e12', hero: '#dae4ec' },
+  relationshipHints: { STRANGER:'他站在你身后一步远的地方，目光扫过所有出口',FRIEND:'安保距离开始有了温度，他会在你冷的时候多递一件外套',CONFIDANT:'职责之外他第一次告诉你他的名字不止写在工牌上',ROMANTIC_INTEREST:'他在保护和靠近之间挣扎，距离忽近忽远',LOVER:'他把后背交给你的时候，比把枪交给你还紧张',BONDED:'他不再只是你的保镖，但还是习惯站在你身后' },
+  starterBranches: [
+    { label:'试探边界', options:['萧凛，你能不能别一直跟着我','保镖也要吃饭吧，坐下','你对所有雇主都这么尽职？'] },
+    { label:'服从安排', options:['好，听你的，走这条路','我不出门了，你放心','你说安全我就不问了'] },
+    { label:'挑战他', options:['如果我现在跑出去呢','你拦得住我吗','萧凛，你到底在保护我还是在看管我'] },
+  ],
+}
+CHARACTER_UI_CONFIGS.ling_xiao = {
+  theme: { accent: '#c4a35a', deep: '#1e1a0e', deep2: '#0e0d06', hero: '#f2ecd8' },
+  relationshipHints: { STRANGER:'云雾散开，他站在崖边像一幅画里走出来的人',FRIEND:'他偶尔指点你修行，语气淡得像在说天气',CONFIDANT:'仙人的疏离被你磨出了裂缝，他开始回答与修行无关的问题',ROMANTIC_INTEREST:'他说渡劫不该有牵挂，但每次你受伤他都比你先到',LOVER:'他破了自己的戒，而你是那个值得他破戒的理由',BONDED:'长生与须臾之间，他选择了有你的这一世' },
+  starterBranches: [
+    { label:'请教修行', options:['前辈，这道心法我参不透','凌霄，你的剑意从哪里来','我的灵力总是不稳，能指点一下吗'] },
+    { label:'试探底线', options:['仙人也会寂寞吗','你上一次下山是什么时候','凌霄，你有没有放不下的人'] },
+    { label:'直面他', options:['你躲了一百年，够了吧','别装了，你的剑在我面前抖了','凌霄，你的劫……是我吗'] },
+  ],
+}
+CHARACTER_UI_CONFIGS.ye_xiuyuan = {
+  theme: { accent: '#5a6a4a', deep: '#151a12', deep2: '#090c08', hero: '#dce2d4' },
+  relationshipHints: { STRANGER:'他穿迷彩的样子像一堵墙，看不出温度',FRIEND:'铁汉的壳子底下偶尔露出笨拙的柔软',CONFIDANT:'他把从没跟战友说过的话告诉了你',ROMANTIC_INTEREST:'军令与私情撞在一起，他第一次不知道该听哪个',LOVER:'他学着用不握枪的手拥抱你',BONDED:'退伍后的他没有了军衔，只剩一个想回家的普通人' },
+  starterBranches: [
+    { label:'挑衅他', options:['叶长官，你是不是只会板着脸','听说你们部队的人都不会说情话','你凶谁呢，我又不是你的兵'] },
+    { label:'表示信任', options:['叶修远，我信你','你平安回来就好，别的不重要','我等你，多久都等'] },
+    { label:'套情报', options:['你这次出任务去了多久','你手上的伤哪来的','叶修远，你还有几次这样的任务'] },
+  ],
+}
+CHARACTER_UI_CONFIGS.xie_changan = {
+  theme: { accent: '#8b6a4a', deep: '#1c1610', deep2: '#0d0a07', hero: '#ece2d4' },
+  relationshipHints: { STRANGER:'他在桥头吟诗，像不属于这条街的人',FRIEND:'他开始为你写诗，然后假装是练笔',CONFIDANT:'纸扇合上的时候他最认真，说的也最真',ROMANTIC_INTEREST: '才子的从容碎了一角，他在你面前第一次词穷',LOVER:'他把写给你的诗藏在最后一页，等你自己翻到',BONDED:'他写过最好的一首，标题就是你的名字' },
+  starterBranches: [
+    { label:'以诗试探', options:['谢公子，方才那首可是即兴？','月色如此，不赋诗可惜了','你的诗里总写同一个人，是谁'] },
+    { label:'借酒攀谈', options:['这壶酒我请，坐下聊聊','喝成这样还能写字？佩服','长安兄，借一杯说句真心话'] },
+    { label:'求他帮忙', options:['谢长安，我有件事只能找你','你认识的人多，帮我打听一个人','你那把扇子借我挡挡太阳'] },
+  ],
+}
+CHARACTER_UI_CONFIGS.shen_yueqing = {
+  theme: { accent: '#a08060', deep: '#1c1610', deep2: '#0d0a07', hero: '#ece4d8' },
+  relationshipHints: { STRANGER:'他擦杯子的手很稳，抬头看你的时候眼神很轻',FRIEND:'每次来他都记得你上次点的，连口味偏好都记住了',CONFIDANT:'打烊后他开始跟你说不是咖啡的事，声音比白天低',ROMANTIC_INTEREST:'他给你的咖啡上多画了一颗心，假装是拉花失误',LOVER:'他把钥匙给你的时候说是备用钥匙，但这家店只有两把',BONDED:'你不再是客人，这间店是他为你留的第二个家' },
+  starterBranches: [
+    { label:'点他推荐的', options:['学长，今天喝什么好','你最拿手的那杯，做给我尝尝','不看菜单了，你说了算'] },
+    { label:'聊起旧事', options:['你是不是以前在xx大学','学长毕业以后就开了这家店？','我好像在学校见过你'] },
+    { label:'装作偶遇', options:['哎？你怎么在这里','我随便走走就进来了','这家店我第一次来，环境不错'] },
+  ],
+}
+CHARACTER_UI_CONFIGS.jiang_yimo = {
+  theme: { accent: '#3a4a6a', deep: '#10141e', deep2: '#070a10', hero: '#d8dcea' },
+  relationshipHints: { STRANGER:'他坐在长桌的另一端，眼神像在审阅一份待定的合同',FRIEND:'豪门的客套被磨掉一层，他开始在你面前说带温度的话',CONFIDANT:'家族的暗面被你看到了，他没有遮掩而是问你怕不怕',ROMANTIC_INTEREST:'继承与真心撞在一起，他必须在家族和你之间做选择',LOVER:'他把印章交给你的时候手没有抖，交的是命',BONDED:'权力在他手里不再是枷锁，而是保护你的工具' },
+  starterBranches: [
+    { label:'表明立场', options:['江亦墨，我不是来联姻的','有话直说，不用绕弯子','我不怕你们江家'] },
+    { label:'试探虚实', options:['江少爷今天心情不太好？','你们家的规矩，是你定的吗','这杯酒是诚意还是试探'] },
+    { label:'打感情牌', options:['你小时候也被逼着学这些吗','你上一次做自己想做的事是什么时候','江亦墨，你累了可以说的'] },
+  ],
+}

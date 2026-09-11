@@ -217,17 +217,21 @@ const FEATURED_CHARACTER_NAME_INDEX = new Map<string, number>(
 )
 
 /**
- * Batch 11 + 12 launch rail. These IDs receive an editorial cold-start
+ * Batch 11 + 12 + 13 launch rail. These IDs receive an editorial cold-start
  * position, but the recommendation score / real view count still orders the
  * characters within the rail after the two fixed lead slots.
  */
 const LAUNCH_BATCH_CHARACTER_INDEX = new Map<string, number>([
-  ['fu_yichen', 0], ['shen_li', 1],
-  ['qin_jingzhou', 2], ['ye_jingheng', 3], ['luo_zhiye', 4],
-  ['han_jingmo', 5], ['xu_yanzhi', 6], ['shang_yanli', 7],
-  ['xu_changye', 8], ['su_chen', 9],
-  ['pei_jinchuan', 10], ['bai_yao', 11], ['ye_linchuan', 12],
-  ['shen_fengchuan', 13], ['huo_yanshen', 14],
+  // Batch 13 priority (positions 0-5)
+  ['pei_jixing', 0], ['lu_shijin', 1],
+  ['fu_chengyan', 2], ['shen_zhixu', 3], ['gu_yanshen', 4], ['wen_li', 5],
+  // Batch 11 + 12 (positions 6-20)
+  ['fu_yichen', 6], ['shen_li', 7],
+  ['qin_jingzhou', 8], ['ye_jingheng', 9], ['luo_zhiye', 10],
+  ['han_jingmo', 11], ['xu_yanzhi', 12], ['shang_yanli', 13],
+  ['xu_changye', 14], ['su_chen', 15],
+  ['pei_jinchuan', 16], ['bai_yao', 17], ['ye_linchuan', 18],
+  ['shen_fengchuan', 19], ['huo_yanshen', 20],
 ])
 
 function featuredCharacterIndex(item: GridItem): number | undefined {
