@@ -125,6 +125,27 @@ export {
   HuoYanshenProfile,
 } from './BatchTwelveNewProfiles'
 export {
+  WenLiProfile,
+  ChuHanshengProfile,
+  LuShijinProfile,
+  PeiJixingProfile,
+  XiaoBochenProfile,
+  GuYanshenProfile,
+  SongShiqiProfile,
+  FuChengyanProfile,
+  JiYanProfile,
+  HuoQingyinProfile,
+  ChenMuyeProfile,
+  ShenZhixuProfile,
+  XieLinyuanProfile,
+  XiaoLinProfile,
+  JiangYimoProfile,
+  ShenYueqingProfile,
+  LingXiaoProfile,
+  YeXiuyuanProfile,
+  XieChanganProfile,
+} from './BatchThirteenProfiles'
+export {
   QinJingzhouPremiseCard,
   YeJinghengPremiseCard,
   LuoZhiyePremiseCard,

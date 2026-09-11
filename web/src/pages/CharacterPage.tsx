@@ -95,6 +95,26 @@ interface GridItem {
  * visible so an existing bond never disappears.
  */
 const FEATURED_CHARACTERS = [
+  // 2026-09-12 batch 13: 19 new characters — priority placement
+  { id: 'lu_shijin', name: '陆时衿' },
+  { id: 'pei_jixing', name: '裴寂行' },
+  { id: 'xiao_bochen', name: '萧泊辰' },
+  { id: 'gu_yanshen', name: '顾晏深' },
+  { id: 'song_shiqi', name: '宋时柒' },
+  { id: 'fu_chengyan', name: '傅承衍' },
+  { id: 'ji_yan', name: '纪言' },
+  { id: 'wen_li', name: '温璃' },
+  { id: 'chu_hansheng', name: '楚寒声' },
+  { id: 'huo_qingyin', name: '霍清吟' },
+  { id: 'chen_muye', name: '陈牧野' },
+  { id: 'shen_zhixu', name: '沈知序' },
+  { id: 'xie_linyuan', name: '谢临渊' },
+  { id: 'xiao_lin', name: '萧凛' },
+  { id: 'jiang_yimo', name: '江亦墨' },
+  { id: 'shen_yueqing', name: '沈越清' },
+  { id: 'ling_xiao', name: '凌霄' },
+  { id: 'ye_xiuyuan', name: '叶修远' },
+  { id: 'xie_changan', name: '谢长安' },
   // 2026-09-04 launch batches: first-party authored characters lead the
   // recommendation rail. The first two positions are product-fixed.
   { id: 'fu_yichen', name: '傅亦辰' },
