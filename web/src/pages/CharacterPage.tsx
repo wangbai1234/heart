@@ -216,30 +216,6 @@ const FEATURED_CHARACTER_NAME_INDEX = new Map<string, number>(
   FEATURED_CHARACTERS.map((character, index) => [character.name, index]),
 )
 
-/**
- * Batch 11 + 12 + 13 launch rail. These IDs receive an editorial cold-start
- * position, but the recommendation score / real view count still orders the
- * characters within the rail after the two fixed lead slots.
- */
-const LAUNCH_BATCH_CHARACTER_INDEX = new Map<string, number>([
-  // Batch 13 priority 6 (positions 0-5, first two are product-fixed leads)
-  ['pei_jixing', 0], ['lu_shijin', 1],
-  ['fu_chengyan', 2], ['shen_zhixu', 3], ['gu_yanshen', 4], ['wen_li', 5],
-  // Batch 13 remaining 13 (positions 6-18)
-  ['xiao_bochen', 6], ['song_shiqi', 7], ['ji_yan', 8],
-  ['chu_hansheng', 9], ['huo_qingyin', 10], ['chen_muye', 11],
-  ['xie_linyuan', 12], ['xiao_lin', 13], ['ling_xiao', 14],
-  ['ye_xiuyuan', 15], ['xie_changan', 16], ['shen_yueqing', 17],
-  ['jiang_yimo', 18],
-  // Batch 11 + 12 (positions 19-33)
-  ['fu_yichen', 19], ['shen_li', 20],
-  ['qin_jingzhou', 21], ['ye_jingheng', 22], ['luo_zhiye', 23],
-  ['han_jingmo', 24], ['xu_yanzhi', 25], ['shang_yanli', 26],
-  ['xu_changye', 27], ['su_chen', 28],
-  ['pei_jinchuan', 29], ['bai_yao', 30], ['ye_linchuan', 31],
-  ['shen_fengchuan', 32], ['huo_yanshen', 33],
-])
-
 function featuredCharacterIndex(item: GridItem): number | undefined {
   return FEATURED_CHARACTER_INDEX.get(item.id) ?? FEATURED_CHARACTER_NAME_INDEX.get(item.profile.name)
 }
@@ -486,18 +462,9 @@ export function CharacterPage() {
         return bTime - aTime
       })
     } else if (activeMode === MODE_RECOMMENDED && !q) {
-      // 推荐只使用服务端每日预计算的真实行为分；展示热度、UGC 初始化
-      // 和每日扶持均不会进入该分数。
+      // 推荐纯按服务端 recommendation_score 排序，不做编辑位钉位。
+      // 新角色靠高初始分数自然排前面。
       base.sort((a, b) => {
-        const aLaunch = LAUNCH_BATCH_CHARACTER_INDEX.get(a.id)
-        const bLaunch = LAUNCH_BATCH_CHARACTER_INDEX.get(b.id)
-        // Product-fixed lead slots. The rest of both launch batches remain
-        // eligible for real-behaviour ranking below these two positions.
-        if (aLaunch !== undefined || bLaunch !== undefined) {
-          if (aLaunch === undefined) return 1
-          if (bLaunch === undefined) return -1
-          if (aLaunch < 2 || bLaunch < 2) return aLaunch - bLaunch
-        }
         const scoreDiff = (b.recommendationScore ?? 0) - (a.recommendationScore ?? 0)
         if (scoreDiff !== 0) return scoreDiff
         const viewDiff = (b.realViewCount ?? 0) - (a.realViewCount ?? 0)
