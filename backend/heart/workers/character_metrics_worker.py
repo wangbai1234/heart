@@ -77,6 +77,11 @@ async def refresh_character_metrics(session) -> int:
                                             WHEN c.id IN (
                                               'pei_jixing','lu_shijin','fu_chengyan',
                                               'shen_zhixu','gu_yanshen','wen_li',
+                                              'xiao_bochen','song_shiqi','ji_yan',
+                                              'chu_hansheng','huo_qingyin','chen_muye',
+                                              'xie_linyuan','xiao_lin','ling_xiao',
+                                              'ye_xiuyuan','xie_changan','shen_yueqing',
+                                              'jiang_yimo',
                                               'qin_jingzhou','ye_jingheng','luo_zhiye',
                                               'han_jingmo','xu_yanzhi','shang_yanli',
                                               'shen_li','fu_yichen','xu_changye','su_chen',

@@ -222,16 +222,22 @@ const FEATURED_CHARACTER_NAME_INDEX = new Map<string, number>(
  * characters within the rail after the two fixed lead slots.
  */
 const LAUNCH_BATCH_CHARACTER_INDEX = new Map<string, number>([
-  // Batch 13 priority (positions 0-5)
+  // Batch 13 priority 6 (positions 0-5, first two are product-fixed leads)
   ['pei_jixing', 0], ['lu_shijin', 1],
   ['fu_chengyan', 2], ['shen_zhixu', 3], ['gu_yanshen', 4], ['wen_li', 5],
-  // Batch 11 + 12 (positions 6-20)
-  ['fu_yichen', 6], ['shen_li', 7],
-  ['qin_jingzhou', 8], ['ye_jingheng', 9], ['luo_zhiye', 10],
-  ['han_jingmo', 11], ['xu_yanzhi', 12], ['shang_yanli', 13],
-  ['xu_changye', 14], ['su_chen', 15],
-  ['pei_jinchuan', 16], ['bai_yao', 17], ['ye_linchuan', 18],
-  ['shen_fengchuan', 19], ['huo_yanshen', 20],
+  // Batch 13 remaining 13 (positions 6-18)
+  ['xiao_bochen', 6], ['song_shiqi', 7], ['ji_yan', 8],
+  ['chu_hansheng', 9], ['huo_qingyin', 10], ['chen_muye', 11],
+  ['xie_linyuan', 12], ['xiao_lin', 13], ['ling_xiao', 14],
+  ['ye_xiuyuan', 15], ['xie_changan', 16], ['shen_yueqing', 17],
+  ['jiang_yimo', 18],
+  // Batch 11 + 12 (positions 19-33)
+  ['fu_yichen', 19], ['shen_li', 20],
+  ['qin_jingzhou', 21], ['ye_jingheng', 22], ['luo_zhiye', 23],
+  ['han_jingmo', 24], ['xu_yanzhi', 25], ['shang_yanli', 26],
+  ['xu_changye', 27], ['su_chen', 28],
+  ['pei_jinchuan', 29], ['bai_yao', 30], ['ye_linchuan', 31],
+  ['shen_fengchuan', 32], ['huo_yanshen', 33],
 ])
 
 function featuredCharacterIndex(item: GridItem): number | undefined {
