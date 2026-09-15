@@ -81,12 +81,7 @@ async def refresh_character_metrics(session) -> int:
                                               'chu_hansheng','huo_qingyin','chen_muye',
                                               'xie_linyuan','xiao_lin','ling_xiao',
                                               'ye_xiuyuan','xie_changan','shen_yueqing',
-                                              'jiang_yimo',
-                                              'qin_jingzhou','ye_jingheng','luo_zhiye',
-                                              'han_jingmo','xu_yanzhi','shang_yanli',
-                                              'shen_li','fu_yichen','xu_changye','su_chen',
-                                              'pei_jinchuan','bai_yao','ye_linchuan',
-                                              'shen_fengchuan','huo_yanshen'
+                                              'jiang_yimo'
                                             )
                                             THEN GREATEST(0.0, 1.3 - c.real_view_count / 8000.0)
                                             ELSE 0.0
