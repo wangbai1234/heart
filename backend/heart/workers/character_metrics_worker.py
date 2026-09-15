@@ -88,7 +88,7 @@ async def refresh_character_metrics(session) -> int:
                                               'pei_jinchuan','bai_yao','ye_linchuan',
                                               'shen_fengchuan','huo_yanshen'
                                             )
-                                            THEN GREATEST(0.0, 0.22 - c.real_view_count / 20000.0)
+                                            THEN GREATEST(0.0, 0.85 - c.real_view_count / 8000.0)
                                             ELSE 0.0
                                           END,
                    metrics_calculated_at = NOW()
