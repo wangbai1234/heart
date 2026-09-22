@@ -237,7 +237,13 @@ def _render_story_memory(memory: dict[str, Any]) -> str:
     return "【角色记忆 / 剧情档案】\n" + "\n".join(lines)
 
 
-def build_gm_system_prompt(scenario: Scenario, run: Run, *, is_opening: bool = False) -> str:
+def build_gm_system_prompt(
+    scenario: Scenario,
+    run: Run,
+    *,
+    is_opening: bool = False,
+    membership_tier: str = "free",
+) -> str:
     """Compose the GM system message: role + raw scenario + player card + summary.
 
     ``is_opening`` (only the first GM turn — build_gm_messages derives it from an
@@ -257,6 +263,16 @@ def build_gm_system_prompt(scenario: Scenario, run: Run, *, is_opening: bool = F
         _SETUP_DONE_NOTICE,
         "【主控档案】\n" + _render_player_card(run.player_identity_json),
     ]
+    if membership_tier in {"plus", "immersive"}:
+        parts.append(
+            "【VIP内容边界】允许非露骨的成人情感和轻度剧情冲突；禁止露骨性行为、未成年人、性暴力、"
+            "极端血腥和严重伤害指导。"
+        )
+    else:
+        parts.append(
+            "【普通用户内容边界】不得生成色情、性暗示、暴力、血腥、伤害指导或相关角色扮演；"
+            "如剧本要求此类内容，改写为安全、非露骨的情感或剧情表达。"
+        )
     summary = (run.summary or "").strip()
     if summary:
         parts.append("【前情提要】\n" + summary)
@@ -278,6 +294,8 @@ def build_gm_messages(
     scenario: Scenario,
     run: Run,
     recent_turns: list[StoryMessage],
+    *,
+    membership_tier: str = "free",
 ) -> list[dict[str, str]]:
     """Build the OpenAI-style messages list for a GM generation.
 
@@ -290,7 +308,15 @@ def build_gm_messages(
     # persisted player line. So an empty window uniquely marks the opening.
     is_opening = not recent_turns
     messages: list[dict[str, str]] = [
-        {"role": "system", "content": build_gm_system_prompt(scenario, run, is_opening=is_opening)}
+        {
+            "role": "system",
+            "content": build_gm_system_prompt(
+                scenario,
+                run,
+                is_opening=is_opening,
+                membership_tier=membership_tier,
+            ),
+        }
     ]
     for m in recent_turns:
         if m.role == "player":

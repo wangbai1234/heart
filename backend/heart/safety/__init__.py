@@ -13,6 +13,7 @@ from heart.safety.care_path import (
     get_template_count,
     validate_all_templates,
 )
+from heart.safety.content_policy import ContentPolicyResult, evaluate_content_policy
 from heart.safety.critic_agent import (
     CriticAgent,
     CriticFailure,
@@ -68,6 +69,9 @@ __all__ = [
     "CriticInput",
     "CriticOutput",
     "build_drift_event",
+    # Tier-aware content policy
+    "ContentPolicyResult",
+    "evaluate_content_policy",
     # Safety
     "ClassificationResult",
     "LexiconLoader",

@@ -30,6 +30,8 @@ class TurnRequest:
     voice_enabled: bool = False
     # Explicit user-owned persona ("mask") bound to this character.
     user_mask: Optional[dict] = None
+    # Effective membership tier resolved by the safety pre-check.
+    membership_tier: str = "free"
 
 
 @dataclass

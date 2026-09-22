@@ -441,6 +441,7 @@ class Orchestrator:
             stream_meta=_meta,
             voice_enabled=voice_enabled,
             user_mask=getattr(req, "user_mask", None),
+            membership_tier=getattr(req, "membership_tier", "free"),
         )
 
         splitter = SentenceSplitter()
@@ -559,6 +560,39 @@ class Orchestrator:
                 turn_id=req.trace_id,
                 model_router=None,
             )
+
+            # Apply the membership-aware sexual/violence policy after the
+            # crisis classifier.  Unknown tiers fail closed to the free policy;
+            # PURPLE care responses always take precedence over content policy.
+            from heart.membership import get_effective_tier
+            from heart.safety.content_policy import evaluate_content_policy
+            from heart.safety.safety_agent import ClassificationResult, SeverityLevel
+
+            try:
+                tier = await get_effective_tier(db_session, req.user_id)
+            except Exception:
+                tier = "free"
+                logger.exception("content_policy_tier_resolution_failed")
+            req.membership_tier = tier
+
+            policy = evaluate_content_policy(req.user_message, tier)
+            if policy.blocked and classification.severity != SeverityLevel.PURPLE:
+                classification = ClassificationResult(
+                    severity=SeverityLevel.RED,
+                    reason=policy.reason,
+                    triggered_rules=["content_policy", policy.category or "restricted_content"],
+                    confidence=1.0,
+                    metadata={
+                        **(classification.metadata or {}),
+                        "content_policy": {
+                            "category": policy.category,
+                            "hard_block": policy.hard_block,
+                            "tier": policy.tier,
+                            "matched_terms": list(policy.matched_terms),
+                        },
+                    },
+                    layer="content_policy",
+                )
             breaker.record_success()
             return classification
         except Exception as exc:
@@ -626,10 +660,15 @@ class Orchestrator:
         RED means high-risk content that should be rejected outright.
         Unlike PURPLE (care), RED does not write to memory.
         """
-        reject_response = (
-            "I'm not able to help with that request. "
-            "If you're in crisis, please contact emergency services or a mental health professional."
-        )
+        if classification.metadata and classification.metadata.get("content_policy"):
+            reject_response = (
+                "这类色情或暴力内容暂时不能继续生成。可以改为非露骨的情感、剧情或冲突表达。"
+            )
+        else:
+            reject_response = (
+                "I'm not able to help with that request. "
+                "If you're in crisis, please contact emergency services or a mental health professional."
+            )
 
         logger.warning(
             "turn_rejected_by_safety",
@@ -835,6 +874,7 @@ class Orchestrator:
                 session_id=session_id,
                 user_message=req.user_message,
                 max_tokens=2000,
+                membership_tier=getattr(req, "membership_tier", "free"),
             )
             result = await composer.compose(
                 ctx=ctx,
