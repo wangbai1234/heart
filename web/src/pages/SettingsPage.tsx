@@ -180,7 +180,7 @@ export function SettingsPage() {
         <div className="grid grid-cols-1 gap-2.5 min-[520px]:grid-cols-2 sm:gap-3">
           <WalletPanel
             balance={balance}
-            onRecharge={() => navigate('/wallet')}
+            onWallet={() => navigate('/wallet')}
             onDetails={() => navigate('/credits/transactions')}
           />
 
@@ -471,11 +471,11 @@ function GroupCard({ children }: { children: ReactNode }) {
 
 function WalletPanel({
   balance,
-  onRecharge,
+  onWallet,
   onDetails,
 }: {
   balance: number
-  onRecharge: () => void
+  onWallet: () => void
   onDetails: () => void
 }) {
   return (
@@ -497,10 +497,10 @@ function WalletPanel({
       <div className="mt-5 flex items-end justify-between gap-2.5">
         <WalletAmount value={balance} label="yuoyuo币余额" />
         <button
-          onClick={onRecharge}
+          onClick={onWallet}
           className="h-[38px] shrink-0 rounded-full bg-[var(--color-primary-500)] px-4 text-[13px] font-semibold text-white shadow-[var(--shadow-btn)] transition-transform active:scale-[0.97]"
         >
-          充值
+          查看钱包
         </button>
       </div>
     </div>

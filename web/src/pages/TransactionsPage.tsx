@@ -15,7 +15,7 @@ interface Transaction {
 
 const TYPE_LABELS: Record<string, string> = {
   grant: '注册赠送',
-  redeem: '兑换码充值',
+  redeem: '兑换码权益',
   consume_text: '文本对话',
   consume_voice: '语音对话',
   consume_llm: '模型对话',

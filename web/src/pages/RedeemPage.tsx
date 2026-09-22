@@ -79,10 +79,10 @@ export function RedeemPage() {
             className="w-[120px] h-[120px] object-contain mx-auto mb-4"
           />
           <h2 className="text-[22px] font-semibold text-[var(--color-ink)] mb-2 font-[var(--font-chinese)]">
-            输入兑换码激活会员
+            输入兑换码激活权益
           </h2>
           <p className="text-[14px] text-[var(--color-text-secondary)] leading-[1.6]">
-            在「爱发电」赞助后，你会收到一串 12 位的兑换码。
+            仅支持已经获得的 12 位兑换码，新兑换码发放入口目前已关闭。
           </p>
         </div>
 
@@ -118,7 +118,7 @@ export function RedeemPage() {
           onClick={() => setShowHelp(!showHelp)}
           className="w-full flex items-center justify-between px-4 py-3 bg-[var(--color-glass-35)] backdrop-blur-[12px] rounded-[16px] mb-3"
         >
-          <span className="text-[15px] font-medium text-[var(--color-ink)]">如何获取兑换码</span>
+          <span className="text-[15px] font-medium text-[var(--color-ink)]">兑换码说明</span>
           <svg
             width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="var(--color-chevron)" strokeWidth="1.5" strokeLinecap="round"
             className={`transition-transform duration-200 ${showHelp ? 'rotate-180' : ''}`}
@@ -129,25 +129,9 @@ export function RedeemPage() {
 
         {showHelp && (
           <div className="bg-[var(--color-glass-35)] backdrop-blur-[12px] rounded-[16px] p-4 mb-4 animate-[fade-in-up_220ms_var(--ease-standard)]">
-            <div className="flex gap-3 mb-3">
-              <span className="w-6 h-6 rounded-full bg-[var(--color-primary)] text-white text-[12px] font-bold flex items-center justify-center shrink-0">1</span>
-              <p className="text-[14px] text-[var(--color-ink)] leading-[1.6]">前往「爱发电」赞助页面</p>
-            </div>
-            <div className="flex gap-3 mb-3">
-              <span className="w-6 h-6 rounded-full bg-[var(--color-primary)] text-white text-[12px] font-bold flex items-center justify-center shrink-0">2</span>
-              <p className="text-[14px] text-[var(--color-ink)] leading-[1.6]">选择心仪的赞助挡位</p>
-            </div>
-            <div className="flex gap-3 mb-3">
-              <span className="w-6 h-6 rounded-full bg-[var(--color-primary)] text-white text-[12px] font-bold flex items-center justify-center shrink-0">3</span>
-              <p className="text-[14px] text-[var(--color-ink)] leading-[1.6]">完成支付后查收兑换码邮件</p>
-            </div>
-            <div className="flex gap-3 mb-4">
-              <span className="w-6 h-6 rounded-full bg-[var(--color-primary)] text-white text-[12px] font-bold flex items-center justify-center shrink-0">4</span>
-              <p className="text-[14px] text-[var(--color-ink)] leading-[1.6]">回到 yuoyuo 输入兑换码</p>
-            </div>
-            <button className="w-full py-3 rounded-full border border-[var(--color-primary)] text-[var(--color-primary)] text-[15px] font-medium active:scale-[0.97] transition-transform">
-              去爱发电 →
-            </button>
+            <p className="text-[14px] text-[var(--color-ink)] leading-[1.7]">
+              兑换码只能使用一次。输入后会立即写入当前账号；如果你是历史会员，请使用原账号登录后再激活。
+            </p>
           </div>
         )}
 

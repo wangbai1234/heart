@@ -463,6 +463,18 @@ class TestPricingEndpoint:
         assert skus == {"pack_6", "pack_18", "pack_48", "pack_128"}
 
     @pytest.mark.asyncio
+    async def test_sales_links_are_disabled(self):
+        from heart.api.routes_credits import pricing
+
+        result = await pricing()
+
+        assert result["afdian_url"] == ""
+        assert all(
+            item["checkout_url"] is None
+            for item in result["membership_tiers"] + result["shop"]
+        )
+
+    @pytest.mark.asyncio
     async def test_actions_include_tts_and_clone(self):
         from heart.api.routes_credits import pricing
         result = await pricing()
