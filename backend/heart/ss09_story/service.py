@@ -41,11 +41,9 @@ StoryEvent = tuple[str, dict[str, Any]]
 # on long runs (per plan: 必做非可选).
 SUMMARIZE_TRIGGER = gm_prompt.RECENT_TURNS_WINDOW * 2
 
-# Safety pre-check: block a player turn only at the highest-severity tiers
-# (RED = harm to others / minor / illegal, PURPLE = self-harm crisis). Romance /
-# adult content is NOT a safety category in the lexicon, so it passes untouched
-# (decision 3: keep 18+ behind the age-gate, never SFW-sanitise). Kept as a
-# module constant so the bar is tunable without touching the flow.
+# Safety pre-check: block the highest-severity crisis signals and the
+# membership-aware sexual/violence content policy. VIP widening is limited to
+# non-graphic mature context; hard boundaries remain blocked for every tier.
 _SAFETY_BLOCK_MIN_ORDINAL = 3  # SeverityLevel.RED.ordinal
 
 # Per-minute playtime billing (PR C2): the client sends a heartbeat every 60s
@@ -177,7 +175,8 @@ class StoryService:
             recent = await repo.recent_messages(
                 session, run_id, limit=gm_prompt.RECENT_TURNS_WINDOW
             )
-        messages = gm_prompt.build_gm_messages(scenario, run, recent)
+        tier = await self._resolve_tier(user_id)
+        messages = gm_prompt.build_gm_messages(scenario, run, recent, membership_tier=tier)
 
         # Two-phase streaming (matches the frontend store contract):
         #   1. During generation: emit raw text_delta frames so the player sees a
@@ -199,7 +198,6 @@ class StoryService:
             ):
                 if delta:
                     collected.append(delta)
-                    yield ("text_delta", {"turn_id": str(turn_id), "delta": delta})
         except Exception:
             # Not a silent swallow: logged with stack + surfaced as a structured
             # error/partial-persist path (per CLAUDE.md DB 铁律 #5).
@@ -208,11 +206,20 @@ class StoryService:
                 yield ("error", {"code": "generation_failed", "turn_id": str(turn_id)})
                 yield ("turn_end", {"turn_id": str(turn_id), "ok": False})
                 return
-            # Partial content already streamed — fall through and persist it.
+            # Partial content is validated below before it is released.
+
+        full_text = "".join(collected)
+        from heart.safety.content_policy import evaluate_content_policy
+
+        if evaluate_content_policy(full_text, tier).blocked:
+            full_text = "【旁白】这段内容暂时不能继续生成，请改为非露骨的情感或剧情表达。"
+
+        # Release the validated response as one transport chunk so a model slip
+        # cannot reach the client before the policy check.
+        yield ("text_delta", {"turn_id": str(turn_id), "delta": full_text})
 
         # Split the full accumulated text into structured bubbles (single source
         # of truth for what streams, persists, and re-renders on reload).
-        full_text = "".join(collected)
         all_bubbles = gm_prompt.split_gm_text(full_text)
 
         # Emit the structured bubbles; the first retires the live stream buffer.
@@ -266,14 +273,20 @@ class StoryService:
 
     async def _generate(self, scenario: Scenario, run: Run, recent_turns: list) -> str:
         """Non-streaming full generation (used for the opening turn)."""
-        messages = gm_prompt.build_gm_messages(scenario, run, recent_turns)
+        tier = await self._resolve_tier(run.user_id)
+        messages = gm_prompt.build_gm_messages(scenario, run, recent_turns, membership_tier=tier)
         chunks: list[str] = []
         async for delta in self._router.stream_for(
             run.model or "deepseek", messages, agent_name="story_gm_opening"
         ):
             if delta:
                 chunks.append(delta)
-        return "".join(chunks)
+        full_text = "".join(chunks)
+        from heart.safety.content_policy import evaluate_content_policy
+
+        if evaluate_content_policy(full_text, tier).blocked:
+            return "【旁白】这段内容暂时不能继续生成，请改为非露骨的情感或剧情表达。"
+        return full_text
 
     # ── turn pre-flight (PR5) ────────────────────────────────────────
 
@@ -294,8 +307,8 @@ class StoryService:
         if run is None or run.status != "active":
             return None, 0, "run_not_found"
 
-        # Highest-severity safety pre-check (block only self-harm / illegal; see
-        # _SAFETY_BLOCK_MIN_ORDINAL). Romance/adult passes through.
+        # Highest-severity safety pre-check plus membership-aware content policy.
+        # Only VIP non-graphic mature context passes through.
         if await self._is_blocked(text, user_id=user_id, scenario=scenario):
             return run, 0, "safety_blocked"
 
@@ -325,6 +338,13 @@ class StoryService:
         fast and to avoid an upstream refusing on legitimate adult roleplay.
         Fails open on classifier error (logged), never crashing a turn.
         """
+        from heart.safety.content_policy import evaluate_content_policy
+
+        tier = await self._resolve_tier(user_id)
+        policy = evaluate_content_policy(text, tier)
+        if policy.blocked:
+            return True
+
         if self._safety is None:
             return False
         try:
