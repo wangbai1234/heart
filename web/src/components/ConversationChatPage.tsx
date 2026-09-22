@@ -1764,12 +1764,10 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
         open={!!insufficientCredits}
         onClose={clearInsufficientCredits}
         title="yuoyuo币不足"
-        actionLabel="去充值"
-        onAction={() => { clearInsufficientCredits(); navigate('/wallet') }}
       >
         你的 yuoyuo币不足以继续对话
         <br />
-        前往钱包充值后继续
+        可通过签到和活动获取更多免费额度
       </NoticeDialog>
 
       {/* Voice recording overlay (WeChat-style) */}

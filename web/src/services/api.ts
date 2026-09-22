@@ -213,7 +213,7 @@ export function detailToMessage(detail: unknown, fallback: string): string {
     const d = detail as Record<string, any>
     if (d.code === 'tier_forbidden') {
       const label = d.provider === 'fish' ? '真人语音（Fish）' : '音色'
-      return `${label}克隆需要会员权限，请先升级会员后再试。`
+      return `${label}克隆需要会员权限，当前账号暂不可用。`
     }
     if (typeof d.code === 'string' && FRIENDLY_MESSAGES[d.code]) {
       return FRIENDLY_MESSAGES[d.code]
@@ -539,7 +539,7 @@ export interface MembershipTierInfo {
   clone: string[]
   /** Deprecated compatibility field; new plans grant daily permanent coins. */
   monthly_grant: number
-  /** 爱发电 order/create 深链（未配置时为 null）；前端会追加 ?custom_order_id=<绑定码>。 */
+  /** Legacy compatibility field; purchase links are no longer issued. */
   checkout_url?: string | null
 }
 
@@ -549,13 +549,12 @@ export interface ShopItem {
   price: number // ¥
   credits: number // 到账总币数（已含 bonus）
   bonus: number
-  /** 爱发电 order/create 深链（未配置时为 null）；前端会追加 ?custom_order_id=<绑定码>。 */
+  /** Legacy compatibility field; purchase links are no longer issued. */
   checkout_url?: string | null
 }
 
 export interface Pricing {
   signup_grant: number
-  afdian_url: string
   models: PricingModel[]
   actions: PricingAction[]
   membership_tiers: MembershipTierInfo[]

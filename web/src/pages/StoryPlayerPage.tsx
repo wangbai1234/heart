@@ -133,25 +133,18 @@ export function StoryPlayerPage() {
         className="relative z-10 flex-shrink-0 border-t border-[var(--color-border-glass)] bg-[var(--color-glass-55)] backdrop-blur-[12px] px-3 pt-2.5"
         style={{ paddingBottom: 'calc(10px + var(--safe-bottom))' }}
       >
-        {/* Per-minute billing ran dry → freeze input + prompt recharge. The run
-            is saved; a successful charge after top-up auto-resumes it. */}
+        {/* Per-minute allowance ran dry. The run remains saved for later. */}
         {paused && (
           <div className="mb-2.5 flex items-center gap-3 rounded-[16px] bg-[var(--color-primary)]/10 border border-[var(--color-primary)]/30 px-3.5 py-2.5">
             <span className="flex-1 text-[13px] leading-[1.5] text-[var(--color-ink)]">
-              余额不足，剧情已暂停。充值后可继续游玩，进度已保存。
+              当前额度不足，剧情已暂停，进度已保存。获得新的免费额度后可继续游玩。
             </span>
-            <button
-              onClick={() => navigate('/wallet')}
-              className="shrink-0 h-[36px] rounded-[18px] bg-[var(--color-primary)] text-white px-4 text-[14px] font-semibold active:scale-[0.97] transition-transform"
-            >
-              去充值
-            </button>
           </div>
         )}
         <div className="flex items-end gap-2">
           <textarea
             className="flex-1 resize-none rounded-[20px] bg-[var(--color-surface)] text-[var(--color-ink)] placeholder-[var(--color-text-muted)] border border-[var(--color-border-glass)] px-4 py-2.5 focus:outline-none focus:border-[var(--color-primary)] max-h-32 min-h-[44px] text-[16px] disabled:opacity-50"
-            placeholder={paused ? '充值后继续剧情…' : '描述你的行动或对白…'}
+            placeholder={paused ? '获得免费额度后继续剧情…' : '描述你的行动或对白…'}
             rows={1}
             value={draft}
             disabled={paused}

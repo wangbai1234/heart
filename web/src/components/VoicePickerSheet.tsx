@@ -358,7 +358,7 @@ export function VoicePickerSheet({
               disabled={!canCloneFish}
               className="w-full h-[40px] rounded-full bg-gradient-to-r from-[#FFB7C5] to-[#FF8FAB] text-white text-[14px] font-semibold active:scale-[0.98] transition-transform disabled:opacity-50 disabled:active:scale-100"
             >
-              {canCloneFish ? '选择音频或视频' : '升级会员解锁'}
+              {canCloneFish ? '选择音频或视频' : '当前账号暂不可用'}
             </button>
             <input
               ref={cloneInputRef}

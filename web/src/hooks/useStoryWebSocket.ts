@@ -44,7 +44,7 @@ const ERROR_COPY: Record<string, string> = {
   generation_failed: '生成失败，请重试',
   turn_failed: '生成失败，请重试',
   turn_in_progress: 'GM 正在续写，请稍候',
-  insufficient_credits: '余额不足，请充值后继续剧情',
+  insufficient_credits: '当前额度不足，获得免费额度后可继续剧情',
   safety_blocked: '这条内容涉及高风险话题，无法继续。如果你正处于困境，请寻求专业帮助。',
 }
 
@@ -129,7 +129,7 @@ export function useStoryWebSocket(runId?: string) {
           const r = msg.run_id ?? activeRunRef.current
           if (r) store.setPaused(r, true)
           if (msg.balance !== undefined) useCreditsStore.getState().setBalance(msg.balance)
-          useToastStore.getState().show('余额不足，剧情已暂停，请充值后继续', 'error')
+          useToastStore.getState().show('当前额度不足，获得免费额度后可继续', 'error')
           break
         }
         case 'error': {

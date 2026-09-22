@@ -793,7 +793,7 @@ export function CreateCharacterPage() {
             {status === 'failed' && '克隆失败，点击重试'}
           </p>
           <p className="text-[12px] text-[var(--color-text-muted)] mt-[2px]">
-            {locked ? '升级会员可使用' : `${cost} yuoyuo币 · 音频或视频，取前 30 秒`}
+            {locked ? '当前账号暂不可用' : `${cost} yuoyuo币 · 音频或视频，取前 30 秒`}
           </p>
         </div>
         {locked && (
