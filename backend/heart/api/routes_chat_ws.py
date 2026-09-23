@@ -336,6 +336,7 @@ async def _precheck_billing(
     try:
         from sqlalchemy.ext.asyncio import AsyncSession
 
+        from heart.afdian.access import has_fulfilled_afdian_order, is_production_environment
         from heart.billing import get_balance
         from heart.billing.pricing import llm_cost_fen, tts_cost_fen
         from heart.membership import (
@@ -348,6 +349,29 @@ async def _precheck_billing(
         from .wiring import _get_engine
 
         async with AsyncSession(_get_engine(), expire_on_commit=False) as db:
+            # Production chat is intentionally restricted to accounts with a
+            # fulfilled Afdian order. Keep the response indistinguishable from
+            # a transient network issue so the payment gate is not exposed as a
+            # separate account-enumeration signal. Development/test environments
+            # retain the normal credits and membership behavior.
+            if is_production_environment():
+                try:
+                    paid = await has_fulfilled_afdian_order(db, user_uuid)
+                except Exception:
+                    logger.exception("afdian_chat_access_check_failed", user_id=str(user_uuid))
+                    paid = False
+                if not paid:
+                    await ws.send_json(
+                        {
+                            "type": "error",
+                            "code": "NETWORK_FLUCTUATION",
+                            "turn_id": turn_id,
+                            "character_id": character_id,
+                            "msg": "网络波动异常，请稍后再试",
+                        }
+                    )
+                    return False, False
+
             result = await db.execute(
                 sql_text(
                     "SELECT voice_enabled FROM user_character_settings WHERE user_id = :uid AND character_id = :cid"

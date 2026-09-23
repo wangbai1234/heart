@@ -440,6 +440,8 @@ export function useWebSocket() {
             errMsg = '模型信息已更新，请重新选择'
           } else if (errCode === 'BILLING_CHECK_FAILED') {
             errMsg = '账户验证失败，请重试'
+          } else if (errCode === 'NETWORK_FLUCTUATION') {
+            errMsg = '网络波动异常，请稍后再试'
           } else if (errCode === 'VOICE_NOT_CONFIGURED') {
             errMsg = '该角色暂未配置音色，已切换为文字模式'
             // Also flip local voice_enabled back off so the next message
