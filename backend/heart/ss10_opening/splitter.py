@@ -9,7 +9,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-_PAREN_RE = re.compile(r"（([^）]+)）")
+_PAREN_RE = re.compile(r"（([^）]+)）|\(([^)]+)\)|(?<!\w)\*([^*\n]+)\*(?!\w)")
 
 # Users often wrap dialogue in double quotes out of prose habit. The chat bubble
 # already signals "this is speech", so an outer pair is redundant. Strip it —
@@ -48,7 +48,12 @@ def split_opening(raw_text: str) -> list[OpeningBubble]:
         before = raw_text[last_end : m.start()].strip()
         if before:
             bubbles.append(OpeningBubble(kind="text", content=_strip_wrapping_quotes(before)))
-        bubbles.append(OpeningBubble(kind="action", content=m.group(1).strip()))
+        bubbles.append(
+            OpeningBubble(
+                kind="action",
+                content=next(group for group in m.groups() if group is not None).strip(),
+            )
+        )
         last_end = m.end()
 
     trailing = raw_text[last_end:].strip()

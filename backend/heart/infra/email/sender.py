@@ -99,3 +99,31 @@ def render_otp_email(code: str) -> tuple[str, str]:
 </body>
 </html>"""
     return plain, html
+
+
+def render_international_otp(code: str, locale: str, ttl_seconds: int) -> tuple[str, str, str]:
+    """Render only trusted, server-generated OTP content in the requested locale."""
+    from html import escape
+
+    minutes = max(1, (ttl_seconds + 59) // 60)
+    copy = {
+        "en": (
+            "Your yuoyuo verification code",
+            "Your verification code",
+            f"Valid for {minutes} minutes. If you did not request this, ignore this email.",
+        ),
+        "ja": (
+            "yuoyuo 認証コード",
+            "認証コード",
+            f"有効期限は{minutes}分です。心当たりがない場合は、このメールを無視してください。",
+        ),
+        "ko": (
+            "yuoyuo 인증 코드",
+            "인증 코드",
+            f"{minutes}분 동안 유효합니다. 요청하지 않았다면 이 이메일을 무시하세요.",
+        ),
+    }
+    subject, heading, footer = copy.get(locale, copy["en"])
+    plain = f"{heading}: {code}\n\n{footer}"
+    html = f"<html lang='{escape(locale)}'><body><h1>yuoyuo</h1><p>{heading}</p><h2>{escape(code)}</h2><p>{footer}</p></body></html>"
+    return subject, plain, html

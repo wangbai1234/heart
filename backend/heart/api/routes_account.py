@@ -235,7 +235,11 @@ async def export_data(
     )
     chat_messages = [dict(r) for r in chat_result.mappings().all()]
 
+    from heart.i18n import load_preferences
+
+    language_preferences = await load_preferences(db, uid)
     return {
+        "language_preferences": language_preferences.model_dump(),
         "profile": dict(user) if user else None,
         "transactions": transactions,
         "character_settings": char_settings,

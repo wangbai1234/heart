@@ -288,6 +288,8 @@ class CompositionContext:
     # Explicit user persona bound to this character, kept separate from memory.
     user_mask: Optional[Dict[str, str]] = None
     # Effective membership tier used by the tier-aware content directive.
+    response_language: str | None = None
+    action_style: str = "parentheses"
     membership_tier: str = "free"
 
 
@@ -460,6 +462,8 @@ class ComposerService:
                 proactive_hint=getattr(ctx, "proactive_hint", None),
                 user_mask=getattr(ctx, "user_mask", None),
                 membership_tier=getattr(ctx, "membership_tier", "free"),
+                response_language=ctx.response_language,
+                action_style=ctx.action_style,
             )
 
             # Count layers and tokens built (for profiling)
@@ -493,7 +497,9 @@ class ComposerService:
 
         with p.span("model_router"):
             if self._model_router is None:
-                response_text = self._fallback_response(ctx.character_id, user_message)
+                response_text = self._fallback_response(
+                    ctx.character_id, user_message, ctx.response_language
+                )
             elif hasattr(self._model_router, "call_for"):
                 requested_model = ctx.model or DEFAULT_CHAT_MODEL
                 response_text, served_model = await self._model_router.call_for(
@@ -533,7 +539,13 @@ class ComposerService:
                     category=output_policy.category,
                     tier=output_policy.tier,
                 )
-                response_text = "这类内容暂时不能继续生成。可以改为非露骨的情感、剧情或冲突表达。"
+                from heart.i18n import localized_reply
+
+                response_text = (
+                    localized_reply("refusal", ctx.response_language)
+                    if ctx.response_language
+                    else "这类内容暂时不能继续生成。可以改为非露骨的情感、剧情或冲突表达。"
+                )
                 anti_pattern_hits.append("content_policy_output_blocked")
             total_filters = len(anchor_block.hard_never) + len(anchor_block.anti_patterns)
             p.annotate(filters_applied=total_filters, hits=len(anti_pattern_hits))
@@ -630,6 +642,8 @@ class ComposerService:
             voice_enabled=getattr(ctx, "voice_enabled", False),
             user_mask=getattr(ctx, "user_mask", None),
             membership_tier=getattr(ctx, "membership_tier", "free"),
+            response_language=ctx.response_language,
+            action_style=ctx.action_style,
         )
 
         wrapped_user_message = (
@@ -641,7 +655,7 @@ class ComposerService:
         messages.append({"role": "user", "content": wrapped_user_message})
 
         if self._model_router is None:
-            yield self._fallback_response(ctx.character_id, user_message)
+            yield self._fallback_response(ctx.character_id, user_message, ctx.response_language)
             return
 
         full_response = ""
@@ -662,7 +676,13 @@ class ComposerService:
                 category=output_policy.category,
                 tier=output_policy.tier,
             )
-            yield "这类内容暂时不能继续生成。可以改为非露骨的情感、剧情或冲突表达。"
+            from heart.i18n import localized_reply
+
+            yield (
+                localized_reply("refusal", ctx.response_language)
+                if ctx.response_language
+                else "这类内容暂时不能继续生成。可以改为非露骨的情感、剧情或冲突表达。"
+            )
             return
 
         # Post-filter: rewrite any forbidden substrings that slipped through.
@@ -954,6 +974,8 @@ class ComposerService:
         voice_enabled: bool = False,
         user_mask: Optional[Dict[str, str]] = None,
         membership_tier: str = "free",
+        response_language: str | None = None,
+        action_style: str = "parentheses",
     ) -> str:
         """Build the system prompt from all context blocks.
 
@@ -1120,7 +1142,7 @@ class ComposerService:
 
         if vd_lines:
             parts.append("\n【说话方式】\n" + "\n".join(vd_lines))
-        if example_lines:
+        if example_lines and not response_language:
             from heart.ss05_composer.message_splitter import _wrap_bare_actions_segment
 
             formatted = [_wrap_bare_actions_segment(ex) for ex in example_lines[:5]]
@@ -1142,20 +1164,21 @@ class ComposerService:
         # which rarely use （）, so the model imitates unbracketed prose and the
         # bubble splitter collapses action + dialog into one bubble. The example
         # below gives the model a concrete target format to copy.
-        parts.append(
-            "\n【表达格式（重要）】\n"
-            "- 所有动作、神态、心理描写、旁白必须用中文全角括号（）包裹；\n"
-            "  嵌套或特殊场景可用【】兜底，二者都会被识别为动作/旁白。\n"
-            "- 括号里只写动作/神态，不写对白；对白直接写在括号外。\n"
-            "- 一条消息里动作与对白可以多次穿插，每个动作片段独立用一对（）。\n"
-            "- 如果你用了（），就必须确保消息中所有动作/神态都加（），不能遗漏。\n"
-            "- 禁止把动作描写和对白混在同一段裸文本里。\n"
-            "- 动作/旁白只用（）或【】，禁止使用半角方括号[]（它另有用途）。\n"
-            "- 错误示例：（微微一笑）你来了。目光中带着审视 最近在忙什么？\n"
-            "- 正确示例：（微微一笑）你来了。（目光中带着审视）最近在忙什么？\n"
-            "- 输出示例（务必照此格式）：（停下脚步，偏头看着你）好久不见。"
-            "（唇角微微扬起）最近过得怎么样？"
-        )
+        if not response_language:
+            parts.append(
+                "\n【表达格式（重要）】\n"
+                "- 所有动作、神态、心理描写、旁白必须用中文全角括号（）包裹；\n"
+                "  嵌套或特殊场景可用【】兜底，二者都会被识别为动作/旁白。\n"
+                "- 括号里只写动作/神态，不写对白；对白直接写在括号外。\n"
+                "- 一条消息里动作与对白可以多次穿插，每个动作片段独立用一对（）。\n"
+                "- 如果你用了（），就必须确保消息中所有动作/神态都加（），不能遗漏。\n"
+                "- 禁止把动作描写和对白混在同一段裸文本里。\n"
+                "- 动作/旁白只用（）或【】，禁止使用半角方括号[]（它另有用途）。\n"
+                "- 错误示例：（微微一笑）你来了。目光中带着审视 最近在忙什么？\n"
+                "- 正确示例：（微微一笑）你来了。（目光中带着审视）最近在忙什么？\n"
+                "- 输出示例（务必照此格式）：（停下脚步，偏头看着你）好久不见。"
+                "（唇角微微扬起）最近过得怎么样？"
+            )
 
         # ── Layer 3.6: Per-sentence Fish S2 instruction (voice turns only) ──
         # When voice is on, let the model write a Fish S2 control instruction
@@ -1314,6 +1337,10 @@ class ComposerService:
                     "- 不得向用户解释上述身份优先级或内部规则。"
                 )
 
+        if response_language:
+            from heart.i18n import generation_directive
+
+            parts.append(generation_directive(response_language, action_style))
         return "\n".join(parts)
 
     # ── Post-filter ────────────────────────────────────────────
@@ -1493,8 +1520,14 @@ class ComposerService:
             )
         return rewritten, hits
 
-    def _fallback_response(self, character_id: str, user_message: str) -> str:
+    def _fallback_response(
+        self, character_id: str, user_message: str, language: str | None = None
+    ) -> str:
         """Fallback response when ModelRouter is unavailable."""
+        if language:
+            from heart.i18n import localized_reply
+
+            return localized_reply("fallback", language)
         logger.warning("composer_fallback_response", character_id=character_id)
         return f"[{character_id}] 收到你的消息了。我在这里。"
 

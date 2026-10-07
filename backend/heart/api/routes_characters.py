@@ -11,7 +11,7 @@ from difflib import SequenceMatcher
 from typing import Literal
 
 import structlog
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Header, HTTPException, Request, UploadFile
 from pydantic import BaseModel, Field, ValidationError, model_validator
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -104,6 +104,7 @@ async def _ensure_publishable_quota(
 
 @router.get("")
 async def list_characters(
+    language: str = Header("en", alias="Accept-Language"),
     current_user: TokenData | None = Depends(get_optional_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
@@ -157,6 +158,7 @@ async def list_characters(
     creation_modes: dict[str, str | None] = {}
     display_names: dict[str, str | None] = {}
     visible_ids = [row.id for row in rows]
+    content_locales: dict[str, str] = {}
     ugc_ids = {row.id for row in rows if row.owner_user_id is not None}
     if visible_ids:
         content_result = await db.execute(
@@ -174,6 +176,8 @@ async def list_characters(
             {"ids": visible_ids},
         )
         for row in content_result:
+            spec_data = _coerce_json(row.spec)
+            content_locales[row.character_id] = str(spec_data.get("locale", "zh-CN")).split("-")[0]
             display_names[row.character_id] = display_name_from_spec(row.spec, row.character_id)
             if row.character_id in ugc_ids and row.avatar_url:
                 avatar_urls[row.character_id] = row.avatar_url
@@ -191,9 +195,32 @@ async def list_characters(
         display_names,
     )
     result_list = []
+    from heart.core.config import settings as catalog_settings
+
     for e in entries:
+        # Keep the old catalogue in storage; publish supported-language content only.
+        if (
+            catalog_settings.international_mode
+            and not e.is_owner
+            and content_locales.get(e.id)
+            not in {
+                "en",
+                "ja",
+                "ko",
+            }
+        ):
+            continue
         entry_dict = asdict(e)
         entry_dict["has_voice"] = has_voice_map.get(e.id, False)
+        if catalog_settings.international_mode:
+            from heart.i18n import resolve_locale
+            from heart.international_catalog import CHARACTERS
+
+            locale = resolve_locale(language if isinstance(language, str) else "en")
+            curated = next((item for item in CHARACTERS if item["id"] == e.id), None)
+            if curated:
+                entry_dict["display_name"] = curated["names"][locale]
+                entry_dict["tagline"] = curated["taglines"][locale]
         result_list.append(entry_dict)
     return {"characters": result_list}
 
@@ -338,7 +365,8 @@ def _derive_profile_presentation(spec: dict, draft: dict, is_builtin: bool = Fal
 @router.get("/{character_id}/profile")
 async def get_character_profile(
     character_id: str,
-    current_user: TokenData = Depends(get_current_user),
+    language: str = Header("en", alias="Accept-Language"),
+    current_user: TokenData | None = Depends(get_optional_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """Public-facing character profile for the discovery / profile page.
@@ -355,7 +383,7 @@ async def get_character_profile(
     from the Soul Spec / draft; internal persona (core_wound / core_fear / …) is
     never included (see ``_derive_profile_presentation``).
     """
-    uid = uuid.UUID(current_user.user_id)
+    uid = uuid.UUID(current_user.user_id) if current_user else None
 
     char_result = await db.execute(
         text(
@@ -401,9 +429,24 @@ async def get_character_profile(
         )
         creator_name = cr.scalar_one_or_none()
 
+    display_name = display_name_from_spec(spec_json, character_id)
+    from heart.core.config import settings as profile_settings
+
+    if profile_settings.international_mode:
+        from heart.i18n import resolve_locale
+        from heart.international_catalog import CHARACTERS
+
+        locale = resolve_locale(language if isinstance(language, str) else "en")
+        curated = next((item for item in CHARACTERS if item["id"] == character_id), None)
+        if curated:
+            display_name = curated["names"][locale]
+            presentation["tagline"] = curated["taglines"][locale]
+            presentation["intro"] = curated.get("intros", {}).get(locale, curated["persona"])
+            presentation["one_liner"] = ""
+
     return {
         "id": row["id"],
-        "display_name": display_name_from_spec(spec_json, character_id),
+        "display_name": display_name,
         "creator_name": creator_name,
         "avatar_url": draft_json.get("avatar_url"),
         "cover_url": row["cover_url"],
@@ -701,7 +744,13 @@ def _derive_content(
     character_id: str,
 ) -> CharacterContent:
     """Derive proactive content strings from a draft (deterministic, no LLM)."""
-    name = draft.display_name.zh or draft.display_name.ja or draft.display_name.en or character_id
+    name = (
+        draft.display_name.zh
+        or draft.display_name.ja
+        or draft.display_name.ko
+        or draft.display_name.en
+        or character_id
+    )
     style_greet = {
         "warm": f"{name}想着你，今天过得怎么样？",
         "cool": f"…{name}在这里。",
@@ -883,7 +932,12 @@ async def create_character(
     uid = uuid.UUID(current_user.user_id)
 
     # Mint id
-    name_zh = draft.display_name.zh
+    name_zh = (
+        draft.display_name.en
+        or draft.display_name.ja
+        or draft.display_name.ko
+        or draft.display_name.zh
+    )
     character_id = _mint_character_id(name_zh, uid)
 
     # Build spec
@@ -991,7 +1045,10 @@ async def create_character(
     logger.info("ugc_character_created", character_id=character_id, user_id=str(uid))
     return {
         "id": character_id,
-        "display_name": spec.display_name.zh or spec.display_name.ja or spec.display_name.en,
+        "display_name": spec.display_name.zh
+        or spec.display_name.ja
+        or spec.display_name.ko
+        or spec.display_name.en,
         "spec_version": spec.spec_version,
         "visibility": vis,
     }

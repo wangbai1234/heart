@@ -268,11 +268,12 @@ def build_soul_spec_from_draft(
     display_name = DisplayName(
         zh=draft.display_name.zh,
         ja=draft.display_name.ja,
+        ko=draft.display_name.ko,
         en=draft.display_name.en,
     )
 
     # ── locale → SoulSpec.locale (must match ^[a-z]{2}-[A-Z]{2}$) ───────────
-    _locale_map = {"zh": "zh-CN", "ja": "ja-JP", "en": "en-US"}
+    _locale_map = {"zh": "zh-CN", "ja": "ja-JP", "ko": "ko-KR", "en": "en-US"}
     spec_locale = _locale_map.get(draft.locale, "zh-CN")
 
     # ── voice_dna from speech_samples + catchphrases + style defaults ─────────
@@ -432,7 +433,11 @@ def build_soul_spec_from_draft(
 
     # ── test_fixtures ────────────────────────────────────────────────────────
     name_str = (
-        draft.display_name.zh or draft.display_name.ja or draft.display_name.en or character_id
+        draft.display_name.zh
+        or draft.display_name.ja
+        or draft.display_name.ko
+        or draft.display_name.en
+        or character_id
     )
     golden_dialogues = [
         GoldenDialogue(

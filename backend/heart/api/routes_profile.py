@@ -16,10 +16,41 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from heart.api.rate_limit import limiter
 from heart.api.wiring import get_db
 from heart.core.auth import TokenData, get_current_user
+from heart.i18n import LanguagePreferences, load_preferences
 
 logger = structlog.get_logger(__name__)
 
 router = APIRouter(prefix="/api/profile", tags=["profile"])
+
+
+@router.get("/preferences", response_model=LanguagePreferences)
+async def get_language_preferences(
+    current_user: TokenData = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> LanguagePreferences:
+    return await load_preferences(db, uuid.UUID(current_user.user_id))
+
+
+@router.put("/preferences", response_model=LanguagePreferences)
+async def save_language_preferences(
+    body: LanguagePreferences,
+    current_user: TokenData = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> LanguagePreferences:
+    await db.execute(
+        text("""
+            INSERT INTO user_language_preferences
+                (user_id, interface_language, response_language, action_style)
+            VALUES (:uid, :interface_language, :response_language, :action_style)
+            ON CONFLICT (user_id) DO UPDATE SET
+                interface_language = EXCLUDED.interface_language,
+                response_language = EXCLUDED.response_language,
+                action_style = EXCLUDED.action_style, updated_at = NOW()
+        """),
+        {"uid": uuid.UUID(current_user.user_id), **body.model_dump()},
+    )
+    await db.commit()
+    return body
 
 
 class ProfileUpdate(BaseModel):

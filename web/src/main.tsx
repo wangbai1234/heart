@@ -1,6 +1,9 @@
+import { lazy, Suspense } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
-import { App } from './App'
+const App = import.meta.env.VITE_INTERNATIONAL === 'true'
+  ? lazy(() => import('./international/InternationalApp').then(m => ({ default: m.InternationalApp })))
+  : lazy(() => import('./App').then(m => ({ default: m.App })))
 import './index.css'
 
 // Dev-mode service worker cleanup. In dev vite-plugin-pwa never registers a
@@ -44,6 +47,6 @@ if (import.meta.env.DEV && 'serviceWorker' in navigator) {
 // is fully idempotent.
 createRoot(document.getElementById('root')!).render(
   <BrowserRouter>
-    <App />
+    <Suspense fallback={<div role="status">yuoyuo</div>}><App /></Suspense>
   </BrowserRouter>,
 )

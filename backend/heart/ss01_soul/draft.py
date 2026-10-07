@@ -33,12 +33,13 @@ class GreetingStyle(str, Enum):
 class DisplayNameDraft(BaseModel, extra="forbid"):
     zh: Optional[str] = Field(None, min_length=1, max_length=20)
     ja: Optional[str] = Field(None, min_length=1, max_length=20)
+    ko: Optional[str] = Field(None, min_length=1, max_length=20)
     en: Optional[str] = Field(None, min_length=1, max_length=40)
 
     @model_validator(mode="after")
     def at_least_one(self) -> "DisplayNameDraft":
-        if not any([self.zh, self.ja, self.en]):
-            raise ValueError("At least one of zh / ja / en is required")
+        if not any([self.zh, self.ja, self.ko, self.en]):
+            raise ValueError("At least one of zh / ja / ko / en is required")
         return self
 
 

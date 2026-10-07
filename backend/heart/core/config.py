@@ -25,6 +25,9 @@ class Settings(BaseSettings):
     heart_invariants: str = ""
     debug: bool = True
     log_level: str = "INFO"
+    international_mode: bool = False
+    international_geo_enforced: bool = False
+    international_origin_secret: str = ""
 
     # Database
     database_url: str = "postgresql+asyncpg://heart:heartdev@localhost:5432/heart"

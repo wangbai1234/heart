@@ -334,6 +334,15 @@ async def request_otp(
         sender = get_email_sender()
         subject = OTP_SUBJECT.format(code=code)
         plain, html = render_otp_email(code)
+        if settings.international_mode:
+            from heart.i18n import resolve_locale
+            from heart.infra.email.sender import render_international_otp
+
+            subject, plain, html = render_international_otp(
+                code,
+                resolve_locale(request.headers.get("accept-language", "en")),
+                settings.otp_ttl_seconds,
+            )
         await sender.send(to=email, subject=subject, body=plain, html=html)
     except Exception as e:
         logger.error("otp_email_send_failed", email=email[:3] + "***", error=str(e))

@@ -45,7 +45,7 @@ def display_name_from_spec(spec: object, fallback_id: str) -> str:
     if isinstance(spec, dict):
         raw = spec.get("display_name")
         if isinstance(raw, dict):
-            for locale in ("zh", "ja", "en"):
+            for locale in ("zh", "ja", "ko", "en"):
                 value = raw.get(locale)
                 if isinstance(value, str) and value.strip():
                     return value.strip()

@@ -173,6 +173,17 @@ async def lifespan(app: FastAPI):
     await _shutdown()
 
 
+def _register_mode_specific_routers(app: FastAPI, international_mode: bool) -> None:
+    """Omit domestic commerce and campaigns from the international app."""
+    if not international_mode:
+        app.include_router(invite_router)  # /api/invite (GET code, POST /use)
+        app.include_router(lottery_router)  # /api/lottery + /api/rewards/coupons
+        app.include_router(commission_router)  # /api/commission (store-credit balance/spend)
+        app.include_router(promotions_router)  # /api/promotions (social promotion tasks)
+        app.include_router(promotions_admin_router)  # /api/admin/promotions (moderation)
+        app.include_router(webhooks_router)  # /api/webhooks/* (afdian)
+
+
 def create_app() -> FastAPI:
     """Create and configure FastAPI application."""
 
@@ -294,13 +305,8 @@ def create_app() -> FastAPI:
     app.include_router(masks_router)  # /api/masks (user-owned conversation personas)
     app.include_router(models_router)  # /api/models (catalog, status, preferences)
     app.include_router(notices_router)  # /api/notices (account-scoped announcements)
-    app.include_router(invite_router)  # /api/invite (GET code, POST /use)
-    app.include_router(lottery_router)  # /api/lottery + /api/rewards/coupons
-    app.include_router(commission_router)  # /api/commission (store-credit balance/spend)
-    app.include_router(promotions_router)  # /api/promotions (social promotion tasks)
-    app.include_router(promotions_admin_router)  # /api/admin/promotions (moderation)
-    app.include_router(admin_router)  # /api/admin/* (admin operations, requires X-Admin-Key)
-    app.include_router(webhooks_router)  # /api/webhooks/* (afdian)
+    _register_mode_specific_routers(app, settings.international_mode)
+    app.include_router(admin_router)  # Authenticated operations remain available.
     app.include_router(profile_router)  # /api/profile/* (GET/PATCH profile, avatar)
     app.include_router(account_router)  # /api/account/* (clear, delete, export)
     app.include_router(characters_router)  # /api/characters/* (voice settings)
@@ -332,6 +338,14 @@ def create_app() -> FastAPI:
 
     app.add_exception_handler(RateLimitExceeded, _rate_limit_handler)  # type: ignore[arg-type]
     app.add_middleware(SlowAPIMiddleware)
+
+    from heart.api.international_access import InternationalAccessMiddleware
+
+    app.add_middleware(
+        InternationalAccessMiddleware,
+        enabled=settings.international_mode and settings.international_geo_enforced,
+        origin_secret=settings.international_origin_secret,
+    )
 
     # OpenTelemetry instrumentation
     FastAPIInstrumentor.instrument_app(app)
