@@ -347,6 +347,10 @@ def create_app() -> FastAPI:
         origin_secret=settings.international_origin_secret,
     )
 
+    from heart.api.local_review import configure_local_review
+
+    configure_local_review(app, settings.local_character_review)
+
     # OpenTelemetry instrumentation
     FastAPIInstrumentor.instrument_app(app)
 

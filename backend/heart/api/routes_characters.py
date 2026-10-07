@@ -195,12 +195,16 @@ async def list_characters(
         display_names,
     )
     result_list = []
+    from heart.api.local_review import review_catalog_records
     from heart.core.config import settings as catalog_settings
+
+    review_records = await review_catalog_records(db, catalog_settings.local_character_review)
 
     for e in entries:
         # Keep the old catalogue in storage; publish supported-language content only.
         if (
             catalog_settings.international_mode
+            and not catalog_settings.local_character_review
             and not e.is_owner
             and content_locales.get(e.id)
             not in {
@@ -212,6 +216,7 @@ async def list_characters(
             continue
         entry_dict = asdict(e)
         entry_dict["has_voice"] = has_voice_map.get(e.id, False)
+        entry_dict.update(review_records.get(e.id, {}))
         if catalog_settings.international_mode:
             from heart.i18n import resolve_locale
             from heart.international_catalog import CHARACTERS

@@ -58,17 +58,20 @@ export function InternationalApp() {
     <footer className="intl-footer"><p>{t('aiNotice')}</p><div>{['terms', 'privacy', 'contentPolicy', 'refunds', 'contact'].map(type => <Link key={type} to={`/legal/${type}`}>{t(type)}</Link>)}</div><small>© 2026 yuoyuo</small></footer>
   </div>
 }
+type ReviewCharacter = CharacterDTO & { local_review?: {
+  batch_id: string; original_visibility: string; original_status: string; original_review_status: string
+} }
 function Discover() {
   const { t } = useTranslation()
   const token = useAuthStore(s => s.accessToken)
-  const [characters, setCharacters] = useState<CharacterDTO[]>([])
+  const [characters, setCharacters] = useState<ReviewCharacter[]>([])
   const [query, setQuery] = useState('')
   const [status, setStatus] = useState('loading')
-  useEffect(() => { let active = true; api<{ characters: CharacterDTO[] }>('/characters').then(result => { if (active) { setCharacters(result.characters); setStatus('') } }).catch(() => { if (active) setStatus('error') }); return () => { active = false } }, [token, t])
-  const filtered = characters.filter(c => `${c.display_name} ${c.tagline ?? ''}`.toLowerCase().includes(query.toLowerCase()))
+  useEffect(() => { let active = true; api<{ characters: ReviewCharacter[] }>('/characters').then(result => { if (active) { setCharacters(result.characters); setStatus('') } }).catch(() => { if (active) setStatus('error') }); return () => { active = false } }, [token, t])
+  const filtered = characters.filter(c => `${c.id} ${c.display_name} ${c.tagline ?? ''}`.toLowerCase().includes(query.toLowerCase()))
   return <><section className="intl-hero"><div><p className="intl-eyebrow">{t('heroEyebrow')}</p><h1>{t('heroTitle')}</h1><p>{t('heroBody')}</p><Link className="intl-button" to="/create">{t('heroCta')} <span aria-hidden>↗</span></Link><small>{t('freePreview')}</small></div><div className="intl-hero-art" aria-hidden><div className="intl-orbit"/><span>Every story<br/>starts with hello.</span><b>y.</b></div></section>
-    <section><div className="intl-section-heading"><h2>{t('catalogTitle')}</h2><input aria-label={t('search')} placeholder={t('search')} value={query} onChange={e => setQuery(e.target.value)} /></div>
-      {status ? <Notice error={status === 'error'}>{t(status)}</Notice> : !filtered.length ? <div className="intl-empty">{t('catalogEmpty')}</div> : <div className="intl-grid">{filtered.map(c => <Link className="intl-character-card" to={`/character/${encodeURIComponent(c.id)}`} key={c.id}><div className="intl-cover">{c.cover_url && <img src={c.cover_url} alt="" loading="lazy" />}<span>{t('aiLabel')}</span></div><div><h3>{c.display_name}</h3><p>{c.tagline}</p>{c.is_owner && <small>{t('myCharacters')}</small>}</div></Link>)}</div>}
+    {characters.some(c => c.local_review) && <Notice>{t('localReviewNotice', { count: characters.length })}</Notice>}<section><div className="intl-section-heading"><h2>{t('catalogTitle')}</h2><input aria-label={t('search')} placeholder={t('search')} value={query} onChange={e => setQuery(e.target.value)} /></div>
+      {status ? <Notice error={status === 'error'}>{t(status)}</Notice> : !filtered.length ? <div className="intl-empty">{t('catalogEmpty')}</div> : <div className="intl-grid">{filtered.map(c => <Link className="intl-character-card" to={`/character/${encodeURIComponent(c.id)}`} key={c.id}><div className="intl-cover">{c.cover_url && <img src={c.cover_url} alt="" loading="lazy" />}<span>{t('aiLabel')}</span></div><div><h3>{c.display_name}</h3><p>{c.tagline}</p>{c.is_owner && <small>{t('myCharacters')}</small>}{c.local_review && <small className="intl-review-source">{t('reviewSource', { visibility: t(c.local_review.original_visibility), status: c.local_review.original_status })}<br/>{c.id}</small>}</div></Link>)}</div>}
     </section></>
 }
 import { useParams } from 'react-router-dom'
