@@ -1,4 +1,5 @@
 import { GoogleCallbackPage } from './pages/GoogleCallbackPage'
+import { SharedMemoriesPage } from './pages/SharedMemoriesPage'
 import { useTranslation } from 'react-i18next'
 import i18n from './i18n'
 import { international } from './i18n/text'
@@ -344,7 +345,6 @@ export function App() {
       <>
         <UpdatePrompt />
         <Routes>
-        <Route path="/auth/google/callback" element={<GoogleCallbackPage />} />
           <Route path="/admin/analytics" element={<AdminAnalyticsPage />} />
         </Routes>
       </>
@@ -373,6 +373,8 @@ export function App() {
         点赞达标还可累计领取两档 VIP
       </NoticeDialog>
       <Routes>
+        <Route path="/auth/google/callback" element={<GoogleCallbackPage />} />
+        <Route path="/character/:id/memories" element={<SharedMemoriesPage />} />
         <Route path="/" element={<Navigate to="/character" replace />} />
         <Route path="/splash" element={<SplashPage />} />
         <Route path="/login" element={<LegacyLoginRedirect />} />

@@ -39,3 +39,21 @@ Planned privacy address: `privacy@yuoyuo.app`, forwarding to the operator's spec
 ## Validation (2026-10-08)
 
 Canonical `bash scripts/ci.sh`: 2,001 backend tests passed, 34 skipped; 64 frontend tests passed; lint, typing, schemas and production build passed. Seven international Tier E tests passed in 7.02 seconds against isolated `heart_ui_test` with real HTTP/WebSocket/Postgres/Redis and a fake LLM; no paid model calls. Both local review and test DB report migration 079. Anonymous details no longer request companion data or authenticated view increments; chat opens the existing login dialog with a return destination. Real Google login and inbound mail delivery are not yet verified.
+
+## Name-first catalog batch (2026-10-08)
+
+The restored 222-row source selection now has 666 independent local preview IDs:
+one English, Japanese and Korean name row for every source. The name plan keeps
+existing hand-edited launch names, gives each locale unique names, and records
+the source name, gender/group hint, method and owner-review status in the private
+`local_review.multilingual_name_adaptations` table. Source characters and
+historical chats are unchanged. This is a name/catalog pass: source-language
+persona, intro, opening and tags remain pending localization until a funded
+model or editorial pass is available, so these rows are not fully translated or
+production-cleared.
+
+
+For local authenticated acceptance, the shared-memory page is
+`http://127.0.0.1:55173/character/{character_id}/memories`, for example
+`/character/shen_yuchuan/memories`. It reads only the signed-in user's own
+relationship and memories.

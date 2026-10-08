@@ -10,6 +10,12 @@ Audit is only in the local database's `local_review` schema and private `/Users/
 
 The private audit directory contains `approved-catalog-20261007.json` and `.csv` for the 222-row result, plus the original 714-row audit and guarded restore SQL. Chinese character content stays unchanged for local review, while international UI options remain EN/JA/KO.
 
+The 2026-10-08 name-first pass adds 666 independent local preview IDs
+(`launch_en_*`, `launch_ja_*`, `launch_ko_*`) for the 222 source rows. Names are
+unique per locale and stored with source snapshots in
+`local_review.multilingual_name_adaptations`. Body copy is still pending
+localization; this pass is for quantity and naming review only.
+
 Restart after Docker is running:
 
 ```bash

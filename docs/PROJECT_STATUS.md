@@ -18,7 +18,7 @@
 
 ## 国际版实施批次（2026-10-08，未部署）
 
-按用户选项推进 B1/C/E/F/H/J/K；角色首发从 222 个候选中选择 12 个官方 public 角色，分 EN/JA/KO 改编并保存独立 ID 和私有 before/after 审计。原角色与聊天不覆盖。新增 Google OIDC + 079 身份绑定表；本地 review/test DB 已迁移。真实 Google 控制台配置、域名隐私邮箱、正式政策主体/处理者资料与部署仍未完成。阶段结果、范围与限制见 [实施记录](international/IMPLEMENTATION_20261008.md)；收费分析见 [日韩收费评估](international/PRICING_JP_KR.md)。不可把本地审核预览当作生产发布。
+按用户选项推进 B1/C/E/F/H/J/K；222 个候选现有 666 个本地名称预览（每个源角色 EN/JA/KO 各一版），另有 12 个完整改编首发稿。名称批次保存独立 ID 和私有来源快照；原角色与聊天不覆盖。正文改编仍待模型额度或编辑审核。新增 Google OIDC + 079 身份绑定表；本地 review/test DB 已迁移。真实 Google 控制台配置、域名隐私邮箱、正式政策主体/处理者资料与部署仍未完成。阶段结果、范围与限制见 [实施记录](international/IMPLEMENTATION_20261008.md)；收费分析见 [日韩收费评估](international/PRICING_JP_KR.md)。不可把本地审核预览当作生产发布。
 
 ## 国际版分支进展（2026-10-07）
 
