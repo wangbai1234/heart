@@ -1,3 +1,4 @@
+import { GoogleCallbackPage } from './pages/GoogleCallbackPage'
 import { useTranslation } from 'react-i18next'
 import i18n from './i18n'
 import { international } from './i18n/text'
@@ -343,6 +344,7 @@ export function App() {
       <>
         <UpdatePrompt />
         <Routes>
+        <Route path="/auth/google/callback" element={<GoogleCallbackPage />} />
           <Route path="/admin/analytics" element={<AdminAnalyticsPage />} />
         </Routes>
       </>

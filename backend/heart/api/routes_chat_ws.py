@@ -1108,10 +1108,10 @@ async def _handle_chat_message(
 
             user_mask = await get_bound_mask(db, user_uuid, character_id)
             from heart.core.config import settings as locale_settings
-            from heart.i18n import load_preferences
+            from heart.i18n import character_preferences
 
             language_preferences = (
-                await load_preferences(db, user_uuid)
+                await character_preferences(db, user_uuid, character_id)
                 if locale_settings.international_mode
                 else None
             )

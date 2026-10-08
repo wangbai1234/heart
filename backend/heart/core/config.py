@@ -30,6 +30,12 @@ class Settings(BaseSettings):
     international_geo_enforced: bool = False
     international_origin_secret: str = ""
 
+    # Google Sign-In; empty credentials leave the integration disabled.
+    google_client_id: str = ""
+    google_client_secret: str = ""
+    google_redirect_uri: str = "https://yuoyuo.app/api/auth/google/callback"
+    google_frontend_callback: str = "https://yuoyuo.app/auth/google/callback"
+
     # Database
     database_url: str = "postgresql+asyncpg://heart:heartdev@localhost:5432/heart"
     database_pool_size: int = 5

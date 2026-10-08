@@ -233,7 +233,7 @@ function stableShuffleScore(id: string): number {
 }
 
 export function CharacterPage() {
-  useTranslation()
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const isAuthenticated = useAuthStore((s) => !!s.accessToken)
   const showAuthPrompt = useAuthPromptStore((state) => state.show)
@@ -254,6 +254,9 @@ export function CharacterPage() {
   const [showOpenLink, setShowOpenLink] = useState(false)
   const [linkInput, setLinkInput] = useState('')
   const [query, setQuery] = useState('')
+  const [contentLanguage, setContentLanguage] = useState('')
+  const [castType, setCastType] = useState('')
+  const [contentRating, setContentRating] = useState('')
   const scrollRef = useScrollRestore()
   const requireLogin = useCallback((from: string) => {
     showAuthPrompt(from)
@@ -413,10 +416,10 @@ export function CharacterPage() {
   }, [items])
 
   // Pinned tags row — fixed order (全部 + 女性向/男性向/.../霸总), always shown.
-  const pinnedTagChips = useMemo(() => [TAG_ALL, ...PINNED_TAGS], [])
+  const pinnedTagChips = useMemo(() => [TAG_ALL, ...(international ? Array.from(new Set(serverCharacters.flatMap(c => c.tags ?? []))).slice(0, 10) : PINNED_TAGS)], [serverCharacters])
 
   // Extra tags for the「筛选」popup — fixed, hardcoded list (see EXTRA_FILTER_TAGS).
-  const extraFilterChips = useMemo(() => [...EXTRA_FILTER_TAGS], [])
+  const extraFilterChips = useMemo(() => international ? Array.from(new Set(serverCharacters.flatMap(c => c.tags ?? []))).slice(10) : [...EXTRA_FILTER_TAGS], [serverCharacters])
 
   const heatMap = useMemo(
     () => buildCharacterHeatMap(rankedItems),
@@ -451,10 +454,17 @@ export function CharacterPage() {
       base = base.filter((it) => (it.profile.tags ?? []).includes(activeTag))
     }
 
-    // **SEARCH** — text match on name/tags/tagline
+    base = base.filter(it => {
+      const metadata = serverCharacters.find(c => c.id === it.id)
+      return (!contentLanguage || metadata?.content_language === contentLanguage)
+        && (!castType || metadata?.cast_type === castType)
+        && (!contentRating || metadata?.content_rating === contentRating)
+    })
+    // Search the public story copy and creator display name as well.
     if (q) {
       base = base.filter((it) => {
-        const hay = `${it.profile.name} ${(it.profile.tags ?? []).join(' ')} ${it.profile.tagline ?? ''}`.toLowerCase()
+        const metadata = serverCharacters.find(c => c.id === it.id)
+        const hay = `${metadata?.intro ?? ''} ${metadata?.creator_name ?? ''} ${it.profile.name} ${(it.profile.tags ?? []).join(' ')} ${it.profile.tagline ?? ''}`.toLowerCase()
         return hay.includes(q)
       })
     }
@@ -482,7 +492,7 @@ export function CharacterPage() {
     }
 
     return base
-  }, [rankedItems, activeMode, activeTag, query, isFavorite])
+  }, [rankedItems, activeMode, activeTag, query, isFavorite, serverCharacters, contentLanguage, castType, contentRating])
 
   const [visibleCount, setVisibleCount] = useState(INITIAL_VISIBLE_ITEMS)
 
@@ -645,7 +655,7 @@ export function CharacterPage() {
                       : `bg-transparent ${inactiveTagText} font-medium`
                   }`}
                 >
-                  {uiLabel(tag)}
+                  {international && tag !== TAG_ALL ? tag : uiLabel(tag)}
                   {activeTag === tag && (
                     <span className="sr-only">{uiText('ui272')}</span>
                   )}
@@ -695,6 +705,17 @@ export function CharacterPage() {
                       {uiText('ui277')}</button>
                   )}
                 </div>
+                <div className="grid grid-cols-2 gap-2 mb-3">
+                  <select aria-label={t('contentLanguage')} value={contentLanguage} onChange={e => setContentLanguage(e.target.value)} className="min-w-0 bg-transparent text-[16px]">
+                    <option value="">{t('allLanguages')}</option><option value="ja">日本語</option><option value="ko">한국어</option><option value="en">English</option>
+                  </select>
+                  <select aria-label={t('castType')} value={castType} onChange={e => setCastType(e.target.value)} className="min-w-0 bg-transparent text-[16px]">
+                    <option value="">{t('allCasts')}</option><option value="single">{t('singleCast')}</option><option value="multiple">{t('multipleCast')}</option>
+                  </select>
+                  <select aria-label={t('contentRating')} value={contentRating} onChange={e => setContentRating(e.target.value)} className="min-w-0 bg-transparent text-[16px]">
+                    <option value="">{t('allRatings')}</option><option value="general">{t('generalRating')}</option><option value="mature">{t('matureRating')}</option>
+                  </select>
+                </div>
                 <div className="grid grid-cols-4 gap-x-2 gap-y-2 max-h-[42vh] overflow-y-auto no-scrollbar">
                   {extraFilterChips.map((tag) => (
                     <button
@@ -705,9 +726,9 @@ export function CharacterPage() {
                           ? 'bg-[var(--color-primary)] text-white border-transparent font-bold'
                           : `${filterChipIdle} font-semibold`
                       }`}
-                      title={uiLabel(tag)}
+                      title={international && tag !== TAG_ALL ? tag : uiLabel(tag)}
                     >
-                      {uiLabel(tag)}
+                      {international && tag !== TAG_ALL ? tag : uiLabel(tag)}
                     </button>
                   ))}
                 </div>
@@ -931,9 +952,9 @@ function DiscoveryCard({
                   <span
                     key={tag}
                     className="inline-flex h-[20px] max-w-[72px] items-center truncate rounded-full border border-white/20 bg-black/16 px-2 text-[11px] text-white/88"
-                    title={uiLabel(tag)}
+                    title={international && tag !== TAG_ALL ? tag : uiLabel(tag)}
                   >
-                    {uiLabel(tag)}
+                    {international && tag !== TAG_ALL ? tag : uiLabel(tag)}
                   </span>
                 ))}
               </div>

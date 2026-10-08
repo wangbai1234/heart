@@ -104,6 +104,11 @@ async def _ensure_publishable_quota(
 
 @router.get("")
 async def list_characters(
+    q: str = "",
+    content_language: Literal["en", "ja", "ko"] | None = None,
+    genre: str = "",
+    cast_type: Literal["single", "multiple"] | None = None,
+    content_rating: Literal["general", "mature"] | None = None,
     language: str = Header("en", alias="Accept-Language"),
     current_user: TokenData | None = Depends(get_optional_user),
     db: AsyncSession = Depends(get_db),
@@ -162,13 +167,15 @@ async def list_characters(
     display_names: dict[str, str | None] = {}
     visible_ids = [row.id for row in rows]
     content_locales: dict[str, str] = {}
+    discovery_metadata: dict[str, dict] = {}
+    creator_names = await _creator_names(db, visible_ids)
     ugc_ids = {row.id for row in rows if row.owner_user_id is not None}
     if visible_ids:
         content_result = await db.execute(
             text(
                 """
                 SELECT character_id,
-                       spec,
+                       spec, draft,
                        draft->>'avatar_url' AS avatar_url,
                        draft->>'tagline' AS tagline,
                        draft->>'creation_mode' AS creation_mode
@@ -180,7 +187,17 @@ async def list_characters(
         )
         for row in content_result:
             spec_data = _coerce_json(row.spec)
-            content_locales[row.character_id] = str(spec_data.get("locale", "zh-CN")).split("-")[0]
+            draft_data = _coerce_json(row.draft)
+            content_locales[row.character_id] = str(
+                draft_data.get("response_language") or spec_data.get("locale", "zh-CN")
+            ).split("-")[0]
+            discovery_metadata[row.character_id] = {
+                "content_language": content_locales[row.character_id],
+                "intro": str(draft_data.get("intro") or ""),
+                "cast_type": draft_data.get("cast_type", "single"),
+                "content_rating": draft_data.get("content_rating", "general"),
+                "creator_name": creator_names.get(row.character_id, ""),
+            }
             display_names[row.character_id] = display_name_from_spec(row.spec, row.character_id)
             if row.character_id in ugc_ids and row.avatar_url:
                 avatar_urls[row.character_id] = row.avatar_url
@@ -218,6 +235,7 @@ async def list_characters(
         ):
             continue
         entry_dict = asdict(e)
+        entry_dict.update(discovery_metadata.get(e.id, {}))
         entry_dict["has_voice"] = has_voice_map.get(e.id, False)
         entry_dict.update(review_records.get(e.id, {}))
         if catalog_settings.international_mode:
@@ -230,7 +248,41 @@ async def list_characters(
                 entry_dict["display_name"] = curated["names"][locale]
                 entry_dict["tagline"] = curated["taglines"][locale]
         result_list.append(entry_dict)
-    return {"characters": result_list}
+    return {
+        "characters": [
+            entry
+            for entry in result_list
+            if _matches_discovery(entry, q, content_language, genre, cast_type, content_rating)
+        ]
+    }
+
+
+async def _creator_names(db: AsyncSession, visible_ids: list[str]) -> dict[str, str]:
+    if not visible_ids:
+        return {}
+    creators = await db.execute(
+        text(
+            "SELECT c.id, CASE WHEN c.owner_user_id IS NULL THEN 'yuoyuo' ELSE u.display_name END AS display_name FROM characters c "
+            "LEFT JOIN users u ON u.id = c.owner_user_id WHERE c.id = ANY(:ids)"
+        ),
+        {"ids": visible_ids},
+    )
+    return {r.id: r.display_name or "" for r in creators}
+
+
+def _matches_discovery(
+    entry: dict, q: str, language: str | None, genre: str, cast: str | None, rating: str | None
+) -> bool:
+    filters = ((language, "content_language"), (cast, "cast_type"), (rating, "content_rating"))
+    if any(value and entry.get(key) != value for value, key in filters):
+        return False
+    if genre and genre not in entry.get("tags", []):
+        return False
+    searchable = " ".join(
+        str(entry.get(key) or "")
+        for key in ("display_name", "tagline", "intro", "creator_name", "tags")
+    )
+    return not q.strip() or q.strip().casefold() in searchable.casefold()
 
 
 def _coerce_json(raw: object) -> dict:
@@ -1075,6 +1127,7 @@ class OpeningPreviewRequest(BaseModel):
     backstory: str | None = None
     tags: list[str] = []
     greeting_style: str = "warm"
+    response_language: Literal["en", "ja", "ko"] | None = None
 
 
 @router.post("/opening-preview")
@@ -1119,7 +1172,9 @@ async def preview_opening(
         from heart.i18n import generation_directive, resolve_locale
 
         messages[0]["content"] += "\n" + generation_directive(
-            resolve_locale(language if isinstance(language, str) else "en"), "fullwidth"
+            body.response_language
+            or resolve_locale(language if isinstance(language, str) else "en"),
+            "fullwidth",
         )
 
     try:
@@ -1521,6 +1576,7 @@ class QuickPrefillRequest(BaseModel):
     display_name: str = Field(min_length=1, max_length=20)
     gender: Literal["male", "female"]
     persona: str = Field(min_length=20, max_length=5000)
+    response_language: Literal["en", "ja", "ko"] | None = None
 
 
 class QuickPrefillResponse(BaseModel):
@@ -1681,7 +1737,7 @@ async def quick_prefill(
 
 只返回JSON，不要其他文字。"""
 
-    prompt = _localize_creation_prompt(prompt, language)
+    prompt = _localize_creation_prompt(prompt, body.response_language or language)
 
     from heart.infra.model_catalog import model_ids_by_ascending_coin_cost
 

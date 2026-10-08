@@ -1,3 +1,4 @@
+import { SharedMemoriesDialog } from './SharedMemoriesDialog'
 import { useTranslation } from 'react-i18next'
 import { uiText, uiLabel } from '../i18n/text'
 import { useEffect, useRef, useState, useCallback, useMemo, type ComponentType } from 'react'
@@ -271,7 +272,8 @@ interface ConversationChatPageProps {
 }
 
 export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
-  useTranslation()
+  const { t: memoryText } = useTranslation()
+  const [sharedMemoriesOpen, setSharedMemoriesOpen] = useState(false)
   const navigate = useNavigate()
   const params = useParams<{ characterId?: string }>()
   const [input, setInput] = useState('')
@@ -1492,13 +1494,15 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
           <button
             onClick={() => {
               setUpgradeStage(null)
-              navigate('/character')
+              setSharedMemoriesOpen(true)
             }}
             className="shrink-0 h-[32px] px-3 rounded-full bg-[var(--color-primary)] text-white text-[12px] font-medium active:scale-[0.96] transition-transform"
           >
-            {uiText('ui98')}</button>
+            {memoryText('sharedMemories')}</button>
         </div>
       )}
+
+      <SharedMemoriesDialog characterId={currentCharacterId} open={sharedMemoriesOpen} onClose={() => setSharedMemoriesOpen(false)} />
 
       {/* Messages */}
       <div ref={scrollRef} className="relative z-10 flex-1 overflow-y-auto px-4 py-3 flex flex-col gap-3">

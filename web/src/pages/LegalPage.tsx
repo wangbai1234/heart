@@ -59,7 +59,7 @@ export function LegalPage() {
               ),
             }}
           >
-            {international ? t(type === 'privacy' ? 'privacyBody' : type === 'age' ? 'ui138' : 'termsBody') : content}
+            {international ? t(type === 'privacy' ? 'privacyBody' : type === 'age' ? 'ageBody' : 'termsBody') : content}
           </Markdown>
         </div>
       </div>

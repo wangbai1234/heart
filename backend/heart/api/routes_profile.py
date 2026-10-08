@@ -119,6 +119,7 @@ def _apply_birthdate(
     if age_precise >= 18:
         updates.append("age_verified_at = NOW()")
         return True
+    updates.append("age_verified_at = NULL")
     return False
 
 

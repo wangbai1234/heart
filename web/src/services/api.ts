@@ -1039,6 +1039,11 @@ export async function generateOpening(characterId: string): Promise<{
  * (avatar / colors) remain a frontend concern — see resolveCharacterProfile.
  */
 export interface CharacterDTO {
+  creator_name?: string
+  intro?: string
+  content_language?: string
+  cast_type?: "single" | "multiple"
+  content_rating?: "general" | "mature"
   local_review?: { batch_id: string; original_visibility: string; original_status: string; original_review_status: string }
   id: string
   display_name: string
@@ -1177,6 +1182,7 @@ export async function recordCharacterView(id: string): Promise<{
 // ── 批4: 快速创建 AI 预填 ──
 
 export interface QuickPrefillRequest {
+  response_language?: "en" | "ja" | "ko"
   display_name: string
   gender: 'male' | 'female'
   persona: string
@@ -1279,6 +1285,10 @@ export interface CharacterDraftDTO {
     steadiness: number
   }
   locale?: string
+  response_language?: "en" | "ja" | "ko"
+  world_book?: string
+  cast_type?: "single" | "multiple"
+  content_rating?: "general" | "mature"
   /** Intended visibility on publish. public/unlisted enter review; private is immediate. */
   visibility?: 'public' | 'unlisted' | 'private'
   // Batch 1 & 4: UGC creation redesign fields
@@ -1335,7 +1345,7 @@ export async function uploadCharacterCover(file: File): Promise<{ cover_url: str
 
 function localizedDraft(draft: CharacterDraftDTO): CharacterDraftDTO {
   if (!international) return draft
-  const locale = supportedLocale(i18n.language)
+  const locale = supportedLocale(draft.locale ?? draft.response_language ?? i18n.language)
   const name = draft.display_name.zh || draft.display_name[locale] || draft.display_name.en || draft.display_name.ja || draft.display_name.ko
   return { ...draft, locale, display_name: { [locale]: name } }
 }
@@ -1362,7 +1372,7 @@ export async function updateCharacter(
       ?? supportedLocale(original.locale ?? 'en')
     payload = {
       ...draft,
-      locale: original.locale,
+      locale: draft.locale ?? original.locale,
       display_name: { ...original.display_name, [nameKey]: draft.display_name.zh ?? draft.display_name[nameKey] },
     }
   }
@@ -1379,6 +1389,7 @@ export async function getCharacterDraft(characterId: string): Promise<CharacterD
  * later played back verbatim (see ss10_opening.generator) with no runtime LLM.
  */
 export async function generateOpeningPreview(input: {
+  response_language?: "en" | "ja" | "ko"
   display_name?: string
   persona: string
   backstory?: string
@@ -2020,4 +2031,34 @@ export function getLanguagePreferences(): Promise<LanguagePreferences> {
 }
 export function saveLanguagePreferences(preferences: LanguagePreferences): Promise<LanguagePreferences> {
   return request('/profile/preferences', { method: 'PUT', body: JSON.stringify(preferences) })
+}
+
+export interface SharedMemoryDTO {
+  id: string
+  tier: 'L3' | 'L4'
+  content: string
+  category: string
+  updated_at: string
+}
+export interface SharedBondDTO {
+  message_count: number
+  stage: string
+  intimacy: number
+  emotion: string
+  memories: SharedMemoryDTO[]
+}
+export function getSharedBond(characterId: string): Promise<SharedBondDTO> {
+  return request(`/companions/${encodeURIComponent(characterId)}/bond`)
+}
+export function correctSharedMemory(characterId: string, memory: SharedMemoryDTO, content: string, confirmIdentity: boolean) {
+  return request(`/companions/${encodeURIComponent(characterId)}/memories/${memory.tier}/${encodeURIComponent(memory.id)}`, {
+    method: 'PATCH', body: JSON.stringify({ content, expected_content: memory.content, confirm_identity: confirmIdentity }),
+  })
+}
+
+export function getGoogleLoginConfig(): Promise<{ enabled: boolean }> {
+  return request('/auth/google/config')
+}
+export function exchangeGoogleTicket(ticket: string): Promise<TokenResponse> {
+  return request('/auth/google/exchange', { method: 'POST', body: JSON.stringify({ ticket }) })
 }

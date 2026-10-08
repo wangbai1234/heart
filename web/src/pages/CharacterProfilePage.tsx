@@ -6,6 +6,8 @@ import type { CharacterProfileDTO } from '../services/api'
 import { useCharactersStore } from '../stores/charactersStore'
 import { useCompanionsStore } from '../stores/companionsStore'
 import { useAppStore } from '../stores/appStore'
+import { useAuthStore } from '../stores/authStore'
+import { useAuthPromptStore } from '../stores/authPromptStore'
 import { useFavoritesStore } from '../stores/favoritesStore'
 import { useToastStore } from '../stores/toastStore'
 import { DEFAULT_COVER } from '../data/uiContent'
@@ -1238,6 +1240,8 @@ export function CharacterProfilePage() {
   const goBack = fromCreate ? () => navigate('/create', { replace: true }) : safeBack
   const { id = '' } = useParams<{ id: string }>()
   const setCharacter = useAppStore((s) => s.setCharacter)
+  const authenticated = useAuthStore((s) => !!s.accessToken)
+  const showLogin = useAuthPromptStore((s) => s.show)
   const companions = useCompanionsStore((s) => s.companions)
   const loadCompanions = useCompanionsStore((s) => s.load)
   const loadProfile = useCharactersStore((s) => s.loadProfile)
@@ -1261,8 +1265,8 @@ export function CharacterProfilePage() {
     // Quick creation updates the catalog store, but the companion store may
     // still contain the pre-creation snapshot. Refresh it on every detail-page
     // entry so the new character's default relationship state is available.
-    void loadCompanions(true)
-  }, [loadCompanions])
+    if (authenticated) void loadCompanions(true)
+  }, [authenticated, loadCompanions])
 
   useEffect(() => {
     let alive = true
@@ -1286,7 +1290,7 @@ export function CharacterProfilePage() {
   // renders and background catalog refreshes must not. One mounted route entry
   // issues exactly one increment request; a later re-entry or reload counts again.
   useEffect(() => {
-    if (!id) return
+    if (!id || !authenticated) return
     void import('../services/api')
       .then(({ recordCharacterView }) => recordCharacterView(id))
       .then(({ display_heat }) => {
@@ -1297,7 +1301,7 @@ export function CharacterProfilePage() {
         }))
       })
       .catch(() => {})
-  }, [id])
+  }, [id, authenticated])
 
   const companion = useMemo(
     () => companions.find((c) => c.character_id === id),
@@ -1333,6 +1337,10 @@ export function CharacterProfilePage() {
 
   const openChat = () => {
     setCharacter(id)
+    if (!authenticated) {
+      showLogin(`/chat/${id}`)
+      return
+    }
     navigate(`/chat/${id}`)
   }
 

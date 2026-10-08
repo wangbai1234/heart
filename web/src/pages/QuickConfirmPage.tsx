@@ -1,3 +1,5 @@
+import i18n, { supportedLocale } from '../i18n'
+import { CharacterLanguageFields, type CharacterLanguage } from '../components/create/CharacterLanguageFields'
 import { useTranslation } from 'react-i18next'
 import { uiText } from '../i18n/text'
 import { useState, useEffect, useRef } from 'react'
@@ -21,6 +23,8 @@ import { THEME_PRESETS, getThemePresetById } from '../data/characterThemePresets
 import { VoicePickerSheet, type VoiceSelection } from '../components/VoicePickerSheet'
 
 interface BaseInfo {
+  language?: CharacterLanguage
+  worldBook?: string
   coverUrl: string
   name: string
   gender: 'male' | 'female'
@@ -93,6 +97,10 @@ export function QuickConfirmPage() {
   const [name, setName] = useState(navBase?.name ?? '')
   const [gender, setGender] = useState<'male' | 'female'>(navBase?.gender ?? 'female')
   const [persona, setPersona] = useState(navBase?.persona ?? '')
+  const [language, setLanguage] = useState<CharacterLanguage>(navBase?.language ?? supportedLocale(i18n.language))
+  const [worldBook, setWorldBook] = useState(navBase?.worldBook ?? '')
+  const [castType, setCastType] = useState<'single' | 'multiple'>('single')
+  const [contentRating, setContentRating] = useState<'general' | 'mature'>('general')
   const [uploadingCover, setUploadingCover] = useState(false)
 
   const [opening, setOpening] = useState(initialPrefill?.opening ?? '')
@@ -140,6 +148,10 @@ export function QuickConfirmPage() {
         setName(draft.display_name?.zh ?? draft.display_name?.en ?? draft.display_name?.ja ?? draft.display_name?.ko ?? '')
         if (draft.gender) setGender(draft.gender)
         setPersona(draft.persona ?? '')
+        setLanguage(draft.response_language ?? supportedLocale(draft.locale ?? i18n.language))
+        setWorldBook(draft.world_book ?? '')
+        setCastType(draft.cast_type ?? 'single')
+        setContentRating(draft.content_rating ?? 'general')
         setOpening(draft.opening ?? '')
         setAgeRange(draft.age_range ?? '')
         setGreetingStyle(draft.greeting_style ?? 'warm')
@@ -253,7 +265,7 @@ export function QuickConfirmPage() {
     prefillAbortRef.current = controller
     const timer = window.setTimeout(() => controller.abort(), PREFILL_CLIENT_TIMEOUT_MS)
     try {
-      return await quickPrefill({ display_name: name, gender, persona }, controller.signal)
+      return await quickPrefill({ display_name: name, gender, persona, response_language: language }, controller.signal)
     } finally {
       window.clearTimeout(timer)
       if (prefillAbortRef.current === controller) prefillAbortRef.current = null
@@ -326,6 +338,11 @@ export function QuickConfirmPage() {
         cover_url: coverUrl,
         gender,
         persona,
+        response_language: language,
+        locale: language,
+        world_book: worldBook,
+        cast_type: castType,
+        content_rating: contentRating,
         tagline: tagline.trim() || undefined,
         intro: intro.trim() || undefined,
         one_liner: oneLiner.trim() || undefined,
@@ -495,6 +512,8 @@ export function QuickConfirmPage() {
             </div>
           </div>
         </div>
+
+        <CharacterLanguageFields language={language} worldBook={worldBook} onLanguage={setLanguage} onWorldBook={setWorldBook} castType={castType} contentRating={contentRating} onCastType={setCastType} onContentRating={setContentRating} />
 
         {/* 开场白全文 - 必须过人眼 */}
         <div className="mb-6">

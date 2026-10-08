@@ -1,3 +1,5 @@
+import i18n, { supportedLocale } from '../i18n'
+import { CharacterLanguageFields, type CharacterLanguage } from '../components/create/CharacterLanguageFields'
 import { useTranslation } from 'react-i18next'
 import { uiText } from '../i18n/text'
 import { useState } from 'react'
@@ -23,6 +25,8 @@ export function QuickCreatePage() {
   const [name, setName] = useState('')
   const [gender, setGender] = useState<'male' | 'female' | ''>('')
   const [persona, setPersona] = useState('')
+  const [language, setLanguage] = useState<CharacterLanguage>(supportedLocale(i18n.language))
+  const [worldBook, setWorldBook] = useState('')
   const [uploading, setUploading] = useState(false)
   const [prefilling, setPrefilling] = useState(false)
 
@@ -62,9 +66,10 @@ export function QuickCreatePage() {
         display_name: name,
         gender: gender as 'male' | 'female',
         persona,
+        response_language: language,
       })
       navigate('/characters/new/quick/confirm', {
-        state: { base: { coverUrl, name, gender, persona }, prefill },
+        state: { base: { coverUrl, name, gender, persona, language, worldBook }, prefill },
       })
     } catch (err) {
       showToast(err instanceof ApiError ? err.message : uiText('ui484'), 'error')
@@ -155,6 +160,7 @@ export function QuickCreatePage() {
         </div>
       </FieldCard>
 
+      <CharacterLanguageFields language={language} worldBook={worldBook} onLanguage={setLanguage} onWorldBook={setWorldBook} />
       {/* 人设 */}
       <FieldCard label={uiText('ui447')} required hint={uiText('ui490')}>
         <textarea

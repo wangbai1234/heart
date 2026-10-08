@@ -1,3 +1,5 @@
+import i18n, { supportedLocale } from '../i18n'
+import { CharacterLanguageFields } from '../components/create/CharacterLanguageFields'
 import { useTranslation } from 'react-i18next'
 import { uiText, uiLabel } from '../i18n/text'
 import { useState, useEffect } from 'react'
@@ -47,16 +49,16 @@ export function WorkshopCreatePage() {
   const [state, setState] = useState<WorkshopState>(() => {
     // Edit mode starts blank and hydrates from the server draft below; the
     // localStorage draft belongs to the create flow and must not leak in.
-    if (isEdit) return EMPTY_STATE
+    if (isEdit) return { ...EMPTY_STATE, responseLanguage: supportedLocale(i18n.language) }
     const saved = localStorage.getItem(STORAGE_KEY)
     if (saved) {
       try {
-        return { ...EMPTY_STATE, ...(JSON.parse(saved) as Partial<WorkshopState>) }
+        return { ...EMPTY_STATE, responseLanguage: supportedLocale(i18n.language), ...(JSON.parse(saved) as Partial<WorkshopState>) }
       } catch {
-        return EMPTY_STATE
+        return { ...EMPTY_STATE, responseLanguage: supportedLocale(i18n.language) }
       }
     }
-    return EMPTY_STATE
+    return { ...EMPTY_STATE, responseLanguage: supportedLocale(i18n.language) }
   })
   const [busy, setBusy] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -121,6 +123,7 @@ export function WorkshopCreatePage() {
       const { opening } = await generateOpeningPreview({
         display_name: state.displayName || undefined,
         persona: state.persona,
+        response_language: state.responseLanguage,
         tags: state.tags.length ? state.tags : undefined,
       })
       updateField('opening', opening)
@@ -271,6 +274,7 @@ export function WorkshopCreatePage() {
             <>
               <Step1 state={state} updateField={updateField} onCoverUpload={handleCoverUpload} uploading={uploading} />
               <Step2 state={state} updateField={updateField} />
+              <CharacterLanguageFields language={state.responseLanguage} worldBook={state.worldBook} onLanguage={v => updateField("responseLanguage", v)} onWorldBook={v => updateField("worldBook", v)} castType={state.castType} contentRating={state.contentRating} onCastType={v => updateField("castType", v)} onContentRating={v => updateField("contentRating", v)} />
             </>
           )}
           {tab === 1 && (

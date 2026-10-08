@@ -188,3 +188,52 @@ def test_signup_initializes_selected_language(api_context, pg_conn, locale):
     )
     assert login_response.ok, login_response.text()
     assert api_context.get("/api/profile/preferences", headers=headers).json() == preferences
+
+
+def test_shared_memory_corrections_are_private_audited_and_conflict_safe(api_context, pg_conn):
+    first, second = str(uuid4()), str(uuid4())
+    token, other = login(api_context, first), login(api_context, second)
+    headers = {"Authorization": f"Bearer {token}"}
+    cid, mid = 'intl_haru', str(uuid4())
+    with pg_conn.cursor() as cur:
+        cur.execute("INSERT INTO identity_memories (id,user_id,character_id,category,key,value,disclosed_at,sacred_reason,significance_score,promotion_trigger) VALUES (%s,%s,%s,'identity','favorite_place','Old library',NOW(),'User shared',0.9,'test')", (mid,first,cid))
+    pg_conn.commit()
+    bond = api_context.get(f'/api/companions/{cid}/bond', headers=headers)
+    assert bond.ok, bond.text()
+    assert any(m['id'] == mid for m in bond.json()['memories'])
+    payload = {'content':'New library', 'expected_content':'Old library', 'confirm_identity':True}
+    url = f'/api/companions/{cid}/memories/L4/{mid}'
+    denied = api_context.patch(url, headers={'Authorization':f'Bearer {other}'}, data=payload)
+    assert denied.status == 404
+    changed = api_context.patch(url, headers=headers, data=payload)
+    assert changed.ok, changed.text()
+    assert api_context.patch(url, headers=headers, data=payload).status == 409
+    with pg_conn.cursor() as cur:
+        cur.execute('SELECT value FROM identity_memories WHERE id=%s', (mid,))
+        assert cur.fetchone()[0] == 'New library'
+        cur.execute('SELECT old_value,new_value,actor FROM memory_audit_log WHERE entity_ref=%s', (mid,))
+        old,new,actor = cur.fetchone()
+        assert old['content'] == 'Old library' and new['content'] == 'New library' and actor == 'user'
+
+
+def test_l3_correction_clears_stale_recall_and_requires_ownership(api_context, pg_conn):
+    uid, mid = str(uuid4()), str(uuid4())
+    token = login(api_context, uid)
+    headers = {'Authorization': f'Bearer {token}'}
+    with pg_conn.cursor() as cur:
+        cur.execute("""INSERT INTO fact_nodes (id,user_id,character_id,predicate,subject,object,literal_text,raw_evidence,confidence,emotional_charge,importance,state,semantic_vector,reconstruction_hints)
+            VALUES (%s,%s,'intl_haru','likes','user','coffee','Likes coffee','Original message',0.9,0.2,0.8,'vivid',%s::vector,'{"detail":"coffee"}')""", (mid,uid,'['+','.join(['0.1']*1024)+']'))
+    pg_conn.commit()
+    changed = api_context.patch(f'/api/companions/intl_haru/memories/L3/{mid}',headers=headers,data={'content':'Likes tea','expected_content':'Likes coffee'})
+    assert changed.ok, changed.text()
+    with pg_conn.cursor() as cur:
+        cur.execute('SELECT object,literal_text,semantic_vector,reconstruction_hints,is_corrected FROM fact_nodes WHERE id=%s AND user_id=%s',(mid,uid))
+        assert cur.fetchone() == ('Likes tea','Likes tea',None,{},True)
+
+
+def test_catalog_filters_do_not_expose_private_characters(api_context):
+    japanese = api_context.get('/api/characters?content_language=ja').json()['characters']
+    assert japanese and all(c['content_language']=='ja' for c in japanese)
+    assert api_context.get('/api/characters?q=not_a_real_plot_983241').json()['characters'] == []
+    assert api_context.get('/api/auth/google/config').json() == {'enabled':False}
+    assert api_context.get('/api/auth/google/start').status == 503

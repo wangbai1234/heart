@@ -16,6 +16,10 @@
 
 ---
 
+## 国际版实施批次（2026-10-08，未部署）
+
+按用户选项推进 B1/C/E/F/H/J/K；角色首发从 222 个候选中选择 12 个官方 public 角色，分 EN/JA/KO 改编并保存独立 ID 和私有 before/after 审计。原角色与聊天不覆盖。新增 Google OIDC + 079 身份绑定表；本地 review/test DB 已迁移。真实 Google 控制台配置、域名隐私邮箱、正式政策主体/处理者资料与部署仍未完成。阶段结果、范围与限制见 [实施记录](international/IMPLEMENTATION_20261008.md)；收费分析见 [日韩收费评估](international/PRICING_JP_KR.md)。不可把本地审核预览当作生产发布。
+
 ## 国际版分支进展（2026-10-07）
 
 本地生产快照已完成角色筛选：恢复 714 个角色的原始状态后，本地目录仅展示 222 个审核通过且 active 的角色（192 public、30 unlisted）。原状态及批次保存在审计表与结果清单。详见 [本地角色筛选](international/LOCAL_REVIEW.md)。这些可见性变更不应用于生产发布。

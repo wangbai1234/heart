@@ -146,6 +146,10 @@ class CharacterDraft(BaseModel, extra="forbid"):
     soul_profile: Optional[SoulProfileDraft] = None
     sliders: SliderSet = Field(default_factory=SliderSet)
     locale: str = "zh"
+    response_language: Literal["en", "ja", "ko"] | None = None
+    world_book: str = Field(default="", max_length=10000)
+    cast_type: Literal["single", "multiple"] = "single"
+    content_rating: Literal["general", "mature"] = "general"
     # Intended visibility once the character is published.
     # public/unlisted → enters review pipeline; private → immediately live,
     # no review, no reward.

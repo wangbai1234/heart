@@ -44,6 +44,7 @@ from .routes_chat_ws import router as chat_ws_router
 from .routes_commission import router as commission_router
 from .routes_companions import router as companions_router
 from .routes_credits import router as credits_router
+from .routes_google_auth import router as google_router
 from .routes_invite import router as invite_router
 from .routes_lottery import router as lottery_router
 from .routes_masks import router as masks_router
@@ -299,6 +300,7 @@ def create_app() -> FastAPI:
 
     # Include API routes
     app.include_router(router)
+    app.include_router(google_router)
     app.include_router(auth_router)  # /api/auth/* (OTP, refresh, logout, me)
     app.include_router(credits_router)  # /api/credits/* (balance, transactions, redeem, pricing)
     app.include_router(membership_router)  # /api/membership (GET tier + entitlements)

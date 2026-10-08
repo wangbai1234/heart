@@ -10,6 +10,7 @@ import { PasswordInput } from './ui/PasswordInput'
 import { Toast } from './ui/Toast'
 import {
   ApiError,
+  getGoogleLoginConfig,
   loginWithPassword,
   logout,
   registerWithPassword,
@@ -62,7 +63,7 @@ function safeReturnTo(path: string): string {
 }
 
 export function AuthModal() {
-  useTranslation()
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const open = useAuthPromptStore((state) => state.open)
   const returnTo = useAuthPromptStore((state) => state.returnTo)
@@ -82,6 +83,10 @@ export function AuthModal() {
   const [code, setCode] = useState('')
   const [ageConfirmed, setAgeConfirmed] = useState(false)
   const [agreed, setAgreed] = useState(false)
+  const [googleEnabled, setGoogleEnabled] = useState(false)
+  useEffect(() => {
+    if (international && open) getGoogleLoginConfig().then(value => setGoogleEnabled(value.enabled)).catch(() => setGoogleEnabled(false))
+  }, [open])
   const [loading, setLoading] = useState(false)
   const [cooldownEndAt, setCooldownEndAt] = useState(0)
   const [toast, setToast] = useState({ visible: false, message: '', variant: 'info' as 'info' | 'error' | 'success' })
@@ -358,7 +363,12 @@ export function AuthModal() {
 
           {modalStep === 'auth' && (
             <>
-              <label className="mt-4 flex cursor-pointer items-start gap-2.5 text-left">
+              {googleEnabled && <button type="button" className="w-full h-[44px] rounded-xl border border-[var(--color-border-glass)] mb-3 text-[16px]" onClick={() => {
+              if (!ageConfirmed || !agreed) { showToast(uiText('ui2'), 'error'); return }
+              sessionStorage.setItem('yuoyuo-google-return', safeReturnTo(returnTo))
+              window.location.assign('/api/auth/google/start')
+            }}>{t('continueWithGoogle')}</button>}
+            <label className="mt-4 flex cursor-pointer items-start gap-2.5 text-left">
                 <input type="checkbox" checked={ageConfirmed} onChange={(event) => setAgeConfirmed(event.target.checked)} className="mt-0.5 h-4 w-4 shrink-0 accent-[#FF7E9F]" />
                 <span className="text-[12px] leading-[1.55] text-white/58">{uiText('ui31')}</span>
               </label>

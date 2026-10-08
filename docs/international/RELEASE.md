@@ -1,8 +1,8 @@
-# International preview release — 2026-10-07
+# International preview release — updated 2026-10-08
 
 ## Release state
 
-Implemented on `codex/international-release`, isolated from the original checkout and production backups. **Not deployed:** HostHatch instance 182191 is behind an unauthenticated login; no new-server SSH address, SSH key reference or deployment domain has been supplied. Existing production was not contacted or changed.
+Implemented on `codex/international-release`, isolated from the original checkout and production backups. **Not deployed:** HostHatch instance 182191 is behind an unauthenticated login; no new-server SSH address, SSH key reference has been supplied; the confirmed future domain is `https://yuoyuo.app`. Existing production was not contacted or changed.
 
 The international build now uses the existing App/PWA entrypoint, page components, styles and navigation. The separate international website and stylesheet were removed. English, Japanese and Korean resources cover authentication, discovery/filtering, chat, settings, quick/workshop creation, masks, voice controls, story controls, wallet, membership and error messages. There is no Chinese UI option. Only the language controls are added to the existing screens. User-authored role content and historical chats remain in their original languages; dormant domestic campaign/admin content is not a complete international translation.
 
@@ -18,7 +18,9 @@ Translation resources live in `web/src/i18n/locales/{en,ja,ko}.json`. `legacy.js
 
 The restored local catalogue now shows 222 active/approved characters (192 public and 30 unlisted) after restoring all 714 original states. See [LOCAL_REVIEW.md](LOCAL_REVIEW.md). Six `intl_*` characters remain optional isolated-test fixtures, not a replacement for the restored selection. Do not seed these into the selected local catalogue.
 
-## Verified locally
+The next implementation batch adds Google OIDC (migration 079), creator reply-language defaults, world books, discovery filters, shared-memory correction and policy drafts. Explicit user reply language takes priority over creator default, then interface language. Twelve separate EN/JA/KO adaptations bring the local preview to 234 rows. Google credentials and mail forwarding are still pending. See [2026-10-08 implementation](IMPLEMENTATION_20261008.md) for current scope and limitations.
+
+## Verified locally (2026-10-07 baseline; newer batch recorded separately)
 
 - Canonical CI validates lint/format, mypy, backend tests, schemas, frontend tests and build; 1,993 backend tests passed (34 skipped), 64 frontend tests passed, mypy checked 267 files, and the separate international production build passed.
 - International Tier E uses a separate `heart_ui_test` database and real uvicorn/Postgres/Redis with an explicit test-only model double. It covers preference isolation/persistence, rejection of Chinese preference values, Korean private character creation, complete WebSocket chat and persisted Japanese output, logical disable, catalogue and commerce-route restrictions. Signup tests cover Japanese/Korean initialization and persistence across login; a second turn on the same WebSocket switches from Japanese to Korean after saving follow-interface preferences.
@@ -56,7 +58,7 @@ Detailed existing restore SOP is in the original checkout's `docs/JAPAN_SERVER_M
    intl_compose run --rm --no-deps api python -m alembic current
    ```
 
-   These run commands require restored Postgres/Redis/MinIO already healthy. `alembic current` must show `078_language_follow` and `heads` must show the same single head. Keep background workers off until acceptance is complete.
+   These run commands require restored Postgres/Redis/MinIO already healthy. `alembic current` must show `079_google_identities` and `heads` must show the same single head. Keep background workers off until acceptance is complete.
 6. Refresh Cloudflare ranges with `python3 scripts/update-cloudflare-origins.py`. Configure proxied DNS (orange cloud), IP geolocation headers, mainland CN blocking and TLS **Full (strict)**. Restrict origin 80/443 to Cloudflare's IPv4/IPv6 networks and SSH to administration addresses. Preserve a working SSH session while changing firewall rules. API, database, Redis and MinIO have no public port mappings.
 7. Establish valid origin TLS before cutover: for an existing hostname restore its still-valid Caddy certificate state; for a new hostname configure a valid origin certificate or DNS-01 issuance. Do not switch to Flexible TLS or open the origin broadly to work around validation. The supplied Caddyfile uses automatic HTTPS and requires an issuance/bootstrap plan for a new hostname behind strict proxying.
 8. Validate Caddy inside the container, then `intl_compose up -d api caddy`. Start the worker after the acceptance tests below and a current backup. Use `--no-access-log` for API to avoid uvicorn logging WebSocket query credentials; Caddy access logs redact `token`.

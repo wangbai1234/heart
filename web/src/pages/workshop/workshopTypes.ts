@@ -1,3 +1,4 @@
+import i18n, { supportedLocale } from '../../i18n'
 import { uiText } from '../../i18n/text'
 import type {
   CharacterDraftDTO,
@@ -12,6 +13,10 @@ import { getThemePresetById, findThemePresetIdByPalette } from '../../data/chara
 export type QualityLevel = 'sketch' | 'draft' | 'shaped' | 'finished'
 
 export interface WorkshopState {
+  responseLanguage: "en" | "ja" | "ko"
+  worldBook: string
+  castType: "single" | "multiple"
+  contentRating: "general" | "mature"
   // Step 1 — 核心身份
   displayName: string
   gender: 'male' | 'female' | ''
@@ -52,6 +57,10 @@ export interface WorkshopState {
 }
 
 export const EMPTY_STATE: WorkshopState = {
+  responseLanguage: supportedLocale(i18n.language),
+  worldBook: "",
+  castType: "single",
+  contentRating: "general",
   displayName: '',
   gender: '',
   coverUrl: '',
@@ -176,6 +185,11 @@ export function buildDraft(s: WorkshopState): CharacterDraftDTO {
   const useHtml = s.advancedHtmlMode && s.customHtml.trim().length > 0
   return {
     display_name: { zh: s.displayName.trim() },
+    response_language: s.responseLanguage,
+    locale: s.responseLanguage,
+    world_book: s.worldBook,
+    cast_type: s.castType,
+    content_rating: s.contentRating,
     gender: s.gender || undefined,
     cover_url: s.coverUrl || undefined,
     tagline: s.tagline.trim() || undefined,
@@ -205,6 +219,10 @@ export function buildDraft(s: WorkshopState): CharacterDraftDTO {
 export function draftToWorkshopState(d: CharacterDraftDTO): WorkshopState {
   const s: WorkshopState = { ...EMPTY_STATE }
   s.displayName = d.display_name?.zh ?? d.display_name?.en ?? d.display_name?.ja ?? d.display_name?.ko ?? ''
+  s.responseLanguage = d.response_language ?? supportedLocale(d.locale ?? i18n.language)
+  s.worldBook = d.world_book ?? ""
+  s.castType = d.cast_type ?? "single"
+  s.contentRating = d.content_rating ?? "general"
   s.gender = d.gender === 'male' || d.gender === 'female' ? d.gender : ''
   s.coverUrl = d.cover_url ?? ''
   s.tagline = d.tagline ?? ''

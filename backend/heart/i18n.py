@@ -115,3 +115,23 @@ REPLIES = {
 def localized_reply(kind: str, language: str) -> str:
     variants = REPLIES[kind]
     return variants.get(language, variants["en"])
+
+
+async def character_preferences(
+    db: AsyncSession, user_id: UUID, character_id: str
+) -> LanguagePreferences:
+    """Resolve per-character defaults without changing stored user preferences."""
+    preferences = await load_preferences(db, user_id)
+    if preferences.response_follows_interface:
+        result = await db.execute(
+            text(
+                "SELECT draft->>'response_language' FROM soul_specs "
+                "WHERE character_id = :cid AND status = 'active' "
+                "ORDER BY created_at DESC LIMIT 1"
+            ),
+            {"cid": character_id},
+        )
+        language = result.scalar_one_or_none()
+        if language in LANGUAGE_NAMES:
+            preferences.response_language = cast(Locale, language)
+    return preferences

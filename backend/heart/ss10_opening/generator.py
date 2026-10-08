@@ -43,9 +43,13 @@ async def generate_opening(
     # Authored opening (human-reviewed, stored on the draft) is played back
     # verbatim — no LLM call. Keeps the first impression on-brand and instant.
     from heart.core.config import settings
-    from heart.i18n import generation_directive, load_preferences
+    from heart.i18n import character_preferences, generation_directive
 
-    preferences = await load_preferences(db, user_id) if settings.international_mode else None
+    preferences = (
+        await character_preferences(db, user_id, character_id)
+        if settings.international_mode
+        else None
+    )
     authored = _resolve_authored_opening(spec)
     if authored and preferences is None:
         bubbles = split_opening(authored)
