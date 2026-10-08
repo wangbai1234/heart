@@ -1,3 +1,7 @@
+import { useTranslation } from 'react-i18next'
+import { InterfaceLanguageSelect } from './LanguagePreferences'
+import { international } from '../i18n/text'
+import { uiText } from '../i18n/text'
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Button } from './ui/Button'
@@ -58,6 +62,7 @@ function safeReturnTo(path: string): string {
 }
 
 export function AuthModal() {
+  useTranslation()
   const navigate = useNavigate()
   const open = useAuthPromptStore((state) => state.open)
   const returnTo = useAuthPromptStore((state) => state.returnTo)
@@ -150,9 +155,9 @@ export function AuthModal() {
   }
 
   const handlePasswordLogin = async () => {
-    if (!validEmail) return showToast('请输入有效的邮箱', 'error')
-    if (!password) return showToast('请输入密码', 'error')
-    if (!ageConfirmed || !agreed) return showToast('请先确认年龄并同意协议', 'error')
+    if (!validEmail) return showToast(uiText('ui0'), 'error')
+    if (!password) return showToast(uiText('ui1'), 'error')
+    if (!ageConfirmed || !agreed) return showToast(uiText('ui2'), 'error')
     setLoading(true)
     try {
       const result = await loginWithPassword(email.trim().toLowerCase(), password)
@@ -161,9 +166,9 @@ export function AuthModal() {
       if (error instanceof ApiError && error.code === 'no_password_set') {
         setLoginMode('otp')
         setOtpStep('email')
-        showToast('该账号请使用验证码登录', 'info')
+        showToast(uiText('ui3'), 'info')
       } else {
-        showToast(error instanceof Error ? error.message : '登录失败，请重试', 'error')
+        showToast(error instanceof Error ? error.message : uiText('ui4'), 'error')
       }
     } finally {
       setLoading(false)
@@ -171,20 +176,20 @@ export function AuthModal() {
   }
 
   const sendCode = async (purpose: 'login' | 'register') => {
-    if (!validEmail) return showToast('请输入有效的邮箱', 'error')
+    if (!validEmail) return showToast(uiText('ui0'), 'error')
     if (cooldown > 0 || loading) return
     setLoading(true)
     try {
       const result = await requestOtp(email.trim().toLowerCase(), purpose)
       setCooldownEndAt(Date.now() + result.cooldown * 1000)
       if (purpose === 'login') setOtpStep('code')
-      showToast('验证码已发送', 'success')
+      showToast(uiText('ui5'), 'success')
     } catch (error) {
       if (purpose === 'login' && error instanceof ApiError && error.code === 'email_not_registered') {
         setPanel('register')
-        showToast('该邮箱尚未注册，请创建账号', 'info')
+        showToast(uiText('ui6'), 'info')
       } else {
-        showToast(error instanceof Error ? error.message : '发送失败，请重试', 'error')
+        showToast(error instanceof Error ? error.message : uiText('ui7'), 'error')
       }
     } finally {
       setLoading(false)
@@ -192,25 +197,25 @@ export function AuthModal() {
   }
 
   const handleOtpLogin = async () => {
-    if (code.length !== 6) return showToast('请输入 6 位验证码', 'error')
-    if (!ageConfirmed || !agreed) return showToast('请先确认年龄并同意协议', 'error')
+    if (code.length !== 6) return showToast(uiText('ui8'), 'error')
+    if (!ageConfirmed || !agreed) return showToast(uiText('ui2'), 'error')
     setLoading(true)
     try {
       const result = await verifyOtp(email.trim().toLowerCase(), code)
       await handleAuthResult(result)
     } catch (error) {
-      showToast(error instanceof Error ? error.message : '验证码错误，请重试', 'error')
+      showToast(error instanceof Error ? error.message : uiText('ui9'), 'error')
     } finally {
       setLoading(false)
     }
   }
 
   const handleRegister = async () => {
-    if (!validEmail) return showToast('请输入有效的邮箱', 'error')
-    if (code.length !== 6) return showToast('请输入 6 位验证码', 'error')
-    if (password.length < 8) return showToast('密码至少 8 位', 'error')
-    if (password !== confirmPassword) return showToast('两次输入的密码不一致', 'error')
-    if (!ageConfirmed || !agreed) return showToast('请先确认年龄并同意协议', 'error')
+    if (!validEmail) return showToast(uiText('ui0'), 'error')
+    if (code.length !== 6) return showToast(uiText('ui8'), 'error')
+    if (password.length < 8) return showToast(uiText('ui10'), 'error')
+    if (password !== confirmPassword) return showToast(uiText('ui11'), 'error')
+    if (!ageConfirmed || !agreed) return showToast(uiText('ui2'), 'error')
     setLoading(true)
     try {
       const result = await registerWithPassword(
@@ -222,7 +227,7 @@ export function AuthModal() {
       sessionStorage.removeItem('yuoyuo-pending-invite')
       await finishAuth(result)
     } catch (error) {
-      showToast(error instanceof Error ? error.message : '注册失败，请重试', 'error')
+      showToast(error instanceof Error ? error.message : uiText('ui12'), 'error')
     } finally {
       setLoading(false)
     }
@@ -246,23 +251,24 @@ export function AuthModal() {
   }
 
   return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center p-3 min-[380px]:p-5" role="dialog" aria-modal="true" aria-label="登录或注册">
-      <button className="absolute inset-0 bg-black/62 backdrop-blur-[8px]" onClick={dismiss} aria-label="关闭登录弹窗" />
+    <div className="fixed inset-0 z-[200] flex items-center justify-center p-3 min-[380px]:p-5" role="dialog" aria-modal="true" aria-label={uiText('ui13')}>
+      <button className="absolute inset-0 bg-black/62 backdrop-blur-[8px]" onClick={dismiss} aria-label={uiText('ui14')} />
       <div className="relative flex max-h-[min(760px,calc(100dvh-24px))] w-full max-w-[400px] flex-col overflow-hidden rounded-[18px] border border-white/10 bg-[#17171C] text-white shadow-[0_24px_80px_rgba(0,0,0,0.48)]">
-        <button onClick={dismiss} className="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full text-white/55 transition-colors hover:bg-white/8 hover:text-white" aria-label="关闭">
+        <button onClick={dismiss} className="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full text-white/55 transition-colors hover:bg-white/8 hover:text-white" aria-label={uiText('ui15')}>
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="m6 6 12 12M18 6 6 18" /></svg>
         </button>
 
         <div className="shrink-0 px-5 pb-3 pt-5 text-center min-[380px]:px-6">
           <img src="/assets/ui/wordmark.png" alt="yuoyuo" className="mx-auto h-[46px] w-auto" />
-          <p className="mt-1 text-[13px] text-white/56">独属于你的虚拟宇宙</p>
+          <p className="mt-1 text-[13px] text-white/56">{uiText('ui16')}</p>
+          {international && <InterfaceLanguageSelect />}
         </div>
 
         {modalStep === 'auth' && (
           <div className="mx-5 grid shrink-0 grid-cols-2 rounded-[10px] bg-white/[0.055] p-1 min-[380px]:mx-6">
             {(['login', 'register'] as const).map((item) => (
               <button key={item} onClick={() => switchPanel(item)} className={`h-9 rounded-[8px] text-[14px] font-semibold transition-colors ${panel === item ? 'bg-[#FF7E9F] text-white' : 'text-white/52'}`}>
-                {item === 'login' ? '登录' : '注册'}
+                {item === 'login' ? uiText('ui17') : uiText('ui18')}
               </button>
             ))}
           </div>
@@ -286,7 +292,7 @@ export function AuthModal() {
                   close()
                   navigate(safeReturnTo(returnTo))
                 } catch (error) {
-                  showToast(error instanceof Error ? error.message : '恢复失败，请重试', 'error')
+                  showToast(error instanceof Error ? error.message : uiText('ui19'), 'error')
                 } finally {
                   setLoading(false)
                 }
@@ -310,43 +316,43 @@ export function AuthModal() {
           ) : panel === 'login' ? (
             <>
               <div className="mb-3 flex gap-5 border-b border-white/8 text-[13px]">
-                <button onClick={() => { setLoginMode('password'); setOtpStep('email'); setCode('') }} className={`pb-2 ${loginMode === 'password' ? 'border-b-2 border-[#FF7E9F] text-white' : 'text-white/45'}`}>密码登录</button>
-                <button onClick={() => { setLoginMode('otp'); setOtpStep('email'); setCode('') }} className={`pb-2 ${loginMode === 'otp' ? 'border-b-2 border-[#FF7E9F] text-white' : 'text-white/45'}`}>验证码登录</button>
+                <button onClick={() => { setLoginMode('password'); setOtpStep('email'); setCode('') }} className={`pb-2 ${loginMode === 'password' ? 'border-b-2 border-[#FF7E9F] text-white' : 'text-white/45'}`}>{uiText('ui20')}</button>
+                <button onClick={() => { setLoginMode('otp'); setOtpStep('email'); setCode('') }} className={`pb-2 ${loginMode === 'otp' ? 'border-b-2 border-[#FF7E9F] text-white' : 'text-white/45'}`}>{uiText('ui21')}</button>
               </div>
               <div className="divide-y divide-white/8 rounded-[10px] border border-white/10 bg-white/[0.035] px-3">
-                <Input icon={MailIcon} placeholder="邮箱" value={email} onChange={setEmail} type="email" />
+                <Input icon={MailIcon} placeholder={uiText('ui22')} value={email} onChange={setEmail} type="email" />
                 {loginMode === 'password' ? (
-                  <PasswordInput icon={LockIcon} placeholder="密码" value={password} onChange={setPassword} autoComplete="current-password" />
+                  <PasswordInput icon={LockIcon} placeholder={uiText('ui23')} value={password} onChange={setPassword} autoComplete="current-password" />
                 ) : otpStep === 'email' ? null : (
                   <CodeRow code={code} setCode={setCode} cooldown={cooldown} loading={loading} onSend={() => void sendCode('login')} />
                 )}
               </div>
               {loginMode === 'password' ? (
-                <div className="mb-4 mt-2 flex justify-end"><Link to="/forgot-password" onClick={close} className="text-[12px] text-[#FF9AB3]">忘记密码？</Link></div>
+                <div className="mb-4 mt-2 flex justify-end"><Link to="/forgot-password" onClick={close} className="text-[12px] text-[#FF9AB3]">{uiText('ui24')}</Link></div>
               ) : otpStep === 'email' ? (
-                <Button className="mt-4" variant="primary" size="lg" loading={loading} onClick={() => void sendCode('login')}>发送验证码</Button>
+                <Button className="mt-4" variant="primary" size="lg" loading={loading} onClick={() => void sendCode('login')}>{uiText('ui25')}</Button>
               ) : (
-                <button className="mb-4 mt-2 text-[12px] text-[#FF9AB3]" onClick={() => { setOtpStep('email'); setCode('') }}>更换邮箱</button>
+                <button className="mb-4 mt-2 text-[12px] text-[#FF9AB3]" onClick={() => { setOtpStep('email'); setCode('') }}>{uiText('ui26')}</button>
               )}
               {(loginMode === 'password' || otpStep === 'code') && (
-                <Button variant="primary" size="lg" loading={loading} onClick={() => void (loginMode === 'password' ? handlePasswordLogin() : handleOtpLogin())}>登录</Button>
+                <Button variant="primary" size="lg" loading={loading} onClick={() => void (loginMode === 'password' ? handlePasswordLogin() : handleOtpLogin())}>{uiText('ui17')}</Button>
               )}
             </>
           ) : (
             <>
               <div className="divide-y divide-white/8 rounded-[10px] border border-white/10 bg-white/[0.035] px-3">
-                <Input icon={MailIcon} placeholder="邮箱" value={email} onChange={setEmail} type="email" />
+                <Input icon={MailIcon} placeholder={uiText('ui22')} value={email} onChange={setEmail} type="email" />
                 <CodeRow code={code} setCode={setCode} cooldown={cooldown} loading={loading} onSend={() => void sendCode('register')} />
-                <PasswordInput icon={LockIcon} placeholder="设置密码（至少 8 位）" value={password} onChange={setPassword} autoComplete="new-password" />
-                <PasswordInput icon={LockIcon} placeholder="确认密码" value={confirmPassword} onChange={setConfirmPassword} autoComplete="new-password" />
+                <PasswordInput icon={LockIcon} placeholder={uiText('ui27')} value={password} onChange={setPassword} autoComplete="new-password" />
+                <PasswordInput icon={LockIcon} placeholder={uiText('ui28')} value={confirmPassword} onChange={setConfirmPassword} autoComplete="new-password" />
                 <Input
                   icon={GiftIcon}
-                  placeholder="邀请码（选填）"
+                  placeholder={uiText('ui29')}
                   value={inviteCode}
                   onChange={(value) => setInviteCode(value.replace(/\s/g, '').toUpperCase().slice(0, 16))}
                 />
               </div>
-              <Button className="mt-4" variant="primary" size="lg" loading={loading} onClick={() => void handleRegister()}>注册并进入</Button>
+              <Button className="mt-4" variant="primary" size="lg" loading={loading} onClick={() => void handleRegister()}>{uiText('ui30')}</Button>
             </>
           )}
 
@@ -354,12 +360,12 @@ export function AuthModal() {
             <>
               <label className="mt-4 flex cursor-pointer items-start gap-2.5 text-left">
                 <input type="checkbox" checked={ageConfirmed} onChange={(event) => setAgeConfirmed(event.target.checked)} className="mt-0.5 h-4 w-4 shrink-0 accent-[#FF7E9F]" />
-                <span className="text-[12px] leading-[1.55] text-white/58">我确认已年满 18 周岁</span>
+                <span className="text-[12px] leading-[1.55] text-white/58">{uiText('ui31')}</span>
               </label>
               <label className="mt-2 flex cursor-pointer items-start gap-2.5 text-left">
                 <input type="checkbox" checked={agreed} onChange={(event) => setAgreed(event.target.checked)} className="mt-0.5 h-4 w-4 shrink-0 accent-[#FF7E9F]" />
                 <span className="text-[12px] leading-[1.55] text-white/58">
-                  我已阅读并同意<Link to="/legal/terms" onClick={close} className="text-[#FF9AB3]">《用户协议》</Link>和<Link to="/legal/privacy" onClick={close} className="text-[#FF9AB3]">《隐私政策》</Link>
+                  {uiText('ui32')}<Link to="/legal/terms" onClick={close} className="text-[#FF9AB3]">{uiText('ui33')}</Link>{uiText('ui34')}<Link to="/legal/privacy" onClick={close} className="text-[#FF9AB3]">{uiText('ui35')}</Link>
                 </span>
               </label>
             </>
@@ -382,39 +388,39 @@ function RestorationPanel({
   onRestore: () => void
   onCancel: () => void
 }) {
+  useTranslation()
   const daysLeft = graceEnd
     ? Math.max(0, Math.ceil((new Date(graceEnd).getTime() - Date.now()) / 86400000))
     : 0
 
   return (
     <div className="py-2 text-center">
-      <h2 className="text-[18px] font-semibold text-white">欢迎回来</h2>
+      <h2 className="text-[18px] font-semibold text-white">{uiText('ui36')}</h2>
+
       <p className="mt-3 text-[14px] leading-[1.7] text-white/62">
-        您的账号正处于冷静期（还剩 {daysLeft} 天），数据仍然保留。
-      </p>
-      <p className="mt-1 text-[13px] text-white/42">是否恢复账号并继续使用？</p>
+        {uiText('ui37')}{daysLeft} {uiText('ui38')}</p>
+      <p className="mt-1 text-[13px] text-white/42">{uiText('ui39')}</p>
       <Button className="mt-5" variant="primary" size="lg" loading={loading} onClick={onRestore}>
-        恢复账号
-      </Button>
+        {uiText('ui40')}</Button>
       <button
         type="button"
         onClick={onCancel}
         disabled={loading}
         className="mt-3 w-full py-2 text-[14px] text-white/42 transition-colors hover:text-white/65 disabled:opacity-50"
       >
-        不了，退出登录
-      </button>
+        {uiText('ui41')}</button>
     </div>
   )
 }
 
 function CodeRow({ code, setCode, cooldown, loading, onSend }: { code: string; setCode: (value: string) => void; cooldown: number; loading: boolean; onSend: () => void }) {
+  useTranslation()
   return (
     <div className="flex min-h-[52px] items-center gap-3 py-2">
       <span className="shrink-0 text-[#FF9AB3]">{ShieldIcon}</span>
-      <input inputMode="numeric" value={code} onChange={(event) => setCode(event.target.value.replace(/\D/g, '').slice(0, 6))} maxLength={6} placeholder="6 位验证码" className="min-w-0 flex-1 bg-transparent text-[16px] text-white outline-none placeholder:text-white/28" />
+      <input inputMode="numeric" value={code} onChange={(event) => setCode(event.target.value.replace(/\D/g, '').slice(0, 6))} maxLength={6} placeholder={uiText('ui42')} className="min-w-0 flex-1 bg-transparent text-[16px] text-white outline-none placeholder:text-white/28" />
       <button type="button" disabled={cooldown > 0 || loading} onClick={onSend} className="shrink-0 text-[12px] font-semibold text-[#FF9AB3] disabled:text-white/25">
-        {cooldown > 0 ? `${cooldown}s` : '获取验证码'}
+        {cooldown > 0 ? `${cooldown}s` : uiText('ui43')}
       </button>
     </div>
   )

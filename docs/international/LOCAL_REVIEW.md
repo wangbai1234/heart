@@ -4,11 +4,11 @@
 
 The 2026-09-28 transaction-consistent snapshot contains 4,223 users, 2,047,103 chats, 212,291 credit transactions and 714 characters. Local database `heart_review` uses port 55438; MinIO uses port 59000. All 3,763 media objects (612,121,549 bytes) were imported from the logical export. Redis uses a fresh namespace rather than replaying expired OTP/session/dispatch state. Local JWT credentials differ from production. Background workers and outbound email are disabled. Model configuration is available for deliberate chat; validation makes no paid model calls.
 
-All 714 local character rows are `public/active/approved` for selection only, including formerly private, unlisted, disabled and unreviewed characters. This is not moderation approval or permission to publish creators' private content on the real service. Production and original backups were not changed. Two built-in characters load file specs; one other disabled-only latest spec was reactivated with its original status recorded.
+The local review operation has completed and the original state of all 714 rows has been restored. The catalogue now contains exactly 222 eligible rows: 192 `public` and 30 `unlisted`, all `active` and `approved`. Private, disabled and unreviewed rows are excluded. This is a local selection view, not new moderation approval or permission to publish creators' private content. Production and original backups were not changed. The restore and approved-catalog exports retain the before/after states and batch IDs.
 
 Audit is only in the local database's `local_review` schema and private `/Users/wanglixun/heart/.local-review/production-20260928/audit/`, excluded from Git. `character_visibility` preserves each entire original character row, original visibility/status/review state, snapshot name and batch ID. `spec_status` records the reactivated spec. JSON exports have SHA-256 manifests and a local-database-guarded SQL restore script. Do not include these data files in a PR or deployment bundle.
 
-Fill `selected` and `selection_note` in `character-selection.csv`, retaining `character_id` as stable identity. Rows include original state and local URLs. Catalogue cards also display original visibility/status/ID; search accepts IDs. Chinese character content stays unchanged for local review, while international UI options remain EN/JA/KO.
+The private audit directory contains `approved-catalog-20261007.json` and `.csv` for the 222-row result, plus the original 714-row audit and guarded restore SQL. Chinese character content stays unchanged for local review, while international UI options remain EN/JA/KO.
 
 Restart after Docker is running:
 
@@ -19,6 +19,6 @@ docker start yuoyuo-intl-test-postgres yuoyuo-intl-test-redis yuoyuo-local-revie
 /Users/wanglixun/heart/.local-review/production-20260928/start-frontend.sh
 ```
 
-Open http://127.0.0.1:55173/ . Catalogue browsing needs no login; existing password accounts remain. Never run automated tests against the restored database. The disposable test database is removed after restore validation.
+Open http://127.0.0.1:55173/ . Catalogue browsing needs no login; existing password accounts remain. Never run automated tests against the restored database. A separate disposable `heart_ui_test` database and Redis DB 3 are used for automated tests; the restored database uses Redis DB 2.
 
-Validation: 714 profiles readable, 711 of 712 recorded covers valid. One source cover is empty; all 52 zero-byte media objects are also empty in the raw-volume backup. These source defects are recorded in the local audit rather than silently replaced. Canonical CI: 1,980 tests passed, 34 skipped, 57 frontend tests, mypy clean.
+Validation: the catalogue contains 222 eligible profiles; 711 of 712 recorded covers valid. One source cover is empty; all 52 zero-byte media objects are also empty in the raw-volume backup. These source defects are recorded in the local audit rather than silently replaced.

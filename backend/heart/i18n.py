@@ -49,6 +49,19 @@ async def load_preferences(db: AsyncSession, user_id: UUID) -> LanguagePreferenc
     return LanguagePreferences(**dict(row)) if row else LanguagePreferences()
 
 
+async def initialize_preferences(db: AsyncSession, user_id: UUID, accept_language: str) -> None:
+    """Initialize signup in its transaction, without overwriting saved choices."""
+    await db.execute(
+        text(
+            "INSERT INTO user_language_preferences "
+            "(user_id, interface_language, response_language, action_style) "
+            "VALUES (:uid, :locale, :locale, 'parentheses') "
+            "ON CONFLICT (user_id) DO NOTHING"
+        ),
+        {"uid": user_id, "locale": resolve_locale(accept_language)},
+    )
+
+
 def generation_directive(language: str, action_style: str) -> str:
     """Only allowlisted values enter the system prompt."""
     name = LANGUAGE_NAMES.get(language, "English")

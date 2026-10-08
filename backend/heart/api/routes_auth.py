@@ -27,6 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from heart.core.auth import TokenData, auth_manager, get_current_user
 from heart.core.config import settings
+from heart.i18n import initialize_preferences
 from heart.infra.email import get_email_sender
 from heart.infra.email.sender import (
     OTP_SUBJECT,
@@ -820,6 +821,9 @@ async def register(
         text("UPDATE users SET last_login_at = NOW() WHERE id = :id"),
         {"id": user_id},
     )
+
+    if settings.international_mode:
+        await initialize_preferences(db, user_id, request.headers.get("accept-language", "en"))
 
     await db.commit()
 

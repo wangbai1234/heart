@@ -1,9 +1,8 @@
 import { lazy, Suspense } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
-const App = import.meta.env.VITE_INTERNATIONAL === 'true'
-  ? lazy(() => import('./international/InternationalApp').then(m => ({ default: m.InternationalApp })))
-  : lazy(() => import('./App').then(m => ({ default: m.App })))
+import './i18n'
+const App = lazy(() => import('./App').then(m => ({ default: m.App })))
 import './index.css'
 
 // Dev-mode service worker cleanup. In dev vite-plugin-pwa never registers a

@@ -114,6 +114,8 @@ async def list_characters(
     Avatar URLs are extracted from the draft stored in soul_specs for UGC characters.
     Anonymous callers only receive active built-ins and public, approved UGC.
     """
+    from heart.core.config import settings as catalog_settings
+
     uid = uuid.UUID(current_user.user_id) if current_user else None
     result = await db.execute(
         text(
@@ -122,11 +124,12 @@ async def list_characters(
                    tags, cover_url, review_status, review_reason, created_at,
                    display_heat, real_view_count, real_play_uv, recommendation_score
             FROM characters
-            WHERE owner_user_id = :uid
-               OR (status = 'active' AND visibility = 'public' AND review_status = 'approved')
+            WHERE (NOT :local_review AND owner_user_id = :uid)
+               OR (status = 'active' AND review_status = 'approved'
+                   AND (visibility = 'public' OR (:local_review AND visibility = 'unlisted')))
             """
         ),
-        {"uid": uid},
+        {"uid": uid, "local_review": catalog_settings.local_character_review},
     )
     raw_rows = list(result.mappings())
     rows = [
@@ -193,10 +196,10 @@ async def list_characters(
         taglines,
         creation_modes,
         display_names,
+        local_review=catalog_settings.local_character_review,
     )
     result_list = []
     from heart.api.local_review import review_catalog_records
-    from heart.core.config import settings as catalog_settings
 
     review_records = await review_catalog_records(db, catalog_settings.local_character_review)
 
@@ -1077,6 +1080,7 @@ class OpeningPreviewRequest(BaseModel):
 @router.post("/opening-preview")
 async def preview_opening(
     body: OpeningPreviewRequest,
+    language: str = Header("en", alias="Accept-Language"),
     current_user: TokenData = Depends(get_current_user),
 ) -> dict:
     """Generate a first-encounter opening draft with the MAIN model (creator-facing).
@@ -1108,6 +1112,16 @@ async def preview_opening(
         tags=list(body.tags or []),
         greeting_style=body.greeting_style or "warm",
     )
+
+    from heart.core.config import settings as authoring_settings
+
+    if authoring_settings.international_mode:
+        from heart.i18n import generation_directive, resolve_locale
+
+        messages[0]["content"] = messages[0]["content"].replace("中文括号（）", "括号()")
+        messages[0]["content"] += "\n" + generation_directive(
+            resolve_locale(language if isinstance(language, str) else "en"), "parentheses"
+        )
 
     try:
         text_out = await router.call_main(
@@ -1569,9 +1583,29 @@ _QUICK_PREFILL_TOTAL_TIMEOUT_S = 55.0
 _QUICK_PREFILL_MAX_TOKENS = 2200
 
 
+def _localize_creation_prompt(prompt: str, language: str) -> str:
+    from heart.core.config import settings as authoring_settings
+
+    if authoring_settings.international_mode:
+        from heart.i18n import LANGUAGE_NAMES, resolve_locale
+
+        output_language = LANGUAGE_NAMES[
+            resolve_locale(language if isinstance(language, str) else "en")
+        ]
+        prompt = prompt.replace("所有文字字段使用简体中文", f"所有文字字段使用{output_language}")
+        prompt = prompt.replace("中文括号（）", "括号()")
+        prompt += (
+            f"\nAll prose values must be written in {output_language}. "
+            "Keep JSON keys and enum values unchanged. Length bounds count characters."
+        )
+
+    return prompt
+
+
 @router.post("/quick-prefill")
 async def quick_prefill(
     body: QuickPrefillRequest,
+    language: str = Header("en", alias="Accept-Language"),
     current_user: TokenData = Depends(get_current_user),
 ) -> QuickPrefillResponse:
     """快速创建：一次性 AI 预填所有设定（批4）。
@@ -1648,6 +1682,8 @@ async def quick_prefill(
 - 不要把用户称为固定姓名，不要替用户决定身份或行动。
 
 只返回JSON，不要其他文字。"""
+
+    prompt = _localize_creation_prompt(prompt, language)
 
     from heart.infra.model_catalog import model_ids_by_ascending_coin_cost
 

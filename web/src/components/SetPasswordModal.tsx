@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next'
+import { uiText } from '../i18n/text'
 import { useState } from 'react'
 import { Dialog } from './ui/Dialog'
 import { Button } from './ui/Button'
@@ -18,6 +20,7 @@ const LockIcon = (
  * Styled entirely via the shared Dialog / Button / PasswordInput — no new palette.
  */
 export function SetPasswordModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  useTranslation()
   const [password, setPwd] = useState('')
   const [confirm, setConfirm] = useState('')
   const [loading, setLoading] = useState(false)
@@ -27,11 +30,11 @@ export function SetPasswordModal({ open, onClose }: { open: boolean; onClose: ()
   const handleSubmit = async () => {
     if (loading) return
     if (password.length < 8) {
-      setError('密码至少 8 位')
+      setError(uiText('ui10'))
       return
     }
     if (password !== confirm) {
-      setError('两次输入的密码不一致')
+      setError(uiText('ui11'))
       return
     }
     setLoading(true)
@@ -41,7 +44,7 @@ export function SetPasswordModal({ open, onClose }: { open: boolean; onClose: ()
       setUser({ has_password: true })
       onClose()
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : '设置失败，请重试')
+      setError(err instanceof Error ? err.message : uiText('ui116'))
     } finally {
       setLoading(false)
     }
@@ -51,39 +54,36 @@ export function SetPasswordModal({ open, onClose }: { open: boolean; onClose: ()
     <Dialog
       open={open}
       onClose={onClose}
-      title="设置密码，下次快速登录"
+      title={uiText('ui117')}
       actions={
         <>
           <Button variant="ghost" size="md" className="flex-1" onClick={onClose} disabled={loading}>
-            稍后再说
-          </Button>
+            {uiText('ui118')}</Button>
           <Button variant="primary" size="md" className="flex-1" onClick={handleSubmit} loading={loading}>
-            立即设置
-          </Button>
+            {uiText('ui119')}</Button>
         </>
       }
     >
       <div className="text-left">
         <p className="text-[13px] text-[var(--color-text-secondary)] mb-3 text-center">
-          设置密码后，下次可直接用邮箱 + 密码登录，无需等待验证码。
-        </p>
+          {uiText('ui120')}</p>
         <div className="rounded-[16px] border border-[var(--color-border-glass)] bg-[var(--color-glass-35)] px-4 divide-y divide-[var(--color-divider-inset)]">
           <PasswordInput
             icon={LockIcon}
-            placeholder="设置密码（至少 8 位）"
+            placeholder={uiText('ui27')}
             value={password}
             onChange={setPwd}
             autoComplete="new-password"
           />
           <PasswordInput
             icon={LockIcon}
-            placeholder="确认密码"
+            placeholder={uiText('ui28')}
             value={confirm}
             onChange={setConfirm}
             autoComplete="new-password"
           />
         </div>
-        <p className="text-[12px] text-[var(--color-text-muted)] mt-2 text-center">密码至少 8 位</p>
+        <p className="text-[12px] text-[var(--color-text-muted)] mt-2 text-center">{uiText('ui10')}</p>
         {error && <p className="text-[12px] text-[var(--color-error)] mt-2 text-center">{error}</p>}
       </div>
     </Dialog>

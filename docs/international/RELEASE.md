@@ -4,24 +4,26 @@
 
 Implemented on `codex/international-release`, isolated from the original checkout and production backups. **Not deployed:** HostHatch instance 182191 is behind an unauthenticated login; no new-server SSH address, SSH key reference or deployment domain has been supplied. Existing production was not contacted or changed.
 
-This is a core international preview, not a translation of every legacy screen. It provides discovery, character details, email/password authentication, localized OTP mail, account/age completion, character creation/edit/disable, text chat, history, balances/check-in, data export/deletion and policy/contact pages in English, Japanese and Korean. There is no Chinese UI option. Voice calls, story campaigns, masks and the old promotions UI are not exposed in this preview. Their stored data is retained. Existing Chinese private characters remain accessible to their owners; they are not promoted in the international public catalogue. User-authored content and old chat history are not automatically translated.
+The international build now uses the existing App/PWA entrypoint, page components, styles and navigation. The separate international website and stylesheet were removed. English, Japanese and Korean resources cover authentication, discovery/filtering, chat, settings, quick/workshop creation, masks, voice controls, story controls, wallet, membership and error messages. There is no Chinese UI option. Only the language controls are added to the existing screens. User-authored role content and historical chats remain in their original languages; dormant domestic campaign/admin content is not a complete international translation.
 
-`VITE_INTERNATIONAL=true` builds the international entrypoint. `INTERNATIONAL_MODE=true` selects backend behavior: saved per-user reply language and action format, localized openings/fallbacks, removal of the Afdian-paid-only gate, omission of domestic webhook/referral/commission/lottery/promotion endpoints. Existing credits and membership records are preserved; daily grants and usage limits remain. No new payment platform is integrated and no payment collection opens. Existing safety/content controls remain; switching region does not disable them.
+`VITE_INTERNATIONAL=true` enables translated text in the same app. `INTERNATIONAL_MODE=true` selects saved per-user reply language and action format, localized openings/fallbacks, removal of the Afdian-paid-only gate, and omission of domestic webhook/referral/commission/lottery/promotion endpoints. Payment collection remains disabled. Existing safety/content controls, credits and membership records remain. This work is local and has not changed old production.
 
-Migration 077 adds a separate `user_language_preferences` table. It does not rewrite existing users or messages. Six original adult launch characters are seeded idempotently under new `intl_*` IDs. Interface and reply language are independent. Action styles are parentheses, fullwidth parentheses or asterisks; action bubbles render without marker characters. Language directives apply to newly generated content, not historical messages. Backend operational and some internal persona instructions still contain Chinese; these are not public UI translations.
+Migration 077 adds `user_language_preferences`. Interface and reply language are independent; new registrations inherit the chosen interface language. Action styles are parentheses, fullwidth parentheses or asterisks. Editing an existing role preserves its original content locale and other name translations even after switching UI language. Language directives affect newly generated content, not history.
+
+Translation resources live in `web/src/i18n/locales/{en,ja,ko}.json`. `legacy.json` retains original strings for the domestic compatibility build and stable stored option labels; it is not a selectable international locale. `uiText` supports interpolation, while `uiLabel` translates only application-owned option labels without changing their stored values. User-authored content must not pass through `uiLabel`.
+
+The restored local catalogue now shows 222 active/approved characters (192 public and 30 unlisted) after restoring all 714 original states. See [LOCAL_REVIEW.md](LOCAL_REVIEW.md). Six `intl_*` characters remain optional isolated-test fixtures, not a replacement for the restored selection. Do not seed these into the selected local catalogue.
 
 ## Verified locally
 
-- Canonical `bash scripts/ci.sh`: lint/format, mypy, 1,975 unit tests passed (34 skipped), schema checks, frontend build and 57 frontend tests.
-- Legacy Tier E: 5 passed, using real uvicorn/Postgres/Redis and the existing no-provider fallback.
-- International Tier E: 2 passed with an explicit test-only language-aware model double. Tests cover two-user preference isolation and DB persistence, rejection of Chinese preference values, Korean private character creation/visibility, complete WebSocket turn and persisted messages, selected Japanese output reaching the model double, logical character disable, localized public catalogue and omitted commerce endpoints.
-- Unit tests cover Accept-Language negotiation, hostile preference rejection, OTP translation, all three action styles, prompt format conflicts and fail-closed HTTP/WebSocket geo checks.
-- Separate `VITE_INTERNATIONAL=true` production build passed; legacy UI chunk is absent.
-- Browser: EN/JA/KO catalogue, Japanese character description, local password login, independent Japanese UI/Korean response settings, Korean opening and completed chat with the model double; mobile layout at 390 × 844 with no horizontal overflow.
-- Empty isolated PostgreSQL migrated to 077 and six characters seeded. Production backup restoration was verified in the earlier migration work; this release has not restored that backup on the destination server.
-- Caddy configuration validated in the official Caddy image. Compose overlay validated with dummy configuration and without resolving secret env files. Cloudflare's official API returned 22 validated network ranges.
+- Canonical CI validates lint/format, mypy, backend tests, schemas, frontend tests and build; 1,985 backend tests passed (34 skipped), 62 frontend tests passed, mypy checked 267 files, and the separate international production build passed.
+- International Tier E uses a separate `heart_ui_test` database and real uvicorn/Postgres/Redis with an explicit test-only model double. It covers preference isolation/persistence, rejection of Chinese preference values, Korean private character creation, complete WebSocket chat and persisted Japanese output, logical disable, catalogue and commerce-route restrictions. Signup tests cover Japanese/Korean initialization and persistence across login.
+- Frontend checks cover complete locale keys/interpolation, immediate language changes in original controls, stable stored theme values, creation in Korean and preservation of Japanese/Chinese authored locales during editing in English.
+- Native browser verification of the current UI confirmed Japanese/Korean discovery and immediate language switching while retaining the original role-card grid and bottom navigation. A separate Chromium check at 390 × 844 confirmed Japanese-to-Korean switching, no horizontal overflow and no page errors in the retained discovery UI. Prior chat screenshots belonged to the removed redesign and are not acceptance evidence for this revision.
+- The local review DB is never used for test cleanup. No paid model calls were made. Existing source media defects remain recorded in private audit files.
+- Earlier infrastructure checks validated the Caddy configuration and Compose overlay, and fetched Cloudflare network ranges. These have not been deployed.
 
-Tests prove request routing and persistence, not real-model translation quality, SMTP deliverability or geographic enforcement on the destination network. These require deployment acceptance below. No paid model calls were made in local verification.
+Tests prove request routing and persistence, not real-model translation quality, SMTP deliverability or geographic enforcement on the destination network. These require deployment acceptance below.
 
 ## Deployment inputs still needed
 
@@ -48,7 +50,6 @@ Detailed existing restore SOP is in the original checkout's `docs/JAPAN_SERVER_M
    intl_compose build api encoder-worker
    intl_compose run --rm --no-deps api python -m alembic upgrade heads
    intl_compose run --rm --no-deps api python -m alembic current
-   intl_compose run --rm --no-deps api python scripts/seed_international.py --apply
    ```
 
    These run commands require restored Postgres/Redis/MinIO already healthy. `alembic current` must show `077_language_preferences` and `heads` must show the same single head. Keep background workers off until acceptance is complete.
@@ -58,7 +59,7 @@ Detailed existing restore SOP is in the original checkout's `docs/JAPAN_SERVER_M
 
 ## Acceptance before public use
 
-- Compare restored counts against snapshot baselines before allowing new writes; no missing users, balances, memberships, memories or files. After seeding expect six new characters and specs only.
+- Compare restored counts against snapshot baselines before allowing new writes; no missing users, balances, memberships, memories or files. Optional isolated-test fixtures can be seeded from `backend/` with `PYTHONPATH=. python -m scripts.seed_international --apply`; this is not a required production step.
 - Japanese and Korean external networks: HTTPS, signup/OTP delivery, adulthood gate, login/refresh/logout, role creation/edit/private visibility, free grant/charged turn, independent UI/reply languages and three action styles, reconnect/history, export and deletion.
 - Mainland CN edge traffic: reject both web and API/WebSocket. Unknown country and missing origin-secret header fail closed. Direct IPv4 **and IPv6**, forged `CF-IPCountry: JP` from a non-Cloudflare peer and all alternate hostnames must fail. Confirm no DNS-only alias exposes the origin.
 - No Afdian or alternative checkout, webhooks, domestic campaigns, yuan store credit or merchant-approved claims. Verify actual policy/contact details before requesting payment underwriting.

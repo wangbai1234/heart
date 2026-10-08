@@ -24,7 +24,7 @@ void i18n.use(initReactI18next).init({
   interpolation: { escapeValue: false }, returnNull: false,
 })
 i18n.on('languageChanged', (language) => {
-  document.documentElement.lang = supportedLocale(language)
+  if (typeof document !== 'undefined') document.documentElement.lang = supportedLocale(language)
   try { localStorage.setItem('yuoyuo-locale', supportedLocale(language)) } catch { /* Optional cache. */ }
 })
 if (typeof document !== 'undefined') document.documentElement.lang = i18n.language

@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next'
+import { uiText, uiLabel } from '../i18n/text'
 import { useEffect, useRef, useState, useCallback, useMemo, type ComponentType } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useAppStore } from '../stores/appStore'
@@ -229,11 +231,9 @@ const PREMISE_CARDS: Record<string, ComponentType> = {
 
 /** 引导回复气泡：首聊时出现在消息区底部，点击直接发送（帮用户破冰）。
  * 优先取角色专属开场白(characterUIConfig.starterPrompts)，缺省用通用三句。*/
-const FALLBACK_STARTER_PROMPTS: string[] = [
-  '你还好吗？',
-  '聊聊你的故事？',
-  '有点好奇你在做什么',
-]
+function fallbackStarterPrompts(): string[] {
+  return [uiText('starterWell'), uiText('starterStory'), uiText('starterDoing')]
+}
 
 // Map a server chat-history item to a store Message. Voice rows get an
 // unambiguous by-message-id audio pointer (keyed on the row id, so it needs no
@@ -271,6 +271,7 @@ interface ConversationChatPageProps {
 }
 
 export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
+  useTranslation()
   const navigate = useNavigate()
   const params = useParams<{ characterId?: string }>()
   const [input, setInput] = useState('')
@@ -383,8 +384,8 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
   const modelCatalog = useModelsStore((s) => s.models)
   const currentModel = modelCatalog.find((model) => model.id === chatModel)
   const textTierLabel = currentModel
-    ? `${currentModel.label} · ${currentModel.included ? '会员免费' : `${currentModel.cost_coins}币`}`
-    : '双子座 3.1 · 0.5币'
+    ? `${currentModel.label} · ${currentModel.included ? uiText('ui64') : uiText('dynamic0', { v0: currentModel.cost_coins })}`
+    : uiText('ui65')
 
   // Sync server-side voice_enabled once on mount (previously done by the
   // backstage page). Keeps the +菜单/语音聊天 toggle honest without opening it.
@@ -686,7 +687,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
       const res = await getCharacterVoice(currentCharacterId)
       const hasVoice = res.has_voice ?? res.clone_status === 'ready'
       if (!hasVoice) {
-        useToastStore.getState().show('该角色暂未配置音色，请先选择一个音色', 'info')
+        useToastStore.getState().show(uiText('ui66'), 'info')
         // 获取角色性别信息用于音色筛选
         try {
           const { getCharacterDraft } = await import('../services/api')
@@ -699,7 +700,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
         return
       }
     } catch {
-      useToastStore.getState().show('音色状态获取失败，请稍后重试', 'error')
+      useToastStore.getState().show(uiText('ui67'), 'error')
       return
     }
     navigate(`/call/${currentCharacterId}`)
@@ -759,7 +760,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
       }
     } catch {
       removeMessage(cid, tempId)
-      useToastStore.getState().show('转账失败，请稍后重试', 'error')
+      useToastStore.getState().show(uiText('ui68'), 'error')
     } finally {
       setTransferSending(false)
     }
@@ -810,7 +811,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
       await loadCompanions(true)
       await reloadHistoryFresh(cid)
     } catch {
-      useToastStore.getState().show('重新开始失败，请稍后重试', 'error')
+      useToastStore.getState().show(uiText('ui69'), 'error')
     } finally {
       setRestarting(false)
     }
@@ -828,11 +829,11 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
     } catch (err) {
       const status = (err as { status?: number })?.status
       if (status === 409) {
-        useToastStore.getState().show('该消息已超出撤回范围', 'info')
+        useToastStore.getState().show(uiText('ui70'), 'info')
         // 刷新历史以清掉过期的撤回按钮
         await reloadHistoryFresh(cid)
       } else {
-        useToastStore.getState().show('撤回失败，请稍后重试', 'error')
+        useToastStore.getState().show(uiText('ui71'), 'error')
       }
     } finally {
       setRewindingTurnId(null)
@@ -895,7 +896,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
         // 配置预设音色
         const { setPresetVoice } = await import('../services/api')
         await setPresetVoice(currentCharacterId, selection.presetVoiceId)
-        useToastStore.getState().show(`已配置音色：${selection.presetName || '预设音色'}`, 'success')
+        useToastStore.getState().show(uiText('dynamic1', { v0: selection.presetName || uiText('ui72') }), 'success')
       } else if (selection.type === 'clone' && selection.cloneFile) {
         // 上传克隆音色
         const { uploadVoiceClone } = await import('../services/api')
@@ -907,20 +908,20 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
             const processed = await preprocessForClone(selection.cloneFile)
             fileToUpload = processed.file
           } else if (selection.cloneFile.size > 20 * 1024 * 1024) {
-            useToastStore.getState().show('文件过大（超过 20MB），请上传更短的录音', 'error')
+            useToastStore.getState().show(uiText('ui73'), 'error')
             return
           }
         } catch {
           if (selection.cloneFile.size > 20 * 1024 * 1024) {
-            useToastStore.getState().show('无法处理该文件，请上传 10–30 秒的清晰录音', 'error')
+            useToastStore.getState().show(uiText('ui74'), 'error')
             return
           }
         }
         await uploadVoiceClone(currentCharacterId, fileToUpload, 'fish')
-        useToastStore.getState().show('音色克隆已提交，处理中…', 'info')
+        useToastStore.getState().show(uiText('ui75'), 'info')
       }
     } catch (err: any) {
-      const msg = err?.message || '音色配置失败，请重试'
+      const msg = err?.message || uiText('ui76')
       useToastStore.getState().show(msg, 'error')
     }
   }, [currentCharacterId])
@@ -940,7 +941,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
         await recorder.start()
       } catch {
         setIsRecording(false)
-        showToast('无法访问麦克风，请检查权限')
+        showToast(uiText('ui77'))
       }
     },
     [isStreaming, recorder, showToast],
@@ -969,7 +970,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
 
       const result = await recorder.stop({ cancel })
       if (!result) {
-        if (!cancel) showToast('说话时间太短')
+        if (!cancel) showToast(uiText('ui78'))
         return
       }
 
@@ -978,7 +979,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
       try {
         const { transcript, audio_url } = await transcribeAudio(wavBlob, durationMs)
         if (!transcript) {
-          showToast('没有识别到语音内容')
+          showToast(uiText('ui79'))
           return
         }
         // Blob URL for immediate in-session playback; S3 audio_url persists across navigations.
@@ -987,7 +988,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
           voiceBubble: { audioData: blobUrl, durationMs, format: 'wav', audioUrl: audio_url },
         })
       } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : '语音识别失败'
+        const msg = err instanceof Error ? err.message : uiText('ui80')
         showToast(msg)
       }
     },
@@ -1027,8 +1028,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
 
     const lead = (
       <p className={`text-[12px] mb-2 ${isDark ? 'text-[rgba(248,242,250,0.45)]' : 'text-[rgba(91,93,117,0.7)]'}`}>
-        你会怎么回应他
-      </p>
+        {uiText('ui81')}</p>
     )
 
     if (branches && branches.length > 0) {
@@ -1089,7 +1089,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
               return ugcConfig.prompts
             }
 
-            return FALLBACK_STARTER_PROMPTS
+            return fallbackStarterPrompts()
           })().map((prompt: string) => (
             <button
               key={prompt}
@@ -1125,7 +1125,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
           <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
           <path d="M3 3v5h5" />
         </svg>
-        <span>{rewindingTurnId === msg.turnId ? '撤回中…' : '撤回'}</span>
+        <span>{rewindingTurnId === msg.turnId ? uiText('ui82') : uiText('ui83')}</span>
       </button>
     ) : null
 
@@ -1185,7 +1185,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.573 2.81.7A2 2 0 0 1 22 16.92Z" />
             </svg>
-            <span>通话时长 {msg.content}</span>
+            <span>{uiText('ui84')}{msg.content}</span>
           </div>
         </div>
       )
@@ -1217,12 +1217,12 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
       //   user side (transfer):  pending→待朋友确认收钱, accepted→已被领取, declined→已被退还
       //   char side (receipt):   accepted→已收款, declined→已退还
       const statusLabel = isReceipt
-        ? (isDeclined ? '已退还' : '已收款')
+        ? (isDeclined ? uiText('ui85') : uiText('ui86'))
         : status === 'accepted'
-          ? '已被领取'
+          ? uiText('ui87')
           : isDeclined
-            ? '已被退还'
-            : '待朋友确认收钱'
+            ? uiText('ui88')
+            : uiText('ui89')
       // Declined transfers (either side) go muted with a return-arrow glyph.
       const dimmed = isDeclined
       return (
@@ -1251,7 +1251,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
               <div className="min-w-0">
                 <div className="text-white text-[17px] font-medium leading-tight">¥{amtStr}</div>
                 <div className="text-white/85 text-[12px] mt-0.5 truncate">
-                  {noteText || (isDeclined ? '已退还' : isReceipt ? '已收款' : '转账')}
+                  {noteText || (isDeclined ? uiText('ui85') : isReceipt ? uiText('ui86') : uiText('ui90'))}
                 </div>
               </div>
             </div>
@@ -1363,7 +1363,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
                       : 'bg-[rgba(255,255,255,0.58)] text-[rgba(91,93,117,0.82)] border border-[rgba(255,255,255,0.74)]'
                   }`}
                 >
-                  {transcriptExpanded ? '收起文字' : '转文字'}
+                  {transcriptExpanded ? uiText('ui91') : uiText('ui92')}
                 </button>
               )}
             </div>
@@ -1447,7 +1447,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
           <div className="flex items-center gap-1">
             <div className="w-[6px] h-[6px] rounded-full bg-[var(--color-online)]" />
             <span className={`text-[13px] ${isDark ? 'text-[rgba(228,228,231,0.65)]' : 'text-[var(--color-text-secondary)]'}`}>
-              {isStreaming ? '正在回复…' : isPlaying ? '朗读中' : profile.statusLabel}
+              {isStreaming ? uiText('ui93') : isPlaying ? uiText('ui94') : uiLabel(profile.statusLabel)}
             </span>
             {currentCompanion && (
               <span className={`text-[12px] ml-1.5 ${isDark ? 'text-[rgba(228,228,231,0.5)]' : 'text-[var(--color-text-secondary)]'}`}>
@@ -1463,8 +1463,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
       {/* AI-generated content disclaimer */}
       <div className="relative z-20 flex items-center justify-center py-2 px-4 bg-[var(--color-surface)] border-b border-[var(--color-divider)]">
         <span className="text-[11px] text-[var(--color-text-muted)] text-center">
-          内容由 AI 生成，对话请遵守社区公约
-        </span>
+          {uiText('ui95')}</span>
       </div>
 
       {/* 剧情邀约卡（Wave 3）— DISABLED 2026-07-24：角色↔剧情关联功能已暂停。
@@ -1486,9 +1485,9 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
         <div className="relative z-20 mx-3 mt-3 rounded-[20px] px-4 py-3 bg-[var(--color-glass-75)] backdrop-blur-[16px] border border-[var(--color-border-glass)] shadow-[var(--shadow-soft)] flex items-center justify-between gap-3">
           <div>
             <p className="text-[13px] font-medium text-[var(--color-ink)]">
-              你们的关系进入「{stageLabel(upgradeStage)}」
+              {uiText('ui96')}{stageLabel(upgradeStage)}」
             </p>
-            <p className="text-[12px] text-[var(--color-text-secondary)] mt-0.5">她开始更主动地靠近你。</p>
+            <p className="text-[12px] text-[var(--color-text-secondary)] mt-0.5">{uiText('ui97')}</p>
           </div>
           <button
             onClick={() => {
@@ -1497,8 +1496,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
             }}
             className="shrink-0 h-[32px] px-3 rounded-full bg-[var(--color-primary)] text-white text-[12px] font-medium active:scale-[0.96] transition-transform"
           >
-            查看羁绊
-          </button>
+            {uiText('ui98')}</button>
         </div>
       )}
 
@@ -1533,15 +1531,13 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
           <div className="flex-1 flex flex-col items-center justify-center gap-3">
             <BreathingDots />
             <span className={`text-[13px] ${isDark ? 'text-[rgba(228,228,231,0.5)]' : 'text-[var(--color-text-muted)]'}`}>
-              {profile.shortName}正在向你走来…
-            </span>
+              {profile.shortName}{uiText('ui99')}</span>
           </div>
         )}
 
         {historyLoaded && messages.length === 0 && !generatingOpening && (
           <div className={`text-center text-[13px] py-8 ${isDark ? 'text-[rgba(228,228,231,0.4)]' : 'text-[var(--color-text-muted)]'}`}>
-            和{profile.shortName}说点什么吧
-          </div>
+            {uiText('ui34')}{profile.shortName}{uiText('ui100')}</div>
         )}
 
         {messages.map((msg, index) => {
@@ -1611,7 +1607,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
             <button
               type="button"
               onClick={handleInterrupt}
-              aria-label="停止回复"
+              aria-label={uiText('ui101')}
               className="flex h-[40px] w-[40px] shrink-0 items-center justify-center rounded-[14px] bg-[var(--color-primary)]/10"
             >
               <svg width="22" height="22" viewBox="0 0 24 24" fill="var(--color-primary)">
@@ -1621,7 +1617,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
           ) : (
             <button
               type="button"
-              aria-label="按住说话"
+              aria-label={uiText('ui102')}
               className={`flex h-[40px] w-[40px] shrink-0 touch-none select-none items-center justify-center rounded-[14px] border ${isDark ? 'border-white/8 bg-white/[0.06]' : 'border-black/[0.06] bg-black/[0.035]'}`}
               onPointerDown={handleMicPointerDown}
               onPointerMove={handleMicPointerMove}
@@ -1641,7 +1637,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
             onChange={(e) => setInput(e.target.value)}
             onFocus={() => setPlusMenuOpen(false)}
             onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-            placeholder={isStreaming ? '正在回复中…' : `想和${profile.shortName}说点什么…`}
+            placeholder={isStreaming ? uiText('ui103') : uiText('dynamic2', { v0: profile.shortName })}
             disabled={isStreaming}
             className={`min-w-0 flex-1 bg-transparent text-[16px] outline-none ${
               isDark ? 'text-[#EFE7DD] placeholder-[rgba(228,228,231,0.3)]' : 'text-[var(--color-ink)] placeholder-[var(--color-text-placeholder)]'
@@ -1650,7 +1646,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
           <button
             type="button"
             onClick={handleSend}
-            aria-label="发送"
+            aria-label={uiText('ui104')}
             disabled={isStreaming || !input.trim()}
             className={`flex h-[40px] w-[40px] shrink-0 items-center justify-center rounded-[14px] bg-[var(--color-primary)] shadow-[0_5px_14px_rgba(194,74,99,0.25)] transition-transform active:scale-90 ${
               isStreaming || !input.trim() ? 'opacity-45' : ''
@@ -1663,7 +1659,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
           <button
             type="button"
             onClick={() => setPlusMenuOpen((v) => !v)}
-            aria-label={plusMenuOpen ? '收起更多功能' : '更多功能'}
+            aria-label={plusMenuOpen ? uiText('ui105') : uiText('ui106')}
             aria-expanded={plusMenuOpen}
             className={`flex h-[40px] w-[40px] shrink-0 items-center justify-center rounded-[14px] border transition-[transform,background-color] active:scale-90 ${
               plusMenuOpen
@@ -1732,7 +1728,7 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
       <Dialog
         open={restartConfirmOpen}
         onClose={() => { if (!restarting) setRestartConfirmOpen(false) }}
-        title="重新开始这段关系？"
+        title={uiText('ui107')}
         actions={
           <>
             <button
@@ -1744,31 +1740,27 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
                   : 'bg-[rgba(255,255,255,0.75)] text-[#30344A]'
               }`}
             >
-              取消
-            </button>
+              {uiText('ui108')}</button>
             <button
               onClick={() => { void handleRestart() }}
               disabled={restarting}
               className="flex-1 rounded-full bg-[#FF5A5A] px-4 py-3 text-[15px] font-semibold text-white disabled:opacity-60"
             >
-              {restarting ? '正在重置…' : '重新开始'}
+              {restarting ? uiText('ui109') : uiText('ui110')}
             </button>
           </>
         }
       >
-        将清空与{profile.shortName}的全部记忆、情绪和关系进度，回到最初的相遇。此操作无法撤销。
-      </Dialog>
+        {uiText('ui111')}{profile.shortName}{uiText('ui112')}</Dialog>
 
       {/* Insufficient credits dialog */}
       <NoticeDialog
         open={!!insufficientCredits}
         onClose={clearInsufficientCredits}
-        title="yuoyuo币不足"
+        title={uiText('ui113')}
       >
-        你的 yuoyuo币不足以继续对话
-        <br />
-        可通过签到和活动获取更多免费额度
-      </NoticeDialog>
+        {uiText('ui114')}<br />
+        {uiText('ui115')}</NoticeDialog>
 
       {/* Voice recording overlay (WeChat-style) */}
       {isRecording && (

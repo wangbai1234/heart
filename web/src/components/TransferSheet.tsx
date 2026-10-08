@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next'
+import { uiText } from '../i18n/text'
 import { useState } from 'react'
 import { Button } from './ui/Button'
 
@@ -26,6 +28,7 @@ function formatAmount(n: number): string {
 // WeChat-style transfer page (full screen). Dark mode = pure dark background,
 // light mode = off-white. Reference: Image #7.
 export function TransferSheet({ open, onClose, characterName, isDark, onConfirm }: TransferSheetProps) {
+  useTranslation()
   const [amount, setAmount] = useState('')
   const [note, setNote] = useState('')
 
@@ -54,7 +57,7 @@ export function TransferSheet({ open, onClose, characterName, isDark, onConfirm 
       <div className="flex items-center px-3 pb-3" style={{ paddingTop: 'calc(var(--safe-top, 0px) + 12px)' }}>
         <button
           onClick={onClose}
-          aria-label="返回"
+          aria-label={uiText('ui127')}
           className="w-[44px] h-[44px] flex items-center justify-center active:opacity-60 transition-opacity"
         >
           <svg width="12" height="20" viewBox="0 0 12 20" fill="none" stroke={ink} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -62,19 +65,18 @@ export function TransferSheet({ open, onClose, characterName, isDark, onConfirm 
           </svg>
         </button>
         <h2 className="flex-1 text-center text-[17px] font-semibold pr-[44px]" style={{ color: ink }}>
-          转账
-        </h2>
+          {uiText('ui90')}</h2>
       </div>
 
       {/* Body */}
       <div className="flex-1 overflow-y-auto px-4 pt-3">
         <div className="rounded-[14px] px-5 pt-6 pb-2" style={{ background: card }}>
           <div className="text-[15px] mb-6" style={{ color: ink }}>
-            转账给 {characterName}
+            {uiText('more83')}{characterName}
           </div>
 
           {/* Amount */}
-          <div className="text-[13px] mb-1" style={{ color: sub }}>转账金额</div>
+          <div className="text-[13px] mb-1" style={{ color: sub }}>{uiText('more84')}</div>
           <div className="flex items-baseline pb-4" style={{ borderBottom: `1px solid ${divider}` }}>
             <span className="text-[34px] font-medium mr-1.5" style={{ color: ink }}>¥</span>
             <input
@@ -104,7 +106,7 @@ export function TransferSheet({ open, onClose, characterName, isDark, onConfirm 
               type="text"
               value={note}
               onChange={(e) => setNote(e.target.value.slice(0, 60))}
-              placeholder="添加转账说明"
+              placeholder={uiText('more85')}
               maxLength={60}
               className="w-full bg-transparent text-[15px] outline-none"
               style={{ color: ink }}
@@ -119,8 +121,7 @@ export function TransferSheet({ open, onClose, characterName, isDark, onConfirm 
           onClick={handleConfirm}
           className="mt-8"
         >
-          转账
-        </Button>
+          {uiText('ui90')}</Button>
       </div>
     </div>
   )

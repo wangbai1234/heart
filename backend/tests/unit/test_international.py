@@ -173,3 +173,16 @@ def test_composer_prompt_removes_conflicting_legacy_format(language, marker):
     assert marker in prompt
     assert "必须用中文全角括号" not in prompt
     assert "OUTPUT LANGUAGE:" in prompt
+
+
+@pytest.mark.parametrize("language,name", [("en", "English"), ("ja", "Japanese"), ("ko", "Korean")])
+def test_existing_quick_creator_uses_selected_language(monkeypatch, language, name):
+    from heart.api.routes_characters import _localize_creation_prompt
+    from heart.core.config import settings
+
+    monkeypatch.setattr(settings, "international_mode", True)
+    prompt = _localize_creation_prompt("所有文字字段使用简体中文，动作使用中文括号（）", language)
+    assert "简体中文" not in prompt
+    assert "中文括号" not in prompt
+    assert f"All prose values must be written in {name}" in prompt
+    assert "Keep JSON keys and enum values unchanged" in prompt

@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next'
+import { uiText } from '../../i18n/text'
 import type { ReactNode } from 'react'
 
 interface NavigationBarProps {
@@ -8,6 +10,7 @@ interface NavigationBarProps {
 }
 
 export function NavigationBar({ title, onBack, rightAction, transparent }: NavigationBarProps) {
+  useTranslation()
   return (
     <nav
       className={`
@@ -26,7 +29,7 @@ export function NavigationBar({ title, onBack, rightAction, transparent }: Navig
           <button
             onClick={onBack}
             className="w-[44px] h-[44px] flex items-center justify-center active:opacity-60 transition-opacity"
-            aria-label="返回"
+            aria-label={uiText('ui127')}
           >
             <svg width="12" height="20" viewBox="0 0 12 20" fill="none" stroke="var(--color-ink)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="10,2 2,10 10,18" />

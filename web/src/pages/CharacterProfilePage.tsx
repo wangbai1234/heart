@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next'
+import { uiText } from '../i18n/text'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams, useLocation } from 'react-router-dom'
 import type { CharacterProfileDTO } from '../services/api'
@@ -1225,6 +1227,7 @@ function pickTheme(tags: string[]): Theme {
  * empty and simply don't render.
  */
 export function CharacterProfilePage() {
+  useTranslation()
   const navigate = useNavigate()
   const location = useLocation()
   const safeBack = useSafeBack('/character')
@@ -1315,12 +1318,12 @@ export function CharacterProfilePage() {
     [uiConfig, profile?.tags],
   )
   const routeHint = uiConfig?.relationshipHints ?? {
-    STRANGER: '第一次照面，你还只是个陌生人',
-    FRIEND: '话变多了，Ta开始留意你的情绪',
-    CONFIDANT: '有些话，Ta只想说给你听',
-    ROMANTIC_INTEREST: '心跳藏不住了，关系差一步',
-    LOVER: '你成了Ta生活里绕不开的人',
-    BONDED: '再没有谁能替代此刻的彼此',
+    get STRANGER() { return uiText('ui301') },
+    get FRIEND() { return uiText('ui302') },
+    get CONFIDANT() { return uiText('ui303') },
+    get ROMANTIC_INTEREST() { return uiText('ui304') },
+    get LOVER() { return uiText('ui305') },
+    get BONDED() { return uiText('ui306') },
   }
 
   // Cover-less characters fall back to the shared background image (product
@@ -1350,7 +1353,7 @@ export function CharacterProfilePage() {
     try {
       await navigator.clipboard.writeText(url)
       showToast(
-        approved ? '链接已复制，分享给好友即可访问' : '链接已复制，审核通过后好友即可访问',
+        approved ? uiText('ui50') : uiText('ui51'),
         'success',
       )
     } catch {
@@ -1361,13 +1364,12 @@ export function CharacterProfilePage() {
   if (error) {
     return (
       <div className="relative w-full h-full flex flex-col items-center justify-center gap-3 bg-[var(--color-bg-page)]">
-        <span className="text-[15px] text-[var(--color-text-secondary)]">角色不存在或已下架</span>
+        <span className="text-[15px] text-[var(--color-text-secondary)]">{uiText('ui307')}</span>
         <button
           onClick={() => navigate('/character')}
           className="h-[38px] px-5 rounded-full bg-[var(--color-glass-75)] border border-[var(--color-border-glass)] text-[14px] text-[var(--color-ink)]"
         >
-          返回
-        </button>
+          {uiText('ui127')}</button>
       </div>
     )
   }
@@ -1408,7 +1410,7 @@ export function CharacterProfilePage() {
           }}
           onClick={() => coverFullH && setCoverExpanded((v) => !v)}
           role="button"
-          aria-label={coverExpanded ? '收起封面' : '展开完整封面'}
+          aria-label={coverExpanded ? uiText('ui308') : uiText('ui309')}
         >
           {profile.cover_url && (
             <img
@@ -1424,14 +1426,14 @@ export function CharacterProfilePage() {
           <div className="absolute inset-x-0 bottom-0 h-[45%] pointer-events-none" style={{ background: chrome.scrimGradient }} />
           {coverFullH > 0 && (
             <div className="absolute bottom-3 right-3 z-10 text-[11px] text-white/70 bg-black/35 backdrop-blur-[6px] rounded-full px-3 py-1 pointer-events-none">
-              {coverExpanded ? '收起' : '点击看全图'}
+              {coverExpanded ? uiText('ui310') : uiText('ui311')}
             </div>
           )}
-          <button onClick={goBack} aria-label="返回" className="absolute left-4 z-10 w-[38px] h-[38px] rounded-full bg-black/30 backdrop-blur-[8px] flex items-center justify-center active:scale-[0.95] transition-transform" style={{ top: 'calc(var(--safe-top) + 8px)' }}>
+          <button onClick={goBack} aria-label={uiText('ui127')} className="absolute left-4 z-10 w-[38px] h-[38px] rounded-full bg-black/30 backdrop-blur-[8px] flex items-center justify-center active:scale-[0.95] transition-transform" style={{ top: 'calc(var(--safe-top) + 8px)' }}>
             <svg width="12" height="20" viewBox="0 0 12 20" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="10,2 2,10 10,18" /></svg>
           </button>
           {shareable && (
-            <button onClick={handleShare} aria-label="分享角色" className="absolute right-4 z-10 w-[38px] h-[38px] rounded-full bg-black/30 backdrop-blur-[8px] flex items-center justify-center active:scale-[0.95] transition-transform" style={{ top: 'calc(var(--safe-top) + 8px)' }}>
+            <button onClick={handleShare} aria-label={uiText('ui312')} className="absolute right-4 z-10 w-[38px] h-[38px] rounded-full bg-black/30 backdrop-blur-[8px] flex items-center justify-center active:scale-[0.95] transition-transform" style={{ top: 'calc(var(--safe-top) + 8px)' }}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" /><line x1="8.59" y1="13.51" x2="15.42" y2="17.49" /><line x1="15.41" y1="6.51" x2="8.59" y2="10.49" /></svg>
             </button>
           )}
@@ -1467,7 +1469,7 @@ export function CharacterProfilePage() {
                 <div className="flex items-center justify-between text-[12px] text-[#B4A4AF]">
                   <span>
                     {isColdWar(relationshipStage)
-                      ? '闹别扭'
+                      ? uiText('ui313')
                       : stageWithIntimacy(relationshipStage, intimacy)}
                   </span>
                 </div>
@@ -1482,7 +1484,7 @@ export function CharacterProfilePage() {
             <button
               onClick={() => toggleFavorite(id)}
               className="shrink-0 w-[48px] h-[48px] rounded-full bg-white/5 border border-white/10 flex items-center justify-center active:scale-[0.96] transition-transform"
-              aria-label={isFavorite(id) ? '取消收藏' : '收藏'}
+              aria-label={isFavorite(id) ? uiText('ui314') : uiText('ui156')}
             >
               {isFavorite(id) ? (
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="#FF6B9D" stroke="#FF6B9D" strokeWidth="1.5">
@@ -1504,8 +1506,7 @@ export function CharacterProfilePage() {
                 boxShadow: chrome.ctaShadow,
               }}
             >
-              和 Ta 聊天
-            </button>
+              {uiText('ui315')}</button>
           </div>
         </div>
 
@@ -1557,7 +1558,7 @@ export function CharacterProfilePage() {
         }
         onClick={hasRealCover ? () => coverFullH && setCoverExpanded((v) => !v) : undefined}
         role={hasRealCover ? 'button' : undefined}
-        aria-label={hasRealCover ? (coverExpanded ? '收起封面' : '展开完整封面') : undefined}
+        aria-label={hasRealCover ? (coverExpanded ? uiText('ui308') : uiText('ui309')) : undefined}
       >
         {hasRealCover ? (
           <img
@@ -1579,7 +1580,7 @@ export function CharacterProfilePage() {
 
         {hasRealCover && coverFullH > 0 && (
           <div className="absolute bottom-3 right-3 z-10 text-[11px] text-white/70 bg-black/35 backdrop-blur-[6px] rounded-full px-3 py-1 pointer-events-none">
-            {coverExpanded ? '收起' : '点击看全图'}
+            {coverExpanded ? uiText('ui310') : uiText('ui311')}
           </div>
         )}
 
@@ -1587,7 +1588,7 @@ export function CharacterProfilePage() {
         <div className="absolute left-0 top-0 z-10" style={{ height: 'var(--safe-top)' }} />
         <button
           onClick={(e) => { e.stopPropagation(); goBack() }}
-          aria-label="返回"
+          aria-label={uiText('ui127')}
           className="absolute left-4 z-10 w-[38px] h-[38px] rounded-full bg-black/30 backdrop-blur-[8px] flex items-center justify-center active:scale-[0.95] transition-transform"
           style={{ top: 'calc(var(--safe-top) + 8px)' }}
         >
@@ -1599,7 +1600,7 @@ export function CharacterProfilePage() {
         {profile && shareable && (
           <button
             onClick={(e) => { e.stopPropagation(); handleShare() }}
-            aria-label="分享角色"
+            aria-label={uiText('ui312')}
             className="absolute right-4 z-10 w-[38px] h-[38px] rounded-full bg-black/30 backdrop-blur-[8px] flex items-center justify-center active:scale-[0.95] transition-transform"
             style={{ top: 'calc(var(--safe-top) + 8px)' }}
           >
@@ -1656,7 +1657,7 @@ export function CharacterProfilePage() {
               <div className="flex items-center justify-between text-[12px] text-[var(--color-text-secondary)]">
                 <span>
                   {isColdWar(relationshipStage)
-                    ? '闹别扭'
+                    ? uiText('ui313')
                     : stageWithIntimacy(relationshipStage, intimacy)}
                 </span>
               </div>
@@ -1672,7 +1673,7 @@ export function CharacterProfilePage() {
           <button
             onClick={() => toggleFavorite(id)}
             className="shrink-0 w-[48px] h-[48px] rounded-full bg-[var(--color-glass-75)] border border-[var(--color-border-glass)] flex items-center justify-center active:scale-[0.96] transition-transform"
-            aria-label={isFavorite(id) ? '取消收藏' : '收藏'}
+            aria-label={isFavorite(id) ? uiText('ui314') : uiText('ui156')}
           >
             {isFavorite(id) ? (
               <svg width="20" height="20" viewBox="0 0 24 24" fill="#FF6B9D" stroke="#FF6B9D" strokeWidth="1.5">
@@ -1694,8 +1695,7 @@ export function CharacterProfilePage() {
               chatted ? 'px-7' : 'flex-1'
             }`}
           >
-            开始聊天
-          </button>
+            {uiText('ui316')}</button>
         </div>
 
         {/* 关于TA card — truncated intro（高级 HTML 模式下隐藏，交给创作者自排） */}
@@ -1703,8 +1703,7 @@ export function CharacterProfilePage() {
           <div className="mt-5 rounded-[20px] bg-[var(--color-glass-75)] border border-[var(--color-border-glass)] p-4">
             <div className="flex items-center gap-2 text-[13px] font-semibold" style={{ color: theme.accent }}>
               <span className="inline-block w-[3px] h-[14px] rounded-full" style={{ background: theme.accent }} />
-              关于TA
-            </div>
+              {uiText('ui317')}</div>
             <p
               className={`mt-3 text-[14px] leading-relaxed text-[var(--color-text-secondary)] whitespace-pre-wrap ${
                 !aboutExpanded && 'line-clamp-4'
@@ -1718,7 +1717,7 @@ export function CharacterProfilePage() {
                 className="mt-2 text-[13px] font-medium active:scale-[0.96] transition-transform"
                 style={{ color: theme.accent }}
               >
-                {aboutExpanded ? '收起' : '更多'}
+                {aboutExpanded ? uiText('ui310') : uiText('ui318')}
               </button>
             )}
           </div>
@@ -1742,8 +1741,7 @@ export function CharacterProfilePage() {
           <div className="mt-5 rounded-[20px] bg-[var(--color-glass-75)] border border-[var(--color-border-glass)] p-4">
             <div className="flex items-center gap-2 text-[13px] font-semibold" style={{ color: theme.accent }}>
               <span className="inline-block w-[3px] h-[14px] rounded-full" style={{ background: theme.accent }} />
-              关系路线
-            </div>
+              {uiText('ui319')}</div>
             <div className="mt-4 relative">
               {/* Progress connector line */}
               <div className="absolute top-[18px] left-[18px] right-[18px] h-[2px] bg-[var(--color-glass-55)]">
@@ -1802,8 +1800,7 @@ export function CharacterProfilePage() {
           {/* 叙引 header */}
           <div className="flex items-center gap-2 text-[13px] font-semibold" style={{ color: theme.accent }}>
             <span className="inline-block w-[3px] h-[14px] rounded-full" style={{ background: theme.accent }} />
-            叙引
-          </div>
+            {uiText('ui320')}</div>
 
           {/* Hero one-liner */}
           {profile.one_liner && (
@@ -1825,8 +1822,7 @@ export function CharacterProfilePage() {
           {(profile.archetype_label || profile.tags.length > 0) && (
             <div className="mt-5 rounded-[16px] bg-white/5 border border-white/10 p-4">
               <div className="text-[12px] font-medium mb-3" style={{ color: theme.accent }}>
-                身份档案
-              </div>
+                {uiText('ui321')}</div>
               <div className="flex flex-wrap gap-2">
                 {profile.archetype_label && (
                   <span

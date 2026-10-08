@@ -131,3 +131,39 @@ def test_international_catalog_and_no_commerce(api_context):
         p.startswith(("/api/webhooks", "/api/commission", "/api/lottery", "/api/promotions"))
         for p in schema
     )
+
+
+@pytest.mark.parametrize("locale", ["ja", "ko"])
+def test_signup_initializes_selected_language(api_context, pg_conn, locale):
+    from heart.api.routes_auth import _hash_code
+
+    email = f"signup-{uuid4()}@example.com"
+    with pg_conn.cursor() as cur:
+        cur.execute(
+            "INSERT INTO email_otp_codes (id, email, code_hash, purpose, expires_at) "
+            "VALUES (%s, %s, %s, 'register', NOW() + interval '10 minutes')",
+            (str(uuid4()), email, _hash_code("123456")),
+        )
+    pg_conn.commit()
+    response = api_context.post(
+        "/api/auth/register",
+        headers={"Accept-Language": locale},
+        data={"email": email, "otp_code": "123456", "password": "Signup-test-password1"},
+    )
+    assert response.ok, response.text()
+    token = response.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+    preferences = api_context.get("/api/profile/preferences", headers=headers).json()
+    assert preferences == {
+        "interface_language": locale,
+        "response_language": locale,
+        "action_style": "parentheses",
+    }
+    # Subsequent login in a different browser language must not reset the choice.
+    login_response = api_context.post(
+        "/api/auth/login/password",
+        headers={"Accept-Language": "en"},
+        data={"email": email, "password": "Signup-test-password1"},
+    )
+    assert login_response.ok, login_response.text()
+    assert api_context.get("/api/profile/preferences", headers=headers).json() == preferences

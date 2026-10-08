@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next'
+import { uiText } from '../i18n/text'
 import { useEffect, useRef, useState } from 'react'
 import { useThemeStore } from '../stores/themeStore'
 import { useMembershipStore } from '../stores/membershipStore'
@@ -38,6 +40,7 @@ export function VoicePickerSheet({
   onConfirm,
   initialSelection,
 }: VoicePickerSheetProps) {
+  useTranslation()
   const { resolvedTheme } = useThemeStore()
   const isDark = resolvedTheme === 'dark'
   const showToast = useToastStore((s) => s.show)
@@ -61,7 +64,7 @@ export function VoicePickerSheet({
     if (open) {
       getPresetVoices(gender)
         .then((res) => setPresets(res.presets))
-        .catch(() => showToast('加载音色列表失败', 'error'))
+        .catch(() => showToast(uiText('more99'), 'error'))
       getPricing()
         .then((p) => {
           const fish = p.actions.find((a) => a.id === 'clone_fish')?.cost
@@ -109,7 +112,7 @@ export function VoicePickerSheet({
       await audio.play()
     } catch (err) {
       const msg =
-        err instanceof ApiError ? err.message : '试听失败，请重试'
+        err instanceof ApiError ? err.message : uiText('more100')
       showToast(msg, 'error')
       setPlayingPresetId(null)
     }
@@ -119,7 +122,7 @@ export function VoicePickerSheet({
     const isVideo = file.type.startsWith('video/')
     const isAudio = file.type.startsWith('audio/')
     if (!isVideo && !isAudio) {
-      showToast('仅支持音频或视频文件', 'error')
+      showToast(uiText('more101'), 'error')
       return
     }
     if (isVideo) {
@@ -137,7 +140,7 @@ export function VoicePickerSheet({
 
   function handleConfirm() {
     if (!selectedPreset) {
-      showToast('请选择一个音色', 'error')
+      showToast(uiText('more102'), 'error')
       return
     }
     const preset = presets.find((p) => p.id === selectedPreset)
@@ -170,12 +173,11 @@ export function VoicePickerSheet({
         <div className="sticky top-0 z-10 px-5 pt-4 pb-3 border-b border-[var(--color-border-subtle)] bg-inherit">
           <div className="flex items-center justify-between">
             <h2 className="text-[17px] font-semibold text-[var(--color-ink)]">
-              角色音色
-            </h2>
+              {uiText('more103')}</h2>
             <button
               onClick={onClose}
               className="w-[32px] h-[32px] rounded-full flex items-center justify-center hover:bg-[var(--color-glass-55)] transition-colors"
-              aria-label="关闭"
+              aria-label={uiText('ui15')}
             >
               <svg
                 width="16"
@@ -197,15 +199,13 @@ export function VoicePickerSheet({
         {/* Content */}
         <div className="overflow-y-auto max-h-[calc(85vh-140px)] px-5 py-4 pb-20">
           <p className="text-[13px] text-[var(--color-text-muted)] mb-4">
-            选择一个预设音色，或上传音频克隆（3-10 分钟音频，不含背景音）
-          </p>
+            {uiText('more104')}</p>
 
           {/* Preset voices grid */}
           <div className="grid grid-cols-2 gap-2.5 mb-6">
             {presets.length === 0 && (
               <p className="col-span-2 text-center text-[13px] text-[var(--color-text-muted)] py-8">
-                加载中…
-              </p>
+                {uiText('more105')}</p>
             )}
             {presets.map((preset) => {
               const active = selectedPreset === preset.id
@@ -284,7 +284,7 @@ export function VoicePickerSheet({
                         ? 'bg-[#FF8FAB] text-white'
                         : 'bg-[rgba(255,183,197,0.22)] text-[#FF7DA1]'
                     }`}
-                    aria-label={isPlaying ? '暂停试听' : '试听'}
+                    aria-label={isPlaying ? uiText('more106') : uiText('more107')}
                   >
                     {isPlaying ? (
                       <>
@@ -297,8 +297,7 @@ export function VoicePickerSheet({
                           <rect x="6" y="4" width="4" height="16" rx="1" />
                           <rect x="14" y="4" width="4" height="16" rx="1" />
                         </svg>
-                        暂停
-                      </>
+                        {uiText('more108')}</>
                     ) : (
                       <>
                         <svg
@@ -309,8 +308,7 @@ export function VoicePickerSheet({
                         >
                           <polygon points="5,3 19,12 5,21" />
                         </svg>
-                        试听
-                      </>
+                        {uiText('more107')}</>
                     )}
                   </button>
                 </button>
@@ -345,12 +343,10 @@ export function VoicePickerSheet({
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-[14px] font-semibold text-[var(--color-ink)] mb-1">
-                  克隆专属音色
-                </p>
+                  {uiText('more109')}</p>
                 <p className="text-[11px] text-[var(--color-text-muted)] leading-relaxed">
-                  上传 3-10 分钟音频（mp3/wav/m4a）或视频（mp4/mov），不含背景音。消耗{' '}
-                  {cloneCost} 币
-                </p>
+                  {uiText('more110')}{' '}
+                  {cloneCost} {uiText('ui571')}</p>
               </div>
             </div>
             <button
@@ -358,7 +354,7 @@ export function VoicePickerSheet({
               disabled={!canCloneFish}
               className="w-full h-[40px] rounded-full bg-gradient-to-r from-[#FFB7C5] to-[#FF8FAB] text-white text-[14px] font-semibold active:scale-[0.98] transition-transform disabled:opacity-50 disabled:active:scale-100"
             >
-              {canCloneFish ? '选择音频或视频' : '当前账号暂不可用'}
+              {canCloneFish ? uiText('more111') : uiText('more112')}
             </button>
             <input
               ref={cloneInputRef}
@@ -381,15 +377,13 @@ export function VoicePickerSheet({
             onClick={onClose}
             className="flex-1 h-[44px] rounded-full border border-[var(--color-border)] text-[var(--color-text-secondary)] text-[15px] font-medium active:scale-[0.98] transition-transform"
           >
-            取消
-          </button>
+            {uiText('ui108')}</button>
           <button
             onClick={handleConfirm}
             disabled={!selectedPreset}
             className="flex-1 h-[44px] rounded-full bg-gradient-to-r from-[#FFB7C5] to-[#FF8FAB] text-white text-[15px] font-semibold active:scale-[0.98] transition-transform disabled:opacity-50 disabled:active:scale-100"
           >
-            确定
-          </button>
+            {uiText('more113')}</button>
         </div>
       </div>
 
@@ -407,24 +401,20 @@ export function VoicePickerSheet({
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="text-[17px] font-semibold text-[var(--color-ink)] mb-2">
-              视频转音频克隆
-            </h3>
+              {uiText('more114')}</h3>
             <p className="text-[14px] text-[var(--color-text-secondary)] leading-relaxed mb-5">
-              已选择视频文件，系统将提取音频用于克隆。请确保视频中的语音清晰且无背景音。
-            </p>
+              {uiText('more115')}</p>
             <div className="flex gap-3">
               <button
                 onClick={() => setPendingCloneFile(null)}
                 className="flex-1 h-[42px] rounded-full border border-[var(--color-border)] text-[var(--color-text-secondary)] text-[14px] font-medium"
               >
-                取消
-              </button>
+                {uiText('ui108')}</button>
               <button
                 onClick={() => confirmClone(pendingCloneFile)}
                 className="flex-1 h-[42px] rounded-full bg-gradient-to-r from-[#FFB7C5] to-[#FF8FAB] text-white text-[14px] font-semibold"
               >
-                确认克隆
-              </button>
+                {uiText('more116')}</button>
             </div>
           </div>
         </>

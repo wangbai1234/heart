@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next'
+import { uiText } from '../i18n/text'
 import { useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useThemeStore } from '../stores/themeStore'
@@ -7,17 +9,17 @@ import { buildShareLink } from '../utils/characterShare'
 import type { CharacterDTO } from '../services/api'
 
 const VIS_LABELS: Record<string, { label: string; color: string; bg: string }> = {
-  public: { label: '公开', color: '#5FC8E8', bg: 'rgba(95,200,232,0.14)' },
-  unlisted: { label: '链接可见', color: '#A7C7E7', bg: 'rgba(167,199,231,0.16)' },
-  private: { label: '私密', color: '#B0A8B4', bg: 'rgba(176,168,180,0.14)' },
+  public: { get label() { return uiText('ui44') }, color: '#5FC8E8', bg: 'rgba(95,200,232,0.14)' },
+  unlisted: { get label() { return uiText('ui45') }, color: '#A7C7E7', bg: 'rgba(167,199,231,0.16)' },
+  private: { get label() { return uiText('ui46') }, color: '#B0A8B4', bg: 'rgba(176,168,180,0.14)' },
 }
 
 // Status/review badge shown alongside the visibility pill. Only meaningful for
 // the owner: 已停用 (disabled), or — when public/unlisted — 审核中 / 审核未通过.
 const STATUS_BADGE: Record<string, { label: string; color: string; bg: string }> = {
-  disabled: { label: '已停用', color: '#B0A8B4', bg: 'rgba(176,168,180,0.16)' },
-  pending: { label: '审核中', color: '#E0A458', bg: 'rgba(224,164,88,0.16)' },
-  rejected: { label: '审核未通过', color: '#E06B6B', bg: 'rgba(224,107,107,0.16)' },
+  disabled: { get label() { return uiText('ui47') }, color: '#B0A8B4', bg: 'rgba(176,168,180,0.16)' },
+  pending: { get label() { return uiText('ui48') }, color: '#E0A458', bg: 'rgba(224,164,88,0.16)' },
+  rejected: { get label() { return uiText('ui49') }, color: '#E06B6B', bg: 'rgba(224,107,107,0.16)' },
 }
 
 interface Props {
@@ -31,6 +33,7 @@ interface Props {
 
 /** 自创角色卡片 + 三点菜单(编辑/可见范围/停用/重新发布/删除) + 状态标签 */
 export function CharacterCard({ char, onEdit, onVisibility, onDisable, onReactivate, onDelete }: Props) {
+  useTranslation()
   const profile = resolveCharacterProfile(char.id, char.display_name, char.avatar_url, {
     isOwner: char.is_owner && !char.is_builtin,
     coverUrl: char.cover_url,
@@ -64,7 +67,7 @@ export function CharacterCard({ char, onEdit, onVisibility, onDisable, onReactiv
     try {
       await navigator.clipboard.writeText(url)
       showToast(
-        approved ? '链接已复制，分享给好友即可访问' : '链接已复制，审核通过后好友即可访问',
+        approved ? uiText('ui50') : uiText('ui51'),
         'success',
       )
     } catch {
@@ -111,7 +114,7 @@ export function CharacterCard({ char, onEdit, onVisibility, onDisable, onReactiv
           </div>
           {char.review_status === 'rejected' && char.review_reason && (
             <p className="mt-1.5 text-[12px] leading-[1.5] text-[var(--color-error)]">
-              未通过原因：{char.review_reason}
+              {uiText('ui52')}{char.review_reason}
             </p>
           )}
         </div>
@@ -119,7 +122,7 @@ export function CharacterCard({ char, onEdit, onVisibility, onDisable, onReactiv
         <button
           onClick={() => setMenuOpen((v) => !v)}
           className="w-[36px] h-[36px] flex items-center justify-center rounded-full active:bg-[rgba(255,183,197,0.15)] transition-colors shrink-0"
-          aria-label="更多操作"
+          aria-label={uiText('ui53')}
         >
           <svg width="4" height="18" viewBox="0 0 4 18" fill="var(--color-text-muted)">
             <circle cx="2" cy="2" r="2" />
@@ -142,16 +145,16 @@ export function CharacterCard({ char, onEdit, onVisibility, onDisable, onReactiv
             >
               {disabled && (
                 <>
-                  <MenuButton label="重新发布" icon={<ReactivateIcon />} onClick={() => { setMenuOpen(false); onReactivate() }} />
+                  <MenuButton label={uiText('ui54')} icon={<ReactivateIcon />} onClick={() => { setMenuOpen(false); onReactivate() }} />
                   <div className="h-px bg-[var(--color-divider)]" />
                 </>
               )}
-              <MenuButton label="编辑角色" icon={<EditIcon />} onClick={() => { setMenuOpen(false); onEdit() }} />
+              <MenuButton label={uiText('ui55')} icon={<EditIcon />} onClick={() => { setMenuOpen(false); onEdit() }} />
               {shareable && (
                 <>
                   <div className="h-px bg-[var(--color-divider)]" />
                   <MenuButton
-                    label="复制分享链接"
+                    label={uiText('ui56')}
                     icon={<LinkIcon />}
                     onClick={() => { setMenuOpen(false); setVisMenuOpen(false); void handleCopyLink() }}
                   />
@@ -160,7 +163,7 @@ export function CharacterCard({ char, onEdit, onVisibility, onDisable, onReactiv
               {!disabled && (
                 <>
                   <div className="h-px bg-[var(--color-divider)]" />
-                  <MenuButton label="可见范围" icon={<EyeIcon />} onClick={() => setVisMenuOpen((v) => !v)} chevron />
+                  <MenuButton label={uiText('ui57')} icon={<EyeIcon />} onClick={() => setVisMenuOpen((v) => !v)} chevron />
                   {visMenuOpen && (
                     <div
                       className={`border-t border-[var(--color-divider)] ${
@@ -191,11 +194,11 @@ export function CharacterCard({ char, onEdit, onVisibility, onDisable, onReactiv
                     </div>
                   )}
                   <div className="h-px bg-[var(--color-divider)]" />
-                  <MenuButton label="停用角色" icon={<DisableIcon />} onClick={() => { setMenuOpen(false); onDisable() }} />
+                  <MenuButton label={uiText('ui58')} icon={<DisableIcon />} onClick={() => { setMenuOpen(false); onDisable() }} />
                 </>
               )}
               <div className="h-px bg-[var(--color-divider)]" />
-              <MenuButton label="删除角色" icon={<DeleteIcon />} danger onClick={() => { setMenuOpen(false); onDelete() }} />
+              <MenuButton label={uiText('ui59')} icon={<DeleteIcon />} danger onClick={() => { setMenuOpen(false); onDelete() }} />
             </div>
           </>,
           document.body
@@ -221,6 +224,7 @@ function MenuButton({
   active?: boolean
   disabled?: boolean
 }) {
+  useTranslation()
   return (
     <button
       onClick={onClick}
@@ -230,7 +234,7 @@ function MenuButton({
     >
       <span className="w-5 flex-shrink-0">{icon}</span>
       <span className="flex-1 text-left">{label}</span>
-      {disabled && <span className="text-[10px] text-[var(--color-text-muted)] font-normal">暂未开放</span>}
+      {disabled && <span className="text-[10px] text-[var(--color-text-muted)] font-normal">{uiText('ui60')}</span>}
       {active && (
         <svg width="12" height="9" viewBox="0 0 12 9" fill="none" stroke="var(--color-primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <polyline points="1,4.5 4.5,8 11,1" />
@@ -246,6 +250,7 @@ function MenuButton({
 }
 
 function EditIcon() {
+  useTranslation()
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
@@ -255,6 +260,7 @@ function EditIcon() {
 }
 
 function EyeIcon() {
+  useTranslation()
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
@@ -264,6 +270,7 @@ function EyeIcon() {
 }
 
 function LinkIcon() {
+  useTranslation()
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
@@ -273,6 +280,7 @@ function LinkIcon() {
 }
 
 function DisableIcon() {
+  useTranslation()
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="12" cy="12" r="10" />
@@ -282,6 +290,7 @@ function DisableIcon() {
 }
 
 function ReactivateIcon() {
+  useTranslation()
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <path d="M23 4v6h-6" />
@@ -291,6 +300,7 @@ function ReactivateIcon() {
 }
 
 function DeleteIcon() {
+  useTranslation()
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <polyline points="3 6 5 6 21 6" />

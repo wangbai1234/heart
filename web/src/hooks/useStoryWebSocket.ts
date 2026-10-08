@@ -1,3 +1,4 @@
+import { uiText } from '../i18n/text'
 import { useCallback, useEffect, useRef } from 'react'
 import { useAuthStore } from '../stores/authStore'
 import { useToastStore } from '../stores/toastStore'
@@ -37,15 +38,15 @@ const TURN_WATCHDOG_MS = 90_000
 const HEARTBEAT_MS = 60_000
 
 const ERROR_COPY: Record<string, string> = {
-  engine_unavailable: '剧情引擎暂时不可用，请稍后再试',
-  run_not_found: '这局剧情不存在或已结束',
-  scenario_not_found: '剧本已下架',
-  empty_message: '说点什么再发送吧',
-  generation_failed: '生成失败，请重试',
-  turn_failed: '生成失败，请重试',
-  turn_in_progress: 'GM 正在续写，请稍候',
-  insufficient_credits: '当前额度不足，获得免费额度后可继续剧情',
-  safety_blocked: '这条内容涉及高风险话题，无法继续。如果你正处于困境，请寻求专业帮助。',
+  get engine_unavailable() { return uiText('more140') },
+  get run_not_found() { return uiText('more141') },
+  get scenario_not_found() { return uiText('more142') },
+  get empty_message() { return uiText('more143') },
+  get generation_failed() { return uiText('more144') },
+  get turn_failed() { return uiText('more144') },
+  get turn_in_progress() { return uiText('more145') },
+  get insufficient_credits() { return uiText('more146') },
+  get safety_blocked() { return uiText('more147') },
 }
 
 export function useStoryWebSocket(runId?: string) {
@@ -129,14 +130,14 @@ export function useStoryWebSocket(runId?: string) {
           const r = msg.run_id ?? activeRunRef.current
           if (r) store.setPaused(r, true)
           if (msg.balance !== undefined) useCreditsStore.getState().setBalance(msg.balance)
-          useToastStore.getState().show('当前额度不足，获得免费额度后可继续', 'error')
+          useToastStore.getState().show(uiText('more148'), 'error')
           break
         }
         case 'error': {
           clearWatchdog()
           if (runId) store.endTurn(runId)
           activeTurnRef.current = null
-          const copy = ERROR_COPY[msg.code ?? ''] ?? '出了点问题，请重试'
+          const copy = ERROR_COPY[msg.code ?? ''] ?? uiText('more149')
           useToastStore.getState().show(copy, 'error')
           break
         }
@@ -186,7 +187,7 @@ export function useStoryWebSocket(runId?: string) {
       const trimmed = text.trim()
       if (!trimmed) return null
       if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
-        useToastStore.getState().show('连接已断开，正在重连…', 'error')
+        useToastStore.getState().show(uiText('more150'), 'error')
         connectRef.current?.()
         return null
       }
@@ -203,7 +204,7 @@ export function useStoryWebSocket(runId?: string) {
       watchdogRef.current = setTimeout(() => {
         watchdogRef.current = null
         useStoryStore.getState().endTurn(runId)
-        useToastStore.getState().show('响应超时，请重试', 'error')
+        useToastStore.getState().show(uiText('more151'), 'error')
       }, TURN_WATCHDOG_MS)
 
       wsRef.current.send(

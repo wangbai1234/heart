@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next'
+import { uiText } from '../i18n/text'
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
@@ -18,16 +20,16 @@ import { buildShareLink } from '../utils/characterShare'
 // ── Visibility label helpers ────────────────────────────────────────
 
 const VIS_LABELS: Record<string, { label: string; color: string; bg: string }> = {
-  public:   { label: '公开',   color: '#5FC8E8', bg: 'rgba(95,200,232,0.14)' },
-  unlisted: { label: '链接可见', color: '#A7C7E7', bg: 'rgba(167,199,231,0.16)' },
-  private:  { label: '私密',   color: '#B0A8B4', bg: 'rgba(176,168,180,0.14)' },
+  public:   { get label() { return uiText('ui44') },   color: '#5FC8E8', bg: 'rgba(95,200,232,0.14)' },
+  unlisted: { get label() { return uiText('ui45') }, color: '#A7C7E7', bg: 'rgba(167,199,231,0.16)' },
+  private:  { get label() { return uiText('ui46') },   color: '#B0A8B4', bg: 'rgba(176,168,180,0.14)' },
 }
 
 // Review-status pill config. `not_required` (private / built-in) shows nothing.
 const REVIEW_LABELS: Record<string, { label: string; color: string; bg: string }> = {
-  pending:  { label: '审核中',  color: '#C99A2E', bg: 'rgba(201,154,46,0.14)' },
-  approved: { label: '已通过',  color: '#4CAF7D', bg: 'rgba(76,175,125,0.14)' },
-  rejected: { label: '未通过',  color: '#D9556B', bg: 'rgba(217,85,107,0.14)' },
+  pending:  { get label() { return uiText('ui48') },  color: '#C99A2E', bg: 'rgba(201,154,46,0.14)' },
+  approved: { get label() { return uiText('ui371') },  color: '#4CAF7D', bg: 'rgba(76,175,125,0.14)' },
+  rejected: { get label() { return uiText('ui372') },  color: '#D9556B', bg: 'rgba(217,85,107,0.14)' },
 }
 
 // ── CharacterCard ───────────────────────────────────────────────────
@@ -40,6 +42,7 @@ interface CharacterCardProps {
 }
 
 function CharacterCard({ char, onEdit, onVisibility, onDisable }: CharacterCardProps) {
+  useTranslation()
   const profile = resolveCharacterProfile(char.id, char.display_name, char.avatar_url, {
     isOwner: char.is_owner && !char.is_builtin,
     coverUrl: char.cover_url,
@@ -64,7 +67,7 @@ function CharacterCard({ char, onEdit, onVisibility, onDisable }: CharacterCardP
     try {
       await navigator.clipboard.writeText(url)
       showToast(
-        approved ? '链接已复制，分享给好友即可访问' : '链接已复制，审核通过后好友即可访问',
+        approved ? uiText('ui50') : uiText('ui51'),
         'success',
       )
     } catch {
@@ -112,7 +115,7 @@ function CharacterCard({ char, onEdit, onVisibility, onDisable }: CharacterCardP
           </div>
           {char.review_status === 'rejected' && char.review_reason && (
             <p className="text-[12px] text-[var(--color-text-muted)] leading-snug mt-1.5">
-              未通过原因：{char.review_reason}
+              {uiText('ui52')}{char.review_reason}
             </p>
           )}
         </div>
@@ -121,7 +124,7 @@ function CharacterCard({ char, onEdit, onVisibility, onDisable }: CharacterCardP
         <button
           onClick={() => setMenuOpen((v) => !v)}
           className="w-[36px] h-[36px] flex items-center justify-center rounded-full active:bg-[rgba(255,183,197,0.15)] transition-colors shrink-0"
-          aria-label="更多操作"
+          aria-label={uiText('ui53')}
         >
           <svg width="4" height="18" viewBox="0 0 4 18" fill="var(--color-text-muted)">
             <circle cx="2" cy="2" r="2" />
@@ -141,7 +144,7 @@ function CharacterCard({ char, onEdit, onVisibility, onDisable }: CharacterCardP
           />
           <div className={`fixed right-4 top-[62px] z-[101] backdrop-blur-[16px] rounded-[14px] shadow-[0_8px_24px_rgba(0,0,0,0.10)] overflow-hidden min-w-[160px] ${isDark ? 'bg-[var(--color-surface-card)] border border-[var(--color-border-subtle)]' : 'bg-white/90 border border-[rgba(255,255,255,0.70)]'}`}>
             <MenuButton
-              label="编辑角色"
+              label={uiText('ui55')}
               icon={<EditIcon />}
               onClick={() => { setMenuOpen(false); onEdit() }}
             />
@@ -149,7 +152,7 @@ function CharacterCard({ char, onEdit, onVisibility, onDisable }: CharacterCardP
               <>
                 <div className="h-px bg-[var(--color-divider)]" />
                 <MenuButton
-                  label="复制分享链接"
+                  label={uiText('ui56')}
                   icon={<LinkIcon />}
                   onClick={() => { setMenuOpen(false); setVisMenuOpen(false); void handleCopyLink() }}
                 />
@@ -157,7 +160,7 @@ function CharacterCard({ char, onEdit, onVisibility, onDisable }: CharacterCardP
             )}
             <div className="h-px bg-[var(--color-divider)]" />
             <MenuButton
-              label="可见范围"
+              label={uiText('ui57')}
               icon={<EyeIcon />}
               onClick={() => setVisMenuOpen((v) => !v)}
               chevron
@@ -173,7 +176,7 @@ function CharacterCard({ char, onEdit, onVisibility, onDisable }: CharacterCardP
                       label={info.label}
                       icon={<span className="w-5 h-5 inline-block rounded-full" style={{ background: info.bg, border: `1.5px solid ${info.color}` }} />}
                       onClick={() => {
-                        if (locked) { showToast('链接可见 / 公开暂未开放', 'info'); return }
+                        if (locked) { showToast(uiText('ui373'), 'info'); return }
                         setMenuOpen(false); setVisMenuOpen(false); onVisibility(v)
                       }}
                       active={char.visibility === v}
@@ -185,7 +188,7 @@ function CharacterCard({ char, onEdit, onVisibility, onDisable }: CharacterCardP
             )}
             <div className="h-px bg-[var(--color-divider)]" />
             <MenuButton
-              label="停用角色"
+              label={uiText('ui58')}
               icon={<DisableIcon />}
               danger
               onClick={() => { setMenuOpen(false); onDisable() }}
@@ -215,6 +218,7 @@ function MenuButton({
   active?: boolean
   disabled?: boolean
 }) {
+  useTranslation()
   return (
     <button
       onClick={onClick}
@@ -225,7 +229,7 @@ function MenuButton({
       <span className="w-5 flex-shrink-0">{icon}</span>
       <span className="flex-1 text-left">{label}</span>
       {disabled && (
-        <span className="text-[10px] text-[var(--color-text-muted)] font-normal">暂未开放</span>
+        <span className="text-[10px] text-[var(--color-text-muted)] font-normal">{uiText('ui60')}</span>
       )}
       {active && (
         <svg width="12" height="9" viewBox="0 0 12 9" fill="none" stroke="var(--color-primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -244,6 +248,7 @@ function MenuButton({
 // ── Main page ───────────────────────────────────────────────────────
 
 export function MyCharactersPage() {
+  useTranslation()
   const navigate = useNavigate()
   const goBack = useSafeBack('/character')
   const { characters, loaded, load, setVisibility, disableCharacter } = useCharactersStore()
@@ -267,9 +272,9 @@ export function MyCharactersPage() {
   async function handleVisibility(id: string, vis: 'public' | 'unlisted' | 'private') {
     try {
       await setVisibility(id, vis)
-      showToast(`可见范围已更新为「${VIS_LABELS[vis].label}」`, 'success')
+      showToast(uiText('dynamic25', { v0: VIS_LABELS[vis].label }), 'success')
     } catch (err) {
-      const msg = err instanceof ApiError ? err.message : '操作失败，请稍后再试'
+      const msg = err instanceof ApiError ? err.message : uiText('ui329')
       showToast(msg, 'error')
     }
   }
@@ -279,10 +284,10 @@ export function MyCharactersPage() {
     setDisabling(true)
     try {
       await disableCharacter(disableTarget.id)
-      showToast(`「${disableTarget.display_name}」已停用`, 'success')
+      showToast(uiText('dynamic26', { v0: disableTarget.display_name }), 'success')
       setDisableTarget(null)
     } catch (err) {
-      const msg = err instanceof ApiError ? err.message : '操作失败，请稍后再试'
+      const msg = err instanceof ApiError ? err.message : uiText('ui329')
       showToast(msg, 'error')
     } finally {
       setDisabling(false)
@@ -310,7 +315,7 @@ export function MyCharactersPage() {
             <polyline points="9,2 2,9.5 9,17" />
           </svg>
         </button>
-        <span className="text-[17px] font-semibold text-[var(--color-ink)]">我的角色</span>
+        <span className="text-[17px] font-semibold text-[var(--color-ink)]">{uiText('ui374')}</span>
         <div className="w-[44px]" />
       </nav>
 
@@ -322,8 +327,7 @@ export function MyCharactersPage() {
           <>
             {/* Character count hint */}
             <p className="text-[13px] text-[var(--color-text-muted)] px-1 mb-4 mt-2">
-              {publishableCount} / 10 个公开或链接可见角色 · 私密角色不限量
-            </p>
+              {publishableCount} {uiText('ui331')}</p>
 
             <div className="flex flex-col gap-3">
               {myChars.map((char) => (
@@ -351,8 +355,7 @@ export function MyCharactersPage() {
               onClick={() => navigate('/characters/new')}
               className="w-full h-[52px] rounded-[14px] bg-gradient-to-r from-[#FFB7C5] to-[#FF8FAB] text-white text-[17px] font-semibold shadow-[0_8px_24px_-4px_rgba(255,143,171,0.40)] active:scale-[0.98] transition-transform"
             >
-              + 创建新角色
-            </button>
+              {uiText('ui375')}</button>
           </div>
         </div>
       )}
@@ -361,18 +364,16 @@ export function MyCharactersPage() {
       <Dialog
         open={disableTarget !== null}
         onClose={() => setDisableTarget(null)}
-        title={`停用「${disableTarget?.display_name ?? ''}」？`}
+        title={uiText('dynamic27', { v0: disableTarget?.display_name ?? '' })}
       >
         <p className="text-[14px] text-[var(--color-text-secondary)] leading-[1.7]">
-          停用后该角色将从列表中隐藏，聊天记录保留。你可以在账号设置中重新启用。
-        </p>
+          {uiText('ui376')}</p>
         <div className="flex gap-3 mt-4">
           <button
             onClick={() => setDisableTarget(null)}
             className={`flex-1 h-[44px] rounded-full text-[var(--color-ink)] text-[15px] font-medium active:bg-[rgba(0,0,0,0.04)] ${isDark ? 'bg-[var(--color-glass-55)]' : 'bg-[rgba(255,255,255,0.75)]'}`}
           >
-            取消
-          </button>
+            {uiText('ui108')}</button>
           <button
             onClick={handleDisable}
             disabled={disabling}
@@ -383,7 +384,7 @@ export function MyCharactersPage() {
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
               </svg>
-            ) : '确认停用'}
+            ) : uiText('ui333')}
           </button>
         </div>
       </Dialog>
@@ -394,6 +395,7 @@ export function MyCharactersPage() {
 // ── Empty state ────────────────────────────────────────────────────
 
 function EmptyState({ onCreateClick }: { onCreateClick: () => void }) {
+  useTranslation()
   const { resolvedTheme } = useThemeStore()
   const isDark = resolvedTheme === 'dark'
 
@@ -407,16 +409,14 @@ function EmptyState({ onCreateClick }: { onCreateClick: () => void }) {
           <path d="M2 12l10 5 10-5" />
         </svg>
       </div>
-      <h2 className="text-[20px] font-semibold text-[var(--color-ink)] mb-2">还没有自创角色</h2>
+      <h2 className="text-[20px] font-semibold text-[var(--color-ink)] mb-2">{uiText('ui377')}</h2>
       <p className="text-[14px] text-[var(--color-text-secondary)] leading-[1.65] mb-8 max-w-[260px]">
-        创建属于你的专属角色，设计 Ta 的名字、性格与说话方式。
-      </p>
+        {uiText('ui378')}</p>
       <button
         onClick={onCreateClick}
         className="h-[50px] px-8 rounded-full bg-gradient-to-r from-[#FFB7C5] to-[#FF8FAB] text-white text-[16px] font-semibold shadow-[0_8px_24px_-4px_rgba(255,143,171,0.40)] active:scale-[0.98] transition-transform"
       >
-        立刻创建
-      </button>
+        {uiText('ui379')}</button>
     </div>
   )
 }
@@ -424,6 +424,7 @@ function EmptyState({ onCreateClick }: { onCreateClick: () => void }) {
 // ── Icons ──────────────────────────────────────────────────────────
 
 function EditIcon() {
+  useTranslation()
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
@@ -433,6 +434,7 @@ function EditIcon() {
 }
 
 function EyeIcon() {
+  useTranslation()
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
@@ -442,6 +444,7 @@ function EyeIcon() {
 }
 
 function LinkIcon() {
+  useTranslation()
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
@@ -451,6 +454,7 @@ function LinkIcon() {
 }
 
 function DisableIcon() {
+  useTranslation()
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="12" cy="12" r="10" />
