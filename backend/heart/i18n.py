@@ -3,7 +3,7 @@
 from typing import Literal, cast
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,7 +16,17 @@ ACTION_MARKERS = {"parentheses": ("(", ")"), "asterisks": ("*", "*"), "fullwidth
 class LanguagePreferences(BaseModel, extra="forbid"):
     interface_language: Locale = "en"
     response_language: Locale = "en"
-    action_style: ActionStyle = "parentheses"
+    action_style: ActionStyle = "fullwidth"
+    response_follows_interface: bool = True
+
+    @model_validator(mode="after")
+    def apply_output_contract(self) -> "LanguagePreferences":
+        # Older clients/rows may carry other markers; generation uses the
+        # original fullwidth contract regardless of that legacy field.
+        self.action_style = "fullwidth"
+        if self.response_follows_interface:
+            self.response_language = self.interface_language
+        return self
 
 
 def resolve_locale(accept_language: str) -> Locale:
@@ -37,10 +47,16 @@ def resolve_locale(accept_language: str) -> Locale:
     return cast(Locale, min(candidates)[2]) if candidates else "en"
 
 
+def resolve_initial_locale(country: str | None, accept_language: str) -> Locale:
+    if country:
+        return cast(Locale, {"JP": "ja", "KR": "ko"}.get(country, "en"))
+    return resolve_locale(accept_language)
+
+
 async def load_preferences(db: AsyncSession, user_id: UUID) -> LanguagePreferences:
     result = await db.execute(
         text(
-            "SELECT interface_language, response_language, action_style "
+            "SELECT interface_language, response_language, action_style, response_follows_interface "
             "FROM user_language_preferences WHERE user_id = :uid"
         ),
         {"uid": user_id},
@@ -55,7 +71,7 @@ async def initialize_preferences(db: AsyncSession, user_id: UUID, accept_languag
         text(
             "INSERT INTO user_language_preferences "
             "(user_id, interface_language, response_language, action_style) "
-            "VALUES (:uid, :locale, :locale, 'parentheses') "
+            "VALUES (:uid, :locale, :locale, 'fullwidth') "
             "ON CONFLICT (user_id) DO NOTHING"
         ),
         {"uid": user_id, "locale": resolve_locale(accept_language)},
@@ -65,14 +81,14 @@ async def initialize_preferences(db: AsyncSession, user_id: UUID, accept_languag
 def generation_directive(language: str, action_style: str) -> str:
     """Only allowlisted values enter the system prompt."""
     name = LANGUAGE_NAMES.get(language, "English")
-    left, right = ACTION_MARKERS.get(action_style, ACTION_MARKERS["parentheses"])
     return (
         f"\nOUTPUT LANGUAGE: Write all dialogue and narration in {name}. "
         "Background notes, memories and examples may use other languages; "
         "they do not set the output language. Preserve the character's identity and voice. "
         "Do not include Chinese translations or bilingual explanations.\n"
-        f"ACTION FORMAT: Wrap each action or narration in {left}action{right}. "
-        "Keep spoken dialogue outside action markers. Never use square brackets for actions. "
+        "ACTION FORMAT: Wrap each action or narration in （action）. "
+        "Keep spoken dialogue outside action markers. Use 【】 only as the legacy fallback. "
+        "Never use ASCII square brackets [] for actions; these are reserved for voice controls. "
         "This output convention supersedes formatting in background examples.\n"
     )
 

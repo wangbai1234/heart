@@ -1104,5 +1104,7 @@
   "modelSlow": "Slower",
   "starterWell": "How are you doing?",
   "starterStory": "Tell me your story?",
-  "starterDoing": "I wonder what you’re up to."
+  "starterDoing": "I wonder what you’re up to.",
+  "followInterface": "Follow interface language",
+  "languageNextReply": "Changes apply to the next reply."
 }

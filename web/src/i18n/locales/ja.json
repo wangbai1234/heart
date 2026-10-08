@@ -1104,5 +1104,7 @@
   "modelSlow": "やや遅い",
   "starterWell": "元気にしてる？",
   "starterStory": "あなたの話を聞かせて？",
-  "starterDoing": "今、何をしてるのかな。"
+  "starterDoing": "今、何をしてるのかな。",
+  "followInterface": "表示言語に合わせる",
+  "languageNextReply": "変更は次の返信から反映されます。"
 }

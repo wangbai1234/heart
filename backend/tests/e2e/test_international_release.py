@@ -36,7 +36,8 @@ def test_preferences_private_characters_and_chat(api_context, pg_conn, e2e_serve
     preferences = {
         "interface_language": "ko",
         "response_language": "ja",
-        "action_style": "asterisks",
+        "action_style": "fullwidth",
+        "response_follows_interface": False,
     }
     saved = api_context.put("/api/profile/preferences", headers=headers, data=preferences)
     assert saved.ok, saved.text()
@@ -61,7 +62,7 @@ def test_preferences_private_characters_and_chat(api_context, pg_conn, e2e_serve
             "SELECT response_language, action_style FROM user_language_preferences WHERE user_id=%s",
             (first,),
         )
-        assert cur.fetchone() == ("ja", "asterisks")
+        assert cur.fetchone() == ("ja", "fullwidth")
         cur.execute(
             "UPDATE users SET age_verified_at=NOW(), credits_balance=100000 WHERE id=%s", (first,)
         )
@@ -102,6 +103,25 @@ def test_preferences_private_characters_and_chat(api_context, pg_conn, e2e_serve
                 "turn_end",
             }:
                 break
+        # Save while the same WebSocket is still open; the next turn must load it.
+        followed = api_context.put(
+            "/api/profile/preferences",
+            headers=headers,
+            data={**preferences, "interface_language": "ko", "response_follows_interface": True},
+        )
+        assert followed.ok, followed.text()
+        assert followed.json()["response_language"] == "ko"
+        ws.send(json.dumps({"type": "chat", "character_id": cid, "text": "Please continue."}))
+        switched_frames = []
+        for _ in range(200):
+            frame = json.loads(ws.recv(timeout=30))
+            switched_frames.append(frame)
+            if frame.get("type") in {"error", "turn_end"}:
+                break
+        assert any(f["type"] == "turn_end" for f in switched_frames), switched_frames
+        assert any(
+            "어떤 이야기" in f.get("content", f.get("delta", "")) for f in switched_frames
+        ), switched_frames
     assert any(f["type"] == "turn_end" for f in frames), frames
     assert not any(f["type"] == "error" for f in frames), frames
     assert any("どんな物語" in f.get("content", f.get("delta", "")) for f in frames), frames
@@ -157,7 +177,8 @@ def test_signup_initializes_selected_language(api_context, pg_conn, locale):
     assert preferences == {
         "interface_language": locale,
         "response_language": locale,
-        "action_style": "parentheses",
+        "action_style": "fullwidth",
+        "response_follows_interface": True,
     }
     # Subsequent login in a different browser language must not reset the choice.
     login_response = api_context.post(

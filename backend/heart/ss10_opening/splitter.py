@@ -9,7 +9,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-_PAREN_RE = re.compile(r"（([^）]+)）|\(([^)]+)\)|(?<!\w)\*([^*\n]+)\*(?!\w)")
+_PAREN_RE = re.compile(r"【([^】]+)】|（([^）]+)）|\(([^)]+)\)|(?<!\w)\*([^*\n]+)\*(?!\w)")
 
 # Users often wrap dialogue in double quotes out of prose habit. The chat bubble
 # already signals "this is speech", so an outer pair is redundant. Strip it —

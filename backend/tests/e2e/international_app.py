@@ -22,6 +22,7 @@ class LanguageAwareTestRouter:
             "Japanese": ("微笑む", "どんな物語を書きたいですか？"),
             "Korean": ("미소 짓는다", "어떤 이야기를 쓰고 싶으세요?"),
         }
+        assert "（action）" in system
         action, dialogue = replies[language]
         left, right = (
             ("*", "*")

@@ -1118,9 +1118,8 @@ async def preview_opening(
     if authoring_settings.international_mode:
         from heart.i18n import generation_directive, resolve_locale
 
-        messages[0]["content"] = messages[0]["content"].replace("中文括号（）", "括号()")
         messages[0]["content"] += "\n" + generation_directive(
-            resolve_locale(language if isinstance(language, str) else "en"), "parentheses"
+            resolve_locale(language if isinstance(language, str) else "en"), "fullwidth"
         )
 
     try:
@@ -1593,7 +1592,6 @@ def _localize_creation_prompt(prompt: str, language: str) -> str:
             resolve_locale(language if isinstance(language, str) else "en")
         ]
         prompt = prompt.replace("所有文字字段使用简体中文", f"所有文字字段使用{output_language}")
-        prompt = prompt.replace("中文括号（）", "括号()")
         prompt += (
             f"\nAll prose values must be written in {output_language}. "
             "Keep JSON keys and enum values unchanged. Length bounds count characters."

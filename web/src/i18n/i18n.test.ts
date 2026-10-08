@@ -50,3 +50,39 @@ it('renders existing controls reactively without changing their stored values', 
     vi.resetModules()
   }
 })
+
+it('uses IP detection once and preserves saved choices and browser fallback', async () => {
+  const { vi } = await import('vitest')
+  vi.stubEnv('VITE_INTERNATIONAL', 'true')
+  vi.resetModules()
+  const values = new Map<string, string>()
+  vi.stubGlobal('localStorage', { getItem: (k: string) => values.get(k) ?? null, setItem: (k: string, v: string) => values.set(k, v) })
+  vi.stubGlobal('navigator', { language: 'ko-KR', languages: ['ko-KR', 'en'] })
+  const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ language: 'ja' }) })
+  vi.stubGlobal('fetch', fetchMock)
+  const { default: detected, initializeLocale } = await import('./index')
+  try {
+    await initializeLocale()
+    expect(detected.language).toBe('ja')
+    expect(fetchMock).toHaveBeenCalledOnce()
+    await detected.changeLanguage('en')
+    await initializeLocale()
+    expect(detected.language).toBe('en')
+    expect(fetchMock).toHaveBeenCalledOnce()
+    values.clear()
+    await detected.changeLanguage('ko')
+    values.clear()
+    fetchMock.mockRejectedValueOnce(new Error('offline'))
+    await initializeLocale()
+    expect(detected.language).toBe('ko')
+  } finally {
+    vi.unstubAllGlobals(); vi.unstubAllEnvs(); vi.resetModules()
+  }
+})
+
+it('switches reply language with the interface unless explicitly pinned', async () => {
+  const { withInterfaceLanguage } = await import('../components/LanguagePreferences')
+  const preferences = { interface_language: 'en' as const, response_language: 'en' as const, action_style: 'fullwidth' as const, response_follows_interface: true }
+  expect(withInterfaceLanguage(preferences, 'ja').response_language).toBe('ja')
+  expect(withInterfaceLanguage({ ...preferences, response_follows_interface: false }, 'ko').response_language).toBe('en')
+})

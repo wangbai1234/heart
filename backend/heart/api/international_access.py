@@ -48,4 +48,5 @@ class InternationalAccessMiddleware:
                     headers={"Cache-Control": "no-store"},
                 )(scope, receive, send)
             return
+        scope.setdefault("state", {})["edge_country"] = country
         await self.app(scope, receive, send)

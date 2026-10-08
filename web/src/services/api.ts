@@ -2013,6 +2013,7 @@ export interface LanguagePreferences {
   interface_language: Locale
   response_language: Locale
   action_style: 'parentheses' | 'asterisks' | 'fullwidth'
+  response_follows_interface: boolean
 }
 export function getLanguagePreferences(): Promise<LanguagePreferences> {
   return request('/profile/preferences')

@@ -1128,7 +1128,7 @@ async def _handle_chat_message(
                     language_preferences.response_language if language_preferences else None
                 ),
                 action_style=(
-                    language_preferences.action_style if language_preferences else "parentheses"
+                    language_preferences.action_style if language_preferences else "fullwidth"
                 ),
             )
 

@@ -289,7 +289,7 @@ class CompositionContext:
     user_mask: Optional[Dict[str, str]] = None
     # Effective membership tier used by the tier-aware content directive.
     response_language: str | None = None
-    action_style: str = "parentheses"
+    action_style: str = "fullwidth"
     membership_tier: str = "free"
 
 
@@ -975,7 +975,7 @@ class ComposerService:
         user_mask: Optional[Dict[str, str]] = None,
         membership_tier: str = "free",
         response_language: str | None = None,
-        action_style: str = "parentheses",
+        action_style: str = "fullwidth",
     ) -> str:
         """Build the system prompt from all context blocks.
 
@@ -1164,21 +1164,20 @@ class ComposerService:
         # which rarely use （）, so the model imitates unbracketed prose and the
         # bubble splitter collapses action + dialog into one bubble. The example
         # below gives the model a concrete target format to copy.
-        if not response_language:
-            parts.append(
-                "\n【表达格式（重要）】\n"
-                "- 所有动作、神态、心理描写、旁白必须用中文全角括号（）包裹；\n"
-                "  嵌套或特殊场景可用【】兜底，二者都会被识别为动作/旁白。\n"
-                "- 括号里只写动作/神态，不写对白；对白直接写在括号外。\n"
-                "- 一条消息里动作与对白可以多次穿插，每个动作片段独立用一对（）。\n"
-                "- 如果你用了（），就必须确保消息中所有动作/神态都加（），不能遗漏。\n"
-                "- 禁止把动作描写和对白混在同一段裸文本里。\n"
-                "- 动作/旁白只用（）或【】，禁止使用半角方括号[]（它另有用途）。\n"
-                "- 错误示例：（微微一笑）你来了。目光中带着审视 最近在忙什么？\n"
-                "- 正确示例：（微微一笑）你来了。（目光中带着审视）最近在忙什么？\n"
-                "- 输出示例（务必照此格式）：（停下脚步，偏头看着你）好久不见。"
-                "（唇角微微扬起）最近过得怎么样？"
-            )
+        parts.append(
+            "\n【表达格式（重要）】\n"
+            "- 所有动作、神态、心理描写、旁白必须用中文全角括号（）包裹；\n"
+            "  嵌套或特殊场景可用【】兜底，二者都会被识别为动作/旁白。\n"
+            "- 括号里只写动作/神态，不写对白；对白直接写在括号外。\n"
+            "- 一条消息里动作与对白可以多次穿插，每个动作片段独立用一对（）。\n"
+            "- 如果你用了（），就必须确保消息中所有动作/神态都加（），不能遗漏。\n"
+            "- 禁止把动作描写和对白混在同一段裸文本里。\n"
+            "- 动作/旁白只用（）或【】，禁止使用半角方括号[]（它另有用途）。\n"
+            "- 错误示例：（微微一笑）你来了。目光中带着审视 最近在忙什么？\n"
+            "- 正确示例：（微微一笑）你来了。（目光中带着审视）最近在忙什么？\n"
+            "- 输出示例（务必照此格式）：（停下脚步，偏头看着你）好久不见。"
+            "（唇角微微扬起）最近过得怎么样？"
+        )
 
         # ── Layer 3.6: Per-sentence Fish S2 instruction (voice turns only) ──
         # When voice is on, let the model write a Fish S2 control instruction
