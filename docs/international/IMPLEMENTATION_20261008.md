@@ -31,6 +31,7 @@ The full 222-source selection audit is private at `/Users/wanglixun/heart/.local
 - Migration: `079_google_identities`; links stable Google subject to user ID. Email-based linking is restricted to Google-authoritative Gmail/Workspace identities. Third-party email accounts with existing users use their previous login method.
 - Redis state lasts 10 minutes; PKCE/nonce and HttpOnly same-site browser cookie bind the request. A 90-second single-use completion ticket appears in a URL fragment, is cleared by the client, and requires the same browser cookie. Access/refresh tokens are never put into redirect URLs. Redact authorization callback query strings in proxy/access logs before production.
 - Deleted accounts must use the existing account recovery flow; Google login does not silently reactivate or regrant balances.
+- The user explicitly approved the Google API Services User Data Policy. The browser-control bridge became unavailable before the final console submission, so the agreement has not yet been accepted in the console and the brand/OAuth client credentials have not been created.
 
 ## Email
 
