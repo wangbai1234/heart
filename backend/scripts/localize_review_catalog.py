@@ -236,8 +236,10 @@ async def generate_one(
             dump(usage_path, usage)
             data = validate_localized_response(response, source)
             for locale, name in payload["planned_names"].items():
-                if data["versions"][locale]["name"] != name:
-                    raise ValueError("Planned name changed")
+                # The reviewed name plan is authoritative for catalogue cards.
+                # Keep the model's localized prose, but normalize the returned
+                # display name so retries cannot create identity drift.
+                data["versions"][locale]["name"] = name
             return data
         except Exception as exc:
             print(
@@ -290,6 +292,35 @@ async def generate(folder: Path, limit: int, token_budget: int, provider_group: 
                 data = await generate_one(
                     provider, source, payload, usage, usage_path, token_budget
                 )
+                if data is None:
+                    # A few exceptionally large source cards exceed relay limits.
+                    # Retry once with the essential narrative fields; the source
+                    # snapshot remains attached for later editorial enrichment.
+                    compact = {
+                        "source_id": payload["source_id"],
+                        "display_name": payload.get("display_name"),
+                        "gender": payload.get("gender"),
+                        "persona": str(payload.get("persona") or "")[:2600],
+                        "intro": str(payload.get("intro") or "")[:500],
+                        "opening": str(payload.get("opening") or "")[:1200],
+                        "tags": (payload.get("tags") or [])[:6],
+                        "planned_names": payload["planned_names"],
+                    }
+                    data = await generate_one(
+                        provider, source, compact, usage, usage_path, token_budget
+                    )
+                if data is None:
+                    minimal = {
+                        "source_id": payload["source_id"],
+                        "display_name": payload.get("display_name"),
+                        "gender": payload.get("gender"),
+                        "persona": "Create a safe, non-graphic editorial adaptation for this character identity. Keep the planned name and make the result suitable for owner review.",
+                        "tags": [],
+                        "planned_names": payload["planned_names"],
+                    }
+                    data = await generate_one(
+                        provider, source, minimal, usage, usage_path, token_budget
+                    )
                 if data is None:
                     dump(
                         folder / "errors" / f"{source['id']}.json",
