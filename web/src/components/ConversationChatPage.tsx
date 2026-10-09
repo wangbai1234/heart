@@ -1,4 +1,4 @@
-import { SharedMemoriesDialog } from './SharedMemoriesDialog'
+import { MemoryBookIcon } from './MemoryBookIcon'
 import { useTranslation } from 'react-i18next'
 import { uiText, uiLabel } from '../i18n/text'
 import { useEffect, useRef, useState, useCallback, useMemo, type ComponentType } from 'react'
@@ -273,7 +273,6 @@ interface ConversationChatPageProps {
 
 export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
   const { t: memoryText } = useTranslation()
-  const [sharedMemoriesOpen, setSharedMemoriesOpen] = useState(false)
   const navigate = useNavigate()
   const params = useParams<{ characterId?: string }>()
   const [input, setInput] = useState('')
@@ -1458,8 +1457,9 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
             )}
           </div>
         </div>
-        {/* header 右侧占位：原「角色后台」入口已下线，设置内联到输入区 */}
-        <div className="w-[44px] h-[44px] shrink-0" />
+        <button aria-label={memoryText('sharedMemories')} onClick={() => navigate(`/character/${encodeURIComponent(currentCharacterId)}/memories`)} className={`w-[44px] h-[44px] shrink-0 flex items-center justify-center rounded-xl active:scale-95 transition-transform ${isDark ? 'text-[#E4E4E7] bg-white/5' : 'text-[var(--color-primary)] bg-[var(--color-glass-55)]'}`}>
+          <MemoryBookIcon />
+        </button>
       </header>
 
       {/* AI-generated content disclaimer */}
@@ -1494,15 +1494,13 @@ export function ConversationChatPage({ isDark }: ConversationChatPageProps) {
           <button
             onClick={() => {
               setUpgradeStage(null)
-              setSharedMemoriesOpen(true)
+              navigate(`/character/${encodeURIComponent(currentCharacterId)}/memories`)
             }}
             className="shrink-0 h-[32px] px-3 rounded-full bg-[var(--color-primary)] text-white text-[12px] font-medium active:scale-[0.96] transition-transform"
           >
             {memoryText('sharedMemories')}</button>
         </div>
       )}
-
-      <SharedMemoriesDialog characterId={currentCharacterId} open={sharedMemoriesOpen} onClose={() => setSharedMemoriesOpen(false)} />
 
       {/* Messages */}
       <div ref={scrollRef} className="relative z-10 flex-1 overflow-y-auto px-4 py-3 flex flex-col gap-3">

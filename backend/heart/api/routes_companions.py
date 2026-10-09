@@ -353,8 +353,12 @@ async def get_shared_memories(
     """Only the authenticated reader can inspect their own relationship and memories."""
     params = {"uid": uuid.UUID(current_user.user_id), "cid": character_id}
     count = await db.execute(
-        text("SELECT COUNT(*) FROM chat_messages WHERE user_id=:uid AND character_id=:cid"), params
+        text(
+            "SELECT COUNT(*) AS message_count, COUNT(*) FILTER (WHERE role='user') AS user_message_count, COUNT(DISTINCT created_at::date) AS active_days, MIN(created_at) AS first_message_at FROM chat_messages WHERE user_id=:uid AND character_id=:cid"
+        ),
+        params,
     )
+    activity = dict(count.mappings().one())
     relation = await db.execute(
         text(
             "SELECT current_stage, intimacy_level FROM relationship_states WHERE user_id=:uid AND character_id=:cid"
@@ -369,17 +373,19 @@ async def get_shared_memories(
         params,
     )
     feeling = emotion.mappings().first()
-    mood = "calm"
-    if feeling:
-        mood = (
-            "warm"
-            if feeling["vad_valence"] > 0.25
-            else "low"
-            if feeling["vad_valence"] < -0.25
-            else "excited"
-            if feeling["vad_arousal"] > 0.65
-            else "calm"
-        )
+    mood = _memory_mood(feeling) if feeling else "unknown"
+    changes = await db.execute(
+        text(
+            "SELECT event_id, event_type, payload, created_at FROM relationship_events WHERE user_id=:uid AND character_id=:cid AND event_type IN ('stage_progression','stage_regression') ORDER BY created_at DESC LIMIT 20"
+        ),
+        params,
+    )
+    emotions = await db.execute(
+        text(
+            "SELECT event_id,vad_after,created_at FROM emotion_events WHERE user_id=:uid AND character_id=:cid AND vad_after IS NOT NULL ORDER BY created_at DESC LIMIT 20"
+        ),
+        params,
+    )
     facts = await db.execute(
         text(
             "SELECT id, literal_text AS content, predicate AS category, updated_at FROM fact_nodes WHERE user_id=:uid AND character_id=:cid AND NOT do_not_recall AND is_active AND superseded_by_id IS NULL AND promoted_to_l4_at IS NULL ORDER BY importance DESC, updated_at DESC LIMIT 100"
@@ -398,12 +404,129 @@ async def get_shared_memories(
         for row in result.mappings()
     ]
     return {
-        "message_count": count.scalar_one(),
+        **activity,
         "stage": state["current_stage"] if state else "stranger",
         "intimacy": state["intimacy_level"] if state else 0,
         "emotion": mood,
         "memories": memories,
+        "relationship_history": [
+            {
+                "id": str(r.event_id),
+                "from_stage": r.payload.get("from_stage"),
+                "to_stage": r.payload.get("to_stage"),
+                "at": r.created_at,
+            }
+            for r in changes
+        ],
+        "emotion_history": [
+            {"id": str(r.event_id), "emotion": _memory_mood(r.vad_after), "at": r.created_at}
+            for r in emotions
+        ],
     }
+
+
+def _memory_mood(vad) -> str:
+    valence = vad.get("vad_valence", vad.get("valence", vad.get("v", 0)))
+    arousal = vad.get("vad_arousal", vad.get("arousal", vad.get("a", 0)))
+    return (
+        "warm"
+        if valence > 0.25
+        else "low"
+        if valence < -0.25
+        else "excited"
+        if arousal > 0.65
+        else "calm"
+    )
+
+
+class MemoryAddition(BaseModel):
+    id: uuid.UUID
+    tier: Literal["L3", "L4"]
+    content: str = Field(min_length=1, max_length=2000)
+    confirm_identity: bool = False
+
+
+@router.post("/{character_id}/memories", status_code=201)
+@limiter.limit("20/minute")
+async def add_shared_memory(
+    request: Request,
+    character_id: str,
+    body: MemoryAddition,
+    current_user: TokenData = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """User-authored notes, never invented chat evidence or automatic promotion."""
+    uid = uuid.UUID(current_user.user_id)
+    content = body.content.strip()
+    if not content:
+        raise HTTPException(422, "empty_memory")
+    if body.tier == "L4" and not body.confirm_identity:
+        raise HTTPException(422, "identity_confirmation_required")
+    visible = await db.execute(
+        text(
+            "SELECT id FROM characters WHERE id=:cid AND status='active' AND (owner_user_id=:uid OR (visibility IN ('public','unlisted') AND review_status='approved'))"
+        ),
+        {"uid": uid, "cid": character_id},
+    )
+    if not visible.first():
+        raise HTTPException(404, "character_not_found")
+    # Serialize explicit additions per account and make retries safe with the supplied UUID.
+    await db.execute(text("SELECT id FROM users WHERE id=:uid FOR UPDATE"), {"uid": uid})
+    table = "fact_nodes" if body.tier == "L3" else "identity_memories"
+    field = "literal_text" if body.tier == "L3" else "value"
+    params = {"uid": uid, "cid": character_id, "id": body.id, "content": content}
+    existing = await db.execute(
+        text(
+            f"SELECT {field} AS content FROM {table} WHERE id=:id AND user_id=:uid AND character_id=:cid"
+        ),
+        params,
+    )
+    row = existing.mappings().first()
+    if row:
+        if row["content"] != content:
+            raise HTTPException(409, "memory_changed_reload")
+        return {"id": str(body.id), "tier": body.tier, "content": content}
+    size = await db.execute(
+        text(f"SELECT COUNT(*) FROM {table} WHERE user_id=:uid AND character_id=:cid"), params
+    )
+    if size.scalar_one() >= 1000:
+        raise HTTPException(422, "memory_limit_reached")
+    if body.tier == "L3":
+        await db.execute(
+            text(
+                "INSERT INTO fact_nodes (id,user_id,character_id,predicate,subject,object,literal_text,raw_evidence,confidence,confidence_ewma,emotional_charge,importance,state,is_corrected,reconstruction_hints) VALUES (:id,:uid,:cid,'user_note','user',:content,:content,:content,1,1,0,0.8,'vivid',TRUE,'{\"origin\":\"user_authored\"}'::jsonb)"
+            ),
+            params,
+        )
+    else:
+        await db.execute(
+            text(
+                "INSERT INTO identity_memories (id,user_id,character_id,category,key,value,disclosed_at,sacred_reason,significance_score,promotion_trigger,reconstruction_hints,audit_log) VALUES (:id,:uid,:cid,'identity',:key,:content,NOW(),'Explicitly pinned by user',0.85,'user_authored','{\"origin\":\"user_authored\"}'::jsonb,CAST(:entry AS jsonb))"
+            ),
+            {
+                **params,
+                "key": f"user_note_{body.id}",
+                "entry": json.dumps([{"actor": "user", "operation": "create", "after": content}]),
+            },
+        )
+    await db.execute(
+        text(
+            "INSERT INTO memory_audit_log (id,user_id,session_id,tier,operation,entity_type,entity_ref,new_value,actor,reasoning) VALUES (:audit,:uid,:op,:tier,'create',:entity,:ref,CAST(:new AS jsonb),'user','Explicit user-authored shared memory; no chat evidence claimed')"
+        ),
+        {
+            "audit": uuid.uuid4(),
+            "uid": uid,
+            "op": uuid.uuid4(),
+            "tier": body.tier,
+            "entity": "fact_node" if body.tier == "L3" else "identity_memory",
+            "ref": str(body.id),
+            "new": json.dumps(
+                {"character_id": character_id, "content": content, "origin": "user_authored"}
+            ),
+        },
+    )
+    await db.commit()
+    return {"id": str(body.id), "tier": body.tier, "content": content}
 
 
 class MemoryCorrection(BaseModel):

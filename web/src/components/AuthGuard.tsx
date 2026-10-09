@@ -21,6 +21,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     '/auth/google/callback',
   ])
   const isPublic = exactPublicPaths.has(location.pathname)
+    || (import.meta.env.DEV && location.pathname === '/_preview/shared-memories')
     || location.pathname.startsWith('/admin')
     || location.pathname.startsWith('/legal/')
     || /^\/character\/[^/]+$/.test(location.pathname)

@@ -373,6 +373,7 @@ export function App() {
         点赞达标还可累计领取两档 VIP
       </NoticeDialog>
       <Routes>
+        {import.meta.env.DEV && <Route path="/_preview/shared-memories" element={<SharedMemoriesPage demo />} />}
         <Route path="/auth/google/callback" element={<GoogleCallbackPage />} />
         <Route path="/character/:id/memories" element={<SharedMemoriesPage />} />
         <Route path="/" element={<Navigate to="/character" replace />} />

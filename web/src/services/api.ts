@@ -2042,10 +2042,20 @@ export interface SharedMemoryDTO {
 }
 export interface SharedBondDTO {
   message_count: number
+  user_message_count: number
+  active_days: number
+  first_message_at: string | null
   stage: string
   intimacy: number
   emotion: string
   memories: SharedMemoryDTO[]
+  relationship_history: { id: string; from_stage: string | null; to_stage: string | null; at: string }[]
+  emotion_history: { id: string; emotion: string; at: string }[]
+}
+export function addSharedMemory(characterId: string, id: string, tier: 'L3' | 'L4', content: string, confirmIdentity: boolean) {
+  return request(`/companions/${encodeURIComponent(characterId)}/memories`, {
+    method: 'POST', body: JSON.stringify({ id, tier, content, confirm_identity: confirmIdentity }),
+  })
 }
 export function getSharedBond(characterId: string): Promise<SharedBondDTO> {
   return request(`/companions/${encodeURIComponent(characterId)}/bond`)

@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import { uiText } from '../i18n/text'
+import { international, uiText } from '../i18n/text'
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate, Link, useSearchParams } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
@@ -7,7 +7,7 @@ import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { PasswordInput } from '../components/ui/PasswordInput'
 import { Toast } from '../components/ui/Toast'
-import { requestOtp, registerWithPassword } from '../services/api'
+import { getGoogleLoginConfig, requestOtp, registerWithPassword } from '../services/api'
 import { useVisualViewport } from '../hooks/useVisualViewport'
 
 const MailIcon = (
@@ -38,7 +38,7 @@ const GiftIcon = (
 )
 
 export function RegisterPage() {
-  useTranslation()
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const setSession = useAuthStore((s) => s.setSession)
   const acceptLegalVersion = useAuthStore((s) => s.acceptLegalVersion)
@@ -52,6 +52,10 @@ export function RegisterPage() {
   const [inviteCode, setInviteCode] = useState('')
   const [ageConfirmed, setAgeConfirmed] = useState(false)
   const [agreed, setAgreed] = useState(false)
+  const [googleEnabled, setGoogleEnabled] = useState(false)
+  useEffect(() => {
+    if (international) getGoogleLoginConfig().then(value => setGoogleEnabled(value.enabled)).catch(() => setGoogleEnabled(false))
+  }, [])
   const [loading, setLoading] = useState(false)
   const [sending, setSending] = useState(false)
   const [cooldownEndAt, setCooldownEndAt] = useState(0)
@@ -201,6 +205,12 @@ export function RegisterPage() {
             </span>
           </label>
 
+          {googleEnabled && <button type="button" className="w-full min-h-11 rounded-xl border border-[var(--color-border-glass)] mb-3 text-[16px]" onClick={() => {
+            if (!ageConfirmed) return showToast(uiText('ui492'), 'error')
+            if (!agreed) return showToast(uiText('ui493'), 'error')
+            sessionStorage.setItem('yuoyuo-google-return', '/character')
+            window.location.assign('/api/auth/google/start')
+          }}>{t('continueWithGoogle')}</button>}
           <Button variant="primary" size="lg" loading={loading} disabled={loading} onClick={handleRegister}>
             {uiText('ui18')}</Button>
         </div>
