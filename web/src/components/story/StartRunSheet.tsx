@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next'
+import { uiText } from '../../i18n/text'
 import { useMemo, useState } from 'react'
 import type { PlayerTemplate, PlayerTemplateField } from '../../services/api'
 import { useStoryStore } from '../../stores/storyStore'
@@ -26,6 +28,7 @@ export function StartRunSheet({
   onClose,
   onStarted,
 }: StartRunSheetProps) {
+  useTranslation()
   const startRun = useStoryStore((s) => s.startRun)
   const showToast = useToastStore((s) => s.show)
   // Text/select/radio fields hold a string; checkbox fields hold a string[].
@@ -48,7 +51,7 @@ export function StartRunSheet({
     // Required-field validation before hitting the network.
     const missing = fields.filter((f) => f.required && !isFilled(f.key))
     if (missing.length > 0) {
-      showToast(`请填写：${missing.map((f) => f.label).join('、')}`, 'error')
+      showToast(uiText('dynamic9', { v0: missing.map((f) => f.label).join('、') }), 'error')
       return
     }
     // Drop empty optional values so the GM card stays clean.
@@ -69,8 +72,8 @@ export function StartRunSheet({
     } catch (e) {
       const msg =
         e instanceof ApiError && e.status === 403
-          ? '暂时无法开始这个剧情，请稍后重试'
-          : '开局失败，请稍后重试'
+          ? uiText('more122')
+          : uiText('more123')
       showToast(msg, 'error')
       setSubmitting(false)
     }
@@ -94,10 +97,9 @@ export function StartRunSheet({
         </div>
 
         <div className="px-5 pt-2 pb-3">
-          <h2 className="text-[19px] font-bold text-[var(--color-ink)]">创建你的主控</h2>
+          <h2 className="text-[19px] font-bold text-[var(--color-ink)]">{uiText('more124')}</h2>
           <p className="mt-1 text-[13px] text-[var(--color-text-muted)]">
-            进入《{scenarioTitle}》前，先告诉 GM 你在故事里是谁
-          </p>
+            {uiText('more125')}{scenarioTitle}{uiText('more126')}</p>
         </div>
 
         <div className="flex-1 overflow-y-auto px-5 pb-4 space-y-4">
@@ -117,7 +119,7 @@ export function StartRunSheet({
             disabled={submitting}
             className="w-full h-[52px] rounded-[26px] bg-[var(--color-primary)] text-white text-[16px] font-semibold shadow-[var(--shadow-btn)] active:scale-[0.98] transition-transform disabled:opacity-60"
           >
-            {submitting ? '正在生成开场…' : '进入剧情'}
+            {submitting ? uiText('more127') : uiText('more82')}
           </button>
         </div>
       </div>
@@ -134,6 +136,7 @@ function FieldInput({
   value: string | string[]
   onChange: (v: string | string[]) => void
 }) {
+  useTranslation()
   const label = (
     <label className="block text-[13px] font-semibold text-[var(--color-text-secondary)] mb-1.5">
       {field.label}
@@ -213,7 +216,7 @@ function FieldInput({
           onChange={(e) => onChange(e.target.value)}
           className={`${baseInput} h-[46px] appearance-none`}
         >
-          <option value="">请选择</option>
+          <option value="">{uiText('ui459')}</option>
           {(field.options ?? []).map((opt) => (
             <option key={opt} value={opt}>
               {opt}
@@ -232,7 +235,7 @@ function FieldInput({
           value={typeof value === 'string' ? value : ''}
           onChange={(e) => onChange(e.target.value)}
           rows={3}
-          placeholder={`描述你的${field.label}…`}
+          placeholder={uiText('dynamic10', { v0: field.label })}
           className={`${baseInput} py-2.5 resize-none min-h-[76px]`}
         />
       </div>
@@ -246,7 +249,7 @@ function FieldInput({
         type="text"
         value={typeof value === 'string' ? value : ''}
         onChange={(e) => onChange(e.target.value)}
-        placeholder={`填写${field.label}`}
+        placeholder={uiText('dynamic11', { v0: field.label })}
         className={`${baseInput} h-[46px]`}
       />
     </div>

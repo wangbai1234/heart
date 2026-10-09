@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next'
+import { uiText } from '../i18n/text'
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useStoryStore } from '../stores/storyStore'
@@ -16,6 +18,7 @@ import { useSafeBack } from '../hooks/useSafeBack'
  * 重新开始 / 开始剧情) and StartRunSheet.
  */
 export function ScenarioDetailPage() {
+  useTranslation()
   const navigate = useNavigate()
   const goBack = useSafeBack('/explore')
   const { scenarioId = '' } = useParams()
@@ -41,7 +44,7 @@ export function ScenarioDetailPage() {
         navigate('/wallet')
         return
       }
-      setUnlockError(err instanceof Error ? err.message : '解锁失败，请稍后再试')
+      setUnlockError(err instanceof Error ? err.message : uiText('more314'))
     } finally {
       setUnlocking(false)
     }
@@ -62,7 +65,7 @@ export function ScenarioDetailPage() {
   const backButton = (
     <button
       onClick={goBack}
-      aria-label="返回"
+      aria-label={uiText('ui127')}
       className="absolute left-4 z-20 w-[38px] h-[38px] rounded-full bg-black/30 backdrop-blur-[8px] flex items-center justify-center active:scale-[0.95] transition-transform"
       style={{ top: 'calc(var(--safe-top) + 8px)' }}
     >
@@ -81,8 +84,8 @@ export function ScenarioDetailPage() {
       ) : detailError && !scenario ? (
         <div className="pt-32 px-4">
           <ErrorState
-            title="加载失败"
-            description="剧情详情没能加载出来。"
+            title={uiText('more274')}
+            description={uiText('more315')}
             onRetry={() => void loadScenario(scenarioId, true)}
           />
         </div>
@@ -108,8 +111,7 @@ export function ScenarioDetailPage() {
                 {scenario.genre}
               </span>
               <span className="inline-flex h-[26px] items-center rounded-full bg-[var(--color-glass-75)] border border-[var(--color-border-glass)] px-3 text-[12px] font-medium text-[var(--color-text-secondary)] tabular-nums">
-                <svg className="inline-block mr-0.5" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg> {scenario.play_count} 人玩过
-              </span>
+                <svg className="inline-block mr-0.5" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg> {scenario.play_count} {uiText('more277')}</span>
             </div>
 
             <h1 className="mt-3 text-[26px] font-bold text-[var(--color-ink)] leading-tight">
@@ -120,10 +122,9 @@ export function ScenarioDetailPage() {
             <div className="mt-4 rounded-[22px] bg-[var(--color-glass-75)] border border-[var(--color-border-glass)] p-5">
               <div className="flex items-center gap-2 text-[13px] font-medium text-[var(--color-primary)]">
                 <span className="inline-block w-[3px] h-[14px] rounded-full bg-[var(--color-primary)]" />
-                剧情简介
-              </div>
+                {uiText('more316')}</div>
               <p className="mt-3 text-[15px] leading-[1.7] text-[var(--color-text-secondary)] whitespace-pre-line">
-                {scenario.blurb || '（暂无简介）'}
+                {scenario.blurb || uiText('more317')}
               </p>
             </div>
           </div>
@@ -143,14 +144,13 @@ export function ScenarioDetailPage() {
             {!scenario.unlocked ? (
               <>
                 <p className="mb-2 text-center text-[12px] text-[var(--color-text-muted)]">
-                  一次性解锁 · 解锁后 {scenario.minute_cost_coins} 悠悠币/分钟
-                </p>
+                  {uiText('more318')}{scenario.minute_cost_coins} {uiText('more319')}</p>
                 <button
                   onClick={handleUnlock}
                   disabled={unlocking}
                   className="w-full h-[52px] rounded-[26px] bg-gradient-to-r from-[#FFB7C5] to-[#FF8FAB] text-white text-[16px] font-semibold shadow-[var(--shadow-btn)] active:scale-[0.97] transition-transform disabled:opacity-60"
                 >
-                  {unlocking ? '解锁中…' : `解锁 · ${scenario.unlock_cost_coins} 悠悠币`}
+                  {unlocking ? uiText('more320') : uiText('dynamic34', { v0: scenario.unlock_cost_coins })}
                 </button>
               </>
             ) : activeRun ? (
@@ -159,22 +159,19 @@ export function ScenarioDetailPage() {
                   onClick={() => setSheetOpen(true)}
                   className="h-[52px] flex-1 rounded-[26px] bg-[var(--color-glass-75)] backdrop-blur-[12px] border border-[var(--color-border-glass)] text-[var(--color-ink)] text-[16px] font-semibold active:scale-[0.97] transition-transform"
                 >
-                  重新开始
-                </button>
+                  {uiText('ui110')}</button>
                 <button
                   onClick={() => navigate(`/story/${activeRun.run_id}`)}
                   className="h-[52px] flex-[1.4] rounded-[26px] bg-gradient-to-r from-[#FFB7C5] to-[#FF8FAB] text-white text-[16px] font-semibold shadow-[var(--shadow-btn)] active:scale-[0.97] transition-transform"
                 >
-                  继续游玩
-                </button>
+                  {uiText('more279')}</button>
               </div>
             ) : (
               <button
                 onClick={() => setSheetOpen(true)}
                 className="w-full h-[52px] rounded-[26px] bg-gradient-to-r from-[#FFB7C5] to-[#FF8FAB] text-white text-[16px] font-semibold shadow-[var(--shadow-btn)] active:scale-[0.97] transition-transform"
               >
-                开始剧情
-              </button>
+                {uiText('more321')}</button>
             )}
           </div>
         </>
@@ -194,6 +191,7 @@ export function ScenarioDetailPage() {
 }
 
 function DetailSkeleton() {
+  useTranslation()
   return (
     <>
       <Skeleton className="w-full h-[62vh] min-h-[380px] rounded-none" />

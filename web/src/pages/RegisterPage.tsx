@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next'
+import { international, uiText } from '../i18n/text'
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate, Link, useSearchParams } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
@@ -5,7 +7,7 @@ import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { PasswordInput } from '../components/ui/PasswordInput'
 import { Toast } from '../components/ui/Toast'
-import { requestOtp, registerWithPassword } from '../services/api'
+import { getGoogleLoginConfig, requestOtp, registerWithPassword } from '../services/api'
 import { useVisualViewport } from '../hooks/useVisualViewport'
 
 const MailIcon = (
@@ -36,6 +38,7 @@ const GiftIcon = (
 )
 
 export function RegisterPage() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const setSession = useAuthStore((s) => s.setSession)
   const acceptLegalVersion = useAuthStore((s) => s.acceptLegalVersion)
@@ -49,6 +52,10 @@ export function RegisterPage() {
   const [inviteCode, setInviteCode] = useState('')
   const [ageConfirmed, setAgeConfirmed] = useState(false)
   const [agreed, setAgreed] = useState(false)
+  const [googleEnabled, setGoogleEnabled] = useState(false)
+  useEffect(() => {
+    if (international) getGoogleLoginConfig().then(value => setGoogleEnabled(value.enabled)).catch(() => setGoogleEnabled(false))
+  }, [])
   const [loading, setLoading] = useState(false)
   const [sending, setSending] = useState(false)
   const [cooldownEndAt, setCooldownEndAt] = useState(0)
@@ -78,7 +85,7 @@ export function RegisterPage() {
 
   const handleSendCode = useCallback(async () => {
     if (!isValidEmail) {
-      showToast('请输入有效的邮箱', 'error')
+      showToast(uiText('ui0'), 'error')
       return
     }
     if (cooldown > 0 || sending) return
@@ -86,9 +93,9 @@ export function RegisterPage() {
     try {
       const res = await requestOtp(email.trim().toLowerCase(), 'register')
       setCooldownEndAt(Date.now() + res.cooldown * 1000)
-      showToast('验证码已发送', 'success')
+      showToast(uiText('ui5'), 'success')
     } catch {
-      showToast('发送失败，请重试', 'error')
+      showToast(uiText('ui7'), 'error')
     } finally {
       setSending(false)
     }
@@ -96,12 +103,12 @@ export function RegisterPage() {
 
   const handleRegister = async () => {
     if (loading) return
-    if (!isValidEmail) return showToast('请输入有效的邮箱', 'error')
-    if (code.trim().length !== 6) return showToast('请输入 6 位验证码', 'error')
-    if (password.length < 8) return showToast('密码至少 8 位', 'error')
-    if (password !== confirm) return showToast('两次输入的密码不一致', 'error')
-    if (!ageConfirmed) return showToast('请先确认你已年满 18 周岁', 'error')
-    if (!agreed) return showToast('请先同意用户协议与隐私政策', 'error')
+    if (!isValidEmail) return showToast(uiText('ui0'), 'error')
+    if (code.trim().length !== 6) return showToast(uiText('ui8'), 'error')
+    if (password.length < 8) return showToast(uiText('ui10'), 'error')
+    if (password !== confirm) return showToast(uiText('ui11'), 'error')
+    if (!ageConfirmed) return showToast(uiText('ui492'), 'error')
+    if (!agreed) return showToast(uiText('ui493'), 'error')
 
     setLoading(true)
     try {
@@ -120,7 +127,7 @@ export function RegisterPage() {
         navigate('/character', { replace: true })
       }
     } catch (err: unknown) {
-      showToast(err instanceof Error ? err.message : '注册失败，请重试', 'error')
+      showToast(err instanceof Error ? err.message : uiText('ui12'), 'error')
     } finally {
       setLoading(false)
     }
@@ -132,15 +139,14 @@ export function RegisterPage() {
         {/* Brand */}
         <div className="text-center mb-5">
           <h1 className="text-[32px] font-bold text-[var(--color-ink)] tracking-[0.02em] font-brand">
-            创建账号
-          </h1>
-          <p className="text-[14px] text-[var(--color-text-muted)] mt-1">加入 yuoyuo，开启你的虚拟宇宙</p>
+            {uiText('ui494')}</h1>
+          <p className="text-[14px] text-[var(--color-text-muted)] mt-1">{uiText('ui495')}</p>
         </div>
 
         {/* Form card */}
         <div className="bg-[var(--color-glass-75)] backdrop-blur-[20px] rounded-[24px] border border-[var(--color-border-glass)] shadow-[var(--shadow-hero)] p-5 mb-4">
           <div className="divide-y divide-[var(--color-divider-inset)]">
-            <Input icon={MailIcon} placeholder="邮箱" value={email} onChange={setEmail} type="email" />
+            <Input icon={MailIcon} placeholder={uiText('ui22')} value={email} onChange={setEmail} type="email" />
 
             {/* Code + send button */}
             <div className="flex items-center gap-3 py-3">
@@ -151,7 +157,7 @@ export function RegisterPage() {
                 maxLength={6}
                 value={code}
                 onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                placeholder="6 位验证码"
+                placeholder={uiText('ui42')}
                 className="flex-1 min-w-0 bg-transparent outline-none text-[var(--color-ink)] placeholder-[var(--color-text-placeholder)] text-base"
               />
               <button
@@ -160,18 +166,17 @@ export function RegisterPage() {
                 disabled={cooldown > 0 || sending || !isValidEmail}
                 className="shrink-0 text-[13px] font-medium text-[var(--color-primary)] disabled:text-[var(--color-text-muted)] active:opacity-60"
               >
-                {cooldown > 0 ? `${cooldown}s` : sending ? '发送中…' : '获取验证码'}
+                {cooldown > 0 ? `${cooldown}s` : sending ? uiText('ui496') : uiText('ui43')}
               </button>
             </div>
 
-            <PasswordInput icon={LockIcon} placeholder="设置密码（至少 8 位）" value={password} onChange={setPassword} autoComplete="new-password" />
-            <PasswordInput icon={LockIcon} placeholder="确认密码" value={confirm} onChange={setConfirm} autoComplete="new-password" />
-            <Input icon={GiftIcon} placeholder="邀请码（选填）" value={inviteCode} onChange={setInviteCode} />
+            <PasswordInput icon={LockIcon} placeholder={uiText('ui27')} value={password} onChange={setPassword} autoComplete="new-password" />
+            <PasswordInput icon={LockIcon} placeholder={uiText('ui28')} value={confirm} onChange={setConfirm} autoComplete="new-password" />
+            <Input icon={GiftIcon} placeholder={uiText('ui29')} value={inviteCode} onChange={setInviteCode} />
           </div>
 
           <p className="text-xs text-[var(--color-text-muted)] mt-2 px-1">
-            验证码为 6 位数字；密码至少 8 位。推荐使用 QQ 邮箱注册，验证码会以 QQ 通知形式送达，无需另开邮箱。
-          </p>
+            {uiText('ui497')}</p>
 
           {/* Age (18+) confirmation — required */}
           <label className="flex items-start gap-2 mt-4 mb-3 cursor-pointer">
@@ -182,10 +187,8 @@ export function RegisterPage() {
               className="mt-[3px] w-4 h-4 shrink-0 accent-[var(--color-primary)]"
             />
             <span className="text-[12px] text-[var(--color-text-secondary)] leading-[1.6]">
-              我确认本人已<span className="font-semibold text-[var(--color-ink)]">年满 18 周岁</span>，并已阅读
-              <Link to="/legal/age" className="text-[var(--color-primary)]">《年满18周岁确认》</Link>
-              。本产品仅供成年人使用。
-            </span>
+              {uiText('ui498')}<span className="font-semibold text-[var(--color-ink)]">{uiText('ui367')}</span>{uiText('ui499')}<Link to="/legal/age" className="text-[var(--color-primary)]">{uiText('ui296')}</Link>
+              {uiText('ui500')}</span>
           </label>
 
           {/* Legal checkbox */}
@@ -197,21 +200,23 @@ export function RegisterPage() {
               className="mt-[3px] w-4 h-4 shrink-0 accent-[var(--color-primary)]"
             />
             <span className="text-[12px] text-[var(--color-text-secondary)] leading-[1.6]">
-              我已阅读并同意
-              <Link to="/legal/terms" className="text-[var(--color-primary)]">《用户协议》</Link>
-              与
-              <Link to="/legal/privacy" className="text-[var(--color-primary)]">《隐私政策》</Link>
+              {uiText('ui32')}<Link to="/legal/terms" className="text-[var(--color-primary)]">{uiText('ui33')}</Link>
+              {uiText('ui370')}<Link to="/legal/privacy" className="text-[var(--color-primary)]">{uiText('ui35')}</Link>
             </span>
           </label>
 
+          {googleEnabled && <button type="button" className="w-full min-h-11 rounded-xl border border-[var(--color-border-glass)] mb-3 text-[16px]" onClick={() => {
+            if (!ageConfirmed) return showToast(uiText('ui492'), 'error')
+            if (!agreed) return showToast(uiText('ui493'), 'error')
+            sessionStorage.setItem('yuoyuo-google-return', '/character')
+            window.location.assign('/api/auth/google/start')
+          }}>{t('continueWithGoogle')}</button>}
           <Button variant="primary" size="lg" loading={loading} disabled={loading} onClick={handleRegister}>
-            注册
-          </Button>
+            {uiText('ui18')}</Button>
         </div>
 
         <p className="text-center text-[13px] text-[var(--color-text-secondary)] mb-6">
-          已有账号？
-          <Link to="/login" className="text-[var(--color-primary)] font-medium">去登录</Link>
+          {uiText('ui501')}<Link to="/login" className="text-[var(--color-primary)] font-medium">{uiText('ui502')}</Link>
         </p>
       </div>
 

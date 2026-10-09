@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next'
+import { uiText } from '../i18n/text'
 import { useEffect, useId, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AppPageContent, AppPageShell } from '../components/ui/AppPageShell'
@@ -9,6 +11,7 @@ const PLATFORM_LABELS = { douyin: '抖音', xiaohongshu: '小红书' } as const
 const MAX_SCREENSHOT_BYTES = 8 * 1024 * 1024
 
 export function PromotionPage() {
+  useTranslation()
   const [data, setData] = useState<PromotionStatus | null>(null)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
@@ -83,7 +86,7 @@ export function PromotionPage() {
       setTitle('')
       await refresh()
     } catch (error) {
-      showToast(error instanceof Error ? error.message : '提交失败', 'error')
+      showToast(error instanceof Error ? error.message : uiText('more403'), 'error')
     } finally {
       setBusy(false)
     }
@@ -108,7 +111,7 @@ export function PromotionPage() {
       resetFile()
       await refresh()
     } catch (error) {
-      showToast(error instanceof Error ? error.message : '提交失败', 'error')
+      showToast(error instanceof Error ? error.message : uiText('more403'), 'error')
     } finally {
       setBusy(false)
     }
@@ -223,7 +226,7 @@ export function PromotionPage() {
               />
               <ScreenshotUpload key={`milestone-${fileInputVersion}`} file={file} onFile={selectFile} title="上传最新点赞截图" required />
               <div className="mt-4 grid grid-cols-2 gap-2">
-                <button type="button" onClick={() => { setMilestoneSource(null); resetFile() }} className="h-[44px] rounded-[8px] bg-[var(--color-page-soft)] text-[13px] text-[var(--color-ink)]">取消</button>
+                <button type="button" onClick={() => { setMilestoneSource(null); resetFile() }} className="h-[44px] rounded-[8px] bg-[var(--color-page-soft)] text-[13px] text-[var(--color-ink)]">{uiText('ui108')}</button>
                 <button type="button" disabled={busy} onClick={() => void submitLikes()} className="h-[44px] rounded-[8px] bg-[var(--color-primary-500)] text-[13px] font-semibold text-white disabled:opacity-50">提交核验</button>
               </div>
             </section>
@@ -269,6 +272,7 @@ export function PromotionPage() {
 }
 
 function AmbassadorGuide() {
+  useTranslation()
   return (
     <div className="mt-5">
       <RewardSummary eyebrow="每日安利任务" value="+20 币" description="每条有效安利审核通过后自动到账" />
@@ -294,6 +298,7 @@ function AmbassadorGuide() {
 }
 
 function CreatorGuide() {
+  useTranslation()
   return (
     <div className="mt-5">
       <RewardSummary eyebrow="原创作品任务" value="+100 币" description="每篇有效原创作品审核通过后自动到账" />
@@ -326,6 +331,7 @@ function CreatorGuide() {
 }
 
 function RewardSummary({ eyebrow, value, description }: { eyebrow: string; value: string; description: string }) {
+  useTranslation()
   return (
     <div className="border-l-4 border-[var(--color-primary-500)] bg-[var(--color-primary-50)]/45 px-4 py-3.5">
       <p className="text-[11px] font-semibold text-[var(--color-text-secondary)]">{eyebrow}</p>
@@ -338,6 +344,7 @@ function RewardSummary({ eyebrow, value, description }: { eyebrow: string; value
 }
 
 function GuideHeading({ title }: { title: string }) {
+  useTranslation()
   return (
     <div className="mt-5 flex items-center gap-2">
       <span className="h-4 w-[3px] bg-[var(--color-primary-500)]" aria-hidden="true" />
@@ -347,6 +354,7 @@ function GuideHeading({ title }: { title: string }) {
 }
 
 function GuideStep({ number, title, children }: { number: string; title: string; children: string }) {
+  useTranslation()
   return (
     <div className="grid grid-cols-[30px_minmax(0,1fr)] gap-2 py-3.5">
       <span className="pt-0.5 text-[11px] font-bold text-[var(--color-primary-600)]">{number}</span>
@@ -359,6 +367,7 @@ function GuideStep({ number, title, children }: { number: string; title: string;
 }
 
 function RuleNote({ lines }: { lines: string[] }) {
+  useTranslation()
   return (
     <div className="mt-3 border-l-2 border-[var(--color-secondary)] bg-[var(--color-page-soft)]/60 px-3 py-3">
       <p className="text-[12px] font-semibold text-[var(--color-ink)]">审核说明</p>
@@ -370,6 +379,7 @@ function RuleNote({ lines }: { lines: string[] }) {
 }
 
 function TaskTab({ active, onClick, children }: { active: boolean; onClick: () => void; children: string }) {
+  useTranslation()
   return (
     <button
       type="button"
@@ -384,6 +394,7 @@ function TaskTab({ active, onClick, children }: { active: boolean; onClick: () =
 }
 
 function RewardMetric({ value, label }: { value: string; label: string }) {
+  useTranslation()
   return (
     <div className="px-1">
       <strong className="block text-[17px] font-bold text-[var(--color-ink)]">{value}</strong>
@@ -393,6 +404,7 @@ function RewardMetric({ value, label }: { value: string; label: string }) {
 }
 
 function MilestoneRow({ value, reward }: { value: string; reward: string }) {
+  useTranslation()
   return (
     <div className="flex items-center justify-between gap-3 py-3">
       <strong className="text-[14px] text-[var(--color-primary-600)]">{value}</strong>
@@ -407,6 +419,7 @@ function ScreenshotUpload({ file, onFile, title, required = false }: {
   title: string
   required?: boolean
 }) {
+  useTranslation()
   const inputId = useId()
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
 
@@ -450,8 +463,9 @@ function ScreenshotUpload({ file, onFile, title, required = false }: {
 }
 
 function SubmissionRow({ item, onMilestone }: { item: PromotionSubmission; onMilestone: () => void }) {
+  useTranslation()
   const task = item.task_type === 'ambassador' ? '安利截图' : item.task_type === 'creator' ? '原创作品' : '点赞核验'
-  const status = { pending: '审核中', approved: '已通过', needs_info: '待补充', rejected: '未通过' }[item.status]
+  const status = { get pending() { return uiText('ui48') }, get approved() { return uiText('ui371') }, needs_info: '待补充', get rejected() { return uiText('ui372') } }[item.status]
   return (
     <div className="flex items-center justify-between gap-3 py-3">
       <div className="min-w-0">

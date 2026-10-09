@@ -1,7 +1,11 @@
+import { lazy, Suspense } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
-import { App } from './App'
+import { initializeLocale } from './i18n'
+const App = lazy(() => import('./App').then(m => ({ default: m.App })))
 import './index.css'
+
+if (import.meta.env.VITE_INTERNATIONAL === 'true') document.documentElement.dataset.mobileShell = 'true'
 
 // Dev-mode service worker cleanup. In dev vite-plugin-pwa never registers a
 // SW (devOptions.enabled defaults to false), but a stale SW from a prior
@@ -42,8 +46,8 @@ if (import.meta.env.DEV && 'serviceWorker' in navigator) {
 // StrictMode disabled: voice streaming playback triggers MSE SourceBuffer
 // residual reuse under dev double-mount. Re-enable once player lifecycle
 // is fully idempotent.
-createRoot(document.getElementById('root')!).render(
+void initializeLocale().then(() => createRoot(document.getElementById('root')!).render(
   <BrowserRouter>
-    <App />
+    <Suspense fallback={<div role="status">yuoyuo</div>}><App /></Suspense>
   </BrowserRouter>,
-)
+))

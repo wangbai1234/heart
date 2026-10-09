@@ -1,3 +1,7 @@
+import i18n, { supportedLocale } from '../i18n'
+import { CharacterLanguageFields, type CharacterLanguage } from '../components/create/CharacterLanguageFields'
+import { useTranslation } from 'react-i18next'
+import { uiText } from '../i18n/text'
 import { useState, useEffect, useRef } from 'react'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { useThemeStore } from '../stores/themeStore'
@@ -19,6 +23,8 @@ import { THEME_PRESETS, getThemePresetById } from '../data/characterThemePresets
 import { VoicePickerSheet, type VoiceSelection } from '../components/VoicePickerSheet'
 
 interface BaseInfo {
+  language?: CharacterLanguage
+  worldBook?: string
   coverUrl: string
   name: string
   gender: 'male' | 'female'
@@ -31,20 +37,20 @@ interface LocationState {
 }
 
 const GREETING_STYLE_LABELS: Record<string, string> = {
-  warm: '温暖',
-  cool: '冷淡',
-  playful: '俏皮',
-  reserved: '含蓄',
-  intense: '热烈',
+  get warm() { return uiText('ui402') },
+  get cool() { return uiText('ui403') },
+  get playful() { return uiText('ui404') },
+  get reserved() { return uiText('ui405') },
+  get intense() { return uiText('ui406') },
 }
 
 const SLIDER_LABELS: Record<string, string> = {
-  warmth: '温暖度',
-  talkativeness: '健谈度',
-  directness: '直接度',
-  humor: '幽默感',
-  playfulness: '俏皮度',
-  steadiness: '沉稳度',
+  get warmth() { return uiText('ui407') },
+  get talkativeness() { return uiText('ui408') },
+  get directness() { return uiText('ui409') },
+  get humor() { return uiText('ui410') },
+  get playfulness() { return uiText('ui411') },
+  get steadiness() { return uiText('ui412') },
 }
 
 const MAX_REGENERATE = 3
@@ -69,6 +75,7 @@ function isAbortError(error: unknown): boolean {
  * 下层折叠: 年龄段、相处风格、六个滑块、口癖
  */
 export function QuickConfirmPage() {
+  useTranslation()
   const navigate = useNavigate()
   const location = useLocation()
   const [searchParams] = useSearchParams()
@@ -90,6 +97,10 @@ export function QuickConfirmPage() {
   const [name, setName] = useState(navBase?.name ?? '')
   const [gender, setGender] = useState<'male' | 'female'>(navBase?.gender ?? 'female')
   const [persona, setPersona] = useState(navBase?.persona ?? '')
+  const [language, setLanguage] = useState<CharacterLanguage>(navBase?.language ?? supportedLocale(i18n.language))
+  const [worldBook, setWorldBook] = useState(navBase?.worldBook ?? '')
+  const [castType, setCastType] = useState<'single' | 'multiple'>('single')
+  const [contentRating, setContentRating] = useState<'general' | 'mature'>('general')
   const [uploadingCover, setUploadingCover] = useState(false)
 
   const [opening, setOpening] = useState(initialPrefill?.opening ?? '')
@@ -134,9 +145,13 @@ export function QuickConfirmPage() {
       .then((draft) => {
         if (cancelled) return
         setCoverUrl(draft.cover_url ?? '')
-        setName(draft.display_name?.zh ?? '')
+        setName(draft.display_name?.zh ?? draft.display_name?.en ?? draft.display_name?.ja ?? draft.display_name?.ko ?? '')
         if (draft.gender) setGender(draft.gender)
         setPersona(draft.persona ?? '')
+        setLanguage(draft.response_language ?? supportedLocale(draft.locale ?? i18n.language))
+        setWorldBook(draft.world_book ?? '')
+        setCastType(draft.cast_type ?? 'single')
+        setContentRating(draft.content_rating ?? 'general')
         setOpening(draft.opening ?? '')
         setAgeRange(draft.age_range ?? '')
         setGreetingStyle(draft.greeting_style ?? 'warm')
@@ -156,7 +171,7 @@ export function QuickConfirmPage() {
         if (matched) setThemeId(matched.id)
       })
       .catch((err) => {
-        showToast(err instanceof ApiError ? err.message : '加载角色数据失败', 'error')
+        showToast(err instanceof ApiError ? err.message : uiText('ui413'), 'error')
       })
       .finally(() => {
         if (!cancelled) setLoadingDraft(false)
@@ -186,14 +201,12 @@ export function QuickConfirmPage() {
       <div className="w-full h-full flex items-center justify-center px-6 text-center">
         <div>
           <p className="text-[15px] text-[var(--color-text-secondary)] mb-4">
-            页面数据丢失，请重新开始快速创建
-          </p>
+            {uiText('ui414')}</p>
           <button
             onClick={() => navigate('/characters/new/quick')}
             className="h-[44px] px-6 rounded-full bg-gradient-to-r from-[#FFB7C5] to-[#FF8FAB] text-white text-[15px] font-semibold"
           >
-            返回
-          </button>
+            {uiText('ui127')}</button>
         </div>
       </div>
     )
@@ -202,8 +215,7 @@ export function QuickConfirmPage() {
   if (loadingDraft) {
     return (
       <div className="w-full h-full flex items-center justify-center text-[14px] text-[var(--color-text-secondary)]">
-        加载中...
-      </div>
+        {uiText('ui415')}</div>
     )
   }
 
@@ -216,7 +228,7 @@ export function QuickConfirmPage() {
       const { cover_url } = await uploadCharacterCover(compressed)
       setCoverUrl(cover_url)
     } catch (err) {
-      showToast(err instanceof ApiError ? err.message : '封面上传失败，请重试', 'error')
+      showToast(err instanceof ApiError ? err.message : uiText('ui416'), 'error')
     } finally {
       setUploadingCover(false)
     }
@@ -224,11 +236,11 @@ export function QuickConfirmPage() {
 
   async function handleRegenerate() {
     if (regenerateCount >= MAX_REGENERATE) {
-      showToast('重新生成次数已用完，可手动修改开场白', 'error')
+      showToast(uiText('ui417'), 'error')
       return
     }
     if (!name.trim() || !persona.trim()) {
-      showToast('请先填写名字和角色描述', 'error')
+      showToast(uiText('ui418'), 'error')
       return
     }
 
@@ -239,8 +251,8 @@ export function QuickConfirmPage() {
       setRegenerateCount((c) => c + 1)
     } catch (err) {
       const msg = isAbortError(err)
-        ? '生成超时或已取消，请重试'
-        : err instanceof ApiError ? err.message : '重新生成失败，请稍后再试'
+        ? uiText('ui419')
+        : err instanceof ApiError ? err.message : uiText('ui420')
       showToast(msg, 'error')
     } finally {
       setRegenerating(false)
@@ -253,7 +265,7 @@ export function QuickConfirmPage() {
     prefillAbortRef.current = controller
     const timer = window.setTimeout(() => controller.abort(), PREFILL_CLIENT_TIMEOUT_MS)
     try {
-      return await quickPrefill({ display_name: name, gender, persona }, controller.signal)
+      return await quickPrefill({ display_name: name, gender, persona, response_language: language }, controller.signal)
     } finally {
       window.clearTimeout(timer)
       if (prefillAbortRef.current === controller) prefillAbortRef.current = null
@@ -262,11 +274,11 @@ export function QuickConfirmPage() {
 
   async function handleEnrich() {
     if (regenerateCount >= MAX_REGENERATE) {
-      showToast('AI 完善次数已用完，仍可手动修改设定', 'error')
+      showToast(uiText('ui421'), 'error')
       return
     }
     if (!name.trim() || persona.trim().length < 20) {
-      showToast('请先填写名字和至少 20 字的角色描述', 'error')
+      showToast(uiText('ui422'), 'error')
       return
     }
 
@@ -288,11 +300,11 @@ export function QuickConfirmPage() {
       setOpening(result.opening)
       setThemeId(result.theme_preset_id)
       setRegenerateCount((count) => count + 1)
-      showToast('角色档案已完善，请确认后保存', 'success')
+      showToast(uiText('ui423'), 'success')
     } catch (err) {
       const message = isAbortError(err)
-        ? 'AI 完善超时或已取消，请重试'
-        : err instanceof ApiError ? err.message : 'AI 完善失败，请稍后再试'
+        ? uiText('ui424')
+        : err instanceof ApiError ? err.message : uiText('ui425')
       showToast(message, 'error')
     } finally {
       setEnriching(false)
@@ -301,19 +313,19 @@ export function QuickConfirmPage() {
 
   async function handleCreate() {
     if (!coverUrl) {
-      showToast('请上传角色封面', 'error')
+      showToast(uiText('ui426'), 'error')
       return
     }
     if (!name.trim()) {
-      showToast('请填写角色名字', 'error')
+      showToast(uiText('ui427'), 'error')
       return
     }
     if (persona.trim().length < 20) {
-      showToast('角色描述至少 20 字', 'error')
+      showToast(uiText('ui428'), 'error')
       return
     }
     if (!opening.trim()) {
-      showToast('开场白不能为空', 'error')
+      showToast(uiText('ui429'), 'error')
       return
     }
 
@@ -326,6 +338,11 @@ export function QuickConfirmPage() {
         cover_url: coverUrl,
         gender,
         persona,
+        response_language: language,
+        locale: language,
+        world_book: worldBook,
+        cast_type: castType,
+        content_rating: contentRating,
         tagline: tagline.trim() || undefined,
         intro: intro.trim() || undefined,
         one_liner: oneLiner.trim() || undefined,
@@ -370,10 +387,10 @@ export function QuickConfirmPage() {
       // Force a post-create snapshot so the new character is present when the
       // user later returns to「我的」, even if an older request was cached.
       await reloadCharacters(true)
-      showToast(isEdit ? '修改已保存' : '角色创建成功', 'success')
+      showToast(isEdit ? uiText('ui430') : uiText('ui431'), 'success')
       navigate(`/character/${targetId}`, { replace: true, state: { fromCreate: true } })
     } catch (err) {
-      const msg = err instanceof ApiError ? err.message : isEdit ? '保存失败，请重试' : '创建失败，请重试'
+      const msg = err instanceof ApiError ? err.message : isEdit ? uiText('ui432') : uiText('ui433')
       showToast(msg, 'error')
     } finally {
       setCreating(false)
@@ -383,15 +400,15 @@ export function QuickConfirmPage() {
   const summaryLine = [
     ageRange,
     GREETING_STYLE_LABELS[greetingStyle] ?? greetingStyle,
-    `${splitTags(tagsText).length} 个标签`,
-    `${catchphrases.length} 条口癖`,
+    uiText('dynamic29', { v0: splitTags(tagsText).length }),
+    uiText('dynamic30', { v0: catchphrases.length }),
   ].join(' · ')
 
   const enrichingLabel = enrichingElapsed < 5
-    ? '正在构建角色档案...'
+    ? uiText('ui434')
     : enrichingElapsed < 10
-      ? '正在完善人物经历与语言风格...'
-      : '当前模型响应较慢，正在尝试备用模型...'
+      ? uiText('ui435')
+      : uiText('ui436')
 
   return (
     <div
@@ -410,7 +427,7 @@ export function QuickConfirmPage() {
           </svg>
         </button>
         <span className="flex-1 text-center text-[17px] font-semibold text-[var(--color-ink)] -ml-[28px]">
-          {isEdit ? '编辑角色' : '确认创建'}
+          {isEdit ? uiText('ui55') : uiText('ui437')}
         </span>
       </nav>
 
@@ -418,7 +435,7 @@ export function QuickConfirmPage() {
         {/* 基础信息 —— 封面 / 名字 / 性别 / 角色描述（编辑页需可改） */}
         <div className="mb-6 space-y-4">
           <div>
-            <label className="block text-[14px] font-medium text-[var(--color-ink)] mb-2">角色封面</label>
+            <label className="block text-[14px] font-medium text-[var(--color-ink)] mb-2">{uiText('ui438')}</label>
             <div className="flex gap-3.5">
               <label
                 className={`relative shrink-0 w-[104px] h-[140px] rounded-[12px] cursor-pointer overflow-hidden ${
@@ -426,40 +443,40 @@ export function QuickConfirmPage() {
                 }`}
               >
                 {uploadingCover ? (
-                  <div className="w-full h-full flex items-center justify-center text-[12px] text-[var(--color-text-secondary)]">上传中</div>
+                  <div className="w-full h-full flex items-center justify-center text-[12px] text-[var(--color-text-secondary)]">{uiText('ui439')}</div>
                 ) : coverUrl ? (
-                  <img src={coverUrl} alt="封面" className="w-full h-full object-cover" />
+                  <img src={coverUrl} alt={uiText('ui440')} className="w-full h-full object-cover" />
                 ) : (
                   <div className="w-full h-full flex flex-col items-center justify-center gap-1.5">
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--color-text-muted)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M12 5v14M5 12h14" />
                     </svg>
-                    <span className="text-[12px] text-[var(--color-text-muted)]">上传图片</span>
+                    <span className="text-[12px] text-[var(--color-text-muted)]">{uiText('ui441')}</span>
                   </div>
                 )}
                 <input type="file" accept="image/*" onChange={handleCoverUpload} className="hidden" />
               </label>
               <ul className="flex-1 text-[12px] leading-[1.6] text-[var(--color-text-muted)] space-y-1.5 pt-0.5">
-                <li>· 建议上传 3:4 或 9:16 竖图，人物居中</li>
-                <li>· 图片同时用作封面和聊天背景</li>
-                <li>· 点击封面可替换</li>
+                <li>{uiText('ui442')}</li>
+                <li>{uiText('ui443')}</li>
+                <li>{uiText('ui444')}</li>
               </ul>
             </div>
           </div>
 
           <div>
-            <label className="block text-[14px] font-medium text-[var(--color-ink)] mb-2">角色名字</label>
+            <label className="block text-[14px] font-medium text-[var(--color-ink)] mb-2">{uiText('ui445')}</label>
             <input
               value={name}
               onChange={(e) => setName(e.target.value.slice(0, 20))}
-              placeholder="给 Ta 起个名字"
+              placeholder={uiText('ui446')}
               maxLength={20}
               className="w-full h-[44px] px-4 rounded-[12px] text-[15px] bg-[var(--color-glass-55)] border border-[var(--color-border-glass)] text-[var(--color-ink)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-primary)] transition-colors"
             />
           </div>
 
           <div>
-            <label className="block text-[14px] font-medium text-[var(--color-ink)] mb-2">性别</label>
+            <label className="block text-[14px] font-medium text-[var(--color-ink)] mb-2">{uiText('ui398')}</label>
             <div className="flex gap-2.5">
               {(['male', 'female'] as const).map((g) => (
                 <button
@@ -471,45 +488,47 @@ export function QuickConfirmPage() {
                       : 'bg-[var(--color-glass-55)] border border-[var(--color-border-glass)] text-[var(--color-ink)]'
                   }`}
                 >
-                  {g === 'male' ? '男' : '女'}
+                  {g === 'male' ? uiText('ui381') : uiText('ui380')}
                 </button>
               ))}
             </div>
           </div>
 
           <div>
-            <label className="block text-[14px] font-medium text-[var(--color-ink)] mb-2">角色描述</label>
+            <label className="block text-[14px] font-medium text-[var(--color-ink)] mb-2">{uiText('ui447')}</label>
             <textarea
               value={persona}
               onChange={(e) => setPersona(e.target.value.slice(0, 5000))}
-              placeholder="一句话介绍你的角色，包括性格、背景、说话方式。"
+              placeholder={uiText('ui448')}
               maxLength={5000}
               rows={4}
               className="w-full px-3.5 py-2.5 rounded-[12px] text-[14px] leading-[1.6] resize-none bg-[var(--color-glass-55)] border border-[var(--color-border-glass)] text-[var(--color-ink)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-primary)] transition-colors"
             />
             <div className="mt-1 flex items-center justify-between text-[12px]">
               <span className={persona.length > 0 && persona.length < 20 ? 'text-[var(--color-error)]' : 'text-transparent'}>
-                {persona.length > 0 && persona.length < 20 ? `还需 ${20 - persona.length} 字` : '·'}
+                {persona.length > 0 && persona.length < 20 ? uiText('dynamic31', { v0: 20 - persona.length }) : '·'}
               </span>
               <span className="text-[var(--color-text-muted)]">{persona.length}/5000</span>
             </div>
           </div>
         </div>
 
+        <CharacterLanguageFields language={language} worldBook={worldBook} onLanguage={setLanguage} onWorldBook={setWorldBook} castType={castType} contentRating={contentRating} onCastType={setCastType} onContentRating={setContentRating} />
+
         {/* 开场白全文 - 必须过人眼 */}
         <div className="mb-6">
           <div className="flex items-center justify-between mb-2">
-            <label className="text-[14px] font-medium text-[var(--color-ink)]">开场白</label>
+            <label className="text-[14px] font-medium text-[var(--color-ink)]">{uiText('ui449')}</label>
             <button
               onClick={handleRegenerate}
               disabled={regenerating || enriching || regenerateCount >= MAX_REGENERATE}
               className="text-[13px] font-medium text-[var(--color-primary)] disabled:opacity-40 active:scale-[0.96] transition-transform"
             >
               {regenerating
-                ? '生成中...'
+                ? uiText('ui450')
                 : regenerateCount >= MAX_REGENERATE
-                  ? '已达重生上限'
-                  : `重新生成 (${MAX_REGENERATE - regenerateCount})`}
+                  ? uiText('ui451')
+                  : uiText('dynamic32', { v0: MAX_REGENERATE - regenerateCount })}
             </button>
           </div>
           <textarea
@@ -528,7 +547,7 @@ export function QuickConfirmPage() {
 
         {/* 主题配色色板 */}
         <div className="mb-6">
-          <label className="block text-[14px] font-medium text-[var(--color-ink)] mb-2">主题配色</label>
+          <label className="block text-[14px] font-medium text-[var(--color-ink)] mb-2">{uiText('ui452')}</label>
           <div className="grid grid-cols-4 gap-3">
             {THEME_PRESETS.map((preset) => (
               <button
@@ -551,7 +570,7 @@ export function QuickConfirmPage() {
 
         {/* 可见性 */}
         <div className="mb-6">
-          <label className="block text-[14px] font-medium text-[var(--color-ink)] mb-2">谁可以看到</label>
+          <label className="block text-[14px] font-medium text-[var(--color-ink)] mb-2">{uiText('ui453')}</label>
           <div className="flex flex-col gap-2">
             <button
               onClick={() => setVisibility('private')}
@@ -563,8 +582,8 @@ export function QuickConfirmPage() {
                     : 'bg-white/80 border-2 border-transparent'
               }`}
             >
-              <div className="text-[15px] font-medium text-[var(--color-ink)]">私密</div>
-              <div className="text-[13px] text-[var(--color-text-secondary)] mt-0.5">仅自己可见，立即生效</div>
+              <div className="text-[15px] font-medium text-[var(--color-ink)]">{uiText('ui46')}</div>
+              <div className="text-[13px] text-[var(--color-text-secondary)] mt-0.5">{uiText('ui454')}</div>
             </button>
             <button
               onClick={() => setVisibility('unlisted')}
@@ -576,15 +595,15 @@ export function QuickConfirmPage() {
                     : 'bg-white/80 border-2 border-transparent'
               }`}
             >
-              <div className="text-[15px] font-medium text-[var(--color-ink)]">链接分享</div>
-              <div className="text-[13px] text-[var(--color-text-secondary)] mt-0.5">审核通过后，拿到链接的人可访问</div>
+              <div className="text-[15px] font-medium text-[var(--color-ink)]">{uiText('ui455')}</div>
+              <div className="text-[13px] text-[var(--color-text-secondary)] mt-0.5">{uiText('ui456')}</div>
             </button>
           </div>
         </div>
 
         {/* 角色声音 */}
         <div className="mb-6">
-          <label className="block text-[14px] font-medium text-[var(--color-ink)] mb-2">角色声音</label>
+          <label className="block text-[14px] font-medium text-[var(--color-ink)] mb-2">{uiText('ui457')}</label>
           <button
             onClick={() => setVoicePickerOpen(true)}
             className={`w-full p-4 rounded-[12px] flex items-center justify-between ${
@@ -596,13 +615,12 @@ export function QuickConfirmPage() {
                 {voiceSelection.type === 'preset'
                   ? voiceSelection.presetName
                   : voiceSelection.type === 'clone'
-                    ? '克隆音色（上传中）'
-                    : '请选择'}
+                    ? uiText('ui458')
+                    : uiText('ui459')}
               </div>
               {!voiceSelection.type && (
                 <div className="text-[12px] text-[var(--color-text-secondary)] mt-0.5">
-                  可选，让角色开口说话
-                </div>
+                  {uiText('ui460')}</div>
               )}
             </div>
             <svg
@@ -629,7 +647,7 @@ export function QuickConfirmPage() {
             }`}
           >
             <div className="text-left">
-              <div className="text-[14px] font-medium text-[var(--color-ink)]">更多设定</div>
+              <div className="text-[14px] font-medium text-[var(--color-ink)]">{uiText('ui461')}</div>
               <div className="text-[12px] text-[var(--color-text-secondary)] mt-0.5">{summaryLine}</div>
             </div>
             <svg
@@ -656,7 +674,7 @@ export function QuickConfirmPage() {
                   disabled={enriching || regenerating || regenerateCount >= MAX_REGENERATE}
                   className="min-w-0 flex-1 min-h-[42px] rounded-[11px] border border-[rgba(255,143,171,0.35)] bg-[rgba(255,143,171,0.10)] px-3 py-2 text-[13px] leading-snug font-medium text-[#E86083] disabled:opacity-60 active:scale-[0.98] transition-transform"
                 >
-                  {enriching ? enrichingLabel : 'AI 完善全部设定'}
+                  {enriching ? enrichingLabel : uiText('ui462')}
                 </button>
                 {enriching && (
                   <button
@@ -664,90 +682,89 @@ export function QuickConfirmPage() {
                     onClick={() => prefillAbortRef.current?.abort()}
                     className="shrink-0 h-[42px] px-3 rounded-[11px] border border-[var(--color-border-subtle)] text-[13px] text-[var(--color-text-secondary)] active:scale-[0.96] transition-transform"
                   >
-                    取消
-                  </button>
+                    {uiText('ui108')}</button>
                 )}
               </div>
 
               <div className="grid grid-cols-2 gap-2.5 mb-3">
                 <label className="block min-w-0">
-                  <span className="block text-[13px] text-[var(--color-text-secondary)] mb-1">身份标签</span>
+                  <span className="block text-[13px] text-[var(--color-text-secondary)] mb-1">{uiText('ui463')}</span>
                   <input
                     type="text"
                     value={archetypeLabel}
                     maxLength={40}
                     onChange={(e) => setArchetypeLabel(e.target.value)}
-                    placeholder="例如：急诊科医生"
+                    placeholder={uiText('ui464')}
                     className="w-full min-w-0 px-3 py-2 rounded-[10px] text-[14px] bg-[var(--color-glass-35)] border border-[var(--color-border-subtle)] text-[var(--color-ink)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-primary)]"
                   />
                 </label>
                 <label className="block min-w-0">
-                  <span className="block text-[13px] text-[var(--color-text-secondary)] mb-1">角色短句</span>
+                  <span className="block text-[13px] text-[var(--color-text-secondary)] mb-1">{uiText('ui465')}</span>
                   <input
                     type="text"
                     value={tagline}
                     maxLength={60}
                     onChange={(e) => setTagline(e.target.value)}
-                    placeholder="封面下的一句话"
+                    placeholder={uiText('ui466')}
                     className="w-full min-w-0 px-3 py-2 rounded-[10px] text-[14px] bg-[var(--color-glass-35)] border border-[var(--color-border-subtle)] text-[var(--color-ink)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-primary)]"
                   />
                 </label>
               </div>
 
               <label className="block mb-3">
-                <span className="block text-[13px] text-[var(--color-text-secondary)] mb-1">关于TA</span>
+                <span className="block text-[13px] text-[var(--color-text-secondary)] mb-1">{uiText('ui317')}</span>
                 <textarea
                   value={intro}
                   maxLength={500}
                   rows={4}
                   onChange={(e) => setIntro(e.target.value)}
-                  placeholder="身份、性格、习惯与当下生活"
+                  placeholder={uiText('ui467')}
                   className="w-full px-3 py-2 rounded-[10px] text-[14px] leading-relaxed resize-none bg-[var(--color-glass-35)] border border-[var(--color-border-subtle)] text-[var(--color-ink)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-primary)]"
                 />
               </label>
 
               <label className="block mb-3">
-                <span className="block text-[13px] text-[var(--color-text-secondary)] mb-1">叙引</span>
+                <span className="block text-[13px] text-[var(--color-text-secondary)] mb-1">{uiText('ui320')}</span>
                 <textarea
                   value={oneLiner}
                   maxLength={120}
                   rows={3}
                   onChange={(e) => setOneLiner(e.target.value)}
-                  placeholder="人物矛盾、故事悬念或关系切口"
+                  placeholder={uiText('ui468')}
                   className="w-full px-3 py-2 rounded-[10px] text-[14px] leading-relaxed resize-none bg-[var(--color-glass-35)] border border-[var(--color-border-subtle)] text-[var(--color-ink)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-primary)]"
                 />
               </label>
 
               <label className="block mb-3">
-                <span className="block text-[13px] text-[var(--color-text-secondary)] mb-1">人物经历</span>
+                <span className="block text-[13px] text-[var(--color-text-secondary)] mb-1">{uiText('ui469')}</span>
                 <textarea
                   value={backstory}
                   maxLength={1500}
                   rows={5}
                   onChange={(e) => setBackstory(e.target.value)}
-                  placeholder="重要经历，以及它如何塑造现在的TA"
+                  placeholder={uiText('ui470')}
                   className="w-full px-3 py-2 rounded-[10px] text-[14px] leading-relaxed resize-none bg-[var(--color-glass-35)] border border-[var(--color-border-subtle)] text-[var(--color-ink)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-primary)]"
                 />
               </label>
 
               <label className="block mb-3">
-                <span className="block text-[13px] text-[var(--color-text-secondary)] mb-1">角色标签</span>
+                <span className="block text-[13px] text-[var(--color-text-secondary)] mb-1">{uiText('ui471')}</span>
                 <input
                   type="text"
                   value={tagsText}
                   onChange={(e) => setTagsText(e.target.value)}
-                  placeholder="用顿号分隔，最多 5 个"
+                  placeholder={uiText('ui472')}
                   className="w-full px-3 py-2 rounded-[10px] text-[14px] bg-[var(--color-glass-35)] border border-[var(--color-border-subtle)] text-[var(--color-ink)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-primary)]"
                 />
               </label>
 
               <label className="block mb-3">
-                <span className="block text-[13px] text-[var(--color-text-secondary)] mb-1">说话样本</span>
+                <span className="block text-[13px] text-[var(--color-text-secondary)] mb-1">{uiText('ui473')}</span>
                 <textarea
                   value={speechSamplesText}
                   rows={4}
                   onChange={(e) => setSpeechSamplesText(e.target.value)}
-                  placeholder="每行一句，最多 5 句"
+                  placeholder={uiText('ui474')}
                   className="w-full px-3 py-2 rounded-[10px] text-[14px] leading-relaxed resize-none bg-[var(--color-glass-35)] border border-[var(--color-border-subtle)] text-[var(--color-ink)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-primary)]"
                 />
               </label>
@@ -756,19 +773,19 @@ export function QuickConfirmPage() {
 
               {/* 年龄段 */}
               <div className="mb-3">
-                <label className="block text-[13px] text-[var(--color-text-secondary)] mb-1">年龄段</label>
+                <label className="block text-[13px] text-[var(--color-text-secondary)] mb-1">{uiText('ui475')}</label>
                 <input
                   type="text"
                   value={ageRange}
                   onChange={(e) => setAgeRange(e.target.value)}
-                  placeholder="例如：20-25"
+                  placeholder={uiText('ui476')}
                   className="w-full px-3 py-2 rounded-[10px] text-[14px] bg-[var(--color-glass-35)] border border-[var(--color-border-subtle)] text-[var(--color-ink)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-primary)]"
                 />
               </div>
 
               {/* 相处风格 */}
               <div className="mb-3">
-                <label className="block text-[13px] text-[var(--color-text-secondary)] mb-2">相处风格</label>
+                <label className="block text-[13px] text-[var(--color-text-secondary)] mb-2">{uiText('ui477')}</label>
                 <div className="flex flex-wrap gap-2">
                   {(['warm', 'cool', 'playful', 'reserved', 'intense'] as const).map((style) => (
                     <button
@@ -810,7 +827,7 @@ export function QuickConfirmPage() {
               <div className="my-3 h-px bg-[var(--color-border-subtle)]" />
 
               {/* 口癖 */}
-              <div className="text-[13px] text-[var(--color-text-secondary)] mb-2">口癖</div>
+              <div className="text-[13px] text-[var(--color-text-secondary)] mb-2">{uiText('ui478')}</div>
               <div className="flex flex-wrap gap-2 mb-2">
                 {catchphrases.map((cp, i) => (
                   <div
@@ -821,7 +838,7 @@ export function QuickConfirmPage() {
                     <button
                       onClick={() => setCatchphrases(catchphrases.filter((_, idx) => idx !== i))}
                       className="w-[14px] h-[14px] rounded-full flex items-center justify-center hover:bg-[var(--color-glass-55)] transition-colors"
-                      aria-label="删除"
+                      aria-label={uiText('ui322')}
                     >
                       <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
                         <line x1="18" y1="6" x2="6" y2="18" />
@@ -833,7 +850,7 @@ export function QuickConfirmPage() {
               </div>
               <input
                 type="text"
-                placeholder="输入口癖后按回车添加"
+                placeholder={uiText('ui479')}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && e.currentTarget.value.trim()) {
                     setCatchphrases([...catchphrases, e.currentTarget.value.trim()])
@@ -855,7 +872,7 @@ export function QuickConfirmPage() {
             disabled={creating || !opening.trim()}
             className="w-full h-[50px] rounded-full bg-gradient-to-r from-[#FFB7C5] to-[#FF8FAB] text-white text-[16px] font-semibold shadow-[0_8px_24px_-4px_rgba(255,143,171,0.40)] active:scale-[0.98] transition-transform disabled:opacity-50 disabled:active:scale-100"
           >
-            {creating ? (isEdit ? '保存中...' : '创建中...') : isEdit ? '保存修改' : '确认创建'}
+            {creating ? (isEdit ? uiText('ui480') : uiText('ui481')) : isEdit ? uiText('ui482') : uiText('ui437')}
           </button>
         </div>
       )}

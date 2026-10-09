@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next'
+import { uiLabel } from '../../i18n/text'
 interface SegmentedControlProps {
   options: string[]
   value: string
@@ -6,6 +8,7 @@ interface SegmentedControlProps {
 }
 
 export function SegmentedControl({ options, value, onChange, textClassName }: SegmentedControlProps) {
+  useTranslation()
   return (
     <div className="flex bg-[var(--color-segment-container)] rounded-[10px] p-[2px]">
       {options.map((opt) => (
@@ -20,7 +23,7 @@ export function SegmentedControl({ options, value, onChange, textClassName }: Se
             }
           `}
         >
-          <span className={textClassName}>{opt}</span>
+          <span className={textClassName}>{uiLabel(opt)}</span>
         </button>
       ))}
     </div>

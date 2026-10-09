@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next'
+import { uiText } from '../i18n/text'
 interface ChatPlusMenuProps {
   open: boolean
   isDark: boolean
@@ -11,6 +13,7 @@ interface ChatPlusMenuProps {
 // Embedded content for the chat composer surface. The parent owns the glass
 // background and border so the input row and this grid read as one panel.
 export function ChatPlusMenu({ open, isDark, onVoiceChat, onVoiceCall, onTransfer, onMasks, onRestart }: ChatPlusMenuProps) {
+  useTranslation()
   const tile = `flex h-[48px] w-[48px] items-center justify-center rounded-[16px] border active:scale-95 transition-transform ${
     isDark
       ? 'border-white/8 bg-white/[0.07]'
@@ -36,7 +39,7 @@ export function ChatPlusMenu({ open, isDark, onVoiceChat, onVoiceCall, onTransfe
                 <path d="M12 18.5v3" />
               </svg>
             </span>
-            <span className={label}>语音聊天</span>
+            <span className={label}>{uiText('more7')}</span>
           </button>
 
           <button type="button" disabled={!open} className="flex flex-col items-center" onClick={onVoiceCall}>
@@ -45,7 +48,7 @@ export function ChatPlusMenu({ open, isDark, onVoiceChat, onVoiceCall, onTransfe
                 <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.573 2.81.7A2 2 0 0 1 22 16.92Z" />
               </svg>
             </span>
-            <span className={label}>语音通话</span>
+            <span className={label}>{uiText('more8')}</span>
           </button>
 
           <button type="button" disabled={!open} className="flex flex-col items-center" onClick={onTransfer}>
@@ -54,7 +57,7 @@ export function ChatPlusMenu({ open, isDark, onVoiceChat, onVoiceCall, onTransfe
                 <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
               </svg>
             </span>
-            <span className={label}>转账</span>
+            <span className={label}>{uiText('ui90')}</span>
           </button>
 
           <button type="button" disabled={!open} className="flex flex-col items-center" onClick={onMasks}>
@@ -64,7 +67,7 @@ export function ChatPlusMenu({ open, isDark, onVoiceChat, onVoiceCall, onTransfe
                 <path d="M7 10.7c1.1-.7 2.2-.7 3.3 0M13.7 10.7c1.1-.7 2.2-.7 3.3 0M9.7 15c1.5.7 3.1.7 4.6 0" />
               </svg>
             </span>
-            <span className={label}>我的面具</span>
+            <span className={label}>{uiText('more9')}</span>
           </button>
 
           <button type="button" disabled={!open} className="flex flex-col items-center" onClick={onRestart}>
@@ -74,7 +77,7 @@ export function ChatPlusMenu({ open, isDark, onVoiceChat, onVoiceCall, onTransfe
                 <path d="M3 3v5h5" />
               </svg>
             </span>
-            <span className={label}>重新开始</span>
+            <span className={label}>{uiText('ui110')}</span>
           </button>
         </div>
       </div>

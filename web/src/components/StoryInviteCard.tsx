@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next'
+import { uiText } from '../i18n/text'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getActiveRun, type StoryHookDTO } from '../services/api'
@@ -47,6 +49,7 @@ interface StoryInviteCardProps {
  * scenario detail page to start fresh. Config-driven, not AI-generated.
  */
 export function StoryInviteCard({ characterId, hook, onDismiss }: StoryInviteCardProps) {
+  useTranslation()
   const navigate = useNavigate()
   const [busy, setBusy] = useState(false)
 
@@ -75,12 +78,12 @@ export function StoryInviteCard({ characterId, hook, onDismiss }: StoryInviteCar
     <div className="rounded-[20px] px-4 py-3 bg-[var(--color-glass-75)] backdrop-blur-[16px] border border-[var(--color-border-glass)] shadow-[var(--shadow-soft)]">
       <div className="flex items-start justify-between gap-3">
         <p className="text-[13px] font-semibold text-[var(--color-ink)]">
-          {hook.invite_title || '她想邀你走进一段剧情'}
+          {hook.invite_title || uiText('more79')}
         </p>
         <button
           onClick={handleDismiss}
           className="shrink-0 -mt-1 -mr-1 w-[28px] h-[28px] flex items-center justify-center text-[var(--color-text-secondary)] active:scale-90 transition-transform"
-          aria-label="暂时不看这个邀约"
+          aria-label={uiText('more80')}
         >
           ×
         </button>
@@ -95,7 +98,7 @@ export function StoryInviteCard({ characterId, hook, onDismiss }: StoryInviteCar
         disabled={busy}
         className="mt-3 h-[34px] px-4 rounded-full bg-[var(--color-primary)] text-white text-[12px] font-medium active:scale-[0.96] transition-transform disabled:opacity-60"
       >
-        {busy ? '进入中…' : hook.cta_label || '进入剧情'}
+        {busy ? uiText('more81') : hook.cta_label || uiText('more82')}
       </button>
     </div>
   )

@@ -1,3 +1,7 @@
+import { useTranslation } from 'react-i18next'
+import { international } from '../i18n/text'
+import { InterfaceLanguageSelect } from '../components/LanguagePreferences'
+import { uiText, uiLabel } from '../i18n/text'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useThemeStore } from '../stores/themeStore'
@@ -26,9 +30,9 @@ import { isDiscoverableCharacter } from '../utils/characterVisibility'
 
 /** Visibility badge config for owned UGC character cards. */
 const VIS_BADGE: Record<string, { label: string; color: string; bg: string }> = {
-  public:   { label: '公开',   color: '#5FC8E8', bg: 'rgba(95,200,232,0.35)' },
-  unlisted: { label: '链接可见', color: '#A7C7E7', bg: 'rgba(167,199,231,0.35)' },
-  private:  { label: '私密',   color: '#FFFFFF', bg: 'rgba(255,255,255,0.25)' },
+  public:   { get label() { return uiText('ui44') },   color: '#5FC8E8', bg: 'rgba(95,200,232,0.35)' },
+  unlisted: { get label() { return uiText('ui45') }, color: '#A7C7E7', bg: 'rgba(167,199,231,0.35)' },
+  private:  { get label() { return uiText('ui46') },   color: '#FFFFFF', bg: 'rgba(255,255,255,0.25)' },
 }
 
 /** Primary discovery modes (large tabs). */
@@ -72,6 +76,7 @@ const VISIBLE_ITEMS_BATCH = 24
  */
 
 interface GridItem {
+  localReview?: boolean
   id: string
   profile: CharacterProfile
   isOwner: boolean
@@ -228,6 +233,7 @@ function stableShuffleScore(id: string): number {
 }
 
 export function CharacterPage() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const isAuthenticated = useAuthStore((s) => !!s.accessToken)
   const showAuthPrompt = useAuthPromptStore((state) => state.show)
@@ -248,6 +254,9 @@ export function CharacterPage() {
   const [showOpenLink, setShowOpenLink] = useState(false)
   const [linkInput, setLinkInput] = useState('')
   const [query, setQuery] = useState('')
+  const [contentLanguage, setContentLanguage] = useState('')
+  const [castType, setCastType] = useState('')
+  const [contentRating, setContentRating] = useState('')
   const scrollRef = useScrollRestore()
   const requireLogin = useCallback((from: string) => {
     showAuthPrompt(from)
@@ -277,16 +286,16 @@ export function CharacterPage() {
     try {
       const text = await navigator.clipboard.readText()
       if (text.trim()) setLinkInput(text.trim())
-      else showToast('剪贴板是空的', 'info')
+      else showToast(uiText('ui264'), 'info')
     } catch {
-      showToast('无法读取剪贴板，请手动粘贴', 'info')
+      showToast(uiText('ui265'), 'info')
     }
   }
 
   function handleOpenLink() {
     const cid = parseCharacterId(linkInput)
     if (!cid) {
-      showToast('链接无效，请粘贴完整的角色分享链接', 'error')
+      showToast(uiText('ui266'), 'error')
       return
     }
     setShowOpenLink(false)
@@ -355,6 +364,7 @@ export function CharacterPage() {
           isBuiltin: c.is_builtin,
           visibility: c.visibility,
           reviewStatus: c.review_status,
+          localReview: Boolean(c.local_review),
           companion: companionById.get(c.id),
           chatUserCount: c.chat_user_count,
           displayHeat: c.display_heat,
@@ -370,6 +380,7 @@ export function CharacterPage() {
         }
       })
     }
+    if (international) return []
     return companions.map((c) => {
       const isOwner = c.is_owner && !c.is_builtin
       return {
@@ -405,10 +416,10 @@ export function CharacterPage() {
   }, [items])
 
   // Pinned tags row — fixed order (全部 + 女性向/男性向/.../霸总), always shown.
-  const pinnedTagChips = useMemo(() => [TAG_ALL, ...PINNED_TAGS], [])
+  const pinnedTagChips = useMemo(() => [TAG_ALL, ...(international ? Array.from(new Set(serverCharacters.flatMap(c => c.tags ?? []))).slice(0, 10) : PINNED_TAGS)], [serverCharacters])
 
   // Extra tags for the「筛选」popup — fixed, hardcoded list (see EXTRA_FILTER_TAGS).
-  const extraFilterChips = useMemo(() => [...EXTRA_FILTER_TAGS], [])
+  const extraFilterChips = useMemo(() => international ? Array.from(new Set(serverCharacters.flatMap(c => c.tags ?? []))).slice(10) : [...EXTRA_FILTER_TAGS], [serverCharacters])
 
   const heatMap = useMemo(
     () => buildCharacterHeatMap(rankedItems),
@@ -443,10 +454,17 @@ export function CharacterPage() {
       base = base.filter((it) => (it.profile.tags ?? []).includes(activeTag))
     }
 
-    // **SEARCH** — text match on name/tags/tagline
+    base = base.filter(it => {
+      const metadata = serverCharacters.find(c => c.id === it.id)
+      return (!contentLanguage || metadata?.content_language === contentLanguage)
+        && (!castType || metadata?.cast_type === castType)
+        && (!contentRating || metadata?.content_rating === contentRating)
+    })
+    // Search the public story copy and creator display name as well.
     if (q) {
       base = base.filter((it) => {
-        const hay = `${it.profile.name} ${(it.profile.tags ?? []).join(' ')} ${it.profile.tagline ?? ''}`.toLowerCase()
+        const metadata = serverCharacters.find(c => c.id === it.id)
+        const hay = `${metadata?.intro ?? ''} ${metadata?.creator_name ?? ''} ${it.profile.name} ${(it.profile.tags ?? []).join(' ')} ${it.profile.tagline ?? ''}`.toLowerCase()
         return hay.includes(q)
       })
     }
@@ -474,7 +492,7 @@ export function CharacterPage() {
     }
 
     return base
-  }, [rankedItems, activeMode, activeTag, query, isFavorite])
+  }, [rankedItems, activeMode, activeTag, query, isFavorite, serverCharacters, contentLanguage, castType, contentRating])
 
   const [visibleCount, setVisibleCount] = useState(INITIAL_VISIBLE_ITEMS)
 
@@ -534,12 +552,12 @@ export function CharacterPage() {
                   autoFocus
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
-                  placeholder="搜索角色 / 标签"
+                  placeholder={uiText('ui267')}
                   className="h-[40px] w-[132px] rounded-[10px] border border-[var(--color-divider)] bg-[var(--color-page-soft)] px-3.5 text-[14px] text-[var(--color-ink)] outline-none transition-colors placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-primary-400)] min-[380px]:w-[176px]"
                 />
                 <button
                   onClick={() => { setShowSearch(false); setQuery('') }}
-                  aria-label="关闭搜索"
+                  aria-label={uiText('ui268')}
                   className={`flex h-[40px] w-[40px] items-center justify-center rounded-[12px] transition-colors active:scale-95 ${headerActionClass}`}
                 >
                   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -552,7 +570,7 @@ export function CharacterPage() {
               <>
                 <button
                   onClick={() => setShowSearch(true)}
-                  aria-label="搜索"
+                  aria-label={uiText('ui269')}
                   className={`flex h-[40px] w-[40px] items-center justify-center rounded-[12px] transition-colors active:scale-95 ${headerActionClass}`}
                 >
                   <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
@@ -560,6 +578,7 @@ export function CharacterPage() {
                     <line x1="11" y1="11" x2="15" y2="15" />
                   </svg>
                 </button>
+          {international && <InterfaceLanguageSelect />}
                 <button
                   onClick={() => {
                     if (!isAuthenticated) {
@@ -569,7 +588,7 @@ export function CharacterPage() {
                     setLinkInput('')
                     setShowOpenLink(true)
                   }}
-                  aria-label="打开分享链接"
+                  aria-label={uiText('ui270')}
                   className="flex h-[40px] w-[40px] items-center justify-center rounded-[10px] bg-[var(--color-page-soft)] text-[var(--color-text-secondary)] transition-colors active:scale-95"
                 >
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -579,7 +598,7 @@ export function CharacterPage() {
                 </button>
                 <button
                   onClick={() => isAuthenticated ? setShowAnnounce(true) : requireLogin('/character')}
-                  aria-label="公告"
+                  aria-label={uiText('ui271')}
                   className={`relative flex h-[40px] w-[40px] items-center justify-center rounded-[12px] transition-colors active:scale-95 ${headerActionClass}`}
                 >
                   <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -614,7 +633,7 @@ export function CharacterPage() {
                   : `font-semibold ${inactiveModeText}`
               }`}
             >
-              {mode}
+              {uiLabel(mode)}
               {activeMode === mode && (
                 <span className="absolute bottom-0 left-1/2 h-[3px] w-[20px] -translate-x-1/2 rounded-full bg-[var(--color-primary-500)]" />
               )}
@@ -636,9 +655,9 @@ export function CharacterPage() {
                       : `bg-transparent ${inactiveTagText} font-medium`
                   }`}
                 >
-                  {tag}
+                  {international && tag !== TAG_ALL ? tag : uiLabel(tag)}
                   {activeTag === tag && (
-                    <span className="sr-only">已选择</span>
+                    <span className="sr-only">{uiText('ui272')}</span>
                   )}
                 </button>
               ))}
@@ -646,7 +665,7 @@ export function CharacterPage() {
             {extraFilterChips.length > 0 && (
               <button
                 onClick={() => setShowFilter((v) => !v)}
-                aria-label="筛选"
+                aria-label={uiText('ui273')}
                 className={`relative shrink-0 w-[38px] h-[38px] flex items-center justify-center transition-colors active:scale-[0.94] ${
                   showFilter || !pinnedTagChips.includes(activeTag)
                     ? 'text-[var(--color-primary)]'
@@ -668,24 +687,34 @@ export function CharacterPage() {
           {showFilter && (
             <>
               <button
-                aria-label="关闭筛选"
+                aria-label={uiText('ui274')}
                 onClick={() => setShowFilter(false)}
                 className="fixed inset-0 z-20 cursor-default bg-black/20"
               />
               <div className={`absolute left-0 right-0 top-full z-30 rounded-b-[16px] border-t px-4 pb-4 pt-3.5 shadow-[0_18px_40px_rgba(0,0,0,0.14)] ${filterPanelClass}`}>
                 <div className="flex items-baseline justify-between gap-3 mb-3">
                   <div className="min-w-0 flex items-baseline gap-2.5">
-                    <p className={`shrink-0 text-[17px] font-bold leading-none ${filterPanelTitle}`}>更多标签</p>
-                    <p className={`min-w-0 text-[13px] font-semibold leading-none truncate ${filterPanelHint}`}>点击标签筛选</p>
+                    <p className={`shrink-0 text-[17px] font-bold leading-none ${filterPanelTitle}`}>{uiText('ui275')}</p>
+                    <p className={`min-w-0 text-[13px] font-semibold leading-none truncate ${filterPanelHint}`}>{uiText('ui276')}</p>
                   </div>
                   {!pinnedTagChips.includes(activeTag) && (
                     <button
                       onClick={() => { setActiveTag(TAG_ALL); setShowFilter(false) }}
                       className="shrink-0 text-[13px] font-semibold text-[var(--color-primary-600)]"
                     >
-                      重置
-                    </button>
+                      {uiText('ui277')}</button>
                   )}
+                </div>
+                <div className="grid grid-cols-2 gap-2 mb-3">
+                  <select aria-label={t('contentLanguage')} value={contentLanguage} onChange={e => setContentLanguage(e.target.value)} className="min-w-0 bg-transparent text-[16px]">
+                    <option value="">{t('allLanguages')}</option><option value="ja">日本語</option><option value="ko">한국어</option><option value="en">English</option>
+                  </select>
+                  <select aria-label={t('castType')} value={castType} onChange={e => setCastType(e.target.value)} className="min-w-0 bg-transparent text-[16px]">
+                    <option value="">{t('allCasts')}</option><option value="single">{t('singleCast')}</option><option value="multiple">{t('multipleCast')}</option>
+                  </select>
+                  <select aria-label={t('contentRating')} value={contentRating} onChange={e => setContentRating(e.target.value)} className="min-w-0 bg-transparent text-[16px]">
+                    <option value="">{t('allRatings')}</option><option value="general">{t('generalRating')}</option><option value="mature">{t('matureRating')}</option>
+                  </select>
                 </div>
                 <div className="grid grid-cols-4 gap-x-2 gap-y-2 max-h-[42vh] overflow-y-auto no-scrollbar">
                   {extraFilterChips.map((tag) => (
@@ -697,9 +726,9 @@ export function CharacterPage() {
                           ? 'bg-[var(--color-primary)] text-white border-transparent font-bold'
                           : `${filterChipIdle} font-semibold`
                       }`}
-                      title={tag}
+                      title={international && tag !== TAG_ALL ? tag : uiLabel(tag)}
                     >
-                      {tag}
+                      {international && tag !== TAG_ALL ? tag : uiLabel(tag)}
                     </button>
                   ))}
                 </div>
@@ -728,14 +757,14 @@ export function CharacterPage() {
               </svg>
             </div>
           )}
-          <button
+          {!international && (          <button
             type="button"
             onClick={() => {
               if (isAuthenticated) navigate('/rewards')
               else requireLogin('/rewards')
             }}
             className="group relative mx-auto mb-3 block h-[110px] w-full max-w-[720px] overflow-hidden rounded-[8px] border border-white/10 bg-[#17171a] text-left shadow-[0_8px_24px_rgba(20,16,18,0.14)] outline-none transition-transform active:scale-[0.99] focus-visible:ring-2 focus-visible:ring-[var(--color-primary-400)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-page-canvas)] sm:mb-4 sm:h-[96px]"
-            aria-label="邀请好友双重奖励。好友聊满三条得一次抽奖，好友付费再享百分之十佣金。立即参与"
+            aria-label={uiText('ui278')}
           >
             <img
               src="/assets/rewards/invite-banner.jpg"
@@ -745,31 +774,28 @@ export function CharacterPage() {
               className="absolute inset-0 h-full w-full select-none object-cover object-right"
             />
             <span className="absolute inset-y-0 left-0 flex w-[72%] flex-col justify-center px-4 py-2.5 sm:w-[66%] sm:px-6">
-              <span className="text-[10px] font-bold text-[#ffb7c5] sm:text-[11px]">邀请好友 · 双重奖励</span>
+              <span className="text-[10px] font-bold text-[#ffb7c5] sm:text-[11px]">{uiText('ui279')}</span>
               <span className="mt-1 text-[15px] font-bold leading-[1.25] text-white sm:text-[18px]">
-                好友聊满 3 条，你得 1 次抽奖
-              </span>
+                {uiText('ui280')}</span>
               <span className="mt-1 text-[10px] font-medium leading-[1.4] text-white/68 sm:text-[12px]">
-                好友后续付费，再享实付金额 10% 佣金
-              </span>
+                {uiText('ui281')}</span>
               <span className="mt-1.5 inline-flex w-fit items-center gap-0.5 text-[11px] font-semibold text-white sm:text-[12px]">
-                去邀请
-                <svg className="transition-transform group-hover:translate-x-0.5" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                {uiText('ui282')}<svg className="transition-transform group-hover:translate-x-0.5" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                   <path d="m6 3 5 5-5 5" />
                 </svg>
               </span>
             </span>
-          </button>
+          </button>)}
           {filtered.length === 0 ? (
             items.length === 0 ? (
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 md:grid-cols-4 xl:grid-cols-5" aria-label="正在加载角色">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 md:grid-cols-4 xl:grid-cols-5" aria-label={uiText('ui283')}>
                 {Array.from({ length: 10 }).map((_, index) => (
                   <div key={index} className="aspect-[3/4] animate-pulse rounded-[12px] bg-[var(--color-page-soft)]" />
                 ))}
               </div>
             ) : (
               <div className="flex h-full flex-col items-center justify-center gap-2 pb-20 text-center">
-                <span className="text-[15px] text-[var(--color-text-secondary)]">没有找到匹配的角色</span>
+                <span className="text-[15px] text-[var(--color-text-secondary)]">{uiText('ui284')}</span>
               </div>
             )
           ) : (
@@ -790,8 +816,7 @@ export function CharacterPage() {
               </div>
               {visibleItems.length < filtered.length && (
                 <div className="flex items-center justify-center py-5 text-[12px] text-[var(--color-text-muted)]" aria-live="polite">
-                  下滑加载更多角色
-                </div>
+                  {uiText('ui285')}</div>
               )}
             </>
           )}
@@ -803,20 +828,16 @@ export function CharacterPage() {
       <NoticeDialog
         open={showNotice}
         onClose={dismissNotice}
-        title="温馨提示"
-        actionLabel="我已满18岁，知道了"
+        title={uiText('ui286')}
+        actionLabel={uiText('ui287')}
       >
         <p className="leading-[1.6]">
-          yuoyuo 是一款面向<span className="font-semibold text-[#2a2a38]">成年人</span>的 AI 情感陪伴产品，
-          <span className="font-semibold text-[#2a2a38]">仅供年满 18 周岁的用户使用</span>。
+          {uiText('ui288')}<span className="font-semibold text-[#2a2a38]">{uiText('ui289')}</span>{uiText('ui290')}<span className="font-semibold text-[#2a2a38]">{uiText('ui291')}</span>。
         </p>
         <p className="leading-[1.6] mt-2">
-          所有角色均为虚构，回复由 AI 生成。聊天时请<span className="font-semibold text-[#2a2a38]">遵守社区公约</span>，
-          不得诱导生成违法或不良内容。
-        </p>
+          {uiText('ui292')}<span className="font-semibold text-[#2a2a38]">{uiText('ui293')}</span>{uiText('ui294')}</p>
         <p className="leading-[1.6] mt-2 text-[#8a8a98]">
-          继续使用即表示你已阅读并同意
-          <Link to="/legal/age" className="text-[var(--color-primary)]">《年满18周岁确认》</Link>。
+          {uiText('ui295')}<Link to="/legal/age" className="text-[var(--color-primary)]">{uiText('ui296')}</Link>。
         </p>
       </NoticeDialog>
 
@@ -825,41 +846,37 @@ export function CharacterPage() {
       <Dialog
         open={showOpenLink}
         onClose={() => setShowOpenLink(false)}
-        title="打开分享链接"
+        title={uiText('ui270')}
         actions={
           <>
             <button
               onClick={() => setShowOpenLink(false)}
               className="flex-1 h-[44px] rounded-full bg-[var(--color-glass-55)] text-[var(--color-ink)] text-[15px] font-medium active:bg-[rgba(0,0,0,0.04)]"
             >
-              取消
-            </button>
+              {uiText('ui108')}</button>
             <button
               onClick={handleOpenLink}
               disabled={!linkInput.trim()}
               className="flex-1 h-[44px] rounded-full bg-gradient-to-r from-[#FFB7C5] to-[#FF8FAB] text-white text-[15px] font-semibold disabled:opacity-50"
             >
-              打开
-            </button>
+              {uiText('ui297')}</button>
           </>
         }
       >
         <p className="text-left leading-[1.6] mb-3">
-          粘贴好友分享的角色链接，直接在应用内打开 Ta 的档案。
-        </p>
+          {uiText('ui298')}</p>
         <div className="flex items-center gap-2">
           <input
             value={linkInput}
             onChange={(e) => setLinkInput(e.target.value)}
-            placeholder="粘贴角色链接"
+            placeholder={uiText('ui299')}
             className="flex-1 min-w-0 h-[44px] px-3.5 rounded-[12px] bg-[var(--color-glass-55)] border border-[var(--color-border-glass)] text-[15px] text-[var(--color-ink)] placeholder:text-[var(--color-text-muted)] outline-none focus:border-[var(--color-primary)]"
           />
           <button
             onClick={handlePasteLink}
             className="shrink-0 h-[44px] px-4 rounded-[12px] bg-[var(--color-glass-55)] border border-[var(--color-border-glass)] text-[14px] text-[var(--color-ink)] active:scale-[0.97] transition-transform"
           >
-            粘贴
-          </button>
+            {uiText('ui300')}</button>
         </div>
       </Dialog>
     </AppPageShell>
@@ -875,6 +892,7 @@ function DiscoveryCard({
   heatMap: Map<string, number>
   onOpen: () => void
 }) {
+  useTranslation()
   const { profile, isOwner, visibility } = item
   const tags = profile.tags ?? []
   const hook = profile.tagline || profile.summary || ''
@@ -934,9 +952,9 @@ function DiscoveryCard({
                   <span
                     key={tag}
                     className="inline-flex h-[20px] max-w-[72px] items-center truncate rounded-full border border-white/20 bg-black/16 px-2 text-[11px] text-white/88"
-                    title={tag}
+                    title={international && tag !== TAG_ALL ? tag : uiLabel(tag)}
                   >
-                    {tag}
+                    {international && tag !== TAG_ALL ? tag : uiLabel(tag)}
                   </span>
                 ))}
               </div>
@@ -949,8 +967,8 @@ function DiscoveryCard({
 }
 
 function formatPlays(n: number): string {
-  if (n >= 10000) return `${(n / 10000).toFixed(1)}w 人玩过`
-  return `${n} 人玩过`
+  if (n >= 10000) return uiText('dynamic14', { v0: (n / 10000).toFixed(1) })
+  return uiText('dynamic15', { v0: n })
 }
 
 /**
@@ -960,6 +978,7 @@ function formatPlays(n: number): string {
  * card shows the page background rather than a blurred placeholder portrait).
  */
 function CoverFill({ cover, alt }: { cover?: string | null; alt: string }) {
+  useTranslation()
   const [loaded, setLoaded] = useState(false)
   const src = cover || DEFAULT_COVER
   useEffect(() => {

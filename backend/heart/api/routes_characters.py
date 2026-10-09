@@ -11,7 +11,7 @@ from difflib import SequenceMatcher
 from typing import Literal
 
 import structlog
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Header, HTTPException, Request, UploadFile
 from pydantic import BaseModel, Field, ValidationError, model_validator
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -104,6 +104,12 @@ async def _ensure_publishable_quota(
 
 @router.get("")
 async def list_characters(
+    q: str = "",
+    content_language: Literal["en", "ja", "ko"] | None = None,
+    genre: str = "",
+    cast_type: Literal["single", "multiple"] | None = None,
+    content_rating: Literal["general", "mature"] | None = None,
+    language: str = Header("en", alias="Accept-Language"),
     current_user: TokenData | None = Depends(get_optional_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
@@ -113,6 +119,8 @@ async def list_characters(
     Avatar URLs are extracted from the draft stored in soul_specs for UGC characters.
     Anonymous callers only receive active built-ins and public, approved UGC.
     """
+    from heart.core.config import settings as catalog_settings
+
     uid = uuid.UUID(current_user.user_id) if current_user else None
     result = await db.execute(
         text(
@@ -121,11 +129,12 @@ async def list_characters(
                    tags, cover_url, review_status, review_reason, created_at,
                    display_heat, real_view_count, real_play_uv, recommendation_score
             FROM characters
-            WHERE owner_user_id = :uid
-               OR (status = 'active' AND visibility = 'public' AND review_status = 'approved')
+            WHERE (NOT :local_review AND owner_user_id = :uid)
+               OR (status = 'active' AND review_status = 'approved'
+                   AND (visibility = 'public' OR (:local_review AND visibility = 'unlisted')))
             """
         ),
-        {"uid": uid},
+        {"uid": uid, "local_review": catalog_settings.local_character_review},
     )
     raw_rows = list(result.mappings())
     rows = [
@@ -157,13 +166,16 @@ async def list_characters(
     creation_modes: dict[str, str | None] = {}
     display_names: dict[str, str | None] = {}
     visible_ids = [row.id for row in rows]
+    content_locales: dict[str, str] = {}
+    discovery_metadata: dict[str, dict] = {}
+    creator_names = await _creator_names(db, visible_ids)
     ugc_ids = {row.id for row in rows if row.owner_user_id is not None}
     if visible_ids:
         content_result = await db.execute(
             text(
                 """
                 SELECT character_id,
-                       spec,
+                       spec, draft,
                        draft->>'avatar_url' AS avatar_url,
                        draft->>'tagline' AS tagline,
                        draft->>'creation_mode' AS creation_mode
@@ -174,6 +186,18 @@ async def list_characters(
             {"ids": visible_ids},
         )
         for row in content_result:
+            spec_data = _coerce_json(row.spec)
+            draft_data = _coerce_json(row.draft)
+            content_locales[row.character_id] = str(
+                draft_data.get("response_language") or spec_data.get("locale", "zh-CN")
+            ).split("-")[0]
+            discovery_metadata[row.character_id] = {
+                "content_language": content_locales[row.character_id],
+                "intro": str(draft_data.get("intro") or ""),
+                "cast_type": draft_data.get("cast_type", "single"),
+                "content_rating": draft_data.get("content_rating", "general"),
+                "creator_name": creator_names.get(row.character_id, ""),
+            }
             display_names[row.character_id] = display_name_from_spec(row.spec, row.character_id)
             if row.character_id in ugc_ids and row.avatar_url:
                 avatar_urls[row.character_id] = row.avatar_url
@@ -189,13 +213,76 @@ async def list_characters(
         taglines,
         creation_modes,
         display_names,
+        local_review=catalog_settings.local_character_review,
     )
     result_list = []
+    from heart.api.local_review import review_catalog_records
+
+    review_records = await review_catalog_records(db, catalog_settings.local_character_review)
+
     for e in entries:
+        # Keep the old catalogue in storage; publish supported-language content only.
+        if (
+            catalog_settings.international_mode
+            and not catalog_settings.local_character_review
+            and not e.is_owner
+            and content_locales.get(e.id)
+            not in {
+                "en",
+                "ja",
+                "ko",
+            }
+        ):
+            continue
         entry_dict = asdict(e)
+        entry_dict.update(discovery_metadata.get(e.id, {}))
         entry_dict["has_voice"] = has_voice_map.get(e.id, False)
+        entry_dict.update(review_records.get(e.id, {}))
+        if catalog_settings.international_mode:
+            from heart.i18n import resolve_locale
+            from heart.international_catalog import CHARACTERS
+
+            locale = resolve_locale(language if isinstance(language, str) else "en")
+            curated = next((item for item in CHARACTERS if item["id"] == e.id), None)
+            if curated:
+                entry_dict["display_name"] = curated["names"][locale]
+                entry_dict["tagline"] = curated["taglines"][locale]
         result_list.append(entry_dict)
-    return {"characters": result_list}
+    return {
+        "characters": [
+            entry
+            for entry in result_list
+            if _matches_discovery(entry, q, content_language, genre, cast_type, content_rating)
+        ]
+    }
+
+
+async def _creator_names(db: AsyncSession, visible_ids: list[str]) -> dict[str, str]:
+    if not visible_ids:
+        return {}
+    creators = await db.execute(
+        text(
+            "SELECT c.id, CASE WHEN c.owner_user_id IS NULL THEN 'yuoyuo' ELSE u.display_name END AS display_name FROM characters c "
+            "LEFT JOIN users u ON u.id = c.owner_user_id WHERE c.id = ANY(:ids)"
+        ),
+        {"ids": visible_ids},
+    )
+    return {r.id: r.display_name or "" for r in creators}
+
+
+def _matches_discovery(
+    entry: dict, q: str, language: str | None, genre: str, cast: str | None, rating: str | None
+) -> bool:
+    filters = ((language, "content_language"), (cast, "cast_type"), (rating, "content_rating"))
+    if any(value and entry.get(key) != value for value, key in filters):
+        return False
+    if genre and genre not in entry.get("tags", []):
+        return False
+    searchable = " ".join(
+        str(entry.get(key) or "")
+        for key in ("display_name", "tagline", "intro", "creator_name", "tags")
+    )
+    return not q.strip() or q.strip().casefold() in searchable.casefold()
 
 
 def _coerce_json(raw: object) -> dict:
@@ -338,7 +425,8 @@ def _derive_profile_presentation(spec: dict, draft: dict, is_builtin: bool = Fal
 @router.get("/{character_id}/profile")
 async def get_character_profile(
     character_id: str,
-    current_user: TokenData = Depends(get_current_user),
+    language: str = Header("en", alias="Accept-Language"),
+    current_user: TokenData | None = Depends(get_optional_user),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """Public-facing character profile for the discovery / profile page.
@@ -355,7 +443,7 @@ async def get_character_profile(
     from the Soul Spec / draft; internal persona (core_wound / core_fear / …) is
     never included (see ``_derive_profile_presentation``).
     """
-    uid = uuid.UUID(current_user.user_id)
+    uid = uuid.UUID(current_user.user_id) if current_user else None
 
     char_result = await db.execute(
         text(
@@ -401,9 +489,24 @@ async def get_character_profile(
         )
         creator_name = cr.scalar_one_or_none()
 
+    display_name = display_name_from_spec(spec_json, character_id)
+    from heart.core.config import settings as profile_settings
+
+    if profile_settings.international_mode:
+        from heart.i18n import resolve_locale
+        from heart.international_catalog import CHARACTERS
+
+        locale = resolve_locale(language if isinstance(language, str) else "en")
+        curated = next((item for item in CHARACTERS if item["id"] == character_id), None)
+        if curated:
+            display_name = curated["names"][locale]
+            presentation["tagline"] = curated["taglines"][locale]
+            presentation["intro"] = curated.get("intros", {}).get(locale, curated["persona"])
+            presentation["one_liner"] = ""
+
     return {
         "id": row["id"],
-        "display_name": display_name_from_spec(spec_json, character_id),
+        "display_name": display_name,
         "creator_name": creator_name,
         "avatar_url": draft_json.get("avatar_url"),
         "cover_url": row["cover_url"],
@@ -701,7 +804,13 @@ def _derive_content(
     character_id: str,
 ) -> CharacterContent:
     """Derive proactive content strings from a draft (deterministic, no LLM)."""
-    name = draft.display_name.zh or draft.display_name.ja or draft.display_name.en or character_id
+    name = (
+        draft.display_name.zh
+        or draft.display_name.ja
+        or draft.display_name.ko
+        or draft.display_name.en
+        or character_id
+    )
     style_greet = {
         "warm": f"{name}想着你，今天过得怎么样？",
         "cool": f"…{name}在这里。",
@@ -883,7 +992,12 @@ async def create_character(
     uid = uuid.UUID(current_user.user_id)
 
     # Mint id
-    name_zh = draft.display_name.zh
+    name_zh = (
+        draft.display_name.en
+        or draft.display_name.ja
+        or draft.display_name.ko
+        or draft.display_name.zh
+    )
     character_id = _mint_character_id(name_zh, uid)
 
     # Build spec
@@ -991,7 +1105,10 @@ async def create_character(
     logger.info("ugc_character_created", character_id=character_id, user_id=str(uid))
     return {
         "id": character_id,
-        "display_name": spec.display_name.zh or spec.display_name.ja or spec.display_name.en,
+        "display_name": spec.display_name.zh
+        or spec.display_name.ja
+        or spec.display_name.ko
+        or spec.display_name.en,
         "spec_version": spec.spec_version,
         "visibility": vis,
     }
@@ -1010,11 +1127,13 @@ class OpeningPreviewRequest(BaseModel):
     backstory: str | None = None
     tags: list[str] = []
     greeting_style: str = "warm"
+    response_language: Literal["en", "ja", "ko"] | None = None
 
 
 @router.post("/opening-preview")
 async def preview_opening(
     body: OpeningPreviewRequest,
+    language: str = Header("en", alias="Accept-Language"),
     current_user: TokenData = Depends(get_current_user),
 ) -> dict:
     """Generate a first-encounter opening draft with the MAIN model (creator-facing).
@@ -1046,6 +1165,17 @@ async def preview_opening(
         tags=list(body.tags or []),
         greeting_style=body.greeting_style or "warm",
     )
+
+    from heart.core.config import settings as authoring_settings
+
+    if authoring_settings.international_mode:
+        from heart.i18n import generation_directive, resolve_locale
+
+        messages[0]["content"] += "\n" + generation_directive(
+            body.response_language
+            or resolve_locale(language if isinstance(language, str) else "en"),
+            "fullwidth",
+        )
 
     try:
         text_out = await router.call_main(
@@ -1446,6 +1576,7 @@ class QuickPrefillRequest(BaseModel):
     display_name: str = Field(min_length=1, max_length=20)
     gender: Literal["male", "female"]
     persona: str = Field(min_length=20, max_length=5000)
+    response_language: Literal["en", "ja", "ko"] | None = None
 
 
 class QuickPrefillResponse(BaseModel):
@@ -1507,9 +1638,28 @@ _QUICK_PREFILL_TOTAL_TIMEOUT_S = 55.0
 _QUICK_PREFILL_MAX_TOKENS = 2200
 
 
+def _localize_creation_prompt(prompt: str, language: str) -> str:
+    from heart.core.config import settings as authoring_settings
+
+    if authoring_settings.international_mode:
+        from heart.i18n import LANGUAGE_NAMES, resolve_locale
+
+        output_language = LANGUAGE_NAMES[
+            resolve_locale(language if isinstance(language, str) else "en")
+        ]
+        prompt = prompt.replace("所有文字字段使用简体中文", f"所有文字字段使用{output_language}")
+        prompt += (
+            f"\nAll prose values must be written in {output_language}. "
+            "Keep JSON keys and enum values unchanged. Length bounds count characters."
+        )
+
+    return prompt
+
+
 @router.post("/quick-prefill")
 async def quick_prefill(
     body: QuickPrefillRequest,
+    language: str = Header("en", alias="Accept-Language"),
     current_user: TokenData = Depends(get_current_user),
 ) -> QuickPrefillResponse:
     """快速创建：一次性 AI 预填所有设定（批4）。
@@ -1586,6 +1736,8 @@ async def quick_prefill(
 - 不要把用户称为固定姓名，不要替用户决定身份或行动。
 
 只返回JSON，不要其他文字。"""
+
+    prompt = _localize_creation_prompt(prompt, body.response_language or language)
 
     from heart.infra.model_catalog import model_ids_by_ascending_coin_cost
 

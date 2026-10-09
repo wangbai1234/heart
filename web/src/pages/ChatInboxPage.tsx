@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next'
+import { uiText } from '../i18n/text'
 import { useState, useRef, useCallback, useEffect } from 'react'
 import { useScrollRestore } from '../hooks/useScrollRestore'
 import { useNavigate } from 'react-router-dom'
@@ -28,6 +30,7 @@ type TimelineMessage = {
 }
 
 function SwipeableRow({ children, onDelete }: { children: React.ReactNode; onDelete: () => void }) {
+  useTranslation()
   const [offsetX, setOffsetX] = useState(0)
   const startX = useRef(0)
   const currentOffset = useRef(0)
@@ -64,8 +67,7 @@ function SwipeableRow({ children, onDelete }: { children: React.ReactNode; onDel
           onClick={(e) => { e.stopPropagation(); onDelete() }}
           className="flex h-full w-full items-center justify-center rounded-r-[24px] bg-[#FF5A5A] text-[14px] font-semibold text-white"
         >
-          删除
-        </button>
+          {uiText('ui322')}</button>
       </div>
       <div
         className="relative z-10 transition-transform duration-200 ease-out"
@@ -81,6 +83,7 @@ function SwipeableRow({ children, onDelete }: { children: React.ReactNode; onDel
 }
 
 export function ChatInboxPage() {
+  useTranslation()
   const navigate = useNavigate()
   const { resolvedTheme } = useThemeStore()
   const currentCharacterId = useAppStore((s) => s.currentCharacterId)
@@ -213,20 +216,19 @@ export function ChatInboxPage() {
 
         <header className="relative px-5 pt-3 pb-2">
           <div className="inline-block">
-            <h1 className="text-[20px] font-semibold tracking-[-0.02em] text-[var(--color-ink)] mb-1">最近聊天</h1>
+            <h1 className="text-[20px] font-semibold tracking-[-0.02em] text-[var(--color-ink)] mb-1">{uiText('ui323')}</h1>
             <div className="h-[3px] w-full bg-gradient-to-r from-[var(--color-primary)] via-[var(--color-primary)]/60 to-transparent rounded-full" />
           </div>
           {totalUnreadCount > 0 && (
             <p className="mt-1.5 text-[13px] font-medium text-[var(--color-text-secondary)]">
-              {totalUnreadCount} 条未读
-            </p>
+              {totalUnreadCount} {uiText('ui324')}</p>
           )}
         </header>
 
         <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 pb-[180px] pt-4">
           {conversations.length === 0 ? (
             <div className="flex flex-col items-center justify-center pt-20">
-              <p className="text-[15px] text-[var(--color-text-muted)]">暂无聊天记录</p>
+              <p className="text-[15px] text-[var(--color-text-muted)]">{uiText('ui325')}</p>
             </div>
           ) : (
             <div className="space-y-4">
@@ -294,7 +296,7 @@ export function ChatInboxPage() {
       <Dialog
         open={deleteTarget !== null}
         onClose={() => setDeleteTarget(null)}
-        title="确认删除聊天记录？"
+        title={uiText('ui326')}
         actions={
           <>
             <button
@@ -305,8 +307,7 @@ export function ChatInboxPage() {
                   : 'bg-[rgba(255,255,255,0.75)] text-[#30344A]'
               }`}
             >
-              取消
-            </button>
+              {uiText('ui108')}</button>
             <button
               onClick={() => {
                 if (deleteTarget) {
@@ -315,13 +316,11 @@ export function ChatInboxPage() {
               }}
               className="flex-1 rounded-full bg-[#FF5A5A] px-4 py-3 text-[15px] font-semibold text-white"
             >
-              删除
-            </button>
+              {uiText('ui322')}</button>
           </>
         }
       >
-        删除后只会隐藏当前设备上的页面消息，服务端聊天记录和角色记忆不会被删除。
-      </Dialog>
+        {uiText('ui327')}</Dialog>
     </div>
   )
 }

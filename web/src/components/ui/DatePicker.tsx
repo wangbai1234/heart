@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next'
+import { uiText } from '../../i18n/text'
 import { useRef, useEffect, useState, useCallback } from 'react'
 import { Button } from './Button'
 
@@ -23,6 +25,7 @@ interface DatePickerProps {
 }
 
 export function DatePicker({ value, onChange, onConfirm }: DatePickerProps) {
+  useTranslation()
   const parsed = value.match(/^(\d{4})-(\d{2})-(\d{2})$/)
   const initYear = parsed ? parseInt(parsed[1]) : 2000
   const initMonth = parsed ? parseInt(parsed[2]) : 1
@@ -50,8 +53,7 @@ export function DatePicker({ value, onChange, onConfirm }: DatePickerProps) {
   return (
     <div>
       <h3 className="text-[18px] font-semibold text-[var(--color-ink)] text-center mb-5">
-        出生日期
-      </h3>
+        {uiText('ui399')}</h3>
 
       <div className="flex justify-center gap-2">
         {/* Year */}
@@ -59,27 +61,26 @@ export function DatePicker({ value, onChange, onConfirm }: DatePickerProps) {
           items={YEARS.map(String)}
           value={String(year)}
           onChange={(v) => setYear(parseInt(v))}
-          suffix="年"
+          suffix={uiText('more128')}
         />
         {/* Month */}
         <Wheel
           items={MONTHS.map((m) => String(m).padStart(2, '0'))}
           value={String(month).padStart(2, '0')}
           onChange={(v) => setMonth(parseInt(v))}
-          suffix="月"
+          suffix={uiText('more129')}
         />
         {/* Day */}
         <Wheel
           items={days.map((d) => String(d).padStart(2, '0'))}
           value={String(day).padStart(2, '0')}
           onChange={(v) => setDay(parseInt(v))}
-          suffix="日"
+          suffix={uiText('more130')}
         />
       </div>
 
       <Button variant="primary" size="sm" onClick={onConfirm} className="mt-5 w-full">
-        完成
-      </Button>
+        {uiText('more131')}</Button>
     </div>
   )
 }
@@ -96,6 +97,7 @@ function Wheel({
   onChange: (v: string) => void
   suffix: string
 }) {
+  useTranslation()
   const containerRef = useRef<HTMLDivElement>(null)
   const scrollingRef = useRef(false)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)

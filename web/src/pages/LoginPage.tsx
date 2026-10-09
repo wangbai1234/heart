@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next'
+import { uiText } from '../i18n/text'
 import { useState, useEffect, useCallback } from 'react'
 import { useLocation, useNavigate, Link } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
@@ -65,6 +67,7 @@ type Mode = 'password' | 'otp'
 type Step = 'email' | 'code' | 'restoration'
 
 export function LoginPage() {
+  useTranslation()
   const snap = readSnapshot()
   const now = Date.now()
 
@@ -182,9 +185,9 @@ export function LoginPage() {
 
   const handlePasswordLogin = useCallback(async () => {
     if (loading) return
-    if (!isValidEmail) { setToast({ visible: true, message: '请输入有效的邮箱' }); return }
-    if (password.length === 0) { setToast({ visible: true, message: '请输入密码' }); return }
-    if (!ageConfirmed) { setToast({ visible: true, message: '请先勾选确认你已年满 18 周岁' }); return }
+    if (!isValidEmail) { setToast({ visible: true, get message() { return uiText('ui0') } }); return }
+    if (password.length === 0) { setToast({ visible: true, get message() { return uiText('ui1') } }); return }
+    if (!ageConfirmed) { setToast({ visible: true, get message() { return uiText('ui355') } }); return }
     setLoading(true)
     try {
       const res = await loginWithPassword(email.trim().toLowerCase(), password)
@@ -193,9 +196,9 @@ export function LoginPage() {
       if (err instanceof ApiError && err.code === 'no_password_set') {
         setMode('otp')
         setStep('email')
-        setToast({ visible: true, message: '该账号尚未设置密码，请使用验证码登录' })
+        setToast({ visible: true, get message() { return uiText('ui356') } })
       } else {
-        setToast({ visible: true, message: err instanceof Error ? err.message : '登录失败，请重试' })
+        setToast({ visible: true, message: err instanceof Error ? err.message : uiText('ui4') })
       }
     } finally {
       setLoading(false)
@@ -204,8 +207,8 @@ export function LoginPage() {
 
   const handleSendOtp = useCallback(async () => {
     if (loading) return
-    if (!isValidEmail) { setToast({ visible: true, message: '请输入有效的邮箱' }); return }
-    if (!ageConfirmed) { setToast({ visible: true, message: '请先勾选确认你已年满 18 周岁' }); return }
+    if (!isValidEmail) { setToast({ visible: true, get message() { return uiText('ui0') } }); return }
+    if (!ageConfirmed) { setToast({ visible: true, get message() { return uiText('ui355') } }); return }
     setLoading(true)
     try {
       const res = await requestOtp(email.trim().toLowerCase(), 'login')
@@ -213,10 +216,10 @@ export function LoginPage() {
       setStep('code')
     } catch (err: unknown) {
       if (err instanceof ApiError && err.code === 'email_not_registered') {
-        setToast({ visible: true, message: '该邮箱未注册，正在前往注册页…' })
+        setToast({ visible: true, get message() { return uiText('ui357') } })
         setTimeout(() => navigate(`/register?email=${encodeURIComponent(email.trim().toLowerCase())}`), 1500)
       } else {
-        setToast({ visible: true, message: '发送失败，请重试' })
+        setToast({ visible: true, get message() { return uiText('ui7') } })
       }
     } finally {
       setLoading(false)
@@ -231,10 +234,10 @@ export function LoginPage() {
       await finishLogin(res)
     } catch (err: unknown) {
       if (err instanceof ApiError && err.code === 'email_not_registered') {
-        setToast({ visible: true, message: '该邮箱未注册，正在前往注册页…' })
+        setToast({ visible: true, get message() { return uiText('ui357') } })
         setTimeout(() => navigate(`/register?email=${encodeURIComponent(email.trim().toLowerCase())}`), 1500)
       } else {
-        const msg = err instanceof Error ? err.message : '验证码错误，请重试'
+        const msg = err instanceof Error ? err.message : uiText('ui9')
         setToast({ visible: true, message: msg })
       }
     } finally {
@@ -248,13 +251,13 @@ export function LoginPage() {
     try {
       const res = await requestOtp(email.trim().toLowerCase(), 'login')
       setCooldownEndAt(Date.now() + res.cooldown * 1000)
-      setToast({ visible: true, message: '验证码已重新发送' })
+      setToast({ visible: true, get message() { return uiText('ui358') } })
     } catch (err: unknown) {
       if (err instanceof ApiError && err.code === 'email_not_registered') {
-        setToast({ visible: true, message: '该邮箱未注册，正在前往注册页…' })
+        setToast({ visible: true, get message() { return uiText('ui357') } })
         setTimeout(() => navigate(`/register?email=${encodeURIComponent(email.trim().toLowerCase())}`), 1500)
       } else {
-        setToast({ visible: true, message: '发送失败，请重试' })
+        setToast({ visible: true, get message() { return uiText('ui7') } })
       }
     } finally {
       setLoading(false)
@@ -308,7 +311,7 @@ export function LoginPage() {
                   await restoreAccount()
                   navigate('/character', { replace: true })
                 } catch {
-                  setToast({ visible: true, message: '恢复失败，请重试' })
+                  setToast({ visible: true, get message() { return uiText('ui19') } })
                 } finally {
                   setLoading(false)
                 }
@@ -336,7 +339,7 @@ export function LoginPage() {
                         : 'text-[var(--color-text-secondary)]'
                     }`}
                   >
-                    {m === 'password' ? '密码登录' : '验证码登录'}
+                    {m === 'password' ? uiText('ui20') : uiText('ui21')}
                   </button>
                 ))}
               </div>
@@ -344,11 +347,11 @@ export function LoginPage() {
               {mode === 'password' ? (
                 <>
                   <div className="divide-y divide-[var(--color-divider-inset)] mb-2">
-                    <Input icon={MailIcon} placeholder="邮箱" value={email} onChange={setEmail} type="email" />
-                    <PasswordInput icon={LockIcon} placeholder="密码" value={password} onChange={setPassword} autoComplete="current-password" />
+                    <Input icon={MailIcon} placeholder={uiText('ui22')} value={email} onChange={setEmail} type="email" />
+                    <PasswordInput icon={LockIcon} placeholder={uiText('ui23')} value={password} onChange={setPassword} autoComplete="current-password" />
                   </div>
                   <div className="flex justify-end mb-4">
-                    <Link to="/forgot-password" className="text-[13px] text-[var(--color-primary)]">忘记密码？</Link>
+                    <Link to="/forgot-password" className="text-[13px] text-[var(--color-primary)]">{uiText('ui24')}</Link>
                   </div>
                   <Button
                     variant="primary"
@@ -357,15 +360,13 @@ export function LoginPage() {
                     disabled={loading}
                     onClick={handlePasswordLogin}
                   >
-                    登录
-                  </Button>
+                    {uiText('ui17')}</Button>
                 </>
               ) : step === 'email' ? (
                 <>
-                  <Input icon={MailIcon} placeholder="你的邮箱" value={email} onChange={setEmail} type="email" />
+                  <Input icon={MailIcon} placeholder={uiText('ui359')} value={email} onChange={setEmail} type="email" />
                   <p className="text-[12px] text-[var(--color-text-secondary)] mt-2 mb-4 leading-[1.6]">
-                    我们会向你的邮箱发送 6 位验证码，5 分钟内有效。
-                  </p>
+                    {uiText('ui360')}</p>
                   <Button
                     variant="primary"
                     size="lg"
@@ -373,13 +374,12 @@ export function LoginPage() {
                     disabled={loading}
                     onClick={handleSendOtp}
                   >
-                    发送验证码
-                  </Button>
+                    {uiText('ui25')}</Button>
                 </>
               ) : (
                 <>
                   <p className="text-[13px] text-[var(--color-text-secondary)] text-center mb-4">
-                    验证码已发送至 <span className="text-[var(--color-ink)] font-medium">{email}</span>
+                    {uiText('ui361')}<span className="text-[var(--color-ink)] font-medium">{email}</span>
                   </p>
                   <div className="flex justify-center mb-4">
                     <OTPInput
@@ -393,20 +393,17 @@ export function LoginPage() {
                       onClick={() => { setStep('email'); setCooldownEndAt(0) }}
                       className="text-[13px] text-[var(--color-primary)]"
                     >
-                      换邮箱
-                    </button>
+                      {uiText('ui362')}</button>
                     {cooldown > 0 ? (
                       <span className="text-[13px] text-[var(--color-text-muted)]">
-                        {cooldown}s 后可重发
-                      </span>
+                        {cooldown}{uiText('ui363')}</span>
                     ) : (
                       <button
                         onClick={handleResend}
                         disabled={loading}
                         className="text-[13px] text-[var(--color-primary)]"
                       >
-                        重新发送
-                      </button>
+                        {uiText('ui350')}</button>
                     )}
                   </div>
                 </>
@@ -418,8 +415,7 @@ export function LoginPage() {
         {/* Register entry */}
         {step !== 'restoration' && (
           <p className="text-center text-[13px] text-[var(--color-text-secondary)] mb-3">
-            没有账号？
-            <Link to="/register" className="text-[var(--color-primary)] font-medium">点击注册</Link>
+            {uiText('ui364')}<Link to="/register" className="text-[var(--color-primary)] font-medium">{uiText('ui365')}</Link>
           </p>
         )}
 
@@ -433,8 +429,8 @@ export function LoginPage() {
               className="w-4 h-4 shrink-0 accent-[var(--color-primary)]"
             />
             <span className="text-[12px] text-[var(--color-text-secondary)] leading-[1.6]">
-              我确认已<span className="font-semibold text-[var(--color-ink)]">年满 18 周岁</span>（
-              <Link to="/legal/age" className="text-[var(--color-primary)]" onClick={(e) => e.stopPropagation()}>年满18周岁确认</Link>
+              {uiText('ui366')}<span className="font-semibold text-[var(--color-ink)]">{uiText('ui367')}</span>（
+              <Link to="/legal/age" className="text-[var(--color-primary)]" onClick={(e) => e.stopPropagation()}>{uiText('ui368')}</Link>
               ）
             </span>
           </label>
@@ -442,10 +438,8 @@ export function LoginPage() {
 
         {/* Legal text */}
         <p className="text-center text-[12px] text-[var(--color-text-secondary)] mb-3">
-          继续即代表同意
-          <Link to="/legal/terms" className="text-[var(--color-primary)]">《用户协议》</Link>
-          与
-          <Link to="/legal/privacy" className="text-[var(--color-primary)]">《隐私政策》</Link>
+          {uiText('ui369')}<Link to="/legal/terms" className="text-[var(--color-primary)]">{uiText('ui33')}</Link>
+          {uiText('ui370')}<Link to="/legal/privacy" className="text-[var(--color-primary)]">{uiText('ui35')}</Link>
         </p>
       </div>
 
@@ -477,6 +471,7 @@ function RestorationCard({
   onRestore: () => void
   onCancel: () => void
 }) {
+  useTranslation()
   const daysLeft = graceEnd
     ? Math.max(0, Math.ceil((new Date(graceEnd).getTime() - Date.now()) / 86400000))
     : 0
@@ -484,29 +479,24 @@ function RestorationCard({
   return (
     <div className="text-center">
       <h2 className="text-[18px] font-semibold text-[var(--color-ink)] mb-2">
-        欢迎回来
-      </h2>
+        {uiText('ui36')}</h2>
       <p className="text-[14px] text-[var(--color-text-secondary)] mb-1">
-        您的账号正处于冷静期（还剩 {daysLeft} 天），数据仍然保留。
-      </p>
+        {uiText('ui37')}{daysLeft} {uiText('ui38')}</p>
       <p className="text-[13px] text-[var(--color-text-muted)] mb-5">
-        是否恢复账号并继续使用？
-      </p>
+        {uiText('ui39')}</p>
       <Button
         variant="primary"
         size="lg"
         loading={loading}
         onClick={onRestore}
       >
-        恢复账号
-      </Button>
+        {uiText('ui40')}</Button>
       <button
         onClick={onCancel}
         disabled={loading}
         className="mt-3 w-full text-center text-[14px] text-[var(--color-text-muted)] py-2 active:opacity-60"
       >
-        不了，退出登录
-      </button>
+        {uiText('ui41')}</button>
     </div>
   )
 }

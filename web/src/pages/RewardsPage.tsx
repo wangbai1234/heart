@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next'
+import { uiText } from '../i18n/text'
 import { useEffect, useMemo, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { AppPageContent, AppPageShell } from '../components/ui/AppPageShell'
@@ -49,6 +51,7 @@ function formatDate(value: string | null): string {
 }
 
 export function RewardsPage() {
+  useTranslation()
   const location = useLocation()
   const navigate = useNavigate()
   const requestedView = new URLSearchParams(location.search).get('view')
@@ -106,7 +109,7 @@ export function RewardsPage() {
         <AppPageContent className="flex h-[58px] shrink-0 items-center justify-between px-4 sm:px-5">
           <div>
             <p className="text-[11px] font-semibold tracking-[0.08em] text-[var(--color-primary-600)]">YUOYUO REWARDS</p>
-            <h1 className="mt-0.5 text-[23px] font-bold text-[var(--color-ink)]">福利</h1>
+            <h1 className="mt-0.5 text-[23px] font-bold text-[var(--color-ink)]">{uiText('ui133')}</h1>
           </div>
           <span className="rounded-full bg-[var(--color-page-surface)] px-3 py-1.5 text-[12px] text-[var(--color-text-secondary)] shadow-[var(--shadow-soft)]">
             {store.lottery?.available_chances ?? 0} 次抽奖机会
@@ -192,11 +195,12 @@ function InvitePanel({ store, onCopyCode, onCopyLink }: {
   onCopyCode: () => void
   onCopyLink: () => void
 }) {
+  useTranslation()
   return (
     <section className="space-y-5">
       <div className="relative overflow-hidden rounded-[8px] border border-[#f1b3c0]/35 bg-[var(--color-page-surface)] p-5 shadow-[0_12px_32px_rgba(117,58,76,0.10)]">
         <div className="relative min-h-[122px] pr-[104px] sm:pr-[150px]">
-          <p className="text-[11px] font-bold text-[var(--color-primary-600)]">邀请好友 · 双重奖励</p>
+          <p className="text-[11px] font-bold text-[var(--color-primary-600)]">{uiText('ui279')}</p>
           <h2 className="mt-2 text-[21px] font-bold leading-[1.3] text-[var(--color-ink)]">
             好友聊满 3 条<br />送你 1 次抽奖
           </h2>
@@ -206,7 +210,7 @@ function InvitePanel({ store, onCopyCode, onCopyLink }: {
           <img src="/assets/settings/invite-mascot.webp" alt="" className="absolute -right-3 -top-1 h-[116px] w-[116px] object-contain sm:right-3 sm:h-[136px] sm:w-[136px]" />
         </div>
         <div className="mt-3 border-t border-[var(--color-divider)] pt-4">
-          <p className="text-[11px] text-[var(--color-text-muted)]">我的邀请码</p>
+          <p className="text-[11px] text-[var(--color-text-muted)]">{uiText('ui572')}</p>
           <p className="mt-1 font-[var(--font-latin)] text-[25px] font-bold tracking-[0.14em] text-[var(--color-ink)]">{store.invite?.invite_code ?? '--'}</p>
           <div className="mt-3 grid grid-cols-2 gap-2.5">
             <button onClick={onCopyCode} className="flex h-[42px] items-center justify-center gap-1.5 rounded-[8px] border border-[var(--color-primary-400)] text-[13px] font-semibold text-[var(--color-primary-600)] active:scale-[0.98]">
@@ -252,6 +256,7 @@ function InvitePanel({ store, onCopyCode, onCopyLink }: {
 }
 
 function RewardStep({ index, title, detail, value }: { index: string; title: string; detail: string; value: string }) {
+  useTranslation()
   return <div className="flex items-center gap-3 rounded-[8px] bg-[var(--color-page-soft)]/75 px-3 py-3"><span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[6px] bg-[var(--color-primary-100)] font-[var(--font-latin)] text-[11px] font-bold text-[var(--color-primary-700)]">{index}</span><span className="min-w-0 flex-1"><strong className="block text-[13px] text-[var(--color-ink)]">{title}</strong><small className="mt-0.5 block text-[11px] leading-relaxed text-[var(--color-text-muted)]">{detail}</small></span><strong className="shrink-0 text-[15px] font-bold text-[var(--color-primary-600)]">{value}</strong></div>
 }
 
@@ -264,6 +269,7 @@ function LotteryPanel({ store, spinning, rotation, result, onDraw, onInvite, onT
   onInvite: () => void
   onToast: (message: string, variant?: 'info' | 'error' | 'success') => void
 }) {
+  useTranslation()
   const prizes = orderLotteryPrizes(store.lottery?.pool_prizes ?? []).slice(0, WHEEL_PRIZE_CODES.length)
 
   return (
@@ -386,7 +392,7 @@ function LotteryPanel({ store, spinning, rotation, result, onDraw, onInvite, onT
             {store.coupons.map((coupon) => (
               <div key={coupon.id} className="flex min-h-[62px] items-center justify-between py-2">
                 <div>
-                  <p className="text-[14px] text-[var(--color-ink)]">{coupon.tier === 'plus' ? '进阶版' : '沉浸版'} {coupon.days} 天</p>
+                  <p className="text-[14px] text-[var(--color-ink)]">{coupon.tier === 'plus' ? uiText('ui504') : uiText('ui505')} {coupon.days} 天</p>
                   <p className="text-[11px] text-[var(--color-text-muted)]">{coupon.status === 'active' ? `${formatDate(coupon.activate_by)} 前激活` : coupon.status === 'activated' ? '已激活' : '已过期'}</p>
                 </div>
                 {coupon.status === 'active' && (
@@ -406,6 +412,7 @@ function CommissionPanel({ store, pendingFen, onToast }: {
   pendingFen: number
   onToast: (message: string, variant?: 'info' | 'error' | 'success') => void
 }) {
+  useTranslation()
   return (
     <section className="space-y-5">
       <div className="border-b border-[var(--color-divider)] pb-5">
@@ -424,7 +431,7 @@ function CommissionPanel({ store, pendingFen, onToast }: {
               </div>
               <button
                 disabled={(store.commission?.balance_fen ?? 0) < product.price_fen}
-                onClick={() => void store.spend(product.target, sku).then(() => onToast('兑换成功', 'success')).catch(() => onToast('兑换失败', 'error'))}
+                onClick={() => void store.spend(product.target, sku).then(() => onToast(uiText('more311'), 'success')).catch(() => onToast('兑换失败', 'error'))}
                 className="h-[34px] rounded-[8px] bg-[var(--color-primary-500)] px-3 text-[12px] font-medium text-white disabled:opacity-40"
               >兑换</button>
             </div>
@@ -448,10 +455,12 @@ function CommissionPanel({ store, pendingFen, onToast }: {
 }
 
 function Metric({ value, label }: { value: number; label: string }) {
+  useTranslation()
   return <div className="text-center"><p className="text-[21px] font-bold text-[var(--color-ink)]">{value}</p><p className="mt-1 text-[11px] text-[var(--color-text-muted)]">{label}</p></div>
 }
 
 function RewardPromise({ value, label, accent = false }: { value: string; label: string; accent?: boolean }) {
+  useTranslation()
   return (
     <div className="text-center">
       <p className={`text-[17px] font-bold ${accent ? 'text-[#e7a8c2]' : 'text-[#f4edf5]'}`}>{value}</p>
@@ -461,6 +470,7 @@ function RewardPromise({ value, label, accent = false }: { value: string; label:
 }
 
 function WishStageHeader() {
+  useTranslation()
   return (
     <div className="relative z-10 mx-auto mb-3 flex min-h-[70px] max-w-[390px] items-center justify-center border-b border-[#d8c5dd]/15 pb-3 pt-1 text-center">
       <span className="h-px w-10 bg-[#d8b98d]/35 sm:w-16" aria-hidden="true" />
@@ -476,6 +486,7 @@ function WishStageHeader() {
 }
 
 function MoonlitBackdrop() {
+  useTranslation()
   return (
     <svg className="pointer-events-none absolute inset-0 h-full w-full opacity-55" viewBox="0 0 480 650" preserveAspectRatio="none" fill="none" aria-hidden="true">
       <ellipse cx="240" cy="350" rx="190" ry="230" stroke="#9b82a6" strokeOpacity=".16" />
@@ -493,11 +504,12 @@ function MoonlitBackdrop() {
 }
 
 function RewardCard({ code, label }: { code: string; label: string }) {
+  useTranslation()
   const isVip = code.startsWith('vip_')
   const isMonth = code.endsWith('_30d')
   const isGrand = code === 'coin_200' || isMonth
   const detail = isVip
-    ? `${code.includes('immersive') ? '沉浸版' : '进阶版'}会员`
+    ? `${code.includes('immersive') ? uiText('ui505') : uiText('ui504')}会员`
     : '悠悠币'
 
   return (
@@ -524,6 +536,7 @@ function RewardCard({ code, label }: { code: string; label: string }) {
 }
 
 function CopyIcon() {
+  useTranslation()
   return (
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
@@ -532,6 +545,7 @@ function CopyIcon() {
 }
 
 function LinkIcon() {
+  useTranslation()
   return (
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" /><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
@@ -540,6 +554,7 @@ function LinkIcon() {
 }
 
 function InviteStep({ index, label }: { index: string; label: string }) {
+  useTranslation()
   return (
     <div className="flex min-w-0 flex-col items-center gap-1.5 text-center">
       <span className="flex h-6 w-6 items-center justify-center rounded-full bg-[var(--color-primary-100)] text-[11px] font-bold text-[var(--color-primary-600)]">{index}</span>
@@ -549,10 +564,17 @@ function InviteStep({ index, label }: { index: string; label: string }) {
 }
 
 function StatusLabel({ status }: { status: string }) {
-  const labels: Record<string, string> = { pending: '互动中', qualified: '已生效', review: '审核中', rejected: '未通过' }
+  useTranslation()
+  const labels: Record<string, string> = { pending: '互动中', qualified: '已生效', get review() { return uiText('ui48') }, get rejected() { return uiText('ui372') } }
   return <span className="text-[12px] font-medium text-[var(--color-text-secondary)]">{labels[status] ?? status}</span>
 }
 
-function EmptyRow({ text }: { text: string }) { return <p className="py-8 text-center text-[13px] text-[var(--color-text-muted)]">{text}</p> }
-function LoadError({ onRetry }: { onRetry: () => void }) { return <div className="py-16 text-center"><p className="text-[14px] text-[var(--color-text-muted)]">加载失败</p><button onClick={onRetry} className="mt-3 text-[13px] font-medium text-[var(--color-primary-600)]">重试</button></div> }
-function RewardsSkeleton() { return <div className="space-y-4"><Skeleton height={180} className="rounded-[8px]" /><Skeleton height={52} className="rounded-[8px]" /><Skeleton height={180} className="rounded-[8px]" /></div> }
+function EmptyRow({ text }: { text: string }) {
+  useTranslation()
+  return <p className="py-8 text-center text-[13px] text-[var(--color-text-muted)]">{text}</p> }
+function LoadError({ onRetry }: { onRetry: () => void }) {
+  useTranslation()
+  return <div className="py-16 text-center"><p className="text-[14px] text-[var(--color-text-muted)]">{uiText('more274')}</p><button onClick={onRetry} className="mt-3 text-[13px] font-medium text-[var(--color-primary-600)]">{uiText('ui126')}</button></div> }
+function RewardsSkeleton() {
+  useTranslation()
+  return <div className="space-y-4"><Skeleton height={180} className="rounded-[8px]" /><Skeleton height={52} className="rounded-[8px]" /><Skeleton height={180} className="rounded-[8px]" /></div> }

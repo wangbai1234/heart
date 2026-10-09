@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next'
+import { uiText } from '../i18n/text'
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useThemeStore } from '../stores/themeStore'
@@ -45,10 +47,10 @@ interface SliderField {
 // ── Constants ──────────────────────────────────────────────────────
 
 const SLIDER_FIELDS: SliderField[] = [
-  { key: 'warmth',        label: '亲切度',   leftLabel: '冷静',   rightLabel: '温暖' },
+  { key: 'warmth',        label: '亲切度',   leftLabel: '冷静',   get rightLabel() { return uiText('ui402') } },
   { key: 'talkativeness', label: '话唠度',   leftLabel: '安静',   rightLabel: '爱说话' },
-  { key: 'directness',    label: '直率度',   leftLabel: '含蓄',   rightLabel: '直接' },
-  { key: 'humor',         label: '幽默感',   leftLabel: '认真',   rightLabel: '搞怪' },
+  { key: 'directness',    label: '直率度',   get leftLabel() { return uiText('ui405') },   rightLabel: '直接' },
+  { key: 'humor',         get label() { return uiText('ui410') },   leftLabel: '认真',   rightLabel: '搞怪' },
   { key: 'playfulness',   label: '活泼度',   leftLabel: '稳重',   rightLabel: '活泼' },
   { key: 'steadiness',    label: '稳定度',   leftLabel: '情绪化', rightLabel: '淡定' },
 ]
@@ -56,7 +58,7 @@ const SLIDER_FIELDS: SliderField[] = [
 const GREETING_STYLES: { value: GreetingStyle; label: string; desc: string }[] = [
   { value: 'warm',     label: '温柔',   desc: '体贴入微，关怀满满' },
   { value: 'cool',     label: '清冷',   desc: '不急不躁，距离感有魅力' },
-  { value: 'playful',  label: '俏皮',   desc: '跳脱有趣，笑声不断' },
+  { value: 'playful',  get label() { return uiText('ui404') },   desc: '跳脱有趣，笑声不断' },
   { value: 'reserved', label: '内敛',   desc: '话不多，但句句走心' },
   { value: 'intense',  label: '浓烈',   desc: '情感丰沛，全情投入' },
 ]
@@ -188,6 +190,7 @@ function validateFormFields(f: FormFields): Record<string, string> {
 // ── Sub-components ─────────────────────────────────────────────────
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
+  useTranslation()
   return (
     <h2 className="text-[13px] font-medium text-[var(--color-text-muted)] uppercase tracking-[0.08em] mb-3 mt-6 px-1">
       {children}
@@ -196,6 +199,7 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 }
 
 function GlassCard({ children, className = '' }: { children: React.ReactNode; className?: string }) {
+  useTranslation()
   const { resolvedTheme } = useThemeStore()
   const isDark = resolvedTheme === 'dark'
 
@@ -213,6 +217,7 @@ interface SliderRowProps {
 }
 
 function SliderRow({ field, value, onChange }: SliderRowProps) {
+  useTranslation()
   const pct = value
   return (
     <div className="px-5 py-4">
@@ -249,6 +254,7 @@ function SliderRow({ field, value, onChange }: SliderRowProps) {
 // ── Main component ─────────────────────────────────────────────────
 
 export function CreateCharacterPage() {
+  useTranslation()
   const navigate = useNavigate()
   const goBack = useSafeBack('/character')
   const [searchParams] = useSearchParams()
@@ -440,7 +446,7 @@ export function CreateCharacterPage() {
       const { cover_url } = await uploadCharacterCover(compressed)
       setCoverUrl(cover_url)
     } catch (err) {
-      const msg = err instanceof ApiError ? err.message : '封面上传失败，请重试'
+      const msg = err instanceof ApiError ? err.message : uiText('ui416')
       showToast(msg, 'error')
     } finally {
       setCoverUploading(false)
@@ -676,14 +682,14 @@ export function CreateCharacterPage() {
         const processed = await preprocessForClone(file)
         toUpload = processed.file
       } else if (file.size > 20 * 1024 * 1024) {
-        showToast('文件过大（超过 20MB），请上传更短的录音', 'error')
+        showToast(uiText('ui73'), 'error')
         setCloneStatus('failed')
         return
       }
     } catch {
       // decode failed (unsupported codec / corrupt) — try raw upload if small.
       if (file.size > 20 * 1024 * 1024) {
-        showToast('无法处理该文件，请上传 10–30 秒的清晰录音', 'error')
+        showToast(uiText('ui74'), 'error')
         setCloneStatus('failed')
         return
       }
@@ -793,7 +799,7 @@ export function CreateCharacterPage() {
             {status === 'failed' && '克隆失败，点击重试'}
           </p>
           <p className="text-[12px] text-[var(--color-text-muted)] mt-[2px]">
-            {locked ? '当前账号暂不可用' : `${cost} yuoyuo币 · 音频或视频，取前 30 秒`}
+            {locked ? uiText('more112') : `${cost} yuoyuo币 · 音频或视频，取前 30 秒`}
           </p>
         </div>
         {locked && (
@@ -821,7 +827,7 @@ export function CreateCharacterPage() {
     try {
       const draft = buildDraft(form, avatarUrl || undefined, coverUrl || undefined)
       await updateCharacter(editId, draft)
-      showToast('角色已更新', 'success')
+      showToast(uiText('ui581'), 'success')
       navigate('/my-characters', { replace: true })
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : '创建失败，请稍后再试'
@@ -866,7 +872,7 @@ export function CreateCharacterPage() {
   }
 
   const isEdit = Boolean(editId)
-  const title = isEdit ? '编辑角色' : '创建角色'
+  const title = isEdit ? uiText('ui55') : uiText('ui586')
   const personaLen = form.persona.trim().length
 
   return (
@@ -899,7 +905,7 @@ export function CreateCharacterPage() {
         </button>
 
         <span className="text-[17px] font-semibold text-[var(--color-ink)]">
-          {step === 4 ? '配置音色' : step === 3 ? '初遇开场' : title}
+          {step === 4 ? uiText('more89') : step === 3 ? '初遇开场' : title}
         </span>
 
         {/* Step indicator — create flow has 4 steps (incl. voice); edit flow
@@ -946,7 +952,7 @@ export function CreateCharacterPage() {
                 }}
               >
                 {coverUrl ? (
-                  <img src={coverUrl} alt="封面" className="w-full h-full object-cover" />
+                  <img src={coverUrl} alt={uiText('ui440')} className="w-full h-full object-cover" />
                 ) : coverUploading ? (
                   <svg className="animate-spin w-8 h-8 text-white" viewBox="0 0 24 24" fill="none">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
@@ -1217,7 +1223,7 @@ export function CreateCharacterPage() {
             </GlassCard>
 
             {/* Greeting style */}
-            <SectionTitle>相处风格</SectionTitle>
+            <SectionTitle>{uiText('ui477')}</SectionTitle>
             <div className="grid grid-cols-1 gap-2.5">
               {GREETING_STYLES.map(({ value, label, desc }) => {
                 const active = form.greetingStyle === value
@@ -1273,7 +1279,7 @@ export function CreateCharacterPage() {
             {advancedOpen && (
               <>
                 {/* Backstory */}
-                <SectionTitle>背景故事</SectionTitle>
+                <SectionTitle>{uiText('ui611')}</SectionTitle>
                 <GlassCard>
                   <div className="px-5 pt-4 pb-3">
                     <textarea
@@ -1445,12 +1451,11 @@ export function CreateCharacterPage() {
               </p>
             </div>
 
-            <SectionTitle>预设音色</SectionTitle>
+            <SectionTitle>{uiText('ui72')}</SectionTitle>
             <div className="space-y-2.5">
               {presets.length === 0 && (
                 <p className="text-center text-[13px] text-[var(--color-text-muted)] py-8">
-                  加载中…
-                </p>
+                  {uiText('more105')}</p>
               )}
               {presets.map((preset) => {
                 const active = selectedPreset === preset.id
@@ -1502,7 +1507,7 @@ export function CreateCharacterPage() {
                               ? 'bg-[#FF8FAB] text-white'
                               : 'bg-[rgba(255,183,197,0.22)] text-[#FF7DA1]'
                           }`}
-                          aria-label={isPlaying ? '暂停试听' : '试听'}
+                          aria-label={isPlaying ? uiText('more106') : uiText('more107')}
                         >
                           {isPlaying ? (
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
@@ -1592,9 +1597,9 @@ export function CreateCharacterPage() {
             <GlassCard>
               <div className="divide-y divide-[var(--color-divider)]">
                 {([
-                  { key: 'public', label: '公开', desc: '审核通过后进入发现页，所有人可见' },
+                  { key: 'public', get label() { return uiText('ui44') }, desc: '审核通过后进入发现页，所有人可见' },
                   { key: 'unlisted', label: '仅链接', desc: '审核通过后仅通过分享链接可见，不进入发现页' },
-                  { key: 'private', label: '私密', desc: '仅自己可见，无需审核，立即可用' },
+                  { key: 'private', get label() { return uiText('ui46') }, desc: '仅自己可见，无需审核，立即可用' },
                 ] as const).map((opt) => (
                   <button
                     key={opt.key}
@@ -1827,8 +1832,7 @@ export function CreateCharacterPage() {
               onClick={() => setPendingCloneFile(null)}
               className="flex-1 h-[46px] rounded-[14px] border border-[var(--color-border-subtle)] text-[15px] font-medium text-[var(--color-text-secondary)] active:scale-[0.98] transition-transform"
             >
-              取消
-            </button>
+              {uiText('ui108')}</button>
             <button
               onClick={() => {
                 const f = pendingCloneFile
@@ -1837,8 +1841,7 @@ export function CreateCharacterPage() {
               }}
               className="flex-1 h-[46px] rounded-[14px] bg-gradient-to-r from-[#FFB7C5] to-[#FF8FAB] text-white text-[15px] font-semibold active:scale-[0.98] transition-transform"
             >
-              确认
-            </button>
+              {uiText('more65')}</button>
           </>
         }
       >

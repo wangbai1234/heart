@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next'
+import { uiText } from '../i18n/text'
 import { useEffect, useRef, useState } from 'react'
 
 interface Props {
@@ -7,6 +9,7 @@ interface Props {
 }
 
 export function VoiceRecordingOverlay({ durationMs, willCancel, cancelZoneRef }: Props) {
+  useTranslation()
   const [elapsed, setElapsed] = useState(0)
   const startRef = useRef(Date.now())
 
@@ -43,10 +46,10 @@ export function VoiceRecordingOverlay({ durationMs, willCancel, cancelZoneRef }:
           style={{ minWidth: 180 }}
         >
           <span className="text-white text-[13px] font-medium">
-            {willCancel ? '松开手指，取消发送' : '上滑取消'}
+            {willCancel ? uiText('more117') : uiText('more118')}
           </span>
           {willCancel && (
-            <span className="text-[rgba(255,255,255,0.75)] text-[11px] mt-1">× 取消</span>
+            <span className="text-[rgba(255,255,255,0.75)] text-[11px] mt-1">{uiText('more119')}</span>
           )}
         </div>
       </div>
@@ -71,7 +74,7 @@ export function VoiceRecordingOverlay({ durationMs, willCancel, cancelZoneRef }:
           {mm}:{ss}
         </span>
         <span className={`text-[12px] mt-1 transition-colors ${willCancel ? 'text-red-300' : 'text-[rgba(255,255,255,0.7)]'}`}>
-          {willCancel ? '松开手指，取消发送' : '手指上滑，取消发送'}
+          {willCancel ? uiText('more117') : uiText('more120')}
         </span>
       </div>
 

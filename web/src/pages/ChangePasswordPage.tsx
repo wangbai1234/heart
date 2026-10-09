@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next'
+import { uiText } from '../i18n/text'
 import { useState } from 'react'
 import { useAuthStore } from '../stores/authStore'
 import { Button } from '../components/ui/Button'
@@ -14,6 +16,7 @@ const LockIcon = (
 )
 
 export function ChangePasswordPage() {
+  useTranslation()
   const goBack = useSafeBack('/settings')
   const user = useAuthStore((s) => s.user)
   const setUser = useAuthStore((s) => s.setUser)
@@ -39,11 +42,11 @@ export function ChangePasswordPage() {
   const handleSubmit = async () => {
     if (loading) return
     if (next.length < 8) {
-      showToast('新密码至少 8 位', 'error')
+      showToast(uiText('ui141'), 'error')
       return
     }
     if (next !== confirm) {
-      showToast('两次输入的密码不一致', 'error')
+      showToast(uiText('ui11'), 'error')
       return
     }
     setLoading(true)
@@ -54,10 +57,10 @@ export function ChangePasswordPage() {
         await setPassword(next)
         setUser({ has_password: true })
       }
-      showToast('密码已更新', 'success')
+      showToast(uiText('ui142'), 'success')
       setTimeout(goBack, 800)
     } catch (err: unknown) {
-      showToast(err instanceof Error ? err.message : '操作失败，请重试', 'error')
+      showToast(err instanceof Error ? err.message : uiText('ui143'), 'error')
     } finally {
       setLoading(false)
     }
@@ -69,27 +72,27 @@ export function ChangePasswordPage() {
       <div className="relative z-10 w-full h-full flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-5 pt-4 pb-3" style={{ paddingTop: 'var(--safe-top)' }}>
-          <button onClick={goBack} className="w-[44px] h-[44px] flex items-center justify-center active:opacity-60 transition-opacity" aria-label="返回">
+          <button onClick={goBack} className="w-[44px] h-[44px] flex items-center justify-center active:opacity-60 transition-opacity" aria-label={uiText('ui127')}>
             <svg width="12" height="20" viewBox="0 0 12 20" fill="none" stroke="var(--color-ink)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="10,2 2,10 10,18" />
             </svg>
           </button>
-          <h2 className="text-[17px] font-semibold text-[var(--color-ink)]">{hasPassword ? '修改密码' : '设置密码'}</h2>
+          <h2 className="text-[17px] font-semibold text-[var(--color-ink)]">{hasPassword ? uiText('ui144') : uiText('ui145')}</h2>
           <div style={{ width: 40 }} />
         </div>
 
         <div className="flex-1 overflow-y-auto px-5 pb-8">
           <p className="text-[13px] text-[var(--color-text-secondary)] leading-[1.6] mb-4">
             {hasPassword
-              ? '修改后，下次可用新密码登录。'
-              : '你当前通过验证码登录。设置密码后，下次可直接用邮箱 + 密码登录。'}
+              ? uiText('ui146')
+              : uiText('ui147')}
           </p>
 
           <div className="bg-[var(--color-glass-card)] backdrop-blur-[20px] rounded-[20px] border border-[var(--color-border-glass)] shadow-[var(--shadow-card)] px-4 divide-y divide-[var(--color-divider-inset)] mb-6">
             {hasPassword && (
               <PasswordInput
                 icon={LockIcon}
-                placeholder="当前密码"
+                placeholder={uiText('ui148')}
                 value={current}
                 onChange={setCurrent}
                 autoComplete="current-password"
@@ -97,14 +100,14 @@ export function ChangePasswordPage() {
             )}
             <PasswordInput
               icon={LockIcon}
-              placeholder="新密码（至少 8 位）"
+              placeholder={uiText('ui149')}
               value={next}
               onChange={setNext}
               autoComplete="new-password"
             />
             <PasswordInput
               icon={LockIcon}
-              placeholder="确认新密码"
+              placeholder={uiText('ui150')}
               value={confirm}
               onChange={setConfirm}
               autoComplete="new-password"
@@ -112,11 +115,10 @@ export function ChangePasswordPage() {
           </div>
 
           <p className="text-xs text-[var(--color-text-muted)] -mt-4 mb-6 px-1">
-            密码至少 8 位，建议包含字母和数字。
-          </p>
+            {uiText('ui151')}</p>
 
           <Button variant="primary" size="lg" loading={loading} disabled={!canSubmit} onClick={handleSubmit}>
-            {hasPassword ? '确认修改' : '确认设置'}
+            {hasPassword ? uiText('ui152') : uiText('ui153')}
           </Button>
         </div>
       </div>

@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next'
+import { uiText } from '../i18n/text'
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
 import { ApiError, adminGetAnalytics, type AdminAnalyticsDTO } from '../services/api'
 
@@ -36,6 +38,7 @@ function pct(value: number | null | undefined): string {
 }
 
 function Stat({ label, value, note }: { label: string; value: string; note?: string }) {
+  useTranslation()
   return (
     <div className="min-w-0 border-l-2 border-[var(--color-primary)] pl-3 py-1">
       <p className="text-[12px] text-[var(--color-text-muted)]">{label}</p>
@@ -46,6 +49,7 @@ function Stat({ label, value, note }: { label: string; value: string; note?: str
 }
 
 function Section({ id, title, children, note }: { id: string; title: string; children: ReactNode; note?: string }) {
+  useTranslation()
   return (
     <section id={id} className="scroll-mt-20 border-t border-[var(--color-divider)] pt-7">
       <div className="mb-4 flex flex-wrap items-end justify-between gap-2">
@@ -58,6 +62,7 @@ function Section({ id, title, children, note }: { id: string; title: string; chi
 }
 
 function TrendChart({ data }: { data: AdminAnalyticsDTO['daily'] }) {
+  useTranslation()
   const width = 900
   const height = 230
   const pad = { left: 38, right: 16, top: 16, bottom: 34 }
@@ -90,6 +95,7 @@ function TrendChart({ data }: { data: AdminAnalyticsDTO['daily'] }) {
 }
 
 export function AdminAnalyticsPage() {
+  useTranslation()
   const today = useMemo(() => isoDay(new Date()), [])
   const initialStart = useMemo(() => {
     const d = new Date(); d.setDate(d.getDate() - 29); return isoDay(d)
@@ -146,8 +152,8 @@ export function AdminAnalyticsPage() {
         <div className="mx-auto flex max-w-[1180px] flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6">
           <div><p className="text-[11px] text-[var(--color-primary)]">YUOYUO · PRODUCT HEALTH</p><h1 className="text-[18px] font-semibold">产品健康看板</h1></div>
           <div className="flex flex-wrap items-end gap-2">
-            <label className="text-[11px] text-[var(--color-text-muted)]">开始<input type="date" value={start} max={end} onChange={(e) => setStart(e.target.value)} className="ml-2 h-[36px] border border-[var(--color-divider)] bg-[var(--color-page-surface)] px-2 text-[13px] text-[var(--color-ink)]" /></label>
-            <label className="text-[11px] text-[var(--color-text-muted)]">结束<input type="date" value={end} min={start} max={today} onChange={(e) => setEnd(e.target.value)} className="ml-2 h-[36px] border border-[var(--color-divider)] bg-[var(--color-page-surface)] px-2 text-[13px] text-[var(--color-ink)]" /></label>
+            <label className="text-[11px] text-[var(--color-text-muted)]">{uiText('more134')}<input type="date" value={start} max={end} onChange={(e) => setStart(e.target.value)} className="ml-2 h-[36px] border border-[var(--color-divider)] bg-[var(--color-page-surface)] px-2 text-[13px] text-[var(--color-ink)]" /></label>
+            <label className="text-[11px] text-[var(--color-text-muted)]">{uiText('more135')}<input type="date" value={end} min={start} max={today} onChange={(e) => setEnd(e.target.value)} className="ml-2 h-[36px] border border-[var(--color-divider)] bg-[var(--color-page-surface)] px-2 text-[13px] text-[var(--color-ink)]" /></label>
             <button type="button" onClick={() => void load()} disabled={loading} className="h-[36px] bg-[var(--color-primary)] px-4 text-[13px] font-medium text-white disabled:opacity-50">{loading ? '刷新中…' : '刷新'}</button>
           </div>
         </div>
@@ -201,7 +207,7 @@ export function AdminAnalyticsPage() {
         <Section id="characters" title="五、角色数据分析（非常重要）" note="按开聊人数、用户轮次排序">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[760px] text-left text-[12px]">
-              <thead className="text-[var(--color-text-muted)]"><tr className="border-b border-[var(--color-divider)]"><th className="py-2 font-medium">角色</th><th>进入</th><th>开聊</th><th>进入→开聊</th><th>用户轮次</th><th>人均轮次</th><th>回访率</th></tr></thead>
+              <thead className="text-[var(--color-text-muted)]"><tr className="border-b border-[var(--color-divider)]"><th className="py-2 font-medium">{uiText('ui132')}</th><th>进入</th><th>开聊</th><th>进入→开聊</th><th>用户轮次</th><th>人均轮次</th><th>回访率</th></tr></thead>
               <tbody>{data.characters.map((c) => <tr key={c.character_name} className="border-b border-[var(--color-divider)]"><td className="py-3 font-medium">{c.character_name}</td><td>{c.entered_users}</td><td>{c.chat_users}</td><td>{pct(c.entry_to_chat_pct)}</td><td>{compact(c.user_turns)}</td><td>{compact(c.avg_turns, 1)}</td><td>{pct(c.return_rate_pct)}</td></tr>)}</tbody>
             </table>
           </div>

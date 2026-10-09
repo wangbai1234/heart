@@ -1,3 +1,4 @@
+import { uiText } from '../i18n/text'
 import { useCallback, useRef } from 'react'
 import { useAuthStore } from '../stores/authStore'
 
@@ -103,7 +104,7 @@ export function useStreamingAsr() {
 
   const start = useCallback(async (opts?: StartOptions): Promise<void> => {
     const { accessToken } = useAuthStore.getState()
-    if (!accessToken) throw new Error('未登录')
+    if (!accessToken) throw new Error(uiText('more152'))
 
     pcmChunksRef.current = []
     pendingRef.current = []
@@ -115,7 +116,7 @@ export function useStreamingAsr() {
 
     const AC = (window as unknown as { AudioContext?: typeof AudioContext; webkitAudioContext?: typeof AudioContext })
     const Ctor = AC.AudioContext ?? AC.webkitAudioContext
-    if (!Ctor) throw new Error('浏览器不支持录音')
+    if (!Ctor) throw new Error(uiText('more153'))
     const ctx = new Ctor()
     ctxRef.current = ctx
     const srcRate = ctx.sampleRate

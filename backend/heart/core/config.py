@@ -25,6 +25,16 @@ class Settings(BaseSettings):
     heart_invariants: str = ""
     debug: bool = True
     log_level: str = "INFO"
+    local_character_review: bool = False
+    international_mode: bool = False
+    international_geo_enforced: bool = False
+    international_origin_secret: str = ""
+
+    # Google Sign-In; empty credentials leave the integration disabled.
+    google_client_id: str = ""
+    google_client_secret: str = ""
+    google_redirect_uri: str = "https://yuoyuo.app/api/auth/google/callback"
+    google_frontend_callback: str = "https://yuoyuo.app/auth/google/callback"
 
     # Database
     database_url: str = "postgresql+asyncpg://heart:heartdev@localhost:5432/heart"
@@ -385,6 +395,21 @@ class Settings(BaseSettings):
     tts_max_concurrency: int = 4
     tts_max_retries: int = 1
     tts_key_cooldown_seconds: float = 20.0
+
+    @model_validator(mode="after")
+    def validate_local_review(self) -> "Settings":
+        if self.local_character_review:
+            from urllib.parse import urlparse
+
+            if (
+                self.environment not in {"development", "test"}
+                or self.heart_dev_mode != "true"
+                or urlparse(self.database_url).hostname not in {"localhost", "127.0.0.1", "::1"}
+            ):
+                raise ValueError(
+                    "Local character review requires development mode and a loopback database"
+                )
+        return self
 
     @model_validator(mode="after")
     def validate_jwt_secret(self) -> "Settings":

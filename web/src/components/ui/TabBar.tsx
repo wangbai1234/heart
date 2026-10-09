@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next'
+import { uiText } from '../../i18n/text'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAppStore } from '../../stores/appStore'
 import { useAuthStore } from '../../stores/authStore'
@@ -17,7 +19,7 @@ interface TabItem {
 const leftTabs: TabItem[] = [
   {
     id: 'character',
-    label: '角色',
+    get label() { return uiText('ui132') },
     path: '/character',
     icon: (active) => (
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={active ? 'var(--color-tab-active)' : 'var(--color-tab-inactive)'} strokeWidth="2" strokeLinecap="round">
@@ -28,7 +30,7 @@ const leftTabs: TabItem[] = [
   },
   {
     id: 'rewards',
-    label: '福利',
+    get label() { return uiText('ui133') },
     path: '/rewards',
     icon: (active) => (
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={active ? 'var(--color-tab-active)' : 'var(--color-tab-inactive)'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -45,7 +47,7 @@ const leftTabs: TabItem[] = [
 const rightTabs: TabItem[] = [
   {
     id: 'chat',
-    label: '消息',
+    get label() { return uiText('ui134') },
     path: '/chat',
     icon: (active) => (
       <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={active ? 'var(--color-tab-active)' : 'var(--color-tab-inactive)'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -55,7 +57,7 @@ const rightTabs: TabItem[] = [
   },
   {
     id: 'settings',
-    label: '我的',
+    get label() { return uiText('ui135') },
     path: '/settings',
     icon: (active) => (
       <svg width="24" height="24" viewBox="0 0 24 24" fill={active ? 'rgba(255,183,197,0.16)' : 'none'} stroke={active ? 'var(--color-tab-active)' : 'var(--color-tab-inactive)'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -78,6 +80,7 @@ function TabButton({
   onClick: () => void
   badgeCount?: number
 }) {
+  useTranslation()
   return (
     <button
       onClick={onClick}
@@ -88,7 +91,7 @@ function TabButton({
         {badgeCount > 0 && (
           <span
             className="absolute -top-1 -right-1.5 min-w-[16px] h-[16px] px-1 flex items-center justify-center rounded-full bg-[#FF4D6D] text-white text-[10px] font-medium leading-none shadow-[0_1px_3px_rgba(0,0,0,0.2)]"
-            aria-label={`${badgeCount} 条未读`}
+            aria-label={uiText('dynamic12', { v0: badgeCount })}
           >
             {badgeCount > 99 ? '99+' : badgeCount}
           </span>
@@ -102,6 +105,7 @@ function TabButton({
 }
 
 export function TabBar() {
+  useTranslation()
   const navigate = useNavigate()
   const location = useLocation()
   const inboxUnreadTotal = useAppStore((s) => s.inboxUnreadTotal)
@@ -131,7 +135,7 @@ export function TabBar() {
         <div className="relative flex h-[58px] flex-1 items-center justify-center">
           <button
             onClick={() => openTab('/create')}
-            aria-label="创作"
+            aria-label={uiText('ui136')}
             className={`relative -mt-[18px] flex h-[58px] w-[58px] items-center justify-center rounded-full border-4 border-[var(--color-page-surface)] transition-all active:scale-95 ${
               createActive
                 ? 'bg-[var(--color-primary-500)] text-white shadow-[0_7px_18px_rgba(255,110,138,0.34)]'
@@ -145,8 +149,7 @@ export function TabBar() {
             </div>
           </button>
           <span className={`absolute bottom-0 text-[11px] transition-colors duration-[var(--duration-fast)] ${createActive ? 'text-[var(--color-tab-active)] font-semibold' : 'text-[var(--color-tab-inactive)]'}`}>
-            创作
-          </span>
+            {uiText('ui136')}</span>
         </div>
 
         {rightTabs.map((tab) => (

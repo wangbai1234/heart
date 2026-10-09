@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next'
+import { uiText } from '../i18n/text'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useThemeStore } from '../stores/themeStore'
@@ -28,6 +30,7 @@ const sections = [
 type Section = (typeof sections)[number]
 
 export function UIStatePreviewPage() {
+  useTranslation()
   const navigate = useNavigate()
   const { resolvedTheme, setTheme } = useThemeStore()
   const [activeSection, setActiveSection] = useState<Section>('offline')
@@ -88,7 +91,7 @@ export function UIStatePreviewPage() {
             <EmptyState
               title="我们刚认识，先聊点什么吧？"
               description="选择一个话题开始对话"
-              actionLabel="开始聊天"
+              actionLabel={uiText('ui316')}
               onAction={() => {}}
             />
           </div>
@@ -164,7 +167,7 @@ export function UIStatePreviewPage() {
                 <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-r from-[#FFB7C5] to-[#FF8FAB] opacity-45">
                   <svg width="17" height="17" viewBox="0 0 24 24" fill="white"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" /></svg>
                 </span>
-                <button type="button" aria-label={showComposerMenu ? '收起更多功能' : '更多功能'} onClick={() => setShowComposerMenu((value) => !value)} className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${showComposerMenu ? 'bg-[#FF8FAB]/16 text-[#FF7D9D]' : 'bg-black/[0.045] text-[var(--color-text-secondary)]'}`}>
+                <button type="button" aria-label={showComposerMenu ? uiText('ui105') : uiText('ui106')} onClick={() => setShowComposerMenu((value) => !value)} className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${showComposerMenu ? 'bg-[#FF8FAB]/16 text-[#FF7D9D]' : 'bg-black/[0.045] text-[var(--color-text-secondary)]'}`}>
                   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" className="transition-transform duration-200" style={{ transform: showComposerMenu ? 'rotate(45deg)' : 'none' }}><line x1="12" y1="6" x2="12" y2="18" /><line x1="6" y1="12" x2="18" y2="12" /></svg>
                 </button>
               </div>
@@ -183,15 +186,13 @@ export function UIStatePreviewPage() {
       </div>
 
       {/* Dialog */}
-      <Dialog open={showDialog} onClose={() => setShowDialog(false)} title="确认退出登录？">
-        <p>退出后需要重新通过邮箱链接登录。</p>
+      <Dialog open={showDialog} onClose={() => setShowDialog(false)} title={uiText('ui547')}>
+        <p>{uiText('ui548')}</p>
         <div className="flex gap-3 mt-4">
           <Button variant="ghost" size="sm" onClick={() => setShowDialog(false)} className="flex-1">
-            取消
-          </Button>
+            {uiText('ui108')}</Button>
           <Button variant="primary" size="sm" onClick={() => setShowDialog(false)} className="flex-1">
-            确认退出
-          </Button>
+            {uiText('ui549')}</Button>
         </div>
       </Dialog>
 
@@ -214,8 +215,7 @@ export function UIStatePreviewPage() {
           </button>
         ))}
         <Button variant="primary" size="sm" onClick={() => setShowSheet(false)} className="mt-4 w-full">
-          完成
-        </Button>
+          {uiText('more131')}</Button>
       </BottomSheet>
       <MaskSheet
         open={showMaskSheet}

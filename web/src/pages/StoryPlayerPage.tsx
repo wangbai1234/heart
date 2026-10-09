@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next'
+import { uiText } from '../i18n/text'
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useStoryStore, type StoryMessageVM } from '../stores/storyStore'
@@ -18,6 +20,7 @@ import { splitGmText } from '../utils/storyBubbles'
  * page only reads it and forwards input to the story WebSocket.
  */
 export function StoryPlayerPage() {
+  useTranslation()
   const navigate = useNavigate()
   const { runId = '' } = useParams()
 
@@ -82,7 +85,7 @@ export function StoryPlayerPage() {
   return (
     <div className="app-atmosphere relative flex h-full w-full flex-col overflow-hidden">
       <NavigationBar
-        title={runMeta?.title ?? '剧情'}
+        title={runMeta?.title ?? uiText('more327')}
         onBack={() => navigate('/explore')}
       />
 
@@ -92,8 +95,7 @@ export function StoryPlayerPage() {
         style={{ top: 'calc(44px + var(--safe-top))' }}
       >
         <span className="text-[11px] text-[var(--color-text-muted)] text-center">
-          内容由 AI 生成，对话请遵守社区公约
-        </span>
+          {uiText('ui95')}</span>
       </div>
 
       <div
@@ -106,8 +108,8 @@ export function StoryPlayerPage() {
         ) : showError ? (
           <div className="pt-20">
             <ErrorState
-              title="加载失败"
-              description="这局剧情没能加载出来。"
+              title={uiText('more274')}
+              description={uiText('more328')}
               onRetry={() => void loadRun(runId, true)}
             />
           </div>
@@ -137,14 +139,13 @@ export function StoryPlayerPage() {
         {paused && (
           <div className="mb-2.5 flex items-center gap-3 rounded-[16px] bg-[var(--color-primary)]/10 border border-[var(--color-primary)]/30 px-3.5 py-2.5">
             <span className="flex-1 text-[13px] leading-[1.5] text-[var(--color-ink)]">
-              当前额度不足，剧情已暂停，进度已保存。获得新的免费额度后可继续游玩。
-            </span>
+              {uiText('more329')}</span>
           </div>
         )}
         <div className="flex items-end gap-2">
           <textarea
             className="flex-1 resize-none rounded-[20px] bg-[var(--color-surface)] text-[var(--color-ink)] placeholder-[var(--color-text-muted)] border border-[var(--color-border-glass)] px-4 py-2.5 focus:outline-none focus:border-[var(--color-primary)] max-h-32 min-h-[44px] text-[16px] disabled:opacity-50"
-            placeholder={paused ? '获得免费额度后继续剧情…' : '描述你的行动或对白…'}
+            placeholder={paused ? uiText('more330') : uiText('more331')}
             rows={1}
             value={draft}
             disabled={paused}
@@ -156,16 +157,14 @@ export function StoryPlayerPage() {
               onClick={interrupt}
               className="shrink-0 h-[44px] rounded-[22px] bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-text-secondary)] px-5 text-[15px] font-medium active:scale-[0.97] transition-transform"
             >
-              停止
-            </button>
+              {uiText('more332')}</button>
           ) : (
             <button
               onClick={handleSend}
               disabled={!draft.trim() || paused}
               className="shrink-0 h-[44px] rounded-[22px] bg-[var(--color-primary)] text-white px-5 text-[15px] font-semibold active:scale-[0.97] transition-transform disabled:opacity-40"
             >
-              发送
-            </button>
+              {uiText('ui104')}</button>
           )}
         </div>
       </div>
@@ -226,6 +225,7 @@ function groupMessages(messages: StoryMessageVM[]): MessageGroup[] {
 }
 
 function MessageGroup({ group }: { group: MessageGroup }) {
+  useTranslation()
   // Player 消息：右侧蓝色气泡
   if (group.role === 'player') {
     return (
@@ -289,6 +289,7 @@ function MessageGroup({ group }: { group: MessageGroup }) {
 }
 
 function TypingDots() {
+  useTranslation()
   return (
     <div className="flex justify-center py-2">
       <div className="flex gap-1.5">
@@ -305,6 +306,7 @@ function TypingDots() {
 }
 
 function PlayerSkeleton() {
+  useTranslation()
   return (
     <div className="flex flex-col gap-3 pt-6">
       <Skeleton className="h-[60px] w-3/4 mx-auto rounded-[18px]" />

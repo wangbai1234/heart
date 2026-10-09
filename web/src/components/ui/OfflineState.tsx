@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next'
+import { uiText } from '../../i18n/text'
 import type { ReactNode } from 'react'
 
 interface OfflineStateProps {
@@ -8,9 +10,10 @@ interface OfflineStateProps {
 
 export function OfflineState({
   icon,
-  title = '网络不可用',
-  description = '请检查网络连接后重试',
+  title = uiText('ui128'),
+  description = uiText('ui129'),
 }: OfflineStateProps) {
+  useTranslation()
   return (
     <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
       {icon || (

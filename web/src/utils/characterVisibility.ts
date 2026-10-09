@@ -1,4 +1,5 @@
 export interface DiscoverableCharacter {
+  localReview?: boolean
   isBuiltin: boolean
   isOwner: boolean
   visibility?: string
@@ -16,6 +17,7 @@ export interface DiscoverableCharacter {
  * existing companion relationship already grants continuity.
  */
 export function isDiscoverableCharacter(character: DiscoverableCharacter): boolean {
+  if (character.localReview) return ['public', 'unlisted'].includes(character.visibility ?? '') && character.reviewStatus === 'approved'
   if (character.isBuiltin || character.isOwner) return true
   if (character.visibility === 'public' && character.reviewStatus === 'approved') return true
   return Boolean(

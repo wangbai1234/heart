@@ -1,3 +1,6 @@
+import { uiText } from '../i18n/text'
+import i18n, { supportedLocale, type Locale } from '../i18n'
+import { international } from '../i18n/text'
 import { useAuthStore } from '../stores/authStore'
 import { promptAuthentication } from './navigation'
 
@@ -70,6 +73,7 @@ async function request<T>(
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     'X-Device-Id': getDeviceId(),
+    ...(international ? { 'Accept-Language': i18n.language } : {}),
     ...(options.headers as Record<string, string>),
   }
 
@@ -144,36 +148,36 @@ export async function acknowledgeNotice(noticeId: string): Promise<{ ok: boolean
  */
 const FRIENDLY_MESSAGES: Record<string, string> = {
   // ── Registration / login / password (machine codes) ──
-  email_already_registered: '该邮箱已注册，请直接登录，或使用「忘记密码」找回。',
-  invalid_invite_code: '邀请码无效，请检查后重试。',
-  no_password_set: '该账号尚未设置密码，请使用验证码登录。',
-  password_too_short: '密码至少 8 位，请重新设置。',
-  invalid_credentials: '邮箱或密码错误，请重试。',
-  email_not_registered: '该邮箱尚未注册，请先注册账号。',
-  user_not_found: '账号不存在，请重新登录。',
-  password_already_set: '你已设置过密码，请前往「修改密码」。',
-  wrong_current_password: '当前密码不正确，请重试。',
-  no_password_to_change: '你还没有设置密码，请先设置密码。',
+  get email_already_registered() { return uiText('more374') },
+  get invalid_invite_code() { return uiText('more375') },
+  get no_password_set() { return uiText('more376') },
+  get password_too_short() { return uiText('more377') },
+  get invalid_credentials() { return uiText('more378') },
+  get email_not_registered() { return uiText('more379') },
+  get user_not_found() { return uiText('more380') },
+  get password_already_set() { return uiText('more381') },
+  get wrong_current_password() { return uiText('more382') },
+  get no_password_to_change() { return uiText('more383') },
   // ── OTP (legacy English detail strings) ──
-  'Invalid or expired OTP': '验证码错误或已过期，请重新获取。',
-  'Invalid or expired code': '验证码错误或已过期，请重新获取。',
-  'OTP already used': '验证码已被使用，请重新获取。',
-  'OTP expired': '验证码已过期，请重新获取。',
-  'Code expired': '验证码已过期，请重新获取。',
-  'Too many OTP attempts': '尝试次数过多，请稍后重新获取验证码。',
-  'Too many attempts, request a new code': '尝试次数过多，请稍后重新获取验证码。',
-  'Invalid OTP': '验证码错误，请重试。',
-  'Invalid code': '验证码错误，请重试。',
-  'User creation failed': '账号创建失败，请稍后重试。',
+  get 'Invalid or expired OTP'() { return uiText('more384') },
+  get 'Invalid or expired code'() { return uiText('more384') },
+  get 'OTP already used'() { return uiText('more385') },
+  get 'OTP expired'() { return uiText('more386') },
+  get 'Code expired'() { return uiText('more386') },
+  get 'Too many OTP attempts'() { return uiText('more387') },
+  get 'Too many attempts, request a new code'() { return uiText('more387') },
+  get 'Invalid OTP'() { return uiText('more388') },
+  get 'Invalid code'() { return uiText('more388') },
+  get 'User creation failed'() { return uiText('more389') },
 }
 
 /** HTTP-status → generic Chinese fallback (never leak English / "Not Found"). */
 export function statusFallback(status: number): string {
-  if (status === 404) return '请求的服务暂不可用，请稍后重试。'
-  if (status === 429) return '操作过于频繁，请稍后再试。'
-  if (status >= 500) return '服务器开小差了，请稍后重试。'
-  if (status === 401 || status === 403) return '登录状态已失效，请重新登录。'
-  return '操作失败，请稍后重试。'
+  if (status === 404) return uiText('more390')
+  if (status === 429) return uiText('more391')
+  if (status >= 500) return uiText('more392')
+  if (status === 401 || status === 403) return uiText('more393')
+  return uiText('more394')
 }
 
 /**
@@ -187,6 +191,19 @@ export function statusFallback(status: number): string {
  * "[object Object]", which is exactly the clone-upload bug this fixes.
  */
 export function detailToMessage(detail: unknown, fallback: string): string {
+  if (international) {
+    if (typeof detail === 'string') {
+      if (FRIENDLY_MESSAGES[detail]) return FRIENDLY_MESSAGES[detail]
+      if (i18n.exists(detail)) return i18n.t(detail)
+      return fallback
+    }
+    if (Array.isArray(detail)) return uiText('fieldInvalid')
+    if (detail && typeof detail === 'object' && 'code' in detail) {
+      const code = String(detail.code)
+      return i18n.exists(code) ? i18n.t(code) : fallback
+    }
+    return fallback
+  }
   if (typeof detail === 'string') {
     return FRIENDLY_MESSAGES[detail] ?? (detail || fallback)
   }
@@ -196,14 +213,14 @@ export function detailToMessage(detail: unknown, fallback: string): string {
         if (d?.msg === 'Field required') {
           const field = Array.isArray(d?.loc) ? d.loc.at(-1) : null
           const labels: Record<string, string> = {
-            display_name: '昵称',
-            gender: '性别',
-            birthdate: '出生日期',
-            timezone: '时区',
+            get display_name() { return uiText('ui396') },
+            get gender() { return uiText('ui398') },
+            get birthdate() { return uiText('ui399') },
+            get timezone() { return uiText('more395') },
           }
           return field && labels[field]
-            ? `请填写${labels[field]}`
-            : '资料提交不完整，请刷新页面后重试'
+            ? uiText('dynamic42', { v0: labels[field] })
+            : uiText('more396')
         }
         return d?.msg ?? JSON.stringify(d)
       }).join('; ') || fallback
@@ -212,8 +229,8 @@ export function detailToMessage(detail: unknown, fallback: string): string {
   if (detail && typeof detail === 'object') {
     const d = detail as Record<string, any>
     if (d.code === 'tier_forbidden') {
-      const label = d.provider === 'fish' ? '真人语音（Fish）' : '音色'
-      return `${label}克隆需要会员权限，当前账号暂不可用。`
+      const label = d.provider === 'fish' ? uiText('more397') : uiText('more398')
+      return uiText('dynamic43', { v0: label })
     }
     if (typeof d.code === 'string' && FRIENDLY_MESSAGES[d.code]) {
       return FRIENDLY_MESSAGES[d.code]
@@ -805,7 +822,7 @@ export async function submitPromotion(input: {
     body: form,
   })
   const data = await res.json().catch(() => null)
-  if (!res.ok || !data) throw new ApiError(res.status, detailToMessage(data?.detail, '提交失败'))
+  if (!res.ok || !data) throw new ApiError(res.status, detailToMessage(data?.detail, uiText('more403')))
   return data
 }
 
@@ -836,7 +853,7 @@ export async function uploadAvatar(file: File): Promise<{ avatar_url: string }> 
   formData.append('file', file)
 
   const { accessToken } = (await import('../stores/authStore')).useAuthStore.getState()
-  if (!accessToken) throw new Error('未登录')
+  if (!accessToken) throw new Error(uiText('more152'))
 
   const res = await fetch('/api/profile/avatar', {
     method: 'POST',
@@ -846,7 +863,7 @@ export async function uploadAvatar(file: File): Promise<{ avatar_url: string }> 
 
   const data = await res.json().catch(() => null)
   if (!res.ok || !data) {
-    throw new Error(detailToMessage(data?.detail, `上传失败 (${res.status})`))
+    throw new Error(detailToMessage(data?.detail, uiText('dynamic44', { v0: res.status })))
   }
   return data
 }
@@ -1022,6 +1039,12 @@ export async function generateOpening(characterId: string): Promise<{
  * (avatar / colors) remain a frontend concern — see resolveCharacterProfile.
  */
 export interface CharacterDTO {
+  creator_name?: string
+  intro?: string
+  content_language?: string
+  cast_type?: "single" | "multiple"
+  content_rating?: "general" | "mature"
+  local_review?: { batch_id: string; original_visibility: string; original_status: string; original_review_status: string }
   id: string
   display_name: string
   visibility: string
@@ -1159,6 +1182,7 @@ export async function recordCharacterView(id: string): Promise<{
 // ── 批4: 快速创建 AI 预填 ──
 
 export interface QuickPrefillRequest {
+  response_language?: "en" | "ja" | "ko"
   display_name: string
   gender: 'male' | 'female'
   persona: string
@@ -1221,7 +1245,7 @@ export async function quickPrefill(
 
 /** Mirrors backend CharacterDraft (heart/ss01_soul/draft.py). */
 export interface CharacterDraftDTO {
-  display_name: { zh?: string; ja?: string; en?: string }
+  display_name: { zh?: string; ja?: string; ko?: string; en?: string }
   avatar_url?: string
   /** Portrait cover (short S3 proxy URL from POST /api/characters/cover — never base64). */
   cover_url?: string
@@ -1261,6 +1285,10 @@ export interface CharacterDraftDTO {
     steadiness: number
   }
   locale?: string
+  response_language?: "en" | "ja" | "ko"
+  world_book?: string
+  cast_type?: "single" | "multiple"
+  content_rating?: "general" | "mature"
   /** Intended visibility on publish. public/unlisted enter review; private is immediate. */
   visibility?: 'public' | 'unlisted' | 'private'
   // Batch 1 & 4: UGC creation redesign fields
@@ -1284,14 +1312,14 @@ export async function uploadCharacterAvatar(file: File): Promise<{ avatar_url: s
   const formData = new FormData()
   formData.append('file', file)
   const { accessToken } = (await import('../stores/authStore')).useAuthStore.getState()
-  if (!accessToken) throw new Error('未登录')
+  if (!accessToken) throw new Error(uiText('more152'))
   const res = await fetch('/api/characters/avatar', {
     method: 'POST',
     headers: { Authorization: `Bearer ${accessToken}` },
     body: formData,
   })
   const data = await res.json().catch(() => null)
-  if (!res.ok || !data) throw new Error(detailToMessage(data?.detail, `上传失败 (${res.status})`))
+  if (!res.ok || !data) throw new Error(detailToMessage(data?.detail, uiText('dynamic44', { v0: res.status })))
   return data
 }
 
@@ -1304,15 +1332,22 @@ export async function uploadCharacterCover(file: File): Promise<{ cover_url: str
   const formData = new FormData()
   formData.append('file', file)
   const { accessToken } = (await import('../stores/authStore')).useAuthStore.getState()
-  if (!accessToken) throw new Error('未登录')
+  if (!accessToken) throw new Error(uiText('more152'))
   const res = await fetch('/api/characters/cover', {
     method: 'POST',
     headers: { Authorization: `Bearer ${accessToken}` },
     body: formData,
   })
   const data = await res.json().catch(() => null)
-  if (!res.ok || !data) throw new Error(detailToMessage(data?.detail, `封面上传失败 (${res.status})`))
+  if (!res.ok || !data) throw new Error(detailToMessage(data?.detail, uiText('dynamic46', { v0: res.status })))
   return data
+}
+
+function localizedDraft(draft: CharacterDraftDTO): CharacterDraftDTO {
+  if (!international) return draft
+  const locale = supportedLocale(draft.locale ?? draft.response_language ?? i18n.language)
+  const name = draft.display_name.zh || draft.display_name[locale] || draft.display_name.en || draft.display_name.ja || draft.display_name.ko
+  return { ...draft, locale, display_name: { [locale]: name } }
 }
 
 export async function createCharacter(draft: CharacterDraftDTO): Promise<{
@@ -1321,14 +1356,27 @@ export async function createCharacter(draft: CharacterDraftDTO): Promise<{
   spec_version: string
   visibility: string
 }> {
-  return request('/characters', { method: 'POST', body: JSON.stringify(draft) })
+  return request('/characters', { method: 'POST', body: JSON.stringify(localizedDraft(draft)) })
 }
 
 export async function updateCharacter(
   characterId: string,
   draft: CharacterDraftDTO,
 ): Promise<{ id: string; spec_version: string }> {
-  return request(`/characters/${characterId}`, { method: 'PATCH', body: JSON.stringify(draft) })
+  let payload = draft
+  if (international) {
+    const original = await getCharacterDraft(characterId)
+    // Existing editors expose one name field, in this same fallback order.
+    // Keep other translations and the authored locale when the UI language changes.
+    const nameKey = (['zh', 'en', 'ja', 'ko'] as const).find(key => original.display_name[key] != null)
+      ?? supportedLocale(original.locale ?? 'en')
+    payload = {
+      ...draft,
+      locale: draft.locale ?? original.locale,
+      display_name: { ...original.display_name, [nameKey]: draft.display_name.zh ?? draft.display_name[nameKey] },
+    }
+  }
+  return request(`/characters/${characterId}`, { method: 'PATCH', body: JSON.stringify(payload) })
 }
 
 export async function getCharacterDraft(characterId: string): Promise<CharacterDraftDTO> {
@@ -1341,6 +1389,7 @@ export async function getCharacterDraft(characterId: string): Promise<CharacterD
  * later played back verbatim (see ss10_opening.generator) with no runtime LLM.
  */
 export async function generateOpeningPreview(input: {
+  response_language?: "en" | "ja" | "ko"
   display_name?: string
   persona: string
   backstory?: string
@@ -1509,7 +1558,7 @@ export async function uploadVoiceClone(
   provider: string = 'fish',
 ): Promise<{ ok: boolean; clone_status: string; balance: number }> {
   const { accessToken } = (await import('../stores/authStore')).useAuthStore.getState()
-  if (!accessToken) throw new Error('未登录')
+  if (!accessToken) throw new Error(uiText('more152'))
   const formData = new FormData()
   formData.append('file', file)
   const res = await fetch(
@@ -1521,7 +1570,7 @@ export async function uploadVoiceClone(
     },
   )
   const data = await res.json().catch(() => null)
-  if (!res.ok) throw new ApiError(res.status, detailToMessage(data?.detail, '上传失败'))
+  if (!res.ok) throw new ApiError(res.status, detailToMessage(data?.detail, uiText('more404')))
   return data
 }
 
@@ -1534,7 +1583,7 @@ export async function transcribeAudio(
   durationMs: number,
 ): Promise<{ transcript: string; duration_ms: number; balance?: number; audio_url?: string | null }> {
   const { accessToken } = (await import('../stores/authStore')).useAuthStore.getState()
-  if (!accessToken) throw new Error('未登录')
+  if (!accessToken) throw new Error(uiText('more152'))
   const formData = new FormData()
   formData.append('file', wav, 'recording.wav')
   formData.append('duration_ms', String(durationMs))
@@ -1544,7 +1593,7 @@ export async function transcribeAudio(
     body: formData,
   })
   const data = await res.json().catch(() => null)
-  if (!res.ok) throw new ApiError(res.status, detailToMessage(data?.detail, '语音识别失败'))
+  if (!res.ok) throw new ApiError(res.status, detailToMessage(data?.detail, uiText('ui80')))
   return data
 }
 
@@ -1969,4 +2018,57 @@ export async function adminNeedsInfoPromotion(id: string, reason: string, adminK
   return adminRequest(`/admin/promotions/${encodeURIComponent(id)}/needs-info`, adminKey, {
     method: 'POST', body: JSON.stringify({ reason }),
   })
+}
+
+export interface LanguagePreferences {
+  interface_language: Locale
+  response_language: Locale
+  action_style: 'parentheses' | 'asterisks' | 'fullwidth'
+  response_follows_interface: boolean
+}
+export function getLanguagePreferences(): Promise<LanguagePreferences> {
+  return request('/profile/preferences')
+}
+export function saveLanguagePreferences(preferences: LanguagePreferences): Promise<LanguagePreferences> {
+  return request('/profile/preferences', { method: 'PUT', body: JSON.stringify(preferences) })
+}
+
+export interface SharedMemoryDTO {
+  id: string
+  tier: 'L3' | 'L4'
+  content: string
+  category: string
+  updated_at: string
+}
+export interface SharedBondDTO {
+  message_count: number
+  user_message_count: number
+  active_days: number
+  first_message_at: string | null
+  stage: string
+  intimacy: number
+  emotion: string
+  memories: SharedMemoryDTO[]
+  relationship_history: { id: string; from_stage: string | null; to_stage: string | null; at: string }[]
+  emotion_history: { id: string; emotion: string; at: string }[]
+}
+export function addSharedMemory(characterId: string, id: string, tier: 'L3' | 'L4', content: string, confirmIdentity: boolean) {
+  return request(`/companions/${encodeURIComponent(characterId)}/memories`, {
+    method: 'POST', body: JSON.stringify({ id, tier, content, confirm_identity: confirmIdentity }),
+  })
+}
+export function getSharedBond(characterId: string): Promise<SharedBondDTO> {
+  return request(`/companions/${encodeURIComponent(characterId)}/bond`)
+}
+export function correctSharedMemory(characterId: string, memory: SharedMemoryDTO, content: string, confirmIdentity: boolean) {
+  return request(`/companions/${encodeURIComponent(characterId)}/memories/${memory.tier}/${encodeURIComponent(memory.id)}`, {
+    method: 'PATCH', body: JSON.stringify({ content, expected_content: memory.content, confirm_identity: confirmIdentity }),
+  })
+}
+
+export function getGoogleLoginConfig(): Promise<{ enabled: boolean }> {
+  return request('/auth/google/config')
+}
+export function exchangeGoogleTicket(ticket: string): Promise<TokenResponse> {
+  return request('/auth/google/exchange', { method: 'POST', body: JSON.stringify({ ticket }) })
 }

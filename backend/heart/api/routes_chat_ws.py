@@ -354,7 +354,9 @@ async def _precheck_billing(
             # a transient network issue so the payment gate is not exposed as a
             # separate account-enumeration signal. Development/test environments
             # retain the normal credits and membership behavior.
-            if is_production_environment():
+            from heart.core.config import settings as billing_settings
+
+            if is_production_environment() and not billing_settings.international_mode:
                 try:
                     paid = await has_fulfilled_afdian_order(db, user_uuid)
                 except Exception:
@@ -1105,6 +1107,14 @@ async def _handle_chat_message(
             from heart.api.routes_masks import get_bound_mask
 
             user_mask = await get_bound_mask(db, user_uuid, character_id)
+            from heart.core.config import settings as locale_settings
+            from heart.i18n import character_preferences
+
+            language_preferences = (
+                await character_preferences(db, user_uuid, character_id)
+                if locale_settings.international_mode
+                else None
+            )
             req = TurnRequest(
                 user_id=user_uuid,
                 character_id=character_id,
@@ -1114,6 +1124,12 @@ async def _handle_chat_message(
                 model=model,
                 voice_enabled=bool(effective_voice),
                 user_mask=user_mask,
+                response_language=(
+                    language_preferences.response_language if language_preferences else None
+                ),
+                action_style=(
+                    language_preferences.action_style if language_preferences else "fullwidth"
+                ),
             )
 
             await ws.send_json(

@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next'
+import { uiText } from '../../i18n/text'
 import { useState, type ReactNode } from 'react'
 
 interface PasswordInputProps {
@@ -23,6 +25,7 @@ export function PasswordInput({
   className = '',
   autoComplete = 'current-password',
 }: PasswordInputProps) {
+  useTranslation()
   const [show, setShow] = useState(false)
 
   return (
@@ -40,7 +43,7 @@ export function PasswordInput({
         type="button"
         onClick={() => setShow((s) => !s)}
         className="shrink-0 text-[var(--color-text-muted)] active:opacity-60 touch-manipulation"
-        aria-label={show ? '隐藏密码' : '显示密码'}
+        aria-label={show ? uiText('ui130') : uiText('ui131')}
       >
         {show ? (
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">

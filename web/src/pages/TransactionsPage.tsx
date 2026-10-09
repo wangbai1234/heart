@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next'
+import { uiText } from '../i18n/text'
 import { useEffect, useState } from 'react'
 import { useCreditsStore } from '../stores/creditsStore'
 import { getTransactions } from '../services/api'
@@ -14,20 +16,21 @@ interface Transaction {
 }
 
 const TYPE_LABELS: Record<string, string> = {
-  grant: '注册赠送',
-  redeem: '兑换码权益',
-  consume_text: '文本对话',
-  consume_voice: '语音对话',
-  consume_llm: '模型对话',
-  consume_tts: '语音合成',
-  consume_clone: '声音克隆',
-  membership_grant: '会员赠币',
-  invite: '邀请奖励',
-  refund: '退款',
-  adjust: '手动调整',
+  get grant() { return uiText('more333') },
+  get redeem() { return uiText('more334') },
+  get consume_text() { return uiText('more335') },
+  get consume_voice() { return uiText('more336') },
+  get consume_llm() { return uiText('more337') },
+  get consume_tts() { return uiText('more338') },
+  get consume_clone() { return uiText('more339') },
+  get membership_grant() { return uiText('more340') },
+  get invite() { return uiText('more341') },
+  get refund() { return uiText('more342') },
+  get adjust() { return uiText('more343') },
 }
 
 export function TransactionsPage() {
+  useTranslation()
   const goBack = useSafeBack('/wallet')
   const { balance, refresh: refreshCredits } = useCreditsStore()
   const scrollRef = useScrollRestore()
@@ -85,7 +88,7 @@ export function TransactionsPage() {
             <polyline points="10,2 2,10 10,18" />
           </svg>
         </button>
-        <span className="text-[17px] font-semibold text-[var(--color-ink)]">yuoyuo币明细</span>
+        <span className="text-[17px] font-semibold text-[var(--color-ink)]">{uiText('ui564')}</span>
         <div className="w-[44px]" />
       </nav>
 
@@ -94,7 +97,7 @@ export function TransactionsPage() {
         <div className="pointer-events-none absolute inset-y-0 right-0 w-[42%] bg-[linear-gradient(110deg,transparent,rgba(255,255,255,0.18))]" />
         <div className="relative flex items-start justify-between">
           <div>
-            <p className="text-[13px] text-white/75">当前 yuoyuo币</p>
+            <p className="text-[13px] text-white/75">{uiText('more344')}</p>
             <p className="mt-1 text-[34px] font-bold leading-none text-white">{balance}</p>
           </div>
           <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.84)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -102,7 +105,7 @@ export function TransactionsPage() {
             <path d="M12 7v10M15 9.5c-.7-1-1.7-1.5-3-1.5-1.7 0-3 1-3 2.4 0 3.1 6 1.5 6 4.4 0 1.5-1.3 2.7-3.2 2.7-1.5 0-2.6-.5-3.4-1.6" />
           </svg>
         </div>
-        <p className="relative mt-3 text-[12px] text-white/70">签到币与购买币均永久有效</p>
+        <p className="relative mt-3 text-[12px] text-white/70">{uiText('more345')}</p>
       </div>
 
       {/* Transaction list */}
@@ -121,12 +124,12 @@ export function TransactionsPage() {
           </div>
         ) : loadError ? (
           <div className="text-center py-12">
-            <p className="text-[var(--color-text-muted)] text-[14px]">加载失败</p>
-            <button onClick={loadInitial} className="mt-3 text-[13px] text-[var(--color-primary)] active:opacity-60">重试</button>
+            <p className="text-[var(--color-text-muted)] text-[14px]">{uiText('more274')}</p>
+            <button onClick={loadInitial} className="mt-3 text-[13px] text-[var(--color-primary)] active:opacity-60">{uiText('ui126')}</button>
           </div>
         ) : items.length === 0 ? (
           <div className="text-center py-12">
-            <p className="text-[var(--color-text-muted)] text-[14px]">暂无 yuoyuo币记录</p>
+            <p className="text-[var(--color-text-muted)] text-[14px]">{uiText('more346')}</p>
           </div>
         ) : (
           <div className="overflow-hidden rounded-[18px] border border-[var(--color-border-glass)] bg-[var(--color-glass-card)] shadow-[var(--shadow-card)]">
@@ -164,10 +167,10 @@ export function TransactionsPage() {
                 }`}
               >
                 {loadingMore
-                  ? '加载中...'
+                  ? uiText('ui415')
                   : loadMoreError
-                  ? '加载失败，点击重试'
-                  : '加载更多'}
+                  ? uiText('more347')
+                  : uiText('more348')}
               </button>
             )}
           </div>
