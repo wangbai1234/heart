@@ -175,13 +175,13 @@ async def lifespan(app: FastAPI):
 
 
 def _register_mode_specific_routers(app: FastAPI, international_mode: bool) -> None:
-    """Omit domestic commerce and campaigns from the international app."""
+    """Keep earned rewards available independently of payment-provider support."""
+    app.include_router(invite_router)  # /api/invite (GET code, POST /use)
+    app.include_router(lottery_router)  # /api/lottery + /api/rewards/coupons
+    app.include_router(commission_router)  # /api/commission (store-credit balance/spend)
+    app.include_router(promotions_router)  # /api/promotions (social promotion tasks)
+    app.include_router(promotions_admin_router)  # /api/admin/promotions (moderation)
     if not international_mode:
-        app.include_router(invite_router)  # /api/invite (GET code, POST /use)
-        app.include_router(lottery_router)  # /api/lottery + /api/rewards/coupons
-        app.include_router(commission_router)  # /api/commission (store-credit balance/spend)
-        app.include_router(promotions_router)  # /api/promotions (social promotion tasks)
-        app.include_router(promotions_admin_router)  # /api/admin/promotions (moderation)
         app.include_router(webhooks_router)  # /api/webhooks/* (afdian)
 
 

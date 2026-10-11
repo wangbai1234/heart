@@ -10,6 +10,29 @@ from .conftest import DEMO_USER_ID
 
 
 @pytest.mark.e2e
+def test_rewards_dashboard_loads_all_panels(api_context):
+    """The dashboard loads these together; one missing route breaks every tab."""
+    response = api_context.post(
+        "/api/auth/login",
+        data={"user_id": str(uuid.uuid4()), "email": f"rewards-{uuid.uuid4()}@example.com"},
+    )
+    assert response.ok, response.text()
+    headers = {"Authorization": f"Bearer {response.json()['access_token']}"}
+    for path, key in (
+        ("/api/invite/status", "invite_code"),
+        ("/api/lottery/status", "pool_prizes"),
+        ("/api/rewards/coupons", "coupons"),
+        ("/api/commission/balance", "balance_fen"),
+        ("/api/promotions/status", "submissions"),
+    ):
+        assert api_context.get(path).status == 401, path
+        result = api_context.get(path, headers=headers)
+        assert result.ok, (path, result.text())
+        assert key in result.json(), path
+    assert api_context.get("/api/lottery/status", headers=headers).json()["pool_prizes"]
+
+
+@pytest.mark.e2e
 def test_lottery_status_then_draw_persists_reward(api_context, pg_conn):
     login_response = api_context.post(
         "/api/auth/login",

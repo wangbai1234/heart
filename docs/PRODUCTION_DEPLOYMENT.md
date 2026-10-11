@@ -28,6 +28,8 @@ docker compose --env-file .env.prod -f docker-compose.prod.yml -f docker-compose
 
 ### 后续更新与回滚
 
+2.0.35 修复手机输入聚焦时字号被小字工具类覆盖（移动端输入最低 16px，保留手动缩放），全局隐藏滚动条外观但保留滚动，并恢复 `/rewards`、`/rewards/content` 及邀请、抽奖、奖励券、站内佣金兑换、活动提交与审核接口。这些福利功能不再受国际支付开关控制；爱发电 webhook 仍关闭。无数据库迁移。回归覆盖真实 HTTP/数据库抽奖发奖、全部福利面板读取，以及暂停语言推广和 Google 身份流程。
+
 以下历史 `release-prod.sh` / `deploy-prod.sh` 命令尚未自动加载国际 overlay，不要直接用来重建当前生产，否则会丢失国际代理配置。后续手动更新须先备份、合并 PR、生产快进 main，再用两份 Compose 文件构建、迁移并启动。前端必须显式使用上述两个 Vite 开关。
 
 回滚应用时保留新增数据库表及新用户写入，禁止直接恢复旧 dump 覆盖生产。旧代码可配合旧 `.env.prod`、旧静态目录及基础 Caddy/Compose 恢复；执行前确认回滚到国内访问逻辑是否仍符合用户当前意图。备份中的 dump 为灾难恢复材料，不是常规应用回滚步骤。

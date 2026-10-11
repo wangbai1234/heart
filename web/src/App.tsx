@@ -380,8 +380,8 @@ export function App() {
         <Route path="/explore" element={<ExplorePage />} />
         <Route path="/explore/:scenarioId" element={<ScenarioDetailPage />} />
         <Route path="/story/:runId" element={<StoryPlayerPage />} />
-        <Route path="/rewards" element={international ? <WalletPage /> : <RewardsPage />} />
-        <Route path="/rewards/content" element={international ? <WalletPage /> : <PromotionPage />} />
+        <Route path="/rewards" element={<RewardsPage />} />
+        <Route path="/rewards/content" element={<PromotionPage />} />
         <Route path="/character" element={<CharacterPage />} />
         <Route path="/character/:id" element={<CharacterProfilePage />} />
         <Route path="/settings" element={<SettingsPage />} />

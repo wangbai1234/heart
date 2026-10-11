@@ -74,13 +74,19 @@ body {
   overscroll-behavior: none;
 }
 
-.scrollbar-hide {
+/* The app uses a mobile canvas on desktop too. Hide only the scrollbar chrome;
+   overflow, touch, wheel and keyboard scrolling must keep working. */
+*,
+*::before,
+*::after {
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
 
-.scrollbar-hide::-webkit-scrollbar {
+*::-webkit-scrollbar {
   display: none;
+  width: 0;
+  height: 0;
 }
 
 /* ── Safe Area Variables ─────────────────────────────────────── */
@@ -92,11 +98,6 @@ body {
 
 .settings-scale-text {
   font-size: inherit;
-}
-
-/* Prevent iOS Safari from auto-zooming on input focus */
-input, textarea, select {
-  font-size: max(16px, 1em);
 }
 
 .text-\[10px\] { font-size: calc(10px * var(--app-font-scale)); }
@@ -117,6 +118,18 @@ input, textarea, select {
 .text-\[40px\] { font-size: calc(40px * var(--app-font-scale)); }
 .text-xs { font-size: calc(0.75rem * var(--app-font-scale)); }
 .text-base { font-size: calc(1rem * var(--app-font-scale)); }
+
+/* Safari zooms focused controls below 16px. This floor must win over utility
+   classes and the user's small-font setting. Keep pinch zoom accessible. */
+@media (max-width: 599px), (pointer: coarse) {
+  input,
+  textarea,
+  select,
+  [contenteditable="true"],
+  [contenteditable="plaintext-only"] {
+    font-size: max(16px, calc(1rem * var(--app-font-scale))) !important;
+  }
+}
 
 /* ── Dark Theme Overrides ────────────────────────────────────── */
 [data-theme="dark"] {
