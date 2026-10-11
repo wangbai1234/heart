@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next'
+import { uiText, uiLabel } from '../../i18n/text'
 import { useState } from 'react'
 import { FieldCard, SectionHeading, textInputCls } from '../../components/create/CreateShell'
 import { THEME_PRESETS } from '../../data/characterThemePresets'
@@ -17,6 +19,7 @@ const MAX_TAG_LEN = 20
 
 /** 标签选择器：预设标签 pill 可点选 + 自定义标签输入（复用角色创建的标签选择方式）。 */
 function TagPicker({ tags, onChange }: { tags: string[]; onChange: (t: string[]) => void }) {
+  useTranslation()
   const [custom, setCustom] = useState('')
   const toggle = (tag: string) =>
     onChange(tags.includes(tag) ? tags.filter((t) => t !== tag) : tags.length < MAX_TAGS ? [...tags, tag] : tags)
@@ -37,12 +40,12 @@ function TagPicker({ tags, onChange }: { tags: string[]; onChange: (t: string[])
       <div className="flex flex-wrap gap-2 mb-3">
         {CHARACTER_ROLE_TAGS.map((tag) => (
           <button key={tag} type="button" onClick={() => toggle(tag)} className={pill(tags.includes(tag))}>
-            {tag}
+            {uiLabel(tag)}
           </button>
         ))}
         {customTags.map((tag) => (
           <button key={tag} type="button" onClick={() => toggle(tag)} className={pill(true)}>
-            {tag}
+            {uiLabel(tag)}
           </button>
         ))}
       </div>
@@ -51,7 +54,7 @@ function TagPicker({ tags, onChange }: { tags: string[]; onChange: (t: string[])
           value={custom}
           onChange={(e) => setCustom(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCustom() } }}
-          placeholder="添加自定义标签…"
+          placeholder={uiText('ui588')}
           maxLength={MAX_TAG_LEN}
           className={`${textInputCls} flex-1 h-[42px]`}
         />
@@ -92,6 +95,7 @@ function RowListEditor({
   max: number
   addLabel: string
 }) {
+  useTranslation()
   const update = (i: number, patch: Partial<Row>) =>
     onChange(rows.map((r, idx) => (idx === i ? { ...r, ...patch } : r)))
   const remove = (i: number) => onChange(rows.filter((_, idx) => idx !== i))
@@ -123,7 +127,7 @@ function RowListEditor({
           />
           <button
             onClick={() => remove(i)}
-            aria-label="删除该行"
+            aria-label={uiText('ui589')}
             className="w-[40px] h-[40px] shrink-0 rounded-[14px] flex items-center justify-center text-[var(--color-text-muted)] bg-[var(--color-glass-35)] border border-[var(--color-border-glass)] active:scale-95 transition-transform"
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -146,19 +150,20 @@ function RowListEditor({
 
 /** 第 3 步：档案信息 → dossier 区块。填够 1 条即在详情页出现。 */
 export function Step3({ state, updateField }: StepProps) {
+  useTranslation()
   return (
     <div className="max-w-[560px] mx-auto">
-      <SectionHeading title="档案信息" hint="职业、身份、状态——填几条关键设定" />
-      <FieldCard label="档案条目" hint={`${state.dossierItems.length}/10 · 填满 3 条详情页更完整`}>
+      <SectionHeading title={uiText('ui590')} hint={uiText('ui591')} />
+      <FieldCard label={uiText('ui592')} hint={uiText('dynamic36', { v0: state.dossierItems.length })}>
         <RowListEditor
           rows={state.dossierItems}
           onChange={(r) => updateField('dossierItems', r)}
-          labelHeader="条目"
-          valueHeader="内容"
-          labelPlaceholder="身份"
-          valuePlaceholder="例：帝国近卫军统领"
+          labelHeader={uiText('ui593')}
+          valueHeader={uiText('ui594')}
+          labelPlaceholder={uiText('ui595')}
+          valuePlaceholder={uiText('ui596')}
           max={10}
-          addLabel="添加一条"
+          addLabel={uiText('ui597')}
         />
       </FieldCard>
     </div>
@@ -167,24 +172,25 @@ export function Step3({ state, updateField }: StepProps) {
 
 /** 第 4 步：独白 / 语气样本 → quote 区块。 */
 export function Step4({ state, updateField }: StepProps) {
+  useTranslation()
   const len = state.quote.length
   return (
     <div className="max-w-[560px] mx-auto">
-      <SectionHeading title="独白样本" hint="一段第一人称的话，让人听见 Ta 的声音" />
-      <FieldCard label="独白" hint={`${len}/200`}>
+      <SectionHeading title={uiText('ui598')} hint={uiText('ui599')} />
+      <FieldCard label={uiText('ui600')} hint={`${len}/200`}>
         <textarea
           value={state.quote}
           onChange={(e) => updateField('quote', e.target.value.slice(0, 200))}
-          placeholder="用 Ta 的口吻说一句话。可以是态度、习惯、或对世界的看法。"
+          placeholder={uiText('ui601')}
           rows={4}
           className="w-full px-4 py-3 rounded-[14px] text-[15px] leading-[1.7] resize-none bg-[var(--color-glass-55)] border border-[var(--color-border-glass)] text-[var(--color-ink)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-primary)] transition-colors"
         />
       </FieldCard>
-      <FieldCard label="署名" hint="可选，例：— 深夜值勤时">
+      <FieldCard label={uiText('ui602')} hint={uiText('ui603')}>
         <input
           value={state.quoteAttribution}
           onChange={(e) => updateField('quoteAttribution', e.target.value.slice(0, 40))}
-          placeholder="这句话出自什么场景"
+          placeholder={uiText('ui604')}
           className={textInputCls}
         />
       </FieldCard>
@@ -193,17 +199,18 @@ export function Step4({ state, updateField }: StepProps) {
 }
 
 const BG_OPTIONS: Array<{ id: 'timeline' | 'objects' | 'contrast'; name: string; desc: string }> = [
-  { id: 'timeline', name: '时间线', desc: '按时间讲 Ta 的经历' },
-  { id: 'objects', name: '随身物件', desc: '几件物品，各有来历' },
-  { id: 'contrast', name: '表里反差', desc: '外表与内里的对照' },
+  { id: 'timeline', get name() { return uiText('ui605') }, get desc() { return uiText('ui606') } },
+  { id: 'objects', get name() { return uiText('ui607') }, get desc() { return uiText('ui608') } },
+  { id: 'contrast', get name() { return uiText('ui609') }, get desc() { return uiText('ui610') } },
 ]
 
 /** 第 5 步：背景故事，三选一 → 对应区块出现。 */
 export function Step5({ state, updateField }: StepProps) {
+  useTranslation()
   const t = state.backgroundType
   return (
     <div className="max-w-[560px] mx-auto">
-      <SectionHeading title="背景故事" hint="选一种最适合 Ta 的讲法" />
+      <SectionHeading title={uiText('ui611')} hint={uiText('ui612')} />
       <div className="grid grid-cols-3 gap-2.5 mb-5">
         {BG_OPTIONS.map((o) => (
           <button
@@ -222,68 +229,68 @@ export function Step5({ state, updateField }: StepProps) {
       </div>
 
       {t === 'timeline' && (
-        <FieldCard label="时间线" hint={`${state.timelineItems.length}/8`}>
+        <FieldCard label={uiText('ui605')} hint={`${state.timelineItems.length}/8`}>
           <RowListEditor
             rows={state.timelineItems}
             onChange={(r) => updateField('timelineItems', r)}
-            labelHeader="时间"
-            valueHeader="发生了什么"
-            labelPlaceholder="如：十六岁"
-            valuePlaceholder="例：入伍从军"
+            labelHeader={uiText('ui613')}
+            valueHeader={uiText('ui614')}
+            labelPlaceholder={uiText('ui615')}
+            valuePlaceholder={uiText('ui616')}
             max={8}
-            addLabel="添加一段经历"
+            addLabel={uiText('ui617')}
           />
         </FieldCard>
       )}
       {t === 'objects' && (
-        <FieldCard label="随身物件" hint={`${state.objectItems.length}/6`}>
+        <FieldCard label={uiText('ui607')} hint={`${state.objectItems.length}/6`}>
           <RowListEditor
             rows={state.objectItems}
             onChange={(r) => updateField('objectItems', r)}
-            labelHeader="物件"
-            valueHeader="故事/意义"
-            labelPlaceholder="如：旧怀表"
-            valuePlaceholder="例：父亲的遗物"
+            labelHeader={uiText('ui618')}
+            valueHeader={uiText('ui619')}
+            labelPlaceholder={uiText('ui620')}
+            valuePlaceholder={uiText('ui621')}
             max={6}
-            addLabel="添加一件物品"
+            addLabel={uiText('ui622')}
           />
         </FieldCard>
       )}
       {t === 'contrast' && (
         <>
-          <FieldCard label="对照维度" hint="给两面起个名">
+          <FieldCard label={uiText('ui623')} hint={uiText('ui624')}>
             <div className="flex gap-3">
               <div className="flex-1">
-                <label className="block text-[12px] text-[var(--color-text-muted)] mb-1.5">表（外显）</label>
+                <label className="block text-[12px] text-[var(--color-text-muted)] mb-1.5">{uiText('ui625')}</label>
                 <input
                   value={state.contrastLeftLabel}
                   onChange={(e) => updateField('contrastLeftLabel', e.target.value.slice(0, 20))}
-                  placeholder="如：人前"
+                  placeholder={uiText('ui626')}
                   className={textInputCls}
                 />
               </div>
               <div className="flex-1">
-                <label className="block text-[12px] text-[var(--color-text-muted)] mb-1.5">里（内在）</label>
+                <label className="block text-[12px] text-[var(--color-text-muted)] mb-1.5">{uiText('ui627')}</label>
                 <input
                   value={state.contrastRightLabel}
                   onChange={(e) => updateField('contrastRightLabel', e.target.value.slice(0, 20))}
-                  placeholder="如：人后"
+                  placeholder={uiText('ui628')}
                   className={textInputCls}
                 />
               </div>
             </div>
           </FieldCard>
-          <FieldCard label="对照项" hint={`${state.contrastPairs.length}/6 · 每组填“表”与“里”两面`}>
+          <FieldCard label={uiText('ui629')} hint={uiText('dynamic37', { v0: state.contrastPairs.length })}>
             <RowListEditor
               rows={state.contrastPairs}
               onChange={(r) => updateField('contrastPairs', r)}
-              labelHeader={state.contrastLeftLabel.trim() || '表（外显）'}
-              valueHeader={state.contrastRightLabel.trim() || '里（内在）'}
-              labelPlaceholder="如：温和有礼"
-              valuePlaceholder="如：内心疏离"
+              labelHeader={state.contrastLeftLabel.trim() || uiText('ui625')}
+              valueHeader={state.contrastRightLabel.trim() || uiText('ui627')}
+              labelPlaceholder={uiText('ui630')}
+              valuePlaceholder={uiText('ui631')}
               equalWidth
               max={6}
-              addLabel="添加一组对照"
+              addLabel={uiText('ui632')}
             />
           </FieldCard>
         </>
@@ -302,6 +309,7 @@ function PromptListEditor({
   onChange: (p: string[]) => void
   max: number
 }) {
+  useTranslation()
   return (
     <div className="space-y-2.5">
       {prompts.map((p, i) => (
@@ -311,12 +319,12 @@ function PromptListEditor({
             onChange={(e) =>
               onChange(prompts.map((x, idx) => (idx === i ? e.target.value.slice(0, 60) : x)))
             }
-            placeholder={`开场选项 ${i + 1}`}
+            placeholder={uiText('dynamic38', { v0: i + 1 })}
             className={`${textInputCls} flex-1`}
           />
           <button
             onClick={() => onChange(prompts.filter((_, idx) => idx !== i))}
-            aria-label="删除该选项"
+            aria-label={uiText('ui633')}
             className="w-[46px] h-[50px] shrink-0 rounded-[14px] flex items-center justify-center text-[var(--color-text-muted)] bg-[var(--color-glass-35)] border border-[var(--color-border-glass)]"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -330,8 +338,7 @@ function PromptListEditor({
           onClick={() => onChange([...prompts, ''])}
           className="w-full h-[46px] rounded-[14px] border border-dashed border-[var(--color-border-glass)] text-[14px] text-[var(--color-text-secondary)]"
         >
-          + 添加开场选项
-        </button>
+          {uiText('ui634')}</button>
       )}
     </div>
   )
@@ -344,17 +351,18 @@ export function Step6({
   onAssistOpening,
   assisting,
 }: StepProps & { onAssistOpening: () => void; assisting: boolean }) {
+  useTranslation()
   return (
     <div className="max-w-[560px] mx-auto">
-      <SectionHeading title="开场设计" hint="用户点进来看到的第一幕" />
+      <SectionHeading title={uiText('ui635')} hint={uiText('ui636')} />
       <FieldCard
-        label="开场白"
-        hint="用户第一次进入聊天时逐字播放，不走实时生成。用（）包裹动作和场景，其余作为对白直接显示——对白不用加引号。"
+        label={uiText('ui449')}
+        hint={uiText('ui637')}
       >
         <textarea
           value={state.opening}
           onChange={(e) => updateField('opening', e.target.value.slice(0, 1500))}
-          placeholder="示例：（他倚在门框上，目光落过来）来得比我想的早。坐吧，我等你很久了。"
+          placeholder={uiText('ui638')}
           rows={5}
           className="w-full px-4 py-3 rounded-[14px] text-[15px] leading-[1.7] resize-none bg-[var(--color-glass-55)] border border-[var(--color-border-glass)] text-[var(--color-ink)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-primary)] transition-colors"
         />
@@ -366,42 +374,41 @@ export function Step6({
               onChange={(e) => updateField('openingFormat', e.target.checked ? 'rich' : 'plain')}
               className="w-4 h-4 accent-[var(--color-primary)]"
             />
-            富文本（含场景/心理描写）
-          </label>
+            {uiText('ui639')}</label>
           <button
             onClick={onAssistOpening}
             disabled={assisting || state.persona.trim().length < 20}
             className="text-[13px] font-medium text-[var(--color-primary)] disabled:opacity-40"
           >
-            {assisting ? '生成中...' : '帮我写'}
+            {assisting ? uiText('ui450') : uiText('ui640')}
           </button>
         </div>
       </FieldCard>
 
-      <FieldCard label="开场档案卡" hint="可选，聊天页顶部的一张设定卡">
+      <FieldCard label={uiText('ui641')} hint={uiText('ui642')}>
         <input
           value={state.premiseLeadIn}
           onChange={(e) => updateField('premiseLeadIn', e.target.value.slice(0, 60))}
-          placeholder="引导语（如：你被带到了……）"
+          placeholder={uiText('ui643')}
           className={`${textInputCls} mb-2.5`}
         />
         <input
           value={state.premiseTitle}
           onChange={(e) => updateField('premiseTitle', e.target.value.slice(0, 40))}
-          placeholder="卡片标题"
+          placeholder={uiText('ui644')}
           className={`${textInputCls} mb-3`}
         />
         <RowListEditor
           rows={state.premiseRows}
           onChange={(r) => updateField('premiseRows', r)}
-          labelPlaceholder="字段"
-          valuePlaceholder="例：地点 / 深夜的军营"
+          labelPlaceholder={uiText('ui645')}
+          valuePlaceholder={uiText('ui646')}
           max={6}
-          addLabel="添加一行"
+          addLabel={uiText('ui647')}
         />
       </FieldCard>
 
-      <FieldCard label="开场选项" hint="给用户 1-5 个开口的引子">
+      <FieldCard label={uiText('ui648')} hint={uiText('ui649')}>
         <PromptListEditor
           prompts={state.starterPrompts}
           onChange={(p) => updateField('starterPrompts', p)}
@@ -417,9 +424,9 @@ const VISIBILITY_OPTIONS: Array<{
   name: string
   desc: string
 }> = [
-  { id: 'private', name: '私有', desc: '只有你能看到，立即可用' },
-  { id: 'unlisted', name: '不公开', desc: '有链接可访问，需审核' },
-  { id: 'public', name: '公开', desc: '出现在发现页，需审核' },
+  { id: 'private', get name() { return uiText('ui650') }, get desc() { return uiText('ui651') } },
+  { id: 'unlisted', get name() { return uiText('ui652') }, get desc() { return uiText('ui653') } },
+  { id: 'public', get name() { return uiText('ui44') }, get desc() { return uiText('ui654') } },
 ]
 
 const HTML_MAX = 50 * 1024
@@ -435,11 +442,12 @@ export function Step7({
   voicePickerOpen: boolean
   setVoicePickerOpen: (open: boolean) => void
 }) {
+  useTranslation()
   const htmlBytes = new Blob([state.customHtml]).size
   const htmlOver = htmlBytes > HTML_MAX
   return (
     <div className="max-w-[560px] mx-auto">
-      <SectionHeading title="主题配色" hint="给详情页定个基调" />
+      <SectionHeading title={uiText('ui452')} hint={uiText('ui655')} />
       <div className="grid grid-cols-2 gap-2.5 mb-6">
         {THEME_PRESETS.map((p) => {
           const active = state.uiChromeThemeId === p.id
@@ -461,15 +469,14 @@ export function Step7({
                   className="text-[11px] mt-0.5"
                   style={{ color: p.palette.taglineColor }}
                 >
-                  Aa 示例文字
-                </span>
+                  {uiText('ui656')}</span>
               </div>
             </button>
           )
         })}
       </div>
 
-      <SectionHeading index="" title="可见性" hint="公开与不公开会先进入审核" />
+      <SectionHeading index="" title={uiText('ui657')} hint={uiText('ui658')} />
       <div className="space-y-2.5 mb-6">
         {VISIBILITY_OPTIONS.map((o) => (
           <button
@@ -496,7 +503,7 @@ export function Step7({
         ))}
       </div>
 
-      <SectionHeading index="" title="角色声音" hint="可选，让角色开口说话" />
+      <SectionHeading index="" title={uiText('ui457')} hint={uiText('ui460')} />
       <button
         onClick={() => setVoicePickerOpen(true)}
         className="w-full flex items-center justify-between p-3.5 rounded-[16px] border border-[var(--color-border-glass)] bg-[var(--color-glass-35)] text-left transition-all active:scale-[0.98] mb-6"
@@ -506,13 +513,12 @@ export function Step7({
             {state.voiceSelection.type === 'preset'
               ? state.voiceSelection.presetName
               : state.voiceSelection.type === 'clone'
-                ? '克隆音色（上传中）'
-                : '请选择音色'}
+                ? uiText('ui458')
+                : uiText('ui659')}
           </div>
           {!state.voiceSelection.type && (
             <div className="text-[12px] text-[var(--color-text-muted)] mt-0.5">
-              预设音色或上传克隆
-            </div>
+              {uiText('ui660')}</div>
           )}
         </div>
         <svg
@@ -529,8 +535,8 @@ export function Step7({
         </svg>
       </button>
 
-      <SectionHeading index="" title="高级模式" hint="会写 HTML？直接自定义详情页" />
-      <FieldCard label="自定义 HTML" hint="开启后详情页只展示你的 HTML，「关于TA / 叙引」等模板区块不再显示。注意：HTML 只负责详情页外观，不会发给 AI，角色人设必须写进第 2 步「人设」里 AI 才读得到。">
+      <SectionHeading index="" title={uiText('ui661')} hint={uiText('ui662')} />
+      <FieldCard label={uiText('ui663')} hint={uiText('ui664')}>
         <label className="flex items-center gap-2 text-[14px] text-[var(--color-ink)] mb-3">
           <input
             type="checkbox"
@@ -538,14 +544,13 @@ export function Step7({
             onChange={(e) => updateField('advancedHtmlMode', e.target.checked)}
             className="w-4 h-4 accent-[var(--color-primary)]"
           />
-          启用高级 HTML
-        </label>
+          {uiText('ui665')}</label>
         {state.advancedHtmlMode && (
           <>
             <textarea
               value={state.customHtml}
               onChange={(e) => updateField('customHtml', e.target.value)}
-              placeholder="<section>...</section>（脚本与事件属性会被自动移除）"
+              placeholder={uiText('ui666')}
               rows={8}
               spellCheck={false}
               className="w-full px-4 py-3 rounded-[14px] text-[13px] font-mono leading-[1.6] resize-none bg-[var(--color-glass-55)] border border-[var(--color-border-glass)] text-[var(--color-ink)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-primary)]"
@@ -553,7 +558,7 @@ export function Step7({
             <div className="mt-2 text-[12px] text-right">
               <span className={htmlOver ? 'text-[var(--color-error)]' : 'text-[var(--color-text-muted)]'}>
                 {(htmlBytes / 1024).toFixed(1)}KB / 50KB
-                {htmlOver ? `（超出 ${((htmlBytes - HTML_MAX) / 1024).toFixed(1)}KB）` : ''}
+                {htmlOver ? uiText('dynamic39', { v0: ((htmlBytes - HTML_MAX) / 1024).toFixed(1) }) : ''}
               </span>
             </div>
           </>
@@ -580,12 +585,13 @@ export function Step1({
   onCoverUpload,
   uploading,
 }: StepProps & { onCoverUpload: (e: React.ChangeEvent<HTMLInputElement>) => void; uploading: boolean }) {
+  useTranslation()
   return (
     <div className="max-w-[560px] mx-auto">
-      <SectionHeading title="核心身份" hint="名字、性别、封面、一句话钩子——第一印象" />
+      <SectionHeading title={uiText('ui667')} hint={uiText('ui668')} />
 
       {/* 封面：小尺寸左置 + 右侧说明（对齐快速创建与 nimoo） */}
-      <FieldCard label="封面" required>
+      <FieldCard label={uiText('ui440')} required>
         <div className="flex gap-3.5">
           <label
             className={`relative shrink-0 w-[104px] h-[140px] rounded-[12px] cursor-pointer overflow-hidden ${
@@ -593,36 +599,36 @@ export function Step1({
             }`}
           >
             {uploading ? (
-              <div className="w-full h-full flex items-center justify-center text-[12px] text-[var(--color-text-secondary)]">上传中</div>
+              <div className="w-full h-full flex items-center justify-center text-[12px] text-[var(--color-text-secondary)]">{uiText('ui439')}</div>
             ) : state.coverUrl ? (
-              <img src={state.coverUrl} alt="封面" className="w-full h-full object-cover" />
+              <img src={state.coverUrl} alt={uiText('ui440')} className="w-full h-full object-cover" />
             ) : (
               <div className="w-full h-full flex flex-col items-center justify-center gap-1.5">
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--color-text-muted)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M12 5v14M5 12h14" />
                 </svg>
-                <span className="text-[12px] text-[var(--color-text-muted)]">上传图片</span>
+                <span className="text-[12px] text-[var(--color-text-muted)]">{uiText('ui441')}</span>
               </div>
             )}
             <input type="file" accept="image/*" onChange={onCoverUpload} className="hidden" />
           </label>
           <ul className="flex-1 text-[12px] leading-[1.6] text-[var(--color-text-muted)] space-y-1.5 pt-0.5">
-            <li>· 建议上传 3:4 或 9:16 竖图，人物居中</li>
-            <li>· 图片同时用作封面和聊天背景</li>
-            <li>· 请勿上传涉及未成年或过度暴露的图像</li>
+            <li>{uiText('ui442')}</li>
+            <li>{uiText('ui443')}</li>
+            <li>{uiText('ui489')}</li>
           </ul>
         </div>
       </FieldCard>
 
-      <FieldCard label="名字" required>
+      <FieldCard label={uiText('ui669')} required>
         <input
           value={state.displayName}
           onChange={(e) => updateField('displayName', e.target.value.slice(0, 20))}
-          placeholder="角色叫什么名字"
+          placeholder={uiText('ui670')}
           className={textInputCls}
         />
       </FieldCard>
-      <FieldCard label="性别" required>
+      <FieldCard label={uiText('ui398')} required>
         <div className="flex gap-3">
           {(['male', 'female'] as const).map((g) => (
             <button
@@ -634,16 +640,16 @@ export function Step1({
                   : 'bg-[var(--color-glass-55)] border border-[var(--color-border-glass)] text-[var(--color-ink)]'
               }`}
             >
-              {g === 'male' ? '男' : '女'}
+              {g === 'male' ? uiText('ui381') : uiText('ui380')}
             </button>
           ))}
         </div>
       </FieldCard>
-      <FieldCard label="一句话钩子" hint="荷尔蒙 / 危险感 / 反差，别平铺直叙">
+      <FieldCard label={uiText('ui671')} hint={uiText('ui672')}>
         <input
           value={state.tagline}
           onChange={(e) => updateField('tagline', e.target.value.slice(0, 60))}
-          placeholder="让人第一眼想点进去的一句话"
+          placeholder={uiText('ui673')}
           className={textInputCls}
         />
       </FieldCard>
@@ -653,29 +659,30 @@ export function Step1({
 
 /** 第 2 步：人设与介绍。 */
 export function Step2({ state, updateField }: StepProps) {
+  useTranslation()
   const len = state.persona.length
   return (
     <div className="max-w-[560px] mx-auto">
-      <SectionHeading title="人设与介绍" hint="人设至少 20 字，介绍和标签显示在详情页顶部" />
-      <FieldCard label="人设描述" required hint={`${len}/5000 · 最少 20 字`}>
+      <SectionHeading title={uiText('ui674')} hint={uiText('ui675')} />
+      <FieldCard label={uiText('ui676')} required hint={uiText('dynamic40', { v0: len })}>
         <textarea
           value={state.persona}
           onChange={(e) => updateField('persona', e.target.value.slice(0, 5000))}
-          placeholder="性格、特质、说话风格、核心设定……"
+          placeholder={uiText('ui677')}
           rows={6}
           className="w-full px-4 py-3 rounded-[14px] text-[15px] leading-[1.7] resize-none bg-[var(--color-glass-55)] border border-[var(--color-border-glass)] text-[var(--color-ink)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-primary)] transition-colors"
         />
       </FieldCard>
-      <FieldCard label="简介" hint="显示在详情页名字下方">
+      <FieldCard label={uiText('ui678')} hint={uiText('ui679')}>
         <textarea
           value={state.intro}
           onChange={(e) => updateField('intro', e.target.value.slice(0, 500))}
-          placeholder="一段简短的介绍"
+          placeholder={uiText('ui680')}
           rows={3}
           className="w-full px-4 py-3 rounded-[14px] text-[15px] leading-[1.7] resize-none bg-[var(--color-glass-55)] border border-[var(--color-border-glass)] text-[var(--color-ink)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:border-[var(--color-primary)] transition-colors"
         />
       </FieldCard>
-      <FieldCard label="标签" hint={`${state.tags.length}/10 · 点选预设或自定义`}>
+      <FieldCard label={uiText('ui681')} hint={uiText('dynamic41', { v0: state.tags.length })}>
         <TagPicker tags={state.tags} onChange={(t) => updateField('tags', t)} />
       </FieldCard>
     </div>

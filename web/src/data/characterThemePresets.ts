@@ -1,3 +1,4 @@
+import { uiText } from '../i18n/text'
 /**
  * 主题配色预置 - UGC 创建重构批 2
  *
@@ -16,7 +17,7 @@ export interface ThemePreset {
 export const THEME_PRESETS: ThemePreset[] = [
   {
     id: 'night_velvet',
-    name: '夜色丝绒',
+    get name() { return uiText('theme0') },
     palette: {
       bg: '#171019',
       coverBg: '#1B1320',
@@ -36,7 +37,7 @@ export const THEME_PRESETS: ThemePreset[] = [
   },
   {
     id: 'crimson_noir',
-    name: '暗红黑金',
+    get name() { return uiText('theme1') },
     palette: {
       bg: '#0F0B0D',
       coverBg: '#1A1315',
@@ -56,7 +57,7 @@ export const THEME_PRESETS: ThemePreset[] = [
   },
   {
     id: 'amber_warm',
-    name: '琥珀暖调',
+    get name() { return uiText('theme2') },
     palette: {
       bg: '#13151A',
       coverBg: '#1B1D22',
@@ -76,7 +77,7 @@ export const THEME_PRESETS: ThemePreset[] = [
   },
   {
     id: 'royal_gold',
-    name: '皇室金',
+    get name() { return uiText('theme3') },
     palette: {
       bg: '#0D0A0E',
       coverBg: '#1A0F16',
@@ -96,7 +97,7 @@ export const THEME_PRESETS: ThemePreset[] = [
   },
   {
     id: 'earth_sage',
-    name: '大地灰褐',
+    get name() { return uiText('theme4') },
     palette: {
       bg: '#0C0C0E',
       coverBg: '#141312',
@@ -116,7 +117,7 @@ export const THEME_PRESETS: ThemePreset[] = [
   },
   {
     id: 'ocean_depth',
-    name: '深海青',
+    get name() { return uiText('theme5') },
     palette: {
       bg: '#0A0C10',
       coverBg: '#12161C',
@@ -136,7 +137,7 @@ export const THEME_PRESETS: ThemePreset[] = [
   },
   {
     id: 'bright_warm',
-    name: '明亮暖调',
+    get name() { return uiText('theme6') },
     palette: {
       bg: '#16171B',
       coverBg: '#1E2025',
@@ -156,7 +157,7 @@ export const THEME_PRESETS: ThemePreset[] = [
   },
   {
     id: 'forest_mint',
-    name: '森林薄荷',
+    get name() { return uiText('theme7') },
     palette: {
       bg: '#080A0B',
       coverBg: '#101616',

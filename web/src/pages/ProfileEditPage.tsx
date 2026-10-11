@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next'
+import { uiText } from '../i18n/text'
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
@@ -15,17 +17,18 @@ import { AppPageContent, AppPageShell } from '../components/ui/AppPageShell'
 function formatBirthdate(iso: string): string {
   const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/)
   if (!m) return ''
-  return `${m[1]}年${parseInt(m[2])}月${parseInt(m[3])}日`
+  return uiText('dynamic28', { v0: m[1], v1: parseInt(m[2]), v2: parseInt(m[3]) })
 }
 
 const GENDER_OPTIONS = [
-  { label: '女', value: 'female' },
-  { label: '男', value: 'male' },
-  { label: '其他', value: 'nonbinary' },
-  { label: '不透露', value: 'undisclosed' },
+  { get label() { return uiText('ui380') }, value: 'female' },
+  { get label() { return uiText('ui381') }, value: 'male' },
+  { get label() { return uiText('ui382') }, value: 'nonbinary' },
+  { get label() { return uiText('ui383') }, value: 'undisclosed' },
 ]
 
 export function ProfileEditPage() {
+  useTranslation()
   const navigate = useNavigate()
   const goBack = useSafeBack('/settings')
   const user = useAuthStore((s) => s.user)
@@ -50,15 +53,15 @@ export function ProfileEditPage() {
   const handleSave = async () => {
     const trimmedName = displayName.trim()
     if (!trimmedName) {
-      setToast({ visible: true, message: '请输入昵称' })
+      setToast({ visible: true, get message() { return uiText('ui384') } })
       return
     }
     if ([...trimmedName].length > 20) {
-      setToast({ visible: true, message: '昵称最多 20 个字符' })
+      setToast({ visible: true, get message() { return uiText('ui385') } })
       return
     }
     if (!birthdate) {
-      setToast({ visible: true, message: '请选择出生日期' })
+      setToast({ visible: true, get message() { return uiText('ui386') } })
       return
     }
     setLoading(true)
@@ -72,15 +75,15 @@ export function ProfileEditPage() {
       })
       if (res.age_verified === false) {
         setUser({ birthdate })
-        setToast({ visible: true, message: '未满 18 周岁，无法使用本产品' })
+        setToast({ visible: true, get message() { return uiText('ui387') } })
         setTimeout(() => navigate('/age-gate', { replace: true }), 1500)
       } else {
         setUser({ display_name: trimmedName, gender, birthdate, age_verified: res.age_verified === true })
-        setToast({ visible: true, message: '保存成功' })
+        setToast({ visible: true, get message() { return uiText('ui388') } })
         setTimeout(() => navigate('/character', { replace: true }), 800)
       }
     } catch (err: any) {
-      setToast({ visible: true, message: err.message || '保存失败' })
+      setToast({ visible: true, message: err.message || uiText('ui389') })
     } finally {
       setLoading(false)
     }
@@ -94,9 +97,9 @@ export function ProfileEditPage() {
       const compressed = await compressImage(file, 512).catch(() => file)
       const res = await uploadAvatar(compressed)
       setUser({ avatar_url: res.avatar_url })
-      setToast({ visible: true, message: '头像更新成功' })
+      setToast({ visible: true, get message() { return uiText('ui390') } })
     } catch {
-      setToast({ visible: true, message: '头像上传失败' })
+      setToast({ visible: true, get message() { return uiText('ui391') } })
     } finally {
       setAvatarUploading(false)
     }
@@ -107,12 +110,12 @@ export function ProfileEditPage() {
       <div className="flex h-full w-full flex-col">
       {/* Header */}
       <AppPageContent size="form" className="flex items-center justify-between px-2 pb-2" style={{ paddingTop: 'var(--safe-top)' }}>
-        <button onClick={goBack} className="w-[44px] h-[44px] flex items-center justify-center active:opacity-60 transition-opacity" aria-label="返回">
+        <button onClick={goBack} className="w-[44px] h-[44px] flex items-center justify-center active:opacity-60 transition-opacity" aria-label={uiText('ui127')}>
           <svg width="12" height="20" viewBox="0 0 12 20" fill="none" stroke="var(--color-ink)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="10,2 2,10 10,18" />
           </svg>
         </button>
-        <h1 className="text-[17px] font-semibold text-[var(--color-ink)]">编辑资料</h1>
+        <h1 className="text-[17px] font-semibold text-[var(--color-ink)]">{uiText('ui392')}</h1>
         <div style={{ width: 40 }} />
       </AppPageContent>
 
@@ -129,7 +132,7 @@ export function ProfileEditPage() {
               ) : user?.avatar_url ? (
                 <img src={user.avatar_url} alt="avatar" className="w-full h-full object-cover" />
               ) : (
-                (displayName || '游')[0]
+                (displayName || uiText('ui393'))[0]
               )}
             </div>
             <input type="file" accept="image/*" className="hidden" disabled={avatarUploading} onChange={handleAvatarUpload} />
@@ -138,16 +141,16 @@ export function ProfileEditPage() {
             </div>
           </label>
           <p className="text-[12px] text-[var(--color-text-muted)] mt-2">
-            {avatarUploading ? '上传中…' : '点击更换头像'}
+            {avatarUploading ? uiText('ui394') : uiText('ui395')}
           </p>
         </div>
 
         {/* Form */}
         <div className="space-y-5">
           <div>
-            <label className="text-[13px] text-[var(--color-text-secondary)] mb-1 block">昵称</label>
+            <label className="text-[13px] text-[var(--color-text-secondary)] mb-1 block">{uiText('ui396')}</label>
             <Input
-              placeholder="1-20 个字符"
+              placeholder={uiText('ui397')}
               value={displayName}
               onChange={setDisplayName}
               className="rounded-[10px] border border-[var(--color-divider)] bg-[var(--color-page-surface)] px-4 focus-within:border-[var(--color-primary-400)]"
@@ -155,10 +158,10 @@ export function ProfileEditPage() {
           </div>
 
           <div>
-            <label className="text-[13px] text-[var(--color-text-secondary)] mb-2 block">性别</label>
+            <label className="text-[13px] text-[var(--color-text-secondary)] mb-2 block">{uiText('ui398')}</label>
             <SegmentedControl
               options={GENDER_OPTIONS.map(o => o.label)}
-              value={GENDER_OPTIONS.find(o => o.value === gender)?.label ?? '不透露'}
+              value={GENDER_OPTIONS.find(o => o.value === gender)?.label ?? uiText('ui383')}
               onChange={(label) => {
                 const opt = GENDER_OPTIONS.find(o => o.label === label)
                 if (opt) setGender(opt.value)
@@ -167,7 +170,7 @@ export function ProfileEditPage() {
           </div>
 
           <div>
-            <label className="text-[13px] text-[var(--color-text-secondary)] mb-1 block">出生日期</label>
+            <label className="text-[13px] text-[var(--color-text-secondary)] mb-1 block">{uiText('ui399')}</label>
             <button
               type="button"
               onClick={() => setShowDatePicker(true)}
@@ -176,7 +179,7 @@ export function ProfileEditPage() {
               {birthdate ? (
                 <span className="text-[var(--color-ink)]">{formatBirthdate(birthdate)}</span>
               ) : (
-                <span className="text-[var(--color-text-placeholder)]">请选择出生日期</span>
+                <span className="text-[var(--color-text-placeholder)]">{uiText('ui386')}</span>
               )}
             </button>
             <div className="mt-3 flex items-start gap-2 rounded-[10px] bg-[var(--color-page-soft)] px-3 py-2.5">
@@ -186,16 +189,14 @@ export function ProfileEditPage() {
                 <path d="M12 8h.01" />
               </svg>
               <p className="text-[12px] leading-[1.55] text-[var(--color-text-secondary)]">
-                出生日期仅用于确认你已年满 18 周岁。
-              </p>
+                {uiText('ui400')}</p>
             </div>
           </div>
         </div>
 
         <div className="sticky bottom-0 mt-8 bg-[var(--color-page-canvas)] pb-3 pt-3">
           <Button variant="primary" size="lg" loading={loading} onClick={handleSave} className="rounded-[12px] bg-[var(--color-primary-500)] shadow-[0_8px_22px_rgba(255,110,138,0.24)]">
-            保存
-          </Button>
+            {uiText('ui401')}</Button>
         </div>
       </AppPageContent>
 

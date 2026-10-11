@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next'
+import { uiText, uiLabel } from '../i18n/text'
 import { useEffect, useMemo, useState } from 'react'
 import { saveModelPreference, type ChatModelInfo } from '../services/api'
 import { useAppStore } from '../stores/appStore'
@@ -14,9 +16,9 @@ interface ModelSelectorSheetProps {
 type Brand = 'gemini' | 'deepseek' | 'claude' | 'grok' | 'gpt'
 
 const BRAND_META: Record<Brand, { label: string; icon: string }> = {
-  gemini: { label: '双子座', icon: '/assets/models/gemini.svg' },
+  gemini: { get label() { return uiText('more50') }, icon: '/assets/models/gemini.svg' },
   deepseek: { label: 'DeepSeek', icon: '/assets/models/deepseek.svg' },
-  claude: { label: '小克', icon: '/assets/models/claude.svg' },
+  claude: { get label() { return uiText('more51') }, icon: '/assets/models/claude.svg' },
   grok: { label: 'Grok', icon: '/assets/models/grok.svg' },
   gpt: { label: 'GPT', icon: '/assets/models/openai.svg' },
 }
@@ -36,6 +38,7 @@ function isSelectable(model: ChatModelInfo): boolean {
 }
 
 function ModelBrandIcon({ brand, size = 42 }: { brand: Brand; size?: number }) {
+  useTranslation()
   const meta = BRAND_META[brand]
   return (
     <span
@@ -44,7 +47,7 @@ function ModelBrandIcon({ brand, size = 42 }: { brand: Brand; size?: number }) {
     >
       <img
         src={meta.icon}
-        alt={`${meta.label}品牌图标`}
+        alt={uiText('dynamic4', { v0: meta.label })}
         className="h-[62%] w-[62%] object-contain"
       />
     </span>
@@ -52,6 +55,7 @@ function ModelBrandIcon({ brand, size = 42 }: { brand: Brand; size?: number }) {
 }
 
 function SignalBadge({ model }: { model: ChatModelInfo }) {
+  useTranslation()
   const smooth = model.status === 'smooth' || model.status === 'available'
   const color = model.status === 'unavailable'
     ? '#A79B9F'
@@ -68,7 +72,7 @@ function SignalBadge({ model }: { model: ChatModelInfo }) {
           <span key={height} className="w-[2px] rounded-full" style={{ height, backgroundColor: color }} />
         ))}
       </span>
-      <span>{smooth ? '流畅' : model.status_label}</span>
+      <span>{smooth ? uiText('more52') : uiLabel(model.status_label)}</span>
     </span>
   )
 }
@@ -82,6 +86,7 @@ function ModelRow({
   selected: boolean
   onSelect: () => void
 }) {
+  useTranslation()
   const unavailable = !isSelectable(model)
   return (
     <button
@@ -105,22 +110,22 @@ function ModelRow({
         <span className="min-w-0 flex-1">
           <span className="flex min-w-0 items-center gap-2">
             <SignalBadge model={model} />
-            <span className="min-w-0 truncate text-[15px] font-semibold text-white">{model.label}</span>
+            <span className="min-w-0 truncate text-[15px] font-semibold text-white">{uiLabel(model.label)}</span>
           </span>
           <span className="mt-2 flex flex-wrap items-center gap-1.5">
             {model.tags.map((tag) => (
               <span
-                key={tag}
+                key={uiLabel(tag)}
                 className="inline-flex h-7 items-center rounded-[5px] border border-[#FFB7C5]/15 bg-black/12 px-2.5 text-[13px] font-medium text-[#FFF0F3]"
               >
-                {tag}
+                {uiLabel(tag)}
               </span>
             ))}
           </span>
         </span>
         <span className="flex shrink-0 flex-col items-end gap-2">
           <span className="rounded-[6px] bg-black/22 px-2.5 py-1.5 text-[12px] font-semibold tabular-nums text-[#F6E8CF]">
-            {model.included ? '会员免费' : `${model.cost_coins}币/次`}
+            {model.included ? uiText('ui64') : uiText('dynamic5', { v0: model.cost_coins })}
           </span>
           <span
             className={`flex h-5 w-5 items-center justify-center rounded-full border ${
@@ -141,6 +146,7 @@ function ModelRow({
 }
 
 export function ModelSelectorSheet({ open, onClose, characterId }: ModelSelectorSheetProps) {
+  useTranslation()
   const models = useModelsStore((state) => state.models)
   const loading = useModelsStore((state) => state.loading)
   const refresh = useModelsStore((state) => state.refresh)
@@ -156,7 +162,7 @@ export function ModelSelectorSheet({ open, onClose, characterId }: ModelSelector
     setCandidate(chatModel)
     setTab('recommended')
     setExpandedBrand(brandFor(chatModel))
-    void refresh().catch(() => useToastStore.getState().show('模型列表加载失败', 'error'))
+    void refresh().catch(() => useToastStore.getState().show(uiText('more53'), 'error'))
   }, [open, chatModel, refresh])
 
   const visibleModels = tab === 'recommended'
@@ -178,7 +184,7 @@ export function ModelSelectorSheet({ open, onClose, characterId }: ModelSelector
       setChatModel(characterId, candidate)
       onClose()
     } catch {
-      useToastStore.getState().show('模型切换失败，请稍后重试', 'error')
+      useToastStore.getState().show(uiText('more54'), 'error')
     } finally {
       setConfirming(false)
     }
@@ -196,10 +202,10 @@ export function ModelSelectorSheet({ open, onClose, characterId }: ModelSelector
         <div className="shrink-0 pb-3 text-center">
           <div className="flex items-center justify-center gap-2">
             <span className="text-[13px] text-[#F3C6D7]" aria-hidden="true">✦</span>
-            <h2 className="text-[21px] font-semibold tracking-[0] text-white">模型选择</h2>
+            <h2 className="text-[21px] font-semibold tracking-[0] text-white">{uiText('more55')}</h2>
             <span className="text-[13px] text-[#F3C6D7]" aria-hidden="true">✦</span>
           </div>
-          <p className="mt-1 text-[13px] text-[#E6D7D5]">今晚，想让谁陪你聊？</p>
+          <p className="mt-1 text-[13px] text-[#E6D7D5]">{uiText('more56')}</p>
           <div className="mx-auto mt-3 grid h-9 w-full max-w-[238px] grid-cols-2 rounded-[8px] border border-white/8 bg-black/18 p-1">
             {([['recommended', '推荐'], ['all', '全部']] as const).map(([key, label]) => (
               <button
@@ -212,7 +218,7 @@ export function ModelSelectorSheet({ open, onClose, characterId }: ModelSelector
                     : 'text-[#D2C3C1]'
                 }`}
               >
-                {label}
+                {uiLabel(label)}
               </button>
             ))}
           </div>
@@ -220,12 +226,11 @@ export function ModelSelectorSheet({ open, onClose, characterId }: ModelSelector
 
         <div className="scrollbar-hide min-h-0 flex-1 overflow-y-auto px-0.5 pb-3">
           {loading && models.length === 0 && (
-            <p className="py-12 text-center text-[13px] text-[#D2C3C1]">正在查看模型状态…</p>
+            <p className="py-12 text-center text-[13px] text-[#D2C3C1]">{uiText('more59')}</p>
           )}
           {!loading && tab === 'recommended' && visibleModels.length === 0 && (
             <p className="py-12 text-center text-[13px] leading-6 text-[#D2C3C1]">
-              暂无流畅模型<br />可前往“全部”选择当前可用模型
-            </p>
+              {uiText('more60')}<br />{uiText('more61')}</p>
           )}
           <div className="space-y-3">
             {brands.map((brand) => {
@@ -246,15 +251,13 @@ export function ModelSelectorSheet({ open, onClose, characterId }: ModelSelector
                   >
                     {smooth && (
                       <span className="absolute -top-[7px] left-3 rounded-[4px] bg-[#2CA76C] px-2 py-0.5 text-[10px] font-semibold text-white shadow-[0_2px_8px_rgba(44,167,108,0.35)]">
-                        流畅
-                      </span>
+                        {uiText('more52')}</span>
                     )}
                     <ModelBrandIcon brand={brand} />
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-[17px] font-semibold text-white">{meta.label}</span>
+                      <span className="block truncate text-[17px] font-semibold text-white">{uiLabel(meta.label)}</span>
                       <span className="mt-0.5 block text-[11px] text-[#D2C3C1]">
-                        {brandModels.length} 个聊天风格
-                      </span>
+                        {brandModels.length} {uiText('more62')}</span>
                     </span>
                     <span className="inline-flex shrink-0 items-center gap-2 rounded-[7px] bg-black/20 px-2.5 py-2 text-[11px] text-[#E6D7D5]">
                       <span
@@ -264,8 +267,7 @@ export function ModelSelectorSheet({ open, onClose, characterId }: ModelSelector
                             : 'bg-[#8B8490]'
                         }`}
                       />
-                      {selectableCount} 个可选
-                    </span>
+                      {selectableCount} {uiText('more63')}</span>
                     <svg
                       width="18"
                       height="18"
@@ -303,7 +305,7 @@ export function ModelSelectorSheet({ open, onClose, characterId }: ModelSelector
             onClick={() => void confirm()}
             className="h-12 w-full rounded-[8px] bg-[linear-gradient(100deg,#F1D8C9_0%,#FFB7C5_34%,#FF94AC_67%,#FF6E8A_100%)] text-[15px] font-semibold text-white shadow-[0_8px_26px_rgba(232,85,119,0.3)] transition-transform active:scale-[0.99] disabled:opacity-40"
           >
-            {confirming ? '确认中…' : '确认'}
+            {confirming ? uiText('more64') : uiText('more65')}
           </button>
         </div>
       </div>

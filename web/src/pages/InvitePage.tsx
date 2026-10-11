@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next'
+import { uiText } from '../i18n/text'
 import { useEffect, useState } from 'react'
 import { useToastStore } from '../stores/toastStore'
 import { getInviteStatus, type InviteStatus } from '../services/api'
@@ -5,6 +7,7 @@ import { Skeleton } from '../components/ui/Skeleton'
 import { useSafeBack } from '../hooks/useSafeBack'
 
 export function InvitePage() {
+  useTranslation()
   const goBack = useSafeBack('/character')
   const showToast = useToastStore((s) => s.show)
   const [status, setStatus] = useState<InviteStatus | null>(null)
@@ -41,15 +44,15 @@ export function InvitePage() {
             <polyline points="10,2 2,10 10,18" />
           </svg>
         </button>
-        <span className="text-[17px] font-semibold text-[var(--color-ink)]">邀请好友</span>
+        <span className="text-[17px] font-semibold text-[var(--color-ink)]">{uiText('ui567')}</span>
         <div className="w-[44px]" />
       </nav>
 
       <div className="relative z-10 flex-1 overflow-y-auto px-4 pb-8">
         {loadError && (
           <div className="text-center py-12">
-            <p className="text-[var(--color-text-muted)] text-[14px]">加载失败</p>
-            <button onClick={load} className="mt-3 text-[13px] text-[var(--color-primary)] active:opacity-60">重试</button>
+            <p className="text-[var(--color-text-muted)] text-[14px]">{uiText('more274')}</p>
+            <button onClick={load} className="mt-3 text-[13px] text-[var(--color-primary)] active:opacity-60">{uiText('ui126')}</button>
           </div>
         )}
 
@@ -73,7 +76,7 @@ export function InvitePage() {
                 <img src="/assets/settings/invite-mascot.webp" alt="" className="pointer-events-none absolute -right-2 -top-2 h-[122px] w-[122px] object-contain" />
               </div>
               <div className="relative mt-4 border-t border-[var(--color-divider)] pt-4">
-                <p className="mb-2 text-[12px] text-[var(--color-text-muted)]">我的邀请码</p>
+                <p className="mb-2 text-[12px] text-[var(--color-text-muted)]">{uiText('ui572')}</p>
                 <button
                   onClick={() => copy(status.invite_code, '邀请码')}
                   className="flex w-full items-center justify-between rounded-[13px] border border-[var(--color-border-glass)] bg-[var(--color-page-soft)] px-4 py-3 active:scale-[0.99] transition-transform"
@@ -81,7 +84,7 @@ export function InvitePage() {
                   <span className="text-[23px] font-bold tracking-[0.16em] text-[var(--color-ink)] font-[var(--font-latin)]">
                     {status.invite_code}
                   </span>
-                  <span className="text-[13px] font-medium text-[var(--color-primary-600)]">复制</span>
+                  <span className="text-[13px] font-medium text-[var(--color-primary-600)]">{uiText('ui574')}</span>
                 </button>
                 <button
                   onClick={() => copy(status.invite_url, '邀请链接')}
@@ -96,7 +99,7 @@ export function InvitePage() {
             <div className="mb-6 grid grid-cols-3 divide-x divide-[var(--color-divider)] overflow-hidden rounded-[18px] border border-[var(--color-border-glass)] bg-[var(--color-page-surface)]/88 py-3 shadow-[var(--shadow-soft)]">
               <div className="text-center">
                 <p className="text-[21px] font-bold text-[var(--color-ink)]">{invited}</p>
-                <p className="mt-1 text-[11px] text-[var(--color-text-muted)]">已邀请</p>
+                <p className="mt-1 text-[11px] text-[var(--color-text-muted)]">{uiText('ui569')}</p>
               </div>
               <div className="text-center">
                 <p className="text-[21px] font-bold text-[var(--color-ink)]">{status.pending_count}</p>

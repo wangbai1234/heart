@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next'
+import { uiText } from '../i18n/text'
 import { useEffect, useState } from 'react'
 import { BottomSheet } from './ui/BottomSheet'
 import { Switch } from './ui/Switch'
@@ -18,6 +20,7 @@ interface VoiceChatSheetProps {
 // 语音聊天开关（原 CharacterBackstagePage 迁移）：开启后 AI 文字回复转为语音气泡。
 // 依赖角色已配置音色，未配置则弹出音色选择弹窗。
 export function VoiceChatSheet({ open, onClose, characterId, isDark }: VoiceChatSheetProps) {
+  useTranslation()
   const voiceChatEnabled = useAppStore((s) => s.voiceChatEnabled[characterId] ?? false)
   const setVoiceChatEnabled = useAppStore((s) => s.setVoiceChatEnabled)
   const [hasVoice, setHasVoice] = useState(false)
@@ -49,7 +52,7 @@ export function VoiceChatSheet({ open, onClose, characterId, isDark }: VoiceChat
   const handleToggle = async (value: boolean) => {
     // 未配音色：显式提示 + 打开音色选择弹窗
     if (value && !hasVoice) {
-      showToast('该角色暂未配置音色，请先选择一个音色', 'info')
+      showToast(uiText('ui66'), 'info')
       setVoicePickerOpen(true)
       return
     }
@@ -59,7 +62,7 @@ export function VoiceChatSheet({ open, onClose, characterId, isDark }: VoiceChat
     } catch (err: any) {
       // 409 = 服务端 has_voice 标记过期，角色实际无音色行。
       if (err?.status === 409) {
-        showToast('请先为该角色配置音色，才能开启语音聊天', 'info')
+        showToast(uiText('more86'), 'info')
         setVoiceChatEnabled(characterId, false)
         setVoicePickerOpen(true)
         return
@@ -69,11 +72,11 @@ export function VoiceChatSheet({ open, onClose, characterId, isDark }: VoiceChat
         const actual = await getCharacterSettings(characterId)
         setVoiceChatEnabled(characterId, actual.voice_enabled)
         if (actual.voice_enabled !== value) {
-          showToast('语音开关切换失败，请稍后重试', 'error')
+          showToast(uiText('more87'), 'error')
         }
       } catch {
         setVoiceChatEnabled(characterId, !value)
-        showToast('语音开关切换失败，请稍后重试', 'error')
+        showToast(uiText('more87'), 'error')
       }
     }
   }
@@ -84,7 +87,7 @@ export function VoiceChatSheet({ open, onClose, characterId, isDark }: VoiceChat
       if (selection.type === 'preset' && selection.presetVoiceId) {
         // 配置预设音色
         await setPresetVoice(characterId, selection.presetVoiceId)
-        showToast(`已配置音色：${selection.presetName || '预设音色'}`, 'success')
+        showToast(uiText('dynamic6', { v0: selection.presetName || uiText('ui72') }), 'success')
         setHasVoice(true)
         // 配置成功后自动开启语音聊天
         setVoiceChatEnabled(characterId, true)
@@ -98,21 +101,21 @@ export function VoiceChatSheet({ open, onClose, characterId, isDark }: VoiceChat
             const processed = await preprocessForClone(selection.cloneFile)
             fileToUpload = processed.file
           } else if (selection.cloneFile.size > 20 * 1024 * 1024) {
-            showToast('文件过大（超过 20MB），请上传更短的录音', 'error')
+            showToast(uiText('ui73'), 'error')
             return
           }
         } catch {
           if (selection.cloneFile.size > 20 * 1024 * 1024) {
-            showToast('无法处理该文件，请上传 10–30 秒的清晰录音', 'error')
+            showToast(uiText('ui74'), 'error')
             return
           }
         }
         await uploadVoiceClone(characterId, fileToUpload, 'fish')
-        showToast('音色克隆已提交，处理中…', 'info')
+        showToast(uiText('ui75'), 'info')
         // 克隆需要等待，暂不自动开启语音聊天
       }
     } catch (err) {
-      const msg = err instanceof ApiError ? err.message : '音色配置失败，请重试'
+      const msg = err instanceof ApiError ? err.message : uiText('ui76')
       showToast(msg, 'error')
     } finally {
       setVoiceConfiguring(false)
@@ -125,19 +128,18 @@ export function VoiceChatSheet({ open, onClose, characterId, isDark }: VoiceChat
     <>
       <BottomSheet open={open} onClose={onClose}>
         <h2 className={`mb-4 text-[18px] font-semibold tracking-[-0.02em] ${isDark ? 'text-[#F3EFF8]' : 'text-[#2D3248]'}`}>
-          语音聊天
-        </h2>
+          {uiText('more7')}</h2>
         <div className="flex items-center gap-4 rounded-[18px] border px-4 py-4"
           style={{ borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.4)' }}
         >
           <div className="min-w-0 flex-1">
             <p className={`mb-1 text-[15px] font-medium ${isDark ? 'text-[#F3EFF8]' : 'text-[#2D3248]'}`}>
-              {hasVoice ? '开启语音回复' : '配置音色'}
+              {hasVoice ? uiText('more88') : uiText('more89')}
             </p>
             <p className={`text-[13px] leading-[1.5] ${subtle}`}>
               {hasVoice
-                ? '开启后 Ta 的回复将转为语音，会额外消耗 yuoyuo币'
-                : '先选择预设音色或克隆专属音色，才能开启语音聊天'}
+                ? uiText('more90')
+                : uiText('more91')}
             </p>
           </div>
           <div className="shrink-0">
@@ -149,7 +151,7 @@ export function VoiceChatSheet({ open, onClose, characterId, isDark }: VoiceChat
                 disabled={voiceConfiguring}
                 className="rounded-full bg-gradient-to-r from-[#FFB7C5] to-[#FF8FAB] px-4 py-2 text-[13px] font-semibold text-white disabled:opacity-50"
               >
-                {voiceConfiguring ? '配置中…' : '去配置'}
+                {voiceConfiguring ? uiText('more92') : uiText('more93')}
               </button>
             )}
           </div>

@@ -10,7 +10,8 @@ fastapi>=0.115.0,<0.137
 uvicorn[standard]>=0.30.0
 
 # Database
-sqlalchemy>=2.0.0
+# Keep the validated 2.0 API and install its required asyncio greenlet dependency.
+sqlalchemy[asyncio]>=2.0.0,<2.1
 asyncpg>=0.29.0
 alembic>=1.13.0
 psycopg2-binary>=2.9.0

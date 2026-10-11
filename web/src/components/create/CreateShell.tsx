@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next'
+import { uiText } from '../../i18n/text'
 import type { ReactNode } from 'react'
 import { useThemeStore } from '../../stores/themeStore'
 
@@ -27,6 +29,7 @@ export function CreateShell({
   children: ReactNode
   footer?: ReactNode
 }) {
+  useTranslation()
   const { resolvedTheme } = useThemeStore()
   const isDark = resolvedTheme === 'dark'
 
@@ -56,7 +59,7 @@ export function CreateShell({
       <nav className="relative z-20 flex items-center px-5 h-[48px] shrink-0">
         <button
           onClick={onBack}
-          aria-label={backLabel ?? '返回'}
+          aria-label={backLabel ?? uiText('ui127')}
           className="w-[32px] h-[32px] -ml-1 rounded-full flex items-center justify-center active:bg-[var(--color-glass-55)] transition-colors"
         >
           <svg width="10" height="16" viewBox="0 0 10 16" fill="none" stroke="var(--color-ink)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -81,6 +84,7 @@ export function CreateShell({
 
 /** 区块标题：serif 大字 + 灰色副标（模式5 字体配对 + 模式2 hero 感） */
 export function SectionHeading({ index, title, hint }: { index?: string; title: string; hint?: string }) {
+  useTranslation()
   return (
     <div className="mb-4">
       <div className="flex items-baseline gap-2.5">
@@ -113,6 +117,7 @@ export function FieldCard({
   required?: boolean
   children: ReactNode
 }) {
+  useTranslation()
   return (
     <div className="mb-3 rounded-[16px] bg-[var(--color-glass-35)] border border-[var(--color-border-glass)] p-3.5 backdrop-blur-[8px]">
       {label && (

@@ -22,6 +22,8 @@ class TurnRequest:
     history: list[dict]  # [{"role": "user/assistant", "content": "..."}, ...]
     trace_id: UUID
     modality: str = "text"
+    response_language: str | None = None
+    action_style: str = "fullwidth"
     # Requested LLM model; orchestrator/composer will use stream_for with failover.
     # Defaults to the product's Gemini 3.1 model.
     model: str = "gemini-3.1"

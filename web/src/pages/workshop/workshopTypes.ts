@@ -1,3 +1,5 @@
+import i18n, { supportedLocale } from '../../i18n'
+import { uiText } from '../../i18n/text'
 import type {
   CharacterDraftDTO,
   ProfileBlock,
@@ -11,6 +13,10 @@ import { getThemePresetById, findThemePresetIdByPalette } from '../../data/chara
 export type QualityLevel = 'sketch' | 'draft' | 'shaped' | 'finished'
 
 export interface WorkshopState {
+  responseLanguage: "en" | "ja" | "ko"
+  worldBook: string
+  castType: "single" | "multiple"
+  contentRating: "general" | "mature"
   // Step 1 — 核心身份
   displayName: string
   gender: 'male' | 'female' | ''
@@ -51,6 +57,10 @@ export interface WorkshopState {
 }
 
 export const EMPTY_STATE: WorkshopState = {
+  responseLanguage: supportedLocale(i18n.language),
+  worldBook: "",
+  castType: "single",
+  contentRating: "general",
   displayName: '',
   gender: '',
   coverUrl: '',
@@ -85,10 +95,10 @@ export const EMPTY_STATE: WorkshopState = {
 export const STORAGE_KEY = 'workshop_draft_state'
 
 export const QUALITY_LABELS: Record<QualityLevel, string> = {
-  sketch: '素描',
-  draft: '半成品',
-  shaped: '有模样',
-  finished: '成品',
+  get sketch() { return uiText('more365') },
+  get draft() { return uiText('more366') },
+  get shaped() { return uiText('more367') },
+  get finished() { return uiText('more368') },
 }
 
 /** 质感分级：每级对应新增区块，让用户看到"再填一步能得到什么"。 */
@@ -117,7 +127,7 @@ export function buildProfileBlocks(s: WorkshopState): ProfileBlock[] {
   const blocks: ProfileBlock[] = []
   const dossierRows = s.dossierItems.filter((r) => r.label.trim() && r.value.trim())
   if (dossierRows.length >= 1) {
-    blocks.push({ type: 'dossier', title: '档案', rows: dossierRows.slice(0, 10) })
+    blocks.push({ type: 'dossier', get title() { return uiText('more369') }, rows: dossierRows.slice(0, 10) })
   }
   if (s.quote.trim()) {
     blocks.push({
@@ -128,17 +138,17 @@ export function buildProfileBlocks(s: WorkshopState): ProfileBlock[] {
   }
   if (s.backgroundType === 'timeline') {
     const events = s.timelineItems.filter((r) => r.label.trim() && r.value.trim())
-    if (events.length) blocks.push({ type: 'timeline', title: '经历', events: events.slice(0, 8) })
+    if (events.length) blocks.push({ type: 'timeline', get title() { return uiText('more370') }, events: events.slice(0, 8) })
   } else if (s.backgroundType === 'objects') {
     const items = s.objectItems.filter((r) => r.label.trim() && r.value.trim())
-    if (items.length) blocks.push({ type: 'objects', title: '随身之物', items: items.slice(0, 6) })
+    if (items.length) blocks.push({ type: 'objects', get title() { return uiText('more371') }, items: items.slice(0, 6) })
   } else if (s.backgroundType === 'contrast') {
     const pairs = s.contrastPairs.filter((r) => r.label.trim() && r.value.trim())
     if (pairs.length) {
       blocks.push({
         type: 'contrast',
-        leftLabel: s.contrastLeftLabel.trim().slice(0, 20) || '表',
-        rightLabel: s.contrastRightLabel.trim().slice(0, 20) || '里',
+        leftLabel: s.contrastLeftLabel.trim().slice(0, 20) || uiText('more372'),
+        rightLabel: s.contrastRightLabel.trim().slice(0, 20) || uiText('more373'),
         pairs: pairs.slice(0, 6),
       })
     }
@@ -175,6 +185,11 @@ export function buildDraft(s: WorkshopState): CharacterDraftDTO {
   const useHtml = s.advancedHtmlMode && s.customHtml.trim().length > 0
   return {
     display_name: { zh: s.displayName.trim() },
+    response_language: s.responseLanguage,
+    locale: s.responseLanguage,
+    world_book: s.worldBook,
+    cast_type: s.castType,
+    content_rating: s.contentRating,
     gender: s.gender || undefined,
     cover_url: s.coverUrl || undefined,
     tagline: s.tagline.trim() || undefined,
@@ -203,7 +218,11 @@ export function buildDraft(s: WorkshopState): CharacterDraftDTO {
  */
 export function draftToWorkshopState(d: CharacterDraftDTO): WorkshopState {
   const s: WorkshopState = { ...EMPTY_STATE }
-  s.displayName = d.display_name?.zh ?? d.display_name?.en ?? ''
+  s.displayName = d.display_name?.zh ?? d.display_name?.en ?? d.display_name?.ja ?? d.display_name?.ko ?? ''
+  s.responseLanguage = d.response_language ?? supportedLocale(d.locale ?? i18n.language)
+  s.worldBook = d.world_book ?? ""
+  s.castType = d.cast_type ?? "single"
+  s.contentRating = d.content_rating ?? "general"
   s.gender = d.gender === 'male' || d.gender === 'female' ? d.gender : ''
   s.coverUrl = d.cover_url ?? ''
   s.tagline = d.tagline ?? ''

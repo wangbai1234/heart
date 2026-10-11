@@ -10,6 +10,7 @@ import { VitePWA } from 'vite-plugin-pwa'
 // pre-commit hook). Copied verbatim into dist/version.json (it lives under
 // public/), so a running client can fetch the *latest deployed* version and
 // show it in the update prompt.
+const internationalBuild = process.env.VITE_INTERNATIONAL === 'true'
 const versionUrl = new URL('./public/version.json', import.meta.url)
 const APP_VERSION = JSON.parse(readFileSync(fileURLToPath(versionUrl), 'utf8')).version as string
 
@@ -48,7 +49,7 @@ export default defineConfig({
       manifest: {
         name: 'yuoyuo',
         short_name: 'yuoyuo',
-        description: 'yuoyuo — AI companion',
+        description: process.env.VITE_LOCALIZATION === 'true' ? 'yuoyuo — AI companion' : 'yuoyuo — AI 伙伴',
         theme_color: '#0f0f14',
         background_color: '#0f0f14',
         display: 'standalone',
@@ -73,7 +74,7 @@ export default defineConfig({
         navigateFallback: '/index.html',
         // Never let the SW cache/serve API or WebSocket traffic.
         navigateFallbackDenylist: [/^\/api/],
-        runtimeCaching: [
+        runtimeCaching: internationalBuild ? [] : [
           {
             // Stale-while-revalidate for auth check: SW serves cached response
             // immediately on PWA cold start (eliminates the auth round-trip wait),
@@ -159,15 +160,15 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': {
-        target: 'http://localhost:8000',
+        target: process.env.VITE_API_TARGET || 'http://localhost:8000',
         changeOrigin: true,
       },
       '/api/chat/ws': {
-        target: 'ws://localhost:8000',
+        target: (process.env.VITE_API_TARGET || 'http://localhost:8000').replace(/^http/, 'ws'),
         ws: true,
       },
       '/api/story/ws': {
-        target: 'ws://localhost:8000',
+        target: (process.env.VITE_API_TARGET || 'http://localhost:8000').replace(/^http/, 'ws'),
         ws: true,
       },
     },

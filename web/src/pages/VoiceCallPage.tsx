@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next'
+import { uiText } from '../i18n/text'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { useAppStore } from '../stores/appStore'
@@ -19,6 +21,7 @@ interface VoiceCallPageProps {
 // 半双工 + 点击打断：角色说话时按住键置灰，点屏幕可打断；说完再按住说话。
 // 右上角 ··· 控制"是否显示 Ta 说的话"字幕（默认关闭）。
 export function VoiceCallPage({ isDark: _isDark }: VoiceCallPageProps) {
+  useTranslation()
   const navigate = useNavigate()
   const params = useParams<{ characterId?: string }>()
   const routeId = params.characterId ?? 'rin'
@@ -129,7 +132,7 @@ export function VoiceCallPage({ isDark: _isDark }: VoiceCallPageProps) {
     } catch {
       setIsRecording(false)
       busyRef.current = false
-      showToast('无法访问麦克风，请检查权限')
+      showToast(uiText('ui77'))
     }
   }, [characterBusy, asr, showToast, unlockAudio])
 
@@ -142,17 +145,17 @@ export function VoiceCallPage({ isDark: _isDark }: VoiceCallPageProps) {
       result = await asr.stop({ cancel: false })
     } catch (err: unknown) {
       busyRef.current = false
-      showToast(err instanceof Error ? err.message : '语音识别失败')
+      showToast(err instanceof Error ? err.message : uiText('ui80'))
       return
     }
     busyRef.current = false
     if (!result) {
-      showToast('说话时间太短')
+      showToast(uiText('ui78'))
       return
     }
     const { transcript, wavBlob, durationMs } = result
     if (!transcript) {
-      showToast('没有识别到语音内容')
+      showToast(uiText('ui79'))
       return
     }
     // Streaming ASR does not persist audio to S3 (calls are ephemeral); play
@@ -211,7 +214,7 @@ export function VoiceCallPage({ isDark: _isDark }: VoiceCallPageProps) {
         minuteRef.current = minute + 1
         if (status === 'charged') setBalance(balance)
         else if (status === 'insufficient') {
-          showToast('余额不足，通话即将结束')
+          showToast(uiText('more349'))
           setTimeout(() => { hangUp() }, 1200)
         }
       } catch {
@@ -234,10 +237,10 @@ export function VoiceCallPage({ isDark: _isDark }: VoiceCallPageProps) {
   }
 
   const statusText = isRecording
-    ? '正在聆听…'
+    ? uiText('more350')
     : characterBusy
-      ? '对方正在说话…'
-      : '按住下方按钮说话'
+      ? uiText('more351')
+      : uiText('more352')
 
   return (
     <div className="relative w-full h-full overflow-hidden" onClick={handleBargeIn}>
@@ -250,7 +253,7 @@ export function VoiceCallPage({ isDark: _isDark }: VoiceCallPageProps) {
       <div className="absolute z-20 right-4 flex flex-col items-end" style={{ top: 'calc(var(--safe-top) + 12px)' }}>
         <button
           onClick={(e) => { e.stopPropagation(); setMenuOpen((v) => !v) }}
-          aria-label="通话设置"
+          aria-label={uiText('more353')}
           className="w-[44px] h-[44px] flex items-center justify-center rounded-full bg-white/12 backdrop-blur-[14px]"
         >
           <span className="text-[20px] text-white">···</span>
@@ -261,7 +264,7 @@ export function VoiceCallPage({ isDark: _isDark }: VoiceCallPageProps) {
             className="mt-2 w-[220px] rounded-[18px] bg-black/70 backdrop-blur-[18px] border border-white/12 px-4 py-3.5"
           >
             <div className="flex items-center justify-between gap-3">
-              <span className="text-[14px] text-white">是否显示 Ta 说的话</span>
+              <span className="text-[14px] text-white">{uiText('more354')}</span>
               <button
                 onClick={() => setShowSubtitle((v) => !v)}
                 className={`relative w-[44px] h-[26px] rounded-full transition-colors ${showSubtitle ? 'bg-[#FF8FAB]' : 'bg-white/25'}`}
@@ -313,7 +316,7 @@ export function VoiceCallPage({ isDark: _isDark }: VoiceCallPageProps) {
           className={`w-[84px] h-[84px] rounded-full flex items-center justify-center touch-none select-none transition-transform ${
             characterBusy ? 'bg-white/15 opacity-50' : isRecording ? 'bg-white/90 scale-110' : 'bg-white/22 backdrop-blur-[14px]'
           }`}
-          aria-label="按住说话"
+          aria-label={uiText('ui102')}
         >
           <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke={isRecording ? '#FF8FAB' : 'white'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <rect x="9" y="2" width="6" height="11" rx="3" />
@@ -325,7 +328,7 @@ export function VoiceCallPage({ isDark: _isDark }: VoiceCallPageProps) {
 
         <button
           onClick={hangUp}
-          aria-label="挂断"
+          aria-label={uiText('more355')}
           className="w-[64px] h-[64px] rounded-full bg-[#FF3B30] flex items-center justify-center shadow-[0_10px_28px_rgba(255,59,48,0.5)] active:scale-90 transition-transform"
         >
           <svg width="30" height="30" viewBox="0 0 24 24" fill="white">

@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next'
+import { uiText } from '../i18n/text'
 import { useState } from 'react'
 import { useCreditsStore } from '../stores/creditsStore'
 import { redeemCode } from '../services/api'
@@ -8,6 +10,7 @@ import { NoticeDialog } from '../components/ui/NoticeDialog'
 import { useSafeBack } from '../hooks/useSafeBack'
 
 export function RedeemPage() {
+  useTranslation()
   const goBack = useSafeBack('/wallet')
   const creditsStore = useCreditsStore()
   const [code, setCode] = useState('')
@@ -28,11 +31,11 @@ export function RedeemPage() {
     } catch (err: unknown) {
       const msg = (err as { message?: string })?.message || ''
       if (msg.includes('expired')) {
-        setToast({ visible: true, message: '兑换码已过期，请检查或联系客服' })
+        setToast({ visible: true, get message() { return uiText('more295') } })
       } else if (msg.includes('already') || msg.includes('used') || msg.includes('redeemed')) {
-        setToast({ visible: true, message: '该兑换码已被使用' })
+        setToast({ visible: true, get message() { return uiText('more296') } })
       } else {
-        setToast({ visible: true, message: '兑换码无效，请检查后重试' })
+        setToast({ visible: true, get message() { return uiText('more297') } })
       }
     } finally {
       setLoading(false)
@@ -45,10 +48,10 @@ export function RedeemPage() {
       const cleaned = text.replace(/[^a-zA-Z0-9]/g, '').slice(0, 12).toUpperCase()
       if (cleaned.length > 0) {
         setCode(cleaned)
-        setToast({ visible: true, message: '已粘贴' })
+        setToast({ visible: true, get message() { return uiText('more298') } })
       }
     } catch {
-      setToast({ visible: true, message: '无法读取剪贴板' })
+      setToast({ visible: true, get message() { return uiText('more299') } })
     }
   }
 
@@ -65,7 +68,7 @@ export function RedeemPage() {
             <polyline points="10,2 2,10 10,18" />
           </svg>
         </button>
-        <span className="text-[17px] font-medium text-[var(--color-ink)]">兑换会员</span>
+        <span className="text-[17px] font-medium text-[var(--color-ink)]">{uiText('more300')}</span>
         <div className="w-[44px]" />
       </nav>
 
@@ -75,15 +78,13 @@ export function RedeemPage() {
         <div className="bg-[var(--color-glass-75)] backdrop-blur-[20px] rounded-[24px] border border-[var(--color-border-glass)] shadow-[var(--shadow-hero)] p-6 mt-4 mb-5 text-center">
           <img
             src="/assets/backgrounds/兑换页礼品盒.webp"
-            alt="礼品盒"
+            alt={uiText('more302')}
             className="w-[120px] h-[120px] object-contain mx-auto mb-4"
           />
           <h2 className="text-[22px] font-semibold text-[var(--color-ink)] mb-2 font-[var(--font-chinese)]">
-            输入兑换码激活权益
-          </h2>
+            {uiText('more303')}</h2>
           <p className="text-[14px] text-[var(--color-text-secondary)] leading-[1.6]">
-            仅支持已经获得的 12 位兑换码，新兑换码发放入口目前已关闭。
-          </p>
+            {uiText('more304')}</p>
         </div>
 
         {/* Code Input */}
@@ -97,8 +98,7 @@ export function RedeemPage() {
             onClick={handlePaste}
             className="px-4 py-2 rounded-full bg-[var(--color-glass-55)] backdrop-blur-[12px] border border-[var(--color-border-glass)] text-[13px] text-[var(--color-ink)] active:scale-[0.97] transition-transform"
           >
-            粘贴
-          </button>
+            {uiText('ui300')}</button>
         </div>
 
         {/* Activate button */}
@@ -110,15 +110,14 @@ export function RedeemPage() {
           onClick={handleRedeem}
           className="mb-5"
         >
-          立即激活
-        </Button>
+          {uiText('more305')}</Button>
 
         {/* Help section */}
         <button
           onClick={() => setShowHelp(!showHelp)}
           className="w-full flex items-center justify-between px-4 py-3 bg-[var(--color-glass-35)] backdrop-blur-[12px] rounded-[16px] mb-3"
         >
-          <span className="text-[15px] font-medium text-[var(--color-ink)]">兑换码说明</span>
+          <span className="text-[15px] font-medium text-[var(--color-ink)]">{uiText('more306')}</span>
           <svg
             width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="var(--color-chevron)" strokeWidth="1.5" strokeLinecap="round"
             className={`transition-transform duration-200 ${showHelp ? 'rotate-180' : ''}`}
@@ -130,28 +129,24 @@ export function RedeemPage() {
         {showHelp && (
           <div className="bg-[var(--color-glass-35)] backdrop-blur-[12px] rounded-[16px] p-4 mb-4 animate-[fade-in-up_220ms_var(--ease-standard)]">
             <p className="text-[14px] text-[var(--color-ink)] leading-[1.7]">
-              兑换码只能使用一次。输入后会立即写入当前账号；如果你是历史会员，请使用原账号登录后再激活。
-            </p>
+              {uiText('more307')}</p>
           </div>
         )}
 
         {/* Footer */}
         <p className="text-center text-[12px] text-[var(--color-text-muted)] mt-2">
-          兑换码一次性有效，激活后不可退还。
-        </p>
+          {uiText('more308')}</p>
       </div>
 
       {/* Success Dialog */}
       <NoticeDialog
         open={showSuccess}
         onClose={() => { setShowSuccess(false); goBack() }}
-        title="激活成功"
-        actionLabel="好的"
+        title={uiText('more309')}
+        actionLabel={uiText('more310')}
       >
-        兑换成功
-        <br />
-        当前余额 {creditsStore.balance} yuoyuo币，尽情享受吧
-      </NoticeDialog>
+        {uiText('more311')}<br />
+        {uiText('more312')}{creditsStore.balance} {uiText('more313')}</NoticeDialog>
 
       <Toast visible={toast.visible} message={toast.message} onDismiss={() => setToast({ visible: false, message: '' })} />
     </div>

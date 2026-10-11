@@ -45,7 +45,7 @@ def display_name_from_spec(spec: object, fallback_id: str) -> str:
     if isinstance(spec, dict):
         raw = spec.get("display_name")
         if isinstance(raw, dict):
-            for locale in ("zh", "ja", "en"):
+            for locale in ("zh", "ja", "ko", "en"):
                 value = raw.get(locale)
                 if isinstance(value, str) and value.strip():
                     return value.strip()
@@ -152,6 +152,8 @@ def build_catalog_entries(
     taglines: dict[str, str | None] | None = None,
     creation_modes: dict[str, str | None] | None = None,
     display_names: dict[str, str | None] | None = None,
+    *,
+    local_review: bool = False,
 ) -> list[CharacterEntry]:
     """Shape visible rows into API entries ordered by persisted recommendation score.
 
@@ -207,7 +209,13 @@ def build_catalog_entries(
             creation_mode=creation_modes.get(row.id),
         )
         for row in rows
-        if visible_to(row, viewer_id)
+        if (
+            row.status == "active"
+            and row.visibility in {"public", "unlisted"}
+            and row.review_status == "approved"
+            if local_review
+            else visible_to(row, viewer_id)
+        )
     ]
 
     entries.sort(key=lambda e: (-e.recommendation_score, -e.real_view_count, e.id))

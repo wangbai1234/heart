@@ -94,7 +94,11 @@ def e2e_server() -> Iterator[str]:
     proc = subprocess.Popen(
         [
             "uvicorn",
-            "heart.api.main:create_app",
+            (
+                "tests.e2e.international_app:create_app"
+                if env.get("INTERNATIONAL_MODE") == "true" and env.get("LLM_PROVIDER") == "fake"
+                else "heart.api.main:create_app"
+            ),
             "--factory",
             "--host",
             "127.0.0.1",

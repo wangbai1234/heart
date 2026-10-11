@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next'
+import { uiText } from '../i18n/text'
 import { useEffect } from 'react'
 import { NoticeDialog } from './ui/NoticeDialog'
 
@@ -16,6 +18,7 @@ export function DailyCheckinDialog({
   coins: number
   onClose: () => void
 }) {
+  useTranslation()
   useEffect(() => {
     if (!open) return
     const t = setTimeout(onClose, 3500)
@@ -23,10 +26,8 @@ export function DailyCheckinDialog({
   }, [open, onClose])
 
   return (
-    <NoticeDialog open={open} onClose={onClose} title="签到成功">
-      今日签到已到账
-      <br />
-      获得 {coins} yuoyuo币，永久有效
-    </NoticeDialog>
+    <NoticeDialog open={open} onClose={onClose} title={uiText('more13')}>
+      {uiText('more14')}<br />
+      {uiText('more15')}{coins} {uiText('more16')}</NoticeDialog>
   )
 }

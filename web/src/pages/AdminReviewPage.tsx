@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next'
+import { uiText } from '../i18n/text'
 import { useEffect, useState, type ReactNode } from 'react'
 import {
   ApiError,
@@ -22,9 +24,9 @@ import { Dialog } from '../components/ui/Dialog'
 const ADMIN_KEY_STORAGE = 'heart_admin_key'
 
 const GREETING_STYLE_TEXT: Record<string, string> = {
-  warm: '温暖',
+  get warm() { return uiText('ui402') },
   cool: '疏离',
-  playful: '俏皮',
+  get playful() { return uiText('ui404') },
   reserved: '克制',
   intense: '浓烈',
 }
@@ -32,6 +34,7 @@ const GREETING_STYLE_TEXT: Record<string, string> = {
 const GENDER_TEXT: Record<string, string> = { female: '女性', male: '男性' }
 
 export function AdminReviewPage() {
+  useTranslation()
   const showToast = useToastStore((s) => s.show)
   // Seed from sessionStorage so a refresh mid-review doesn't force re-entry,
   // but it never touches localStorage (won't outlive the tab).
@@ -127,6 +130,7 @@ interface ViewProps {
 }
 
 function AdminReviewView(p: ViewProps) {
+  useTranslation()
   const [reason, setReason] = useState('')
 
   if (!p.authed) {
@@ -176,7 +180,7 @@ function AdminReviewView(p: ViewProps) {
       <div className="flex-1 overflow-y-auto px-4 pb-10 pt-2">
         {p.items.length === 0 ? (
           <p className="text-center text-[14px] text-[var(--color-text-muted)] pt-20">
-            {p.loading ? '加载中…' : '没有待审核的角色'}
+            {p.loading ? uiText('more105') : '没有待审核的角色'}
           </p>
         ) : (
           <div className="flex flex-col gap-3">
@@ -211,8 +215,7 @@ function AdminReviewView(p: ViewProps) {
             onClick={() => p.setRejectTarget(null)}
             className="flex-1 h-[44px] rounded-full bg-[var(--color-glass-75)] text-[var(--color-ink)] text-[15px] font-medium"
           >
-            取消
-          </button>
+            {uiText('ui108')}</button>
           <button
             onClick={() => p.rejectTarget && p.onReject(p.rejectTarget, reason.trim())}
             disabled={!reason.trim() || p.busyId !== null}
@@ -227,12 +230,13 @@ function AdminReviewView(p: ViewProps) {
 }
 
 const VIS_TEXT: Record<string, string> = {
-  public: '公开',
+  get public() { return uiText('ui44') },
   unlisted: '仅链接可见',
-  private: '私密',
+  get private() { return uiText('ui46') },
 }
 
 function Field({ label, value }: { label: string; value: ReactNode }) {
+  useTranslation()
   if (value == null || value === '' || (Array.isArray(value) && value.length === 0)) return null
   return (
     <div className="mt-3">
@@ -245,6 +249,7 @@ function Field({ label, value }: { label: string; value: ReactNode }) {
 }
 
 function Chips({ items }: { items: string[] }) {
+  useTranslation()
   return (
     <div className="flex flex-wrap gap-1.5">
       {items.map((t, i) => (
@@ -267,6 +272,7 @@ function PendingCard({
   onApprove: () => void
   onReject: () => void
 }) {
+  useTranslation()
   const [expanded, setExpanded] = useState(false)
   const meta = [
     c.gender ? GENDER_TEXT[c.gender] ?? c.gender : null,
@@ -326,7 +332,7 @@ function PendingCard({
           <div className="mt-1">
             {meta && <p className="mt-3 text-[12px] text-[var(--color-text-muted)]">{meta}</p>}
             {c.tags.length > 0 && <div className="mt-3"><Chips items={c.tags} /></div>}
-            <Field label="人设描述" value={c.persona} />
+            <Field label={uiText('ui676')} value={c.persona} />
             <Field label="背景设定" value={c.backstory} />
             <Field label="角色简介" value={c.intro} />
             <Field label="一句话标语" value={c.tagline} />

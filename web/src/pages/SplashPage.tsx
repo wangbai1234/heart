@@ -1,8 +1,11 @@
+import { useTranslation } from 'react-i18next'
+import { uiText } from '../i18n/text'
 import { useEffect, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuthStore } from '../stores/authStore'
 
 export function SplashPage() {
+  useTranslation()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
@@ -45,7 +48,7 @@ export function SplashPage() {
     <div className="relative h-full w-full overflow-hidden bg-[#F5D0E0]">
       <img
         src="/assets/backgrounds/加载页.webp"
-        alt="yuoyuo 加载页"
+        alt={uiText('more326')}
         className="absolute inset-0 h-full w-full object-cover"
       />
     </div>

@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next'
+import { uiText, international } from '../i18n/text'
 import { useState } from 'react'
 import { HOME_ANNOUNCEMENTS, type HomeAnnouncement } from '../data/uiContent'
 
@@ -9,8 +11,9 @@ import { HOME_ANNOUNCEMENTS, type HomeAnnouncement } from '../data/uiContent'
  * `open` toggles the list sheet; tapping a row opens the full detail sheet.
  */
 export function AnnouncementSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+  useTranslation()
   const [active, setActive] = useState<HomeAnnouncement | null>(null)
-  const announcements = [...HOME_ANNOUNCEMENTS].sort((a, b) => b.publishedAt - a.publishedAt)
+  const announcements = [...(international ? [] : HOME_ANNOUNCEMENTS)].sort((a, b) => b.publishedAt - a.publishedAt)
 
   if (!open) return null
 
@@ -31,14 +34,14 @@ export function AnnouncementSheet({ open, onClose }: { open: boolean; onClose: (
           <div className="h-[4px] w-[38px] rounded-full bg-[var(--color-divider)]" />
           <div className="mt-4 flex w-full items-center justify-between border-b border-[var(--color-divider)] px-5 pb-4">
             <div>
-              <p className="text-[18px] font-semibold leading-tight text-[var(--color-ink)]">公告</p>
-              <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">yuoyuo 的最新动态</p>
+              <p className="text-[18px] font-semibold leading-tight text-[var(--color-ink)]">{uiText('ui271')}</p>
+              <p className="mt-1 text-[12px] text-[var(--color-text-muted)]">{uiText('more5')}</p>
             </div>
-            <span className="mr-2 text-[12px] text-[var(--color-text-muted)]">{announcements.length} 条</span>
+            <span className="mr-2 text-[12px] text-[var(--color-text-muted)]">{announcements.length} {uiText('more6')}</span>
             <button
               onClick={closeAll}
               className="flex h-[32px] w-[32px] items-center justify-center rounded-full bg-[var(--color-page-soft)] text-[var(--color-ink)] active:scale-95"
-              aria-label="关闭"
+              aria-label={uiText('ui15')}
             >
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                 <line x1="1" y1="1" x2="13" y2="13" />
@@ -52,6 +55,7 @@ export function AnnouncementSheet({ open, onClose }: { open: boolean; onClose: (
           className="relative max-h-[calc(78vh-132px)] overflow-y-auto px-4 pb-3"
           style={{ paddingBottom: 'max(env(safe-area-inset-bottom, 16px), 20px)' }}
         >
+          {announcements.length === 0 && <p className="py-6 text-center text-[14px] text-[var(--color-text-muted)]">{uiText('noticeEmpty')}</p>}
           {announcements.map((a) => (
             <button
               key={a.id}
@@ -87,6 +91,7 @@ export function AnnouncementSheet({ open, onClose }: { open: boolean; onClose: (
 }
 
 function AnnouncementDetail({ announcement, onClose }: { announcement: HomeAnnouncement; onClose: () => void }) {
+  useTranslation()
   return (
     <div className="absolute inset-0 z-[60] flex items-end" onClick={onClose}>
       <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" />
@@ -105,7 +110,7 @@ function AnnouncementDetail({ announcement, onClose }: { announcement: HomeAnnou
           <button
             onClick={onClose}
             className="flex h-[32px] w-[32px] items-center justify-center rounded-full bg-[var(--color-page-soft)]"
-            aria-label="关闭"
+            aria-label={uiText('ui15')}
           >
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="var(--color-ink)" strokeWidth="2" strokeLinecap="round">
               <line x1="1" y1="1" x2="13" y2="13" />

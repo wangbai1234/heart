@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next'
+import { uiText } from '../i18n/text'
 import { useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStoryStore } from '../stores/storyStore'
@@ -16,6 +18,7 @@ import { AppPageContent, AppPageShell } from '../components/ui/AppPageShell'
  * Read-only in this PR; starting a run lands with the player UI (PR4).
  */
 export function ExplorePage() {
+  useTranslation()
   const navigate = useNavigate()
   const {
     scenarios,
@@ -51,12 +54,11 @@ export function ExplorePage() {
         {/* Header */}
         <AppPageContent className="flex h-[58px] shrink-0 items-center justify-between px-4 sm:px-5">
           <div>
-            <p className="text-[11px] font-semibold tracking-[0.12em] text-[var(--color-primary-600)]">今日故事</p>
-            <h1 className="mt-0.5 text-[23px] font-bold leading-none text-[var(--color-ink)]">探索</h1>
+            <p className="text-[11px] font-semibold tracking-[0.12em] text-[var(--color-primary-600)]">{uiText('more271')}</p>
+            <h1 className="mt-0.5 text-[23px] font-bold leading-none text-[var(--color-ink)]">{uiText('more272')}</h1>
           </div>
           <span className="rounded-full border border-[var(--color-divider)] bg-[var(--color-page-surface)] px-3 py-1.5 text-[12px] font-medium text-[var(--color-text-secondary)] shadow-[0_3px_12px_rgba(90,54,68,0.05)]">
-            今日精选
-          </span>
+            {uiText('more273')}</span>
         </AppPageContent>
 
         {/* Scrollable content */}
@@ -66,8 +68,8 @@ export function ExplorePage() {
           ) : error && !loaded ? (
             <div className="mx-auto mt-5 max-w-[520px] rounded-[12px] border border-[var(--color-divider)] bg-[var(--color-page-surface)]">
               <ErrorState
-                title="加载失败"
-                description="剧情列表没能加载出来，检查网络后重试。"
+                title={uiText('more274')}
+                description={uiText('more275')}
                 onRetry={() => void loadCatalog(true)}
               />
             </div>
@@ -94,8 +96,7 @@ export function ExplorePage() {
                       )}
                       <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/10 to-transparent" />
                       <div className="absolute left-3 top-3 inline-flex h-[23px] items-center rounded-full bg-black/25 px-2.5 text-[11px] font-semibold text-white backdrop-blur-[5px]">
-                        热门推荐
-                      </div>
+                        {uiText('more276')}</div>
                       <div className="absolute bottom-0 left-0 right-0 p-3.5 text-left">
                         <p className="text-[18px] font-bold leading-[1.3] text-white line-clamp-1">
                           {scenario.title}
@@ -105,7 +106,7 @@ export function ExplorePage() {
                         </p>
                         <div className="mt-1.5 flex items-center gap-2 text-[11px] text-white/80">
                           <span className="rounded-full bg-white/20 px-2 py-0.5">{scenario.genre}</span>
-                          <span>{scenario.play_count} 人玩过</span>
+                          <span>{scenario.play_count} {uiText('more277')}</span>
                         </div>
                       </div>
                     </button>
@@ -121,7 +122,7 @@ export function ExplorePage() {
                       <circle cx="12" cy="12" r="10" />
                       <polyline points="12 6 12 12 16 14" />
                     </svg>
-                    <span className="text-[16px] font-bold text-[var(--color-ink)]">近期玩过</span>
+                    <span className="text-[16px] font-bold text-[var(--color-ink)]">{uiText('more278')}</span>
                   </div>
                   <div className="flex gap-3 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none">
                     {recentScenarios.map((item) => (
@@ -148,8 +149,7 @@ export function ExplorePage() {
                           {item.title}
                         </p>
                         <p className="mt-0.5 text-center text-[10px] font-medium text-[var(--color-primary-600)]">
-                          继续游玩
-                        </p>
+                          {uiText('more279')}</p>
                       </button>
                     ))}
                   </div>
@@ -160,7 +160,7 @@ export function ExplorePage() {
               {genres.length > 0 && (
                 <div className="flex gap-2 overflow-x-auto pb-1 mb-4 -mx-1 px-1 scrollbar-none">
                   <GenreChip
-                    label="全部"
+                    label={uiText('ui157')}
                     active={activeGenre === null}
                     onClick={() => void setGenre(null)}
                   />
@@ -185,9 +185,9 @@ export function ExplorePage() {
               ) : grid.length === 0 && featuredTop4.length === 0 ? (
                 <div className="pt-16">
                   <EmptyState
-                    title="还没有剧情"
-                    description="剧情正在整理上架中，先去和角色聊聊天吧。"
-                    actionLabel="去聊天"
+                    title={uiText('more280')}
+                    description={uiText('more281')}
+                    actionLabel={uiText('more282')}
                     onAction={() => navigate('/chat')}
                   />
                 </div>
@@ -203,13 +203,12 @@ export function ExplorePage() {
               {characters.length > 0 && (
                 <div className="mt-7">
                   <div className="flex items-center justify-between pl-1 pr-1 mb-3">
-                    <span className="text-[16px] font-bold text-[var(--color-ink)]">找个人陪你</span>
+                    <span className="text-[16px] font-bold text-[var(--color-ink)]">{uiText('more283')}</span>
                     <button
                       onClick={() => navigate('/character')}
                       className="text-[13px] text-[var(--color-text-secondary)]"
                     >
-                      全部 ›
-                    </button>
+                      {uiText('more284')}</button>
                   </div>
                   <div className="flex gap-4 overflow-x-auto pb-2 -mx-1 px-1 scrollbar-none">
                     {characters.slice(0, 8).map((c) => {
@@ -260,6 +259,7 @@ function GenreChip({
   active: boolean
   onClick: () => void
 }) {
+  useTranslation()
   return (
     <button
       onClick={onClick}
@@ -275,6 +275,7 @@ function GenreChip({
 }
 
 function ExploreSkeleton() {
+  useTranslation()
   return (
     <>
       <Skeleton className="mb-5 h-[174px] w-full rounded-[15px]" />

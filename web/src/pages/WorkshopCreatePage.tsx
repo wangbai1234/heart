@@ -1,3 +1,7 @@
+import i18n, { supportedLocale } from '../i18n'
+import { CharacterLanguageFields } from '../components/create/CharacterLanguageFields'
+import { useTranslation } from 'react-i18next'
+import { uiText, uiLabel } from '../i18n/text'
 import { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useToastStore } from '../stores/toastStore'
@@ -33,6 +37,7 @@ const TABS = ['基础信息', '角色设定', '美化设置'] as const
  * 必填（封面/名字/性别/人设）缺项跳到对应 Tab 并 toast 提示，按钮始终可点。
  */
 export function WorkshopCreatePage() {
+  useTranslation()
   const navigate = useNavigate()
   const showToast = useToastStore((s) => s.show)
   const [searchParams] = useSearchParams()
@@ -44,16 +49,16 @@ export function WorkshopCreatePage() {
   const [state, setState] = useState<WorkshopState>(() => {
     // Edit mode starts blank and hydrates from the server draft below; the
     // localStorage draft belongs to the create flow and must not leak in.
-    if (isEdit) return EMPTY_STATE
+    if (isEdit) return { ...EMPTY_STATE, responseLanguage: supportedLocale(i18n.language) }
     const saved = localStorage.getItem(STORAGE_KEY)
     if (saved) {
       try {
-        return { ...EMPTY_STATE, ...(JSON.parse(saved) as Partial<WorkshopState>) }
+        return { ...EMPTY_STATE, responseLanguage: supportedLocale(i18n.language), ...(JSON.parse(saved) as Partial<WorkshopState>) }
       } catch {
-        return EMPTY_STATE
+        return { ...EMPTY_STATE, responseLanguage: supportedLocale(i18n.language) }
       }
     }
-    return EMPTY_STATE
+    return { ...EMPTY_STATE, responseLanguage: supportedLocale(i18n.language) }
   })
   const [busy, setBusy] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -72,7 +77,7 @@ export function WorkshopCreatePage() {
         if (!cancelled) setState(draftToWorkshopState(draft))
       })
       .catch(() => {
-        if (!cancelled) showToast('无法加载角色草稿，请重试', 'error')
+        if (!cancelled) showToast(uiText('ui578'), 'error')
       })
       .finally(() => {
         if (!cancelled) setLoadingDraft(false)
@@ -105,7 +110,7 @@ export function WorkshopCreatePage() {
       const { cover_url } = await uploadCharacterCover(compressed)
       updateField('coverUrl', cover_url)
     } catch (err) {
-      showToast(err instanceof ApiError ? err.message : '封面上传失败，请重试', 'error')
+      showToast(err instanceof ApiError ? err.message : uiText('ui416'), 'error')
     } finally {
       setUploading(false)
     }
@@ -118,11 +123,12 @@ export function WorkshopCreatePage() {
       const { opening } = await generateOpeningPreview({
         display_name: state.displayName || undefined,
         persona: state.persona,
+        response_language: state.responseLanguage,
         tags: state.tags.length ? state.tags : undefined,
       })
       updateField('opening', opening)
     } catch (err) {
-      showToast(err instanceof ApiError ? err.message : 'AI 生成失败，请重试', 'error')
+      showToast(err instanceof ApiError ? err.message : uiText('ui484'), 'error')
     } finally {
       setAssisting(false)
     }
@@ -130,10 +136,10 @@ export function WorkshopCreatePage() {
 
   /** 校验必填 → 返回 {tab, msg}；全部通过返回 null。 */
   function firstMissing(): { tab: number; msg: string } | null {
-    if (!state.coverUrl) return { tab: 0, msg: '请上传角色封面' }
-    if (!state.displayName.trim()) return { tab: 0, msg: '请填写角色名字' }
-    if (!state.gender) return { tab: 0, msg: '请选择性别' }
-    if (state.persona.trim().length < 20) return { tab: 0, msg: '人设描述至少 20 字' }
+    if (!state.coverUrl) return { tab: 0, get msg() { return uiText('ui426') } }
+    if (!state.displayName.trim()) return { tab: 0, get msg() { return uiText('ui427') } }
+    if (!state.gender) return { tab: 0, get msg() { return uiText('ui483') } }
+    if (state.persona.trim().length < 20) return { tab: 0, get msg() { return uiText('ui579') } }
     return null
   }
 
@@ -146,7 +152,7 @@ export function WorkshopCreatePage() {
     }
     if (htmlOver) {
       setTab(2)
-      showToast('自定义 HTML 超出 50KB，请精简', 'error')
+      showToast(uiText('ui580'), 'error')
       return
     }
     setBusy(true)
@@ -155,7 +161,7 @@ export function WorkshopCreatePage() {
       if (isEdit) {
         await updateCharacter(editId, draft)
         showToast(
-          state.visibility === 'private' ? '角色已更新' : '角色已更新，重新提交审核',
+          state.visibility === 'private' ? uiText('ui581') : uiText('ui582'),
           'success',
         )
         navigate(`/character/${editId}`, { replace: true, state: { fromCreate: true } })
@@ -181,11 +187,11 @@ export function WorkshopCreatePage() {
       const msg =
         err instanceof ApiError
           ? err.status === 422
-            ? '有字段格式不符合要求，请检查各项内容后重试'
+            ? uiText('ui583')
             : err.message
           : isEdit
-            ? '保存失败，请重试'
-            : '创建失败，请重试'
+            ? uiText('ui432')
+            : uiText('ui433')
       showToast(msg, 'error')
     } finally {
       setBusy(false)
@@ -205,8 +211,8 @@ export function WorkshopCreatePage() {
 
   return (
     <CreateShell
-      title={isEdit ? '编辑角色' : '角色创作'}
-      backLabel={tab > 0 ? '上一步' : '返回创作中心'}
+      title={isEdit ? uiText('ui55') : uiText('ui344')}
+      backLabel={tab > 0 ? uiText('ui584') : uiText('ui485')}
       onBack={handleBack}
       headerExtra={
         <div className="relative z-10 px-5 pb-2">
@@ -222,7 +228,7 @@ export function WorkshopCreatePage() {
                       : 'font-normal text-[var(--color-text-muted)]'
                   }`}
                 >
-                  {label}
+                  {uiLabel(label)}
                   {tab === i && (
                     <span className="absolute -bottom-px left-0 right-0 h-[2.5px] rounded-full bg-[var(--color-primary)]" />
                   )}
@@ -247,13 +253,13 @@ export function WorkshopCreatePage() {
           >
             {busy
               ? isEdit
-                ? '保存中...'
-                : '创建中...'
+                ? uiText('ui480')
+                : uiText('ui481')
               : tab < TABS.length - 1
-                ? '下一步'
+                ? uiText('ui585')
                 : isEdit
-                  ? '保存修改'
-                  : '创建角色'}
+                  ? uiText('ui482')
+                  : uiText('ui586')}
           </button>
         </div>
         )
@@ -261,14 +267,14 @@ export function WorkshopCreatePage() {
     >
       {loadingDraft ? (
         <div className="flex items-center justify-center py-24 text-[14px] text-[var(--color-text-muted)]">
-          正在加载角色草稿...
-        </div>
+          {uiText('ui587')}</div>
       ) : (
         <>
           {tab === 0 && (
             <>
               <Step1 state={state} updateField={updateField} onCoverUpload={handleCoverUpload} uploading={uploading} />
               <Step2 state={state} updateField={updateField} />
+              <CharacterLanguageFields language={state.responseLanguage} worldBook={state.worldBook} onLanguage={v => updateField("responseLanguage", v)} onWorldBook={v => updateField("worldBook", v)} castType={state.castType} contentRating={state.contentRating} onCastType={v => updateField("castType", v)} onContentRating={v => updateField("contentRating", v)} />
             </>
           )}
           {tab === 1 && (

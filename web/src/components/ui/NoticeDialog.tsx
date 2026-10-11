@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next'
+import { uiText } from '../../i18n/text'
 import type { ReactNode } from 'react'
 
 interface NoticeDialogProps {
@@ -31,9 +33,10 @@ export function NoticeDialog({
   onClose,
   title,
   children,
-  actionLabel = '知道了',
+  actionLabel = uiText('more139'),
   onAction,
 }: NoticeDialogProps) {
+  useTranslation()
   if (!open) return null
 
   return (
@@ -53,7 +56,7 @@ export function NoticeDialog({
         {/* Close — top-right, inside the panel corner */}
         <button
           onClick={onClose}
-          aria-label="关闭"
+          aria-label={uiText('ui15')}
           className="absolute w-[30px] h-[30px] flex items-center justify-center rounded-full text-[#9B7FB0] active:scale-90 transition-transform"
           style={{ left: '78%', top: '23.5%' }}
         >

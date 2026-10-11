@@ -69,6 +69,7 @@ async def screen_persona(
     """
     texts_to_check: list[tuple[str, str]] = [
         ("persona", draft.persona),
+        *([("world_book", draft.world_book)] if draft.world_book else []),
         *[(f"speech_sample[{i}]", s) for i, s in enumerate(draft.speech_samples)],
     ]
 

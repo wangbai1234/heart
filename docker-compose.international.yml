@@ -1,0 +1,20 @@
+# Overlay on docker-compose.prod.yml. No public API/DB/Redis/MinIO ports.
+services:
+  api:
+    command: ["uvicorn", "heart.api.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2", "--no-access-log"]
+    environment:
+      INTERNATIONAL_MODE: "true"
+      INTERNATIONAL_GEO_ENFORCED: "true"
+      INTERNATIONAL_ORIGIN_SECRET: ${INTERNATIONAL_ORIGIN_SECRET:?Set the origin secret}
+  encoder-worker:
+    environment:
+      INTERNATIONAL_MODE: "true"
+      INTERNATIONAL_GEO_ENFORCED: "true"
+      INTERNATIONAL_ORIGIN_SECRET: ${INTERNATIONAL_ORIGIN_SECRET:?Set the origin secret}
+  caddy:
+    environment:
+      INTERNATIONAL_DOMAIN: ${INTERNATIONAL_DOMAIN:?Set the international domain}
+      INTERNATIONAL_ORIGIN_SECRET: ${INTERNATIONAL_ORIGIN_SECRET:?Set the origin secret}
+    volumes:
+      - ./infra/international/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./infra/international/cloudflare-ips.caddy:/etc/caddy/cloudflare-ips.caddy:ro

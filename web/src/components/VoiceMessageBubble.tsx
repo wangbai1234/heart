@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next'
+import { uiText } from '../i18n/text'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useChatStore } from '../stores/chatStore'
 import { useAuthStore } from '../stores/authStore'
@@ -29,6 +31,7 @@ export default function VoiceMessageBubble({
   isDark = false,
   fallbackUrl,
 }: VoiceMessageBubbleProps) {
+  useTranslation()
   const [isPlaying, setIsPlaying] = useState(false)
   const [audioUrl, setAudioUrl] = useState<string | null>(null)
   const [frameIndex, setFrameIndex] = useState(0)
@@ -151,7 +154,7 @@ export default function VoiceMessageBubble({
       const statusCode = statusMatch ? parseInt(statusMatch[0]) : 0
       if (statusCode === 404) {
         setLoadExpired(true)
-        useToastStore.getState().show('音频已过期，可点击"转文字"查看内容', 'error')
+        useToastStore.getState().show(uiText('more94'), 'error')
       } else {
         setLoadFailed(true)
         const permanent = statusCode === 401 || statusCode === 403
@@ -318,12 +321,12 @@ export default function VoiceMessageBubble({
   const label = useMemo(
     () =>
       loadExpired
-        ? '音频已过期'
+        ? uiText('more95')
         : loadFailed
-          ? '加载失败 · 点此重试'
+          ? uiText('more96')
           : isPlaying
-            ? '播放中'
-            : '点击收听',
+            ? uiText('more97')
+            : uiText('more98'),
     [isPlaying, loadFailed, loadExpired],
   )
 

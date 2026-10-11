@@ -1,3 +1,10 @@
+import { GoogleCallbackPage } from './pages/GoogleCallbackPage'
+import { SharedMemoriesPage } from './pages/SharedMemoriesPage'
+import { useTranslation } from 'react-i18next'
+import i18n from './i18n'
+import { international, localized } from './i18n/text'
+import { useToastStore } from './stores/toastStore'
+import { getLanguagePreferences } from './services/api'
 import { useEffect, useState } from 'react'
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
 import type { ReactElement } from 'react'
@@ -5,6 +12,7 @@ import { consumePendingAuthentication, setNavigate } from './services/navigation
 import { AuthGuard } from './components/AuthGuard'
 import { SplashPage } from './pages/SplashPage'
 import { RegisterPage } from './pages/RegisterPage'
+import { LoginPage } from './pages/LoginPage'
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage'
 import { ChangePasswordPage } from './pages/ChangePasswordPage'
 import { ChatInboxPage } from './pages/ChatInboxPage'
@@ -76,21 +84,19 @@ function NotFoundRedirect(): ReactElement {
   return <Navigate to="/character" replace />
 }
 
-function LegacyLoginRedirect(): ReactElement {
-  const location = useLocation()
-  return (
-    <Navigate
-      to={{ pathname: '/character', search: location.search }}
-      replace
-      state={{ authRequired: true, from: '/character' }}
-    />
-  )
-}
-
 const SKIP_SAVE_ROUTES = new Set(['/splash', '/login', '/register', '/forgot-password', '/redeem', '/age-gate', '/'])
 const PROMOTION_NOTICE_VERSION = 'v1'
 
 export function App() {
+  useTranslation()
+  const languageUserId = useAuthStore(s => s.user?.id)
+  useEffect(() => {
+    if (!localized || !languageUserId) return
+    let active = true
+    void getLanguagePreferences().then(p => { if (active) void i18n.changeLanguage(p.interface_language) }).catch(() => { if (active) useToastStore.getState().show(i18n.t('error'), 'error') })
+    return () => { active = false }
+  }, [languageUserId])
+
   const { fontScale } = useAppStore()
   const inboxUnreadTotal = useAppStore((s) => s.inboxUnreadTotal)
   const accessToken = useAuthStore((s) => s.accessToken)
@@ -232,7 +238,7 @@ export function App() {
   // The server receipt is the source of truth so acknowledgement follows the
   // account across browsers and devices.
   useEffect(() => {
-    if (!accessToken) {
+    if (international || !accessToken) {
       setRecoveryNotice(null)
       return
     }
@@ -344,7 +350,7 @@ export function App() {
       <DailyCheckinDialog open={checkinOpen} coins={checkinCoins} onClose={() => setCheckinOpen(false)} />
       <ReviewResultDialog item={reviewQueue[0] ?? null} onConfirm={confirmReviewResult} />
       <NoticeDialog
-        open={promotionNoticeOpen && !recoveryNotice && !checkinOpen && reviewQueue.length === 0}
+        open={!international && promotionNoticeOpen && !recoveryNotice && !checkinOpen && reviewQueue.length === 0}
         onClose={dismissPromotionNotice}
         title="安利与创作福利上线"
         actionLabel="去参加"
@@ -357,9 +363,12 @@ export function App() {
         点赞达标还可累计领取两档 VIP
       </NoticeDialog>
       <Routes>
+        {import.meta.env.DEV && <Route path="/_preview/shared-memories" element={<SharedMemoriesPage demo />} />}
+        <Route path="/auth/google/callback" element={<GoogleCallbackPage />} />
+        <Route path="/character/:id/memories" element={<SharedMemoriesPage />} />
         <Route path="/" element={<Navigate to="/character" replace />} />
         <Route path="/splash" element={<SplashPage />} />
-        <Route path="/login" element={<LegacyLoginRedirect />} />
+        <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/redeem" element={<RedeemPage />} />
@@ -371,8 +380,8 @@ export function App() {
         <Route path="/explore" element={<ExplorePage />} />
         <Route path="/explore/:scenarioId" element={<ScenarioDetailPage />} />
         <Route path="/story/:runId" element={<StoryPlayerPage />} />
-        <Route path="/rewards" element={<RewardsPage />} />
-        <Route path="/rewards/content" element={<PromotionPage />} />
+        <Route path="/rewards" element={international ? <WalletPage /> : <RewardsPage />} />
+        <Route path="/rewards/content" element={international ? <WalletPage /> : <PromotionPage />} />
         <Route path="/character" element={<CharacterPage />} />
         <Route path="/character/:id" element={<CharacterProfilePage />} />
         <Route path="/settings" element={<SettingsPage />} />

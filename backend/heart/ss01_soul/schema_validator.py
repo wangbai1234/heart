@@ -434,10 +434,11 @@ class DisplayName(BaseModel):
 
     zh: Optional[str] = None
     ja: Optional[str] = None
+    ko: Optional[str] = None
     en: Optional[str] = None
     pet_self_reference: Optional[str] = None
 
-    @field_validator("zh", "ja", "en")
+    @field_validator("zh", "ja", "ko", "en")
     @classmethod
     def validate_at_least_one(cls, v, info):
         """Ensure at least one locale is provided."""
@@ -493,8 +494,8 @@ class SoulSpec(BaseModel):
     @classmethod
     def validate_display_name(cls, v):
         """Ensure at least one locale name is provided."""
-        if not any([v.zh, v.ja, v.en]):
-            raise ValueError("At least one of zh/ja/en must be provided in display_name")
+        if not any([v.zh, v.ja, v.ko, v.en]):
+            raise ValueError("At least one of zh/ja/ko/en must be provided in display_name")
         return v
 
     model_config = ConfigDict(

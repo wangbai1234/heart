@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next'
+import { uiText } from '../i18n/text'
 import { useState } from 'react'
 import type { ActiveNoticeDTO } from '../services/api'
 
@@ -7,6 +9,7 @@ interface RecoveryNoticeDialogProps {
 }
 
 export function RecoveryNoticeDialog({ notice, onAcknowledge }: RecoveryNoticeDialogProps) {
+  useTranslation()
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
 
@@ -19,7 +22,7 @@ export function RecoveryNoticeDialog({ notice, onAcknowledge }: RecoveryNoticeDi
     try {
       await onAcknowledge(notice.id)
     } catch {
-      setError('确认失败，请检查网络后重试。')
+      setError(uiText('more66'))
       setSubmitting(false)
     }
   }
@@ -38,7 +41,7 @@ export function RecoveryNoticeDialog({ notice, onAcknowledge }: RecoveryNoticeDi
       >
         <header className="shrink-0 border-b border-[var(--color-divider)] px-5 pb-3 pt-4 sm:pb-4 sm:pt-5">
           <p className="text-[12px] font-semibold text-[var(--color-primary-600)]">
-            {notice.eyebrow || '重要公告'}
+            {notice.eyebrow || uiText('more67')}
           </p>
           <h2
             id="recovery-notice-title"
@@ -59,12 +62,11 @@ export function RecoveryNoticeDialog({ notice, onAcknowledge }: RecoveryNoticeDi
             <div className="mt-6 flex flex-col items-center">
               <img
                 src={notice.qr_image_url}
-                alt="yuoyuo 客服 QQ 3533394028 二维码"
+                alt={uiText('more68')}
                 className="w-full max-w-[250px] rounded-[8px] border border-[var(--color-divider)]"
               />
               <p className="mt-3 text-center text-[13px] leading-6 text-[var(--color-text-secondary)]">
-                扫码添加客服，或搜索 QQ：3533394028
-              </p>
+                {uiText('more69')}</p>
             </div>
           )}
         </div>
@@ -80,7 +82,7 @@ export function RecoveryNoticeDialog({ notice, onAcknowledge }: RecoveryNoticeDi
             disabled={submitting}
             className="h-[46px] w-full rounded-[8px] bg-[var(--color-primary-500)] text-[15px] font-semibold text-white transition-opacity active:opacity-85 disabled:opacity-60"
           >
-            {submitting ? '正在确认…' : notice.confirm_label || '我已了解'}
+            {submitting ? uiText('more70') : notice.confirm_label || uiText('more71')}
           </button>
         </footer>
       </section>

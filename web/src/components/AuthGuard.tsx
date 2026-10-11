@@ -18,10 +18,13 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     '/redeem',
     '/age-gate',
     '/character',
+    '/auth/google/callback',
   ])
   const isPublic = exactPublicPaths.has(location.pathname)
+    || (import.meta.env.DEV && location.pathname === '/_preview/shared-memories')
     || location.pathname.startsWith('/admin')
     || location.pathname.startsWith('/legal/')
+    || /^\/character\/[^/]+$/.test(location.pathname)
 
   // Public paths are always accessible
   if (isPublic) return <>{children}</>

@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next'
+import { uiText } from '../i18n/text'
 import { useEffect, useState } from 'react'
 import { useRegisterSW } from 'virtual:pwa-register/react'
 import { NoticeDialog } from './ui/NoticeDialog'
@@ -11,6 +13,7 @@ import { NoticeDialog } from './ui/NoticeDialog'
 // dialog and only reload when the user confirms. `updateServiceWorker(true)`
 // calls skipWaiting() on the waiting SW and reloads the page onto it.
 export function UpdatePrompt() {
+  useTranslation()
   const {
     needRefresh: [needRefresh, setNeedRefresh],
     updateServiceWorker,
@@ -62,16 +65,15 @@ export function UpdatePrompt() {
     <NoticeDialog
       open={needRefresh}
       onClose={() => setNeedRefresh(false)}
-      title="发现新版本"
-      actionLabel="确认刷新"
+      title={uiText('ui121')}
+      actionLabel={uiText('ui122')}
       onAction={() => void confirmRefresh()}
     >
-      当前有版本更新，刷新即可使用最新功能
-      <br />
+      {uiText('ui123')}<br />
       <span className="text-[12px] text-[#9a9aa8]">
-        当前版本 v{__APP_VERSION__}
+        {uiText('ui124')}{__APP_VERSION__}
         {latestVersion && latestVersion !== __APP_VERSION__ && (
-          <> · 最新 v{latestVersion}</>
+          <> {uiText('ui125')}{latestVersion}</>
         )}
       </span>
     </NoticeDialog>

@@ -1,14 +1,19 @@
+import { uiText } from '../i18n/text'
+import { useTranslation } from 'react-i18next'
+import { international } from '../i18n/text'
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import Markdown from 'react-markdown'
 import { useSafeBack } from '../hooks/useSafeBack'
 
 export function LegalPage() {
+  const { t } = useTranslation()
   const { type } = useParams<{ type: string }>()
   const goBack = useSafeBack('/settings')
   const [content, setContent] = useState('')
 
   useEffect(() => {
+    if (international) return
     const file = type === 'privacy' ? 'privacy.md' : type === 'age' ? 'age.md' : 'terms.md'
     fetch(`/legal/${file}`)
       .then((r) => r.text())
@@ -16,15 +21,15 @@ export function LegalPage() {
         // Strip HTML comments (internal notes that shouldn't be rendered)
         setContent(text.replace(/<!--[\s\S]*?-->/g, ''))
       })
-      .catch(() => setContent('加载失败'))
+      .catch(() => setContent(uiText('more274')))
   }, [type])
 
-  const title = type === 'privacy' ? '隐私政策' : type === 'age' ? '年满18周岁确认' : '用户协议'
+  const title = type === 'privacy' ? uiText('ui545') : type === 'age' ? uiText('ui368') : uiText('ui544')
 
   return (
     <div className="w-full h-full flex flex-col" style={{ background: 'var(--color-bg)' }}>
       <div className="flex items-center px-5 pt-4 pb-3" style={{ paddingTop: 'var(--safe-top)' }}>
-        <button onClick={goBack} className="w-[44px] h-[44px] flex items-center justify-center active:opacity-60 transition-opacity" aria-label="返回">
+        <button onClick={goBack} className="w-[44px] h-[44px] flex items-center justify-center active:opacity-60 transition-opacity" aria-label={uiText('ui127')}>
           <svg width="12" height="20" viewBox="0 0 12 20" fill="none" stroke="var(--color-ink)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="10,2 2,10 10,18" />
           </svg>
@@ -54,7 +59,7 @@ export function LegalPage() {
               ),
             }}
           >
-            {content}
+            {international ? t(type === 'privacy' ? 'privacyBody' : type === 'age' ? 'ageBody' : 'termsBody') : content}
           </Markdown>
         </div>
       </div>

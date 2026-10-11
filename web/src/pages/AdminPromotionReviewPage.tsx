@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next'
+import { uiText } from '../i18n/text'
 import { useEffect, useState } from 'react'
 import {
   ApiError,
@@ -49,6 +51,7 @@ function approvalToast(rewardCoins: number, memberships: PromotionMembershipRewa
 }
 
 export function AdminPromotionReviewPage() {
+  useTranslation()
   const showToast = useToastStore((state) => state.show)
   const [key, setKey] = useState(() => sessionStorage.getItem(ADMIN_KEY_STORAGE) ?? '')
   const [authed, setAuthed] = useState(false)
@@ -67,7 +70,7 @@ export function AdminPromotionReviewPage() {
       setAuthed(true)
       sessionStorage.setItem(ADMIN_KEY_STORAGE, adminKey)
     } catch (error) {
-      showToast(error instanceof ApiError ? error.message : '加载失败', 'error')
+      showToast(error instanceof ApiError ? error.message : uiText('more274'), 'error')
       setAuthed(false)
     } finally {
       setLoading(false)
@@ -181,6 +184,7 @@ function PromotionApprovalDialog({ item, busy, onClose, onConfirm }: {
   onClose: () => void
   onConfirm: () => void
 }) {
+  useTranslation()
   if (!item) return null
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center px-5" role="dialog" aria-modal="true" aria-labelledby="promotion-approval-title">
@@ -190,7 +194,7 @@ function PromotionApprovalDialog({ item, busy, onClose, onConfirm }: {
         <p className="mt-4 text-[13px] leading-relaxed text-[var(--color-text-secondary)]">已核验该作品为 <strong className="text-[var(--color-ink)]">{item.likes_count ?? 0} 赞</strong>。</p>
         <p className="mt-2 text-[13px] leading-relaxed text-[var(--color-text-secondary)]">{approvalLabel(item)}。权益按里程碑累计，已发放的档位不会重复发放。</p>
         <div className="mt-5 flex gap-2">
-          <button type="button" onClick={onClose} disabled={busy} className="h-[44px] flex-1 rounded-[8px] bg-[var(--color-page-soft)] text-[14px] text-[var(--color-ink)] disabled:opacity-50">取消</button>
+          <button type="button" onClick={onClose} disabled={busy} className="h-[44px] flex-1 rounded-[8px] bg-[var(--color-page-soft)] text-[14px] text-[var(--color-ink)] disabled:opacity-50">{uiText('ui108')}</button>
           <button type="button" onClick={onConfirm} disabled={busy} className="h-[44px] flex-1 rounded-[8px] bg-[var(--color-primary-500)] text-[14px] font-semibold text-white disabled:opacity-50">{busy ? '发放中…' : '确认通过'}</button>
         </div>
       </div>
@@ -211,6 +215,7 @@ function PromotionReviewCard({ item, adminKey, busy, reasonOpen, reason, onReaso
   onNeedsInfo: () => void
   onCopyLink: () => void
 }) {
+  useTranslation()
   return (
     <article className="rounded-[8px] border border-[var(--color-divider)] bg-[var(--color-page-surface)] p-4 shadow-[var(--shadow-soft)] sm:p-5">
       <div className="flex items-start justify-between gap-4">
@@ -256,6 +261,7 @@ function PromotionReviewCard({ item, adminKey, busy, reasonOpen, reason, onReaso
 }
 
 function MembershipEntitlementPreview({ item }: { item: PromotionSubmission }) {
+  useTranslation()
   const rewards = membershipPreview(item)
   const currentRewards = rewards.filter((reward) => reward.state === 'grant_now')
   return (
@@ -283,6 +289,7 @@ function MembershipEntitlementPreview({ item }: { item: PromotionSubmission }) {
 }
 
 function RewardState({ state }: { state: MembershipPreview['state'] }) {
+  useTranslation()
   const content = {
     not_reached: { label: '未达标', className: 'text-[var(--color-text-muted)]' },
     grant_now: { label: '本次发放', className: 'text-[var(--color-primary-700)]' },
@@ -292,6 +299,7 @@ function RewardState({ state }: { state: MembershipPreview['state'] }) {
 }
 
 function AdminEvidenceImage({ submissionId, adminKey }: { submissionId: string; adminKey: string }) {
+  useTranslation()
   const [imageUrl, setImageUrl] = useState<string | null>(null)
   const [failed, setFailed] = useState(false)
 

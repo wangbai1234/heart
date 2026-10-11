@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next'
+import { uiText } from '../i18n/text'
 import { NoticeDialog } from './ui/NoticeDialog'
 import type { ReviewUpdateDTO } from '../services/api'
 
@@ -13,32 +15,29 @@ export function ReviewResultDialog({
   item: ReviewUpdateDTO | null
   onConfirm: () => void
 }) {
+  useTranslation()
   const open = item !== null
   const approved = item?.review_status === 'approved'
   return (
     <NoticeDialog
       open={open}
       onClose={onConfirm}
-      title={approved ? '角色审核通过' : '角色审核未通过'}
+      title={approved ? uiText('more72') : uiText('more73')}
     >
       {approved ? (
         <>
-          「{item?.display_name}」已通过审核
-          <br />
-          角色已公开，可通过链接分享
-        </>
+          「{item?.display_name}{uiText('more74')}<br />
+          {uiText('more75')}</>
       ) : (
         <>
-          「{item?.display_name}」未通过审核
-          {item?.review_reason ? (
+          「{item?.display_name}{uiText('more76')}{item?.review_reason ? (
             <>
               <br />
-              原因：{item.review_reason}
+              {uiText('more77')}{item.review_reason}
             </>
           ) : null}
           <br />
-          可修改后重新提交
-        </>
+          {uiText('more78')}</>
       )}
     </NoticeDialog>
   )

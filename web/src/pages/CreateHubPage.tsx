@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next'
+import { uiText } from '../i18n/text'
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useThemeStore } from '../stores/themeStore'
@@ -24,6 +26,7 @@ function useToast() {
  * actions front-and-center as we prepare to ship publishing features.)
  */
 export function CreateHubPage() {
+  useTranslation()
   const navigate = useNavigate()
   const { characters, loaded, load, setVisibility, disableCharacter, reactivateCharacter, deleteCharacter } =
     useCharactersStore()
@@ -49,13 +52,13 @@ export function CreateHubPage() {
     try {
       await setVisibility(id, vis)
       if (vis === 'public' || vis === 'unlisted') {
-        const label = vis === 'public' ? '公开' : '链接可见'
-        showToast(`已提交审核，通过后将以「${label}」展示`, 'success')
+        const label = vis === 'public' ? uiText('ui44') : uiText('ui45')
+        showToast(uiText('dynamic16', { v0: label }), 'success')
       } else {
-        showToast('可见范围已更新为「私密」', 'success')
+        showToast(uiText('ui328'), 'success')
       }
     } catch (err) {
-      const msg = err instanceof ApiError ? err.message : '操作失败，请稍后再试'
+      const msg = err instanceof ApiError ? err.message : uiText('ui329')
       showToast(msg, 'error')
     }
   }
@@ -65,10 +68,10 @@ export function CreateHubPage() {
     setDisabling(true)
     try {
       await disableCharacter(disableTarget.id)
-      showToast(`「${disableTarget.display_name}」已停用`, 'success')
+      showToast(uiText('dynamic17', { v0: disableTarget.display_name }), 'success')
       setDisableTarget(null)
     } catch (err) {
-      const msg = err instanceof ApiError ? err.message : '操作失败，请稍后再试'
+      const msg = err instanceof ApiError ? err.message : uiText('ui329')
       showToast(msg, 'error')
     } finally {
       setDisabling(false)
@@ -80,11 +83,11 @@ export function CreateHubPage() {
       await reactivateCharacter(char.id)
       const msg =
         char.visibility === 'public' || char.visibility === 'unlisted'
-          ? `「${char.display_name}」已重新提交审核，通过后展示`
-          : `「${char.display_name}」已重新发布`
+          ? uiText('dynamic18', { v0: char.display_name })
+          : uiText('dynamic19', { v0: char.display_name })
       showToast(msg, 'success')
     } catch (err) {
-      const m = err instanceof ApiError ? err.message : '操作失败，请稍后再试'
+      const m = err instanceof ApiError ? err.message : uiText('ui329')
       showToast(m, 'error')
     }
   }
@@ -94,10 +97,10 @@ export function CreateHubPage() {
     setDeleting(true)
     try {
       await deleteCharacter(deleteTarget.id)
-      showToast(`「${deleteTarget.display_name}」已删除`, 'success')
+      showToast(uiText('dynamic20', { v0: deleteTarget.display_name }), 'success')
       setDeleteTarget(null)
     } catch (err) {
-      const msg = err instanceof ApiError ? err.message : '操作失败，请稍后再试'
+      const msg = err instanceof ApiError ? err.message : uiText('ui329')
       showToast(msg, 'error')
     } finally {
       setDeleting(false)
@@ -109,7 +112,7 @@ export function CreateHubPage() {
       <div style={{ height: 'env(safe-area-inset-top, 47px)' }} />
 
       <AppPageContent size="medium" className="flex h-[58px] shrink-0 items-center px-4 sm:px-5">
-        <h1 className="text-[24px] font-bold text-[var(--color-ink)]">创作</h1>
+        <h1 className="text-[24px] font-bold text-[var(--color-ink)]">{uiText('ui136')}</h1>
       </AppPageContent>
 
       <div ref={scrollRef} className="relative z-10 mx-auto min-h-0 w-full max-w-[860px] flex-1 overflow-y-auto px-4 pb-[120px] pt-2 sm:px-5">
@@ -121,10 +124,9 @@ export function CreateHubPage() {
             <ModeSelector />
 
             <div className="mb-4">
-              <p className="text-[15px] font-semibold text-[var(--color-ink)] px-1 mb-1">我的创造</p>
+              <p className="text-[15px] font-semibold text-[var(--color-ink)] px-1 mb-1">{uiText('ui330')}</p>
               <p className="text-[13px] text-[var(--color-text-muted)] px-1">
-                {publishableCount} / 10 个公开或链接可见角色 · 私密角色不限量
-              </p>
+                {publishableCount} {uiText('ui331')}</p>
             </div>
 
             <div className="flex flex-col gap-3">
@@ -154,17 +156,15 @@ export function CreateHubPage() {
 
       <TabBar />
 
-      <Dialog open={disableTarget !== null} onClose={() => setDisableTarget(null)} title={`停用「${disableTarget?.display_name ?? ''}」？`}>
+      <Dialog open={disableTarget !== null} onClose={() => setDisableTarget(null)} title={uiText('dynamic21', { v0: disableTarget?.display_name ?? '' })}>
         <p className="text-[14px] text-[var(--color-text-secondary)] leading-[1.7]">
-          停用后该角色对他人不可见，聊天记录保留。它会以「已停用」保留在这里，你随时可以重新发布。
-        </p>
+          {uiText('ui332')}</p>
         <div className="flex gap-3 mt-4">
           <button
             onClick={() => setDisableTarget(null)}
             className={`flex-1 h-[44px] rounded-full text-[var(--color-ink)] text-[15px] font-medium active:bg-[rgba(0,0,0,0.04)] ${isDark ? 'bg-[var(--color-glass-55)]' : 'bg-[rgba(255,255,255,0.75)]'}`}
           >
-            取消
-          </button>
+            {uiText('ui108')}</button>
           <button
             onClick={handleDisable}
             disabled={disabling}
@@ -176,23 +176,21 @@ export function CreateHubPage() {
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
               </svg>
             ) : (
-              '确认停用'
+              uiText('ui333')
             )}
           </button>
         </div>
       </Dialog>
 
-      <Dialog open={deleteTarget !== null} onClose={() => setDeleteTarget(null)} title={`删除「${deleteTarget?.display_name ?? ''}」？`}>
+      <Dialog open={deleteTarget !== null} onClose={() => setDeleteTarget(null)} title={uiText('dynamic22', { v0: deleteTarget?.display_name ?? '' })}>
         <p className="text-[14px] text-[var(--color-text-secondary)] leading-[1.7]">
-          删除是永久操作，无法撤销。该角色及其聊天记录、设定将被彻底移除，不会再找回。
-        </p>
+          {uiText('ui334')}</p>
         <div className="flex gap-3 mt-4">
           <button
             onClick={() => setDeleteTarget(null)}
             className={`flex-1 h-[44px] rounded-full text-[var(--color-ink)] text-[15px] font-medium active:bg-[rgba(0,0,0,0.04)] ${isDark ? 'bg-[var(--color-glass-55)]' : 'bg-[rgba(255,255,255,0.75)]'}`}
           >
-            取消
-          </button>
+            {uiText('ui108')}</button>
           <button
             onClick={handleDelete}
             disabled={deleting}
@@ -204,7 +202,7 @@ export function CreateHubPage() {
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
               </svg>
             ) : (
-              '永久删除'
+              uiText('ui335')
             )}
           </button>
         </div>
@@ -214,10 +212,11 @@ export function CreateHubPage() {
 }
 
 function EmptyState() {
+  useTranslation()
   return (
     <div className="flex flex-col px-1 pb-12 pt-3 text-left">
-      <h2 className="text-[18px] font-semibold text-[var(--color-ink)]">开始你的角色创作</h2>
-      <p className="mt-1 text-[13px] leading-[1.5] text-[var(--color-text-secondary)]">从一句想法开始，把 Ta 的性格和故事交给你决定。</p>
+      <h2 className="text-[18px] font-semibold text-[var(--color-ink)]">{uiText('ui336')}</h2>
+      <p className="mt-1 text-[13px] leading-[1.5] text-[var(--color-text-secondary)]">{uiText('ui337')}</p>
       <ModeSelector />
     </div>
   )
@@ -230,6 +229,7 @@ function CreatorHero({
   isDark: boolean
   onStart: () => void
 }) {
+  useTranslation()
   return (
     <section
       className={`relative mb-5 min-h-[170px] overflow-hidden rounded-[18px] border p-5 shadow-[0_8px_24px_rgba(73,48,62,0.10)] ${
@@ -240,20 +240,16 @@ function CreatorHero({
     >
       <div className="relative z-10 max-w-[62%]">
         <span className={`inline-flex rounded-full px-2.5 py-1 text-[11px] font-semibold ${isDark ? 'bg-white/12 text-white/80' : 'bg-white/70 text-[#C94A6A]'}`}>
-          创作工作台
-        </span>
+          {uiText('ui338')}</span>
         <h2 className={`mt-3 text-[20px] font-bold leading-[1.25] ${isDark ? 'text-white' : 'text-[var(--color-ink)]'}`}>
-          创造一个会被记住的角色
-        </h2>
+          {uiText('ui339')}</h2>
         <p className={`mt-2 text-[12px] leading-[1.5] ${isDark ? 'text-white/72' : 'text-[var(--color-text-secondary)]'}`}>
-          让每一次相遇，都从你的设定开始。
-        </p>
+          {uiText('ui340')}</p>
         <button
           onClick={onStart}
           className={`mt-4 inline-flex h-[36px] items-center justify-center rounded-full px-4 text-[13px] font-semibold transition-transform active:scale-[0.97] ${isDark ? 'bg-white text-[#A14C68]' : 'bg-[var(--color-primary-500)] text-white shadow-[var(--shadow-btn)]'}`}
         >
-          开始创建
-        </button>
+          {uiText('ui341')}</button>
       </div>
       <div className="pointer-events-none absolute -bottom-4 right-[-12px] flex items-end" aria-hidden="true">
         <img src="/assets/characters/character_ji_yu_avatar.webp" alt="" className="h-[92px] w-[72px] -rotate-[8deg] rounded-[14px] object-cover opacity-80 shadow-[0_8px_18px_rgba(73,48,62,0.18)]" />
@@ -266,6 +262,7 @@ function CreatorHero({
 
 /** 批3: 两档入口 - 快速创建 vs 角色创作 */
 function ModeSelector() {
+  useTranslation()
   const navigate = useNavigate()
 
   return (
@@ -281,8 +278,8 @@ function ModeSelector() {
             </svg>
           </div>
           <div className="flex-1">
-            <h3 className="text-[17px] font-semibold text-[var(--color-ink)] mb-1">快速创建</h3>
-            <p className="text-[13px] text-[var(--color-text-secondary)] leading-[1.5]">AI 辅助生成</p>
+            <h3 className="text-[17px] font-semibold text-[var(--color-ink)] mb-1">{uiText('ui342')}</h3>
+            <p className="text-[13px] text-[var(--color-text-secondary)] leading-[1.5]">{uiText('ui343')}</p>
           </div>
         </div>
       </button>
@@ -301,8 +298,8 @@ function ModeSelector() {
             </svg>
           </div>
           <div className="flex-1">
-            <h3 className="text-[17px] font-semibold text-[var(--color-ink)] mb-1">角色创作</h3>
-            <p className="text-[13px] text-[var(--color-text-secondary)] leading-[1.5]">逐步精细设定</p>
+            <h3 className="text-[17px] font-semibold text-[var(--color-ink)] mb-1">{uiText('ui344')}</h3>
+            <p className="text-[13px] text-[var(--color-text-secondary)] leading-[1.5]">{uiText('ui345')}</p>
           </div>
         </div>
       </button>

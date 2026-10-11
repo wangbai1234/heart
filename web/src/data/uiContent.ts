@@ -1,3 +1,5 @@
+import i18n from '../i18n'
+import { uiText, international } from '../i18n/text'
 // A character id is a free-text key (UGC refactor C4). The set of *valid* ids is
 // no longer a compile-time union — it comes from the server catalog at runtime
 // (see stores/charactersStore). This alias stays for readability at call sites.
@@ -378,11 +380,11 @@ function formatVoiceDuration(value?: string | number) {
 
 export function getMessagePreview(messages: PreviewMessage[]) {
   const last = messages[messages.length - 1]
-  if (!last) return '开始新的对话'
+  if (!last) return uiText('chatEmpty')
   if (last.kind === 'voice') {
-    return `语音消息 · ${formatVoiceDuration(last.duration ?? last.audioDuration)}`
+    return uiText('voicePreview', { duration: formatVoiceDuration(last.duration ?? last.audioDuration) })
   }
-  return last.content || '新的消息'
+  return last.content || uiText('newMessage')
 }
 
 export function getConversationPreview(messages: ConversationMessage[]) {
@@ -406,7 +408,7 @@ export function formatConversationTime(timestamp: number) {
     date.getMonth() === nowDate.getMonth() &&
     date.getDate() === nowDate.getDate()
   if (sameDay) {
-    return new Intl.DateTimeFormat('zh-CN', {
+    return new Intl.DateTimeFormat(international ? i18n.language : 'zh-CN', {
       hour: '2-digit',
       minute: '2-digit',
       hour12: false,
@@ -419,7 +421,7 @@ export function formatConversationTime(timestamp: number) {
     date.getFullYear() === yesterday.getFullYear() &&
     date.getMonth() === yesterday.getMonth() &&
     date.getDate() === yesterday.getDate()
-  if (isYesterday) return '昨天'
+  if (isYesterday) return uiText('yesterday')
 
   return `${date.getMonth() + 1}/${date.getDate()}`
 }
@@ -448,7 +450,7 @@ export function formatChatTime(timestamp: number): string {
   const yesterday = new Date(now)
   yesterday.setDate(now.getDate() - 1)
   if (isSameDay(date, yesterday)) {
-    return `昨天 ${pad2(date.getHours())}:${pad2(date.getMinutes())}`
+    return `${uiText('yesterday')} ${pad2(date.getHours())}:${pad2(date.getMinutes())}`
   }
 
   return `${date.getMonth() + 1}/${date.getDate()} ${pad2(date.getHours())}:${pad2(date.getMinutes())}`

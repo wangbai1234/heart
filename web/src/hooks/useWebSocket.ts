@@ -1,3 +1,4 @@
+import { uiText } from '../i18n/text'
 import { useCallback, useEffect, useRef } from 'react'
 import { useChatStore } from '../stores/chatStore'
 import { useAppStore } from '../stores/appStore'
@@ -172,7 +173,7 @@ export function useWebSocket() {
         if (stuckTurnId) dropEmptyAssistantTurn(cid, stuckTurnId)
         delete activeTurnByCharRef.current[cid]
         pendingVoiceTurnRef.current = false
-        useToastStore.getState().show('响应超时，请重试', 'error')
+        useToastStore.getState().show(uiText('more151'), 'error')
       }, TURN_WATCHDOG_MS)
     }
 
@@ -371,7 +372,7 @@ export function useWebSocket() {
           // Silent model degradation: tell the user which model actually served
           // the turn (never surface a technical error).
           if (msg.degraded_to) {
-            useToastStore.getState().show(`已切换到 ${modelLabel(msg.degraded_to)}`, 'info')
+            useToastStore.getState().show(uiText('dynamic13', { v0: modelLabel(msg.degraded_to) }), 'info')
           }
           pendingVoiceTurnRef.current = false
           break
@@ -431,19 +432,19 @@ export function useWebSocket() {
           const errCode = msg.code
           let errMsg: string = FEEDBACK_COPY.streamError
           if (errCode === 'SOUL_NOT_LOADED') {
-            errMsg = '角色加载中，请稍后重试'
+            errMsg = uiText('more154')
           } else if (errCode === 'SERVICE_UNAVAILABLE') {
-            errMsg = '服务暂时不可用，请稍后重试'
+            errMsg = uiText('more155')
           } else if (errCode === 'MODEL_UNAVAILABLE') {
-            errMsg = '这个模型暂时不可用，请选择其他模型'
+            errMsg = uiText('more156')
           } else if (errCode === 'UNKNOWN_MODEL') {
-            errMsg = '模型信息已更新，请重新选择'
+            errMsg = uiText('more157')
           } else if (errCode === 'BILLING_CHECK_FAILED') {
-            errMsg = '账户验证失败，请重试'
+            errMsg = uiText('more158')
           } else if (errCode === 'NETWORK_FLUCTUATION') {
-            errMsg = '网络波动异常，请稍后再试'
+            errMsg = uiText('more159')
           } else if (errCode === 'VOICE_NOT_CONFIGURED') {
-            errMsg = '该角色暂未配置音色，已切换为文字模式'
+            errMsg = uiText('more160')
             // Also flip local voice_enabled back off so the next message
             // doesn't re-fire the same broken voice code path. Server side
             // still holds voice_enabled=true (we don't PATCH here) but the
@@ -455,11 +456,11 @@ export function useWebSocket() {
               useAppStore.getState().setVoiceChatEnabled(errCharacterId as CharacterId, false)
             }
           } else if (errCode === 'EMPTY_RESPONSE') {
-            errMsg = '生成失败，请重试'
+            errMsg = uiText('more144')
           } else if (errCode === 'PERSIST_FAILED') {
-            errMsg = '消息保存失败，请重试'
+            errMsg = uiText('more161')
           } else if (errCode === 'TURN_TIMEOUT') {
-            errMsg = '响应超时，请重试'
+            errMsg = uiText('more151')
           }
           useToastStore.getState().show(errMsg, 'error')
           break

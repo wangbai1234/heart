@@ -52,3 +52,10 @@ describe('isDiscoverableCharacter', () => {
     })).toBe(true)
   })
 })
+
+it('local selection admits approved unlisted but never private or pending owner entries', () => {
+  const base = { localReview: true, isBuiltin: false, isOwner: true }
+  expect(isDiscoverableCharacter({ ...base, visibility: 'unlisted', reviewStatus: 'approved' })).toBe(true)
+  expect(isDiscoverableCharacter({ ...base, visibility: 'private', reviewStatus: 'approved' })).toBe(false)
+  expect(isDiscoverableCharacter({ ...base, visibility: 'public', reviewStatus: 'pending' })).toBe(false)
+})

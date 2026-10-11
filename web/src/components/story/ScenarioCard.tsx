@@ -1,3 +1,4 @@
+import { uiText } from '../../i18n/text'
 import { useState } from 'react'
 import type { ScenarioCardDTO } from '../../services/api'
 
@@ -83,6 +84,6 @@ function CoverImage({ src }: { src: string }) {
 }
 
 function formatPlays(n: number): string {
-  if (n >= 10000) return `${(n / 10000).toFixed(1)}w 人玩过`
-  return `${n} 人玩过`
+  if (n >= 10000) return uiText('dynamic7', { v0: (n / 10000).toFixed(1) })
+  return uiText('dynamic8', { v0: n })
 }

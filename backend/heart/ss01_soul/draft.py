@@ -33,12 +33,13 @@ class GreetingStyle(str, Enum):
 class DisplayNameDraft(BaseModel, extra="forbid"):
     zh: Optional[str] = Field(None, min_length=1, max_length=20)
     ja: Optional[str] = Field(None, min_length=1, max_length=20)
+    ko: Optional[str] = Field(None, min_length=1, max_length=20)
     en: Optional[str] = Field(None, min_length=1, max_length=40)
 
     @model_validator(mode="after")
     def at_least_one(self) -> "DisplayNameDraft":
-        if not any([self.zh, self.ja, self.en]):
-            raise ValueError("At least one of zh / ja / en is required")
+        if not any([self.zh, self.ja, self.ko, self.en]):
+            raise ValueError("At least one of zh / ja / ko / en is required")
         return self
 
 
@@ -145,6 +146,10 @@ class CharacterDraft(BaseModel, extra="forbid"):
     soul_profile: Optional[SoulProfileDraft] = None
     sliders: SliderSet = Field(default_factory=SliderSet)
     locale: str = "zh"
+    response_language: Literal["en", "ja", "ko"] | None = None
+    world_book: str = Field(default="", max_length=10000)
+    cast_type: Literal["single", "multiple"] = "single"
+    content_rating: Literal["general", "mature"] = "general"
     # Intended visibility once the character is published.
     # public/unlisted → enters review pipeline; private → immediately live,
     # no review, no reward.

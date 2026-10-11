@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next'
+import { uiText, uiLabel } from '../../i18n/text'
 import { useRef, useEffect } from 'react'
 import { Button } from './Button'
 
@@ -28,6 +30,7 @@ export function MuteTimePicker({
   onChangeNever,
   onConfirm,
 }: MuteTimePickerProps) {
+  useTranslation()
   const startMinutes = parseInt(startHour) * 60 + parseInt(startMin)
   const endMinutes = parseInt(endHour) * 60 + parseInt(endMin)
   const isValidRange = isNever || endMinutes > startMinutes
@@ -35,8 +38,7 @@ export function MuteTimePicker({
   return (
     <div>
       <h3 className="text-[18px] font-semibold text-[var(--color-ink)] text-center mb-4">
-        静音时段
-      </h3>
+        {uiText('ui536')}</h3>
 
       {/* Never / Custom toggle */}
       <div className="flex bg-[var(--color-segment-container)] rounded-[10px] p-[2px] mb-5">
@@ -52,7 +54,7 @@ export function MuteTimePicker({
                   : 'bg-transparent text-[var(--color-text-muted)]'
               }`}
             >
-              {opt}
+              {uiLabel(opt)}
             </button>
           )
         })}
@@ -63,11 +65,11 @@ export function MuteTimePicker({
         {/* Labels */}
         <div className="flex mb-2">
           <div className="flex-1 flex justify-center">
-            <span className="text-[13px] text-[var(--color-text-muted)]">开始</span>
+            <span className="text-[13px] text-[var(--color-text-muted)]">{uiText('more134')}</span>
           </div>
           <div className="w-10" />
           <div className="flex-1 flex justify-center">
-            <span className="text-[13px] text-[var(--color-text-muted)]">结束</span>
+            <span className="text-[13px] text-[var(--color-text-muted)]">{uiText('more135')}</span>
           </div>
         </div>
 
@@ -79,13 +81,13 @@ export function MuteTimePicker({
               items={HOURS}
               value={startHour}
               onChange={(v) => onChangeTime(v, startMin, endHour, endMin)}
-              suffix="时"
+              suffix={uiText('more136')}
             />
             <Wheel
               items={MINUTES}
               value={startMin}
               onChange={(v) => onChangeTime(startHour, v, endHour, endMin)}
-              suffix="分"
+              suffix={uiText('more137')}
             />
           </div>
           {/* Separator */}
@@ -98,13 +100,13 @@ export function MuteTimePicker({
               items={HOURS}
               value={endHour}
               onChange={(v) => onChangeTime(startHour, startMin, v, endMin)}
-              suffix="时"
+              suffix={uiText('more136')}
             />
             <Wheel
               items={MINUTES}
               value={endMin}
               onChange={(v) => onChangeTime(startHour, startMin, endHour, v)}
-              suffix="分"
+              suffix={uiText('more137')}
             />
           </div>
         </div>
@@ -113,14 +115,12 @@ export function MuteTimePicker({
       {/* Validation warning */}
       {!isValidRange && (
         <p className="text-[12px] text-[var(--color-primary)] text-center mt-3">
-          结束时间不能早于或等于开始时间
-        </p>
+          {uiText('more138')}</p>
       )}
 
       {/* Confirm */}
       <Button variant="primary" size="sm" onClick={onConfirm} disabled={!isValidRange} className="mt-5 w-full">
-        完成
-      </Button>
+        {uiText('more131')}</Button>
     </div>
   )
 }
@@ -137,6 +137,7 @@ function Wheel({
   onChange: (v: string) => void
   suffix: string
 }) {
+  useTranslation()
   const containerRef = useRef<HTMLDivElement>(null)
   const scrollingRef = useRef(false)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)

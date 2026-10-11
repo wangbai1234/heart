@@ -339,7 +339,7 @@ class Orchestrator:
             composer = await self._composer_builder(db_session=db_session)
         except Exception as exc:
             logger.error("composer_build_failed_stream", error=str(exc))
-            fallback = self._fallback_message(req.character_id)
+            fallback = self._fallback_message(req.character_id, req.response_language)
             yield {"type": "text_delta", "delta": fallback}
             yield {
                 "type": "turn_end",
@@ -350,7 +350,7 @@ class Orchestrator:
             return
 
         if composer is None:
-            fallback = self._fallback_message(req.character_id)
+            fallback = self._fallback_message(req.character_id, req.response_language)
             yield {"type": "text_delta", "delta": fallback}
             yield {
                 "type": "turn_end",
@@ -436,6 +436,8 @@ class Orchestrator:
             turn_id=req.trace_id,
             session_id=session_id,
             user_message=req.user_message,
+            response_language=req.response_language,
+            action_style=req.action_style,
             max_tokens=2000,
             model=getattr(req, "model", "gemini-3.1"),
             stream_meta=_meta,
@@ -619,6 +621,10 @@ class Orchestrator:
         )
         if not care_response_text:
             care_response_text = DEFAULT_CARE_RESPONSE
+        if req.response_language:
+            from heart.i18n import localized_reply
+
+            care_response_text = localized_reply("care", req.response_language)
 
         logger.warning(
             "turn_blocked_by_safety",
@@ -669,6 +675,11 @@ class Orchestrator:
                 "I'm not able to help with that request. "
                 "If you're in crisis, please contact emergency services or a mental health professional."
             )
+
+        if req.response_language:
+            from heart.i18n import localized_reply
+
+            reject_response = localized_reply("refusal", req.response_language)
 
         logger.warning(
             "turn_rejected_by_safety",
@@ -850,7 +861,7 @@ class Orchestrator:
                 user_id=str(req.user_id),
                 character_id=req.character_id,
             )
-            return self._fallback_message(req.character_id)
+            return self._fallback_message(req.character_id, req.response_language)
 
         # Build composer
         composer = None
@@ -863,7 +874,7 @@ class Orchestrator:
                 error=str(exc),
                 user_id=str(req.user_id),
             )
-            return self._fallback_message(req.character_id)
+            return self._fallback_message(req.character_id, req.response_language)
 
         # Compose
         try:
@@ -873,6 +884,8 @@ class Orchestrator:
                 turn_id=req.trace_id,
                 session_id=session_id,
                 user_message=req.user_message,
+                response_language=req.response_language,
+                action_style=req.action_style,
                 max_tokens=2000,
                 membership_tier=getattr(req, "membership_tier", "free"),
             )
@@ -892,7 +905,7 @@ class Orchestrator:
                 error=str(exc),
                 user_id=str(req.user_id),
             )
-            return self._fallback_message(req.character_id)
+            return self._fallback_message(req.character_id, req.response_language)
 
     # ── Private: Cold path ──────────────────────────────────────────
 
@@ -1127,7 +1140,11 @@ class Orchestrator:
         intensity = max(abs(valence), arousal)
         return valence, arousal, intensity
 
-    def _fallback_message(self, character_id: str) -> str:
+    def _fallback_message(self, character_id: str, language: str | None = None) -> str:
         """Return a Soul-flavored fallback message when composer is unavailable."""
+        if language:
+            from heart.i18n import localized_reply
+
+            return localized_reply("fallback", language)
         key = character_id.lower()
         return _FALLBACK_MESSAGES.get(key, _FALLBACK_MESSAGES.get("rin", _DEFAULT_FALLBACK))
