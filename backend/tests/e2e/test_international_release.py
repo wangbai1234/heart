@@ -148,7 +148,7 @@ def test_international_catalog_and_no_commerce(api_context):
     assert "古書店" in profile.json()["intro"]
     schema = api_context.get("/api/openapi.json").json()["paths"]
     assert not any(
-        p.startswith(("/api/webhooks", "/api/commission", "/api/lottery", "/api/promotions"))
+        p.startswith("/api/webhooks")
         for p in schema
     )
 

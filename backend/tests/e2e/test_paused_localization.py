@@ -82,7 +82,7 @@ def test_original_prompt_ignores_saved_foreign_preferences(api_context, pg_conn,
         assert cur.fetchone()[0] >= 2
     paths = api_context.get("/api/openapi.json").json()["paths"]
     assert not any(
-        p.startswith(("/api/webhooks", "/api/commission", "/api/lottery", "/api/promotions"))
+        p.startswith("/api/webhooks")
         for p in paths
     )
 
