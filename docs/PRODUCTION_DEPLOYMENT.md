@@ -20,9 +20,11 @@ docker compose --env-file .env.prod -f docker-compose.prod.yml -f docker-compose
 - 旧静态目录保留为 `web/dist-before-international-20261011`，旧提交 `504e925`。
 - 健康检查均 200；Google config 为 enabled=true；start 303 跳转 Google，真实回调、PKCE S256、Secure cookie 已核对。内部 CN/缺失来源凭据探针及直接源站请求返回 403，JP 探针 200。尚未使用真实大陆终端验证，也不等于识别用户国籍。
 
-### 当前发布验收待办
+### 当前发布验收
 
-Cloudflare 仍缓存旧 `/sw.js`（实测 HIT、TTL 14400 秒），旧浏览器可能继续加载旧版本。需在 Cloudflare 对 `https://yuoyuo.app/sw.js` 执行精确清缓存；源站现已返回 no-cache。Google 真实账号完整往返尚未验收，不能仅凭 config 或 start 成功判断完成。
+已精确清除 Cloudflare 的 `/sw.js`、`/version.json`、`/manifest.webmanifest` 缓存，并创建启用的 `Bypass PWA release metadata` 规则（ID `e17b0af09080485c8ecd270ea926ad65`），仅对这三个路径旁路 CDN 和浏览器缓存。公网 `/sw.js` 与当前构建文件逐字节一致，响应 `Cache-Control: no-cache` / `CF-Cache-Status: DYNAMIC`。后续发布无需等待 4 小时 CDN TTL。浏览器已打开的旧页面仍需通过服务工作线程更新流程或重新打开页面更新。
+
+用户已亲自验证生产环境 Google 登录正常；登录与注册按钮和真实 Google 授权页也已浏览器验收。代理补丁恢复 www → apex 的 308 跳转，并将 OAuth code/state 与 WebSocket token 一同从访问日志脱敏。
 
 ### 后续更新与回滚
 
