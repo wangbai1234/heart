@@ -22,7 +22,7 @@
             root * /srv/web
             @immutable path_regexp hashed ^/assets/.*-[a-zA-Z0-9_-]{8,}\.(js|css)$
             header @immutable Cache-Control "public, max-age=31536000, immutable"
-            @shell path / /index.html /sw.js /manifest.webmanifest
+            @shell path / /index.html /sw.js /version.json /manifest.webmanifest
             header @shell Cache-Control "no-cache"
             try_files {path} /index.html
             file_server
@@ -42,9 +42,16 @@
             fields {
                 request>uri query {
                     replace token REDACTED
+                    replace code REDACTED
+                    replace state REDACTED
                 }
                 request>headers>X-Yuoyuo-Origin delete
             }
         }
     }
+}
+
+# Preserve the existing canonical-domain redirect. The apex enforces region access.
+www.{$INTERNATIONAL_DOMAIN} {
+    redir https://{$INTERNATIONAL_DOMAIN}{uri} 308
 }

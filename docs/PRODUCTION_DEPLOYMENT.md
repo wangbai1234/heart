@@ -2,24 +2,33 @@
 
 > 本文是生产发布的唯一入口文档。服务器：`deploy@103.69.128.125:22`，目录：`/home/deploy/heart`。
 
-## 当前阻塞（2026-09-07）
+## 当前生产状态（2026-10-11）
 
-新服务器已在原目录安全恢复 Git 元数据，但历史发布曾直接 rsync/上传源码，线上代码并不等于
-GitHub `origin/main`。为避免覆盖线上修复，服务器目前停在本地恢复分支：
+用户明确授权在旧 HostHatch 实例发布。PR #366 合并提交 `5ad64e1` 已上线，生产仓库为干净 `main`。数据库已从 076 升级到 `079_google_identities`；前端版本为 2.0.34，构建使用 `VITE_INTERNATIONAL=true VITE_LOCALIZATION=false`。
 
-```text
-production-snapshot/103-69-128-125-20260907-033454
-2fe1ce2ddc9d4fa6835e33007ca3ae51b971b772
+当前运行必须带国际 overlay：
+
+```bash
+cd /home/deploy/heart
+docker compose --env-file .env.prod -f docker-compose.prod.yml -f docker-compose.international.yml ps
 ```
 
-关键配置备份位于服务器：
+- `.env.prod` 中 `INTERNATIONAL_MODE=true`、`INTERNATIONAL_GEO_ENFORCED=true`、`INTERNATIONAL_LOCALIZATION=false`；生产密钥保持权限 600。
+- Google 回调为 `https://yuoyuo.app/api/auth/google/callback`，前端回调为 `https://yuoyuo.app/auth/google/callback`。Google Cloud 应用已正式发布，仅请求 openid/email/profile。
+- 生产数据卷原地保留，没有导入旧的本地生产快照或本地角色改编稿。
+- 升级前备份：`backups/pre-international-20261011T085302Z/`，包含数据库自定义格式 dump、`.env.prod`、旧 Caddyfile、前端 tar 和旧提交号。SHA256 校验和 `pg_restore --list` 检查通过；目录权限 700，数据库和密钥文件 600。
+- 旧静态目录保留为 `web/dist-before-international-20261011`，旧提交 `504e925`。
+- 健康检查均 200；Google config 为 enabled=true；start 303 跳转 Google，真实回调、PKCE S256、Secure cookie 已核对。内部 CN/缺失来源凭据探针及直接源站请求返回 403，JP 探针 200。尚未使用真实大陆终端验证，也不等于识别用户国籍。
 
-```text
-/home/deploy/heart/.deploy-backups/git-init-20260907-033230
-```
+### 当前发布验收待办
 
-在生产差异归并并推送 GitHub `main` 之前，后端 Git 部署会主动停止。不要强制 checkout/reset，
-也不要删除上述快照分支。当前容器仍使用初始化前的相同文件，服务未因 Git 恢复而重启。
+Cloudflare 仍缓存旧 `/sw.js`（实测 HIT、TTL 14400 秒），旧浏览器可能继续加载旧版本。需在 Cloudflare 对 `https://yuoyuo.app/sw.js` 执行精确清缓存；源站现已返回 no-cache。Google 真实账号完整往返尚未验收，不能仅凭 config 或 start 成功判断完成。
+
+### 后续更新与回滚
+
+以下历史 `release-prod.sh` / `deploy-prod.sh` 命令尚未自动加载国际 overlay，不要直接用来重建当前生产，否则会丢失国际代理配置。后续手动更新须先备份、合并 PR、生产快进 main，再用两份 Compose 文件构建、迁移并启动。前端必须显式使用上述两个 Vite 开关。
+
+回滚应用时保留新增数据库表及新用户写入，禁止直接恢复旧 dump 覆盖生产。旧代码可配合旧 `.env.prod`、旧静态目录及基础 Caddy/Compose 恢复；执行前确认回滚到国内访问逻辑是否仍符合用户当前意图。备份中的 dump 为灾难恢复材料，不是常规应用回滚步骤。
 
 ## 标准发布命令（Mac 仓库根目录）
 

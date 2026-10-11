@@ -16,6 +16,12 @@
 
 ---
 
+## 旧 HostHatch 发布（2026-10-11）
+
+用户确认本次使用旧实例。PR #366 已合并，`deploy@103.69.128.125:/home/deploy/heart` 已运行 `5ad64e1`，前端 2.0.34、数据库 `079_google_identities`。Google Cloud 客户端已保存正式域名与回调，品牌链接补齐，发布状态为正式版。线上 Google config 已启用；健康、PKCE 授权跳转与地域拒绝探针通过。完整真实账号登录往返仍待验收。语言开关保持 false，中文默认；不导入本地快照覆盖线上数据。
+
+备份与运行命令见 [生产发布手册](PRODUCTION_DEPLOYMENT.md)。必须带国际 Compose overlay；旧脚本默认仅用基础 Compose，不可直接运行旧发布命令。浏览器验收发现 Cloudflare 缓存旧 `/sw.js`（4 小时 TTL），已请求登录 Cloudflare 后清除该文件缓存；未清除前旧客户端可能仍显示旧页面。
+
 ## 语言上线暂停与 Google 登录（2026-10-11，未部署）
 
 用户调整后续市场方向为孟加拉地区；本轮不实施孟加拉语。`codex/international-release` 默认恢复中文界面及原有中文生成提示词，隐藏 EN/JA/KO 语言选择和本地首发改编预览。语言功能独立为 `INTERNATIONAL_LOCALIZATION` / `VITE_LOCALIZATION`，默认 false；`INTERNATIONAL_MODE` / `VITE_INTERNATIONAL` 继续控制地域、国内商业接口和移动端布局，不随语言暂停关闭。保留 222 个原审核角色以及三语改编与审计，不删除数据。共同记忆、世界书、搜索等功能保留。
