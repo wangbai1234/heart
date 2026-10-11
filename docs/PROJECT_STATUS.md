@@ -10,11 +10,17 @@
 
 > 📖 **启动/部署/手机端测试/启用语义召回，一律看 [`docs/EXECUTION_MANUAL.md`](EXECUTION_MANUAL.md)（单一操作手册）。**
 > 🚀 **生产发布看 [`docs/PRODUCTION_DEPLOYMENT.md`](PRODUCTION_DEPLOYMENT.md)**。当前服务器为
-> `deploy@103.69.128.125:22`，部署目录 `/home/deploy/heart`。2026-09-07 已恢复 Git 元数据，
-> 但线上历史直传改动尚未完全归并 `origin/main`，后端 Git 发布暂由脚本安全阻止；详见该文档“当前阻塞”。
+> `deploy@103.69.128.125:22`，部署目录 `/home/deploy/heart`。2026-10-11 已切换国际 Compose overlay；
+> 生产仓库为 main，部署参数及回滚说明见该手册最新章节。
 > 📖 **拉取最新代码后如何 bring-up 本地环境**，直接看下方 §0.5「拉取最新代码后必做清单」。
 
 ---
+
+## 旧 HostHatch 发布（2026-10-11）
+
+用户确认本次使用旧实例。PR #366 已合并，`deploy@103.69.128.125:/home/deploy/heart` 已运行 `5ad64e1`，前端 2.0.34、数据库 `079_google_identities`。Google Cloud 客户端已保存正式域名与回调，品牌链接补齐，发布状态为正式版。线上 Google config 已启用；健康、PKCE 授权跳转与地域拒绝探针通过。用户已亲自验证生产环境 Google 登录正常。语言开关保持 false，中文默认；不导入本地快照覆盖线上数据。
+
+备份与运行命令见 [生产发布手册](PRODUCTION_DEPLOYMENT.md)。必须带国际 Compose overlay；旧脚本默认仅用基础 Compose，不可直接运行旧发布命令。已清除 Cloudflare 旧 `/sw.js`、版本文件与 manifest 缓存，并部署仅匹配这三个路径的 CDN/浏览器缓存旁路规则。公网离线脚本与构建产物逐字节一致，返回 no-cache/DYNAMIC。
 
 ## 语言上线暂停与 Google 登录（2026-10-11，未部署）
 
