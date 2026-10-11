@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import { international } from '../i18n/text'
+import { international, localized } from '../i18n/text'
 import { InterfaceLanguageSelect } from '../components/LanguagePreferences'
 import { uiText, uiLabel } from '../i18n/text'
 import { useCallback, useEffect, useMemo, useState } from 'react'
@@ -578,7 +578,7 @@ export function CharacterPage() {
                     <line x1="11" y1="11" x2="15" y2="15" />
                   </svg>
                 </button>
-          {international && <InterfaceLanguageSelect />}
+          {localized && <InterfaceLanguageSelect />}
                 <button
                   onClick={() => {
                     if (!isAuthenticated) {
@@ -706,9 +706,9 @@ export function CharacterPage() {
                   )}
                 </div>
                 <div className="grid grid-cols-2 gap-2 mb-3">
-                  <select aria-label={t('contentLanguage')} value={contentLanguage} onChange={e => setContentLanguage(e.target.value)} className="min-w-0 bg-transparent text-[16px]">
+                  {localized && <select aria-label={t('contentLanguage')} value={contentLanguage} onChange={e => setContentLanguage(e.target.value)} className="min-w-0 bg-transparent text-[16px]">
                     <option value="">{t('allLanguages')}</option><option value="ja">日本語</option><option value="ko">한국어</option><option value="en">English</option>
-                  </select>
+                  </select>}
                   <select aria-label={t('castType')} value={castType} onChange={e => setCastType(e.target.value)} className="min-w-0 bg-transparent text-[16px]">
                     <option value="">{t('allCasts')}</option><option value="single">{t('singleCast')}</option><option value="multiple">{t('multipleCast')}</option>
                   </select>

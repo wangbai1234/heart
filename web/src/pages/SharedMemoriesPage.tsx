@@ -29,7 +29,7 @@ export function SharedMemoriesPage({ demo = false }: { demo?: boolean }) {
     let active = true
     setError(''); setEditor(null); setBond(null); setName(''); setAvatar(null)
     if (demo) {
-      setBond(demoBond(i18n.language)); setName('Haru'); return
+      setBond(demoBond(i18n.language)); setName(i18n.language.startsWith('zh') ? '晴' : 'Haru'); return
     }
     Promise.all([getSharedBond(id), getCharacterProfile(id)]).then(([value, profile]) => {
       if (active) { setBond(value); setName(profile.display_name); setAvatar(profile.avatar_url ?? null) }
@@ -125,6 +125,6 @@ export function SharedMemoriesPage({ demo = false }: { demo?: boolean }) {
 }
 
 function demoBond(language: string): SharedBondDTO {
-  const notes = language.startsWith('ja') ? ['疲れた日は、アドバイスよりも静かに話を聞いてほしい。','大切な面接が10月15日にある。終わったら、ふたりで話したい。','雨の夜に読書をするのが好き。お気に入りは小さな古書店。'] : language.startsWith('ko') ? ['힘든 날에는 조언보다 조용히 이야기를 들어주면 좋겠다.','10월 15일에 중요한 면접이 있다. 끝나면 함께 이야기하고 싶다.','비 오는 저녁에 책 읽는 것을 좋아한다. 작은 헌책방이 가장 편안한 곳이다.'] : ['On difficult days, I prefer quiet listening to advice.','My important interview is on October 15. I want us to talk afterwards.','I love reading on rainy evenings. My favourite place is the little secondhand bookshop.']
-  return {message_count:428, user_message_count:196, active_days:24, first_message_at:'2026-09-12T10:00:00Z', stage:'CLOSE_FRIEND', intimacy:0.64, emotion:'warm', memories:notes.map((content,i) => ({id:`demo-${i}`,tier:i===0?'L4':'L3',content,category:'user_note',updated_at:`2026-10-0${8-i}T10:00:00Z`})),relationship_history:[{id:'r2',from_stage:'FRIEND',to_stage:'CLOSE_FRIEND',at:'2026-10-06T10:00:00Z'},{id:'r1',from_stage:'ACQUAINTANCE',to_stage:'FRIEND',at:'2026-09-20T10:00:00Z'}],emotion_history:[{id:'e2',emotion:'warm',at:'2026-10-08T10:00:00Z'},{id:'e1',emotion:'calm',at:'2026-09-12T10:00:00Z'}]}
+  const notes = language.startsWith('zh') ? ['疲惫的时候，比起建议，我更希望你能安静地听我说。','10 月 15 日有一场重要面试，结束后想和你聊聊。','喜欢在下雨的夜晚读书，最喜欢的地方是那间小旧书店。'] : language.startsWith('ja') ? ['疲れた日は、アドバイスよりも静かに話を聞いてほしい。','大切な面接が10月15日にある。終わったら、ふたりで話したい。','雨の夜に読書をするのが好き。お気に入りは小さな古書店。'] : language.startsWith('ko') ? ['힘든 날에는 조언보다 조용히 이야기를 들어주면 좋겠다.','10월 15일에 중요한 면접이 있다. 끝나면 함께 이야기하고 싶다.','비 오는 저녁에 책 읽는 것을 좋아한다. 작은 헌책방이 가장 편안한 곳이다.'] : ['On difficult days, I prefer quiet listening to advice.','My important interview is on October 15. I want us to talk afterwards.','I love reading on rainy evenings. My favourite place is the little secondhand bookshop.']
+  return {message_count:428, user_message_count:196, active_days:24, first_message_at:'2026-09-12T10:00:00Z', stage:'CONFIDANT', intimacy:0.64, emotion:'warm', memories:notes.map((content,i) => ({id:`demo-${i}`,tier:i===0?'L4':'L3',content,category:'user_note',updated_at:`2026-10-0${8-i}T10:00:00Z`})),relationship_history:[{id:'r2',from_stage:'FRIEND',to_stage:'CONFIDANT',at:'2026-10-06T10:00:00Z'},{id:'r1',from_stage:'ACQUAINTANCE',to_stage:'FRIEND',at:'2026-09-20T10:00:00Z'}],emotion_history:[{id:'e2',emotion:'warm',at:'2026-10-08T10:00:00Z'},{id:'e1',emotion:'calm',at:'2026-09-12T10:00:00Z'}]}
 }

@@ -47,7 +47,7 @@ async def generate_opening(
 
     preferences = (
         await character_preferences(db, user_id, character_id)
-        if settings.international_mode
+        if settings.international_localization
         else None
     )
     authored = _resolve_authored_opening(spec)

@@ -11,6 +11,7 @@ afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); vi.resetModules() }
 
 it('creates in the chosen language with a matching request header', async () => {
   vi.stubEnv('VITE_INTERNATIONAL', 'true')
+  vi.stubEnv('VITE_LOCALIZATION', 'true')
   vi.resetModules()
   const { default: i18n } = await import('../i18n')
   await i18n.changeLanguage('ko')
@@ -26,6 +27,7 @@ it('creates in the chosen language with a matching request header', async () => 
 
 it.each(['zh-CN', 'ja'])('preserves authored locale %s and translations when editing in English', async (locale) => {
   vi.stubEnv('VITE_INTERNATIONAL', 'true')
+  vi.stubEnv('VITE_LOCALIZATION', 'true')
   vi.resetModules()
   const { default: i18n } = await import('../i18n')
   await i18n.changeLanguage('en')
@@ -42,5 +44,37 @@ it.each(['zh-CN', 'ja'])('preserves authored locale %s and translations when edi
   expect(url).toBe('/api/characters/existing')
   expect(JSON.parse(options.body)).toMatchObject({
     locale, display_name: { [key]: 'Edited name', ko: '보존된 이름' }, visibility: 'private',
+  })
+})
+
+it('ignores dormant form language when creating with localization paused', async () => {
+  vi.stubEnv('VITE_INTERNATIONAL', 'true')
+  vi.stubEnv('VITE_LOCALIZATION', 'false')
+  vi.resetModules()
+  const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ id: 'new' }) })
+  vi.stubGlobal('fetch', fetchMock)
+  const { createCharacter } = await import('./api')
+  await createCharacter({ ...draft, locale: 'en', response_language: 'en' })
+  const options = fetchMock.mock.calls[0][1]
+  expect(options.headers['Accept-Language']).toBeUndefined()
+  const sent = JSON.parse(options.body)
+  expect(sent.locale).toBe('zh-CN')
+  expect(sent.response_language).toBeUndefined()
+  expect(sent.display_name).toEqual(draft.display_name)
+})
+
+it.each(['zh-CN', 'ja'])('preserves original %s locale and names when editing with localization paused', async locale => {
+  vi.stubEnv('VITE_LOCALIZATION', 'false')
+  vi.resetModules()
+  const key = locale === 'zh-CN' ? 'zh' : 'ja'
+  const original = { ...draft, locale, response_language: 'ja', display_name: { [key]: 'Original', ko: '보존된 이름' } }
+  const fetchMock = vi.fn()
+    .mockResolvedValueOnce({ ok: true, json: async () => original })
+    .mockResolvedValueOnce({ ok: true, json: async () => ({ id: 'existing' }) })
+  vi.stubGlobal('fetch', fetchMock)
+  const { updateCharacter } = await import('./api')
+  await updateCharacter('existing', { ...draft, locale: 'en', response_language: 'en' })
+  expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toMatchObject({
+    locale, response_language: 'ja', display_name: { [key]: 'Edited name', ko: '보존된 이름' },
   })
 })

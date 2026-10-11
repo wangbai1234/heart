@@ -1,6 +1,6 @@
 import { uiText } from '../i18n/text'
 import i18n, { supportedLocale, type Locale } from '../i18n'
-import { international } from '../i18n/text'
+import { international, localized } from '../i18n/text'
 import { useAuthStore } from '../stores/authStore'
 import { promptAuthentication } from './navigation'
 
@@ -73,7 +73,7 @@ async function request<T>(
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     'X-Device-Id': getDeviceId(),
-    ...(international ? { 'Accept-Language': i18n.language } : {}),
+    ...(localized ? { 'Accept-Language': i18n.language } : {}),
     ...(options.headers as Record<string, string>),
   }
 
@@ -1236,7 +1236,7 @@ export async function quickPrefill(
 ): Promise<QuickPrefillResponse> {
   return request('/characters/quick-prefill', {
     method: 'POST',
-    body: JSON.stringify(body),
+    body: JSON.stringify({ ...body, response_language: localized ? body.response_language : undefined }),
     signal,
   })
 }
@@ -1344,7 +1344,7 @@ export async function uploadCharacterCover(file: File): Promise<{ cover_url: str
 }
 
 function localizedDraft(draft: CharacterDraftDTO): CharacterDraftDTO {
-  if (!international) return draft
+  if (!localized) return { ...draft, locale: 'zh-CN', response_language: undefined }
   const locale = supportedLocale(draft.locale ?? draft.response_language ?? i18n.language)
   const name = draft.display_name.zh || draft.display_name[locale] || draft.display_name.en || draft.display_name.ja || draft.display_name.ko
   return { ...draft, locale, display_name: { [locale]: name } }
@@ -1363,18 +1363,15 @@ export async function updateCharacter(
   characterId: string,
   draft: CharacterDraftDTO,
 ): Promise<{ id: string; spec_version: string }> {
-  let payload = draft
-  if (international) {
-    const original = await getCharacterDraft(characterId)
-    // Existing editors expose one name field, in this same fallback order.
-    // Keep other translations and the authored locale when the UI language changes.
-    const nameKey = (['zh', 'en', 'ja', 'ko'] as const).find(key => original.display_name[key] != null)
-      ?? supportedLocale(original.locale ?? 'en')
-    payload = {
-      ...draft,
-      locale: draft.locale ?? original.locale,
-      display_name: { ...original.display_name, [nameKey]: draft.display_name.zh ?? draft.display_name[nameKey] },
-    }
+  const original = await getCharacterDraft(characterId)
+  // Editors expose a single name field. Retain other authored translations.
+  const nameKey = (['zh', 'en', 'ja', 'ko'] as const).find(key => original.display_name[key] != null)
+    ?? supportedLocale(original.locale ?? 'en')
+  const payload = {
+    ...draft,
+    locale: localized ? draft.locale ?? original.locale : original.locale,
+    response_language: localized ? draft.response_language : original.response_language,
+    display_name: { ...original.display_name, [nameKey]: draft.display_name.zh ?? draft.display_name[nameKey] },
   }
   return request(`/characters/${characterId}`, { method: 'PATCH', body: JSON.stringify(payload) })
 }
@@ -1398,7 +1395,7 @@ export async function generateOpeningPreview(input: {
 }): Promise<{ opening: string }> {
   return request('/characters/opening-preview', {
     method: 'POST',
-    body: JSON.stringify(input),
+    body: JSON.stringify({ ...input, response_language: localized ? input.response_language : undefined }),
   })
 }
 

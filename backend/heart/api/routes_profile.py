@@ -32,7 +32,7 @@ async def get_language_preferences(
     from heart.core.config import settings
 
     uid = uuid.UUID(current_user.user_id)
-    if settings.international_mode:
+    if settings.international_localization:
         await initialize_preferences(db, uid, request.headers.get("accept-language", "en"))
         await db.commit()
     return await load_preferences(db, uid)

@@ -3,6 +3,10 @@ import { initReactI18next } from 'react-i18next'
 import en from './locales/en.json'
 import ja from './locales/ja.json'
 import ko from './locales/ko.json'
+import legacy from './legacy.json'
+import zh from './locales/zh.json'
+
+const localized = import.meta.env.VITE_LOCALIZATION === 'true'
 
 const i18n = createInstance()
 
@@ -21,20 +25,21 @@ function initialLocale(): Locale {
   return supportedLocale(typeof navigator === 'undefined' ? 'en' : navigator.language)
 }
 void i18n.use(initReactI18next).init({
-  resources: { en: { translation: en }, ja: { translation: ja }, ko: { translation: ko } },
-  lng: initialLocale(), fallbackLng: 'en', supportedLngs: [...locales],
+  resources: { zh: { translation: { ...legacy, ...zh } }, en: { translation: en }, ja: { translation: ja }, ko: { translation: ko } },
+  lng: localized ? initialLocale() : 'zh', fallbackLng: localized ? 'en' : 'zh', supportedLngs: localized ? [...locales] : ['zh'],
   interpolation: { escapeValue: false }, returnNull: false,
 })
 i18n.on('languageChanged', (language) => {
-  if (typeof document !== 'undefined') document.documentElement.lang = supportedLocale(language)
+  if (typeof document !== 'undefined') document.documentElement.lang = localized ? supportedLocale(language) : 'zh-CN'
+  if (!localized) return
   try { localStorage.setItem('yuoyuo-locale', supportedLocale(language)) } catch { /* Optional cache. */ }
 })
-if (typeof document !== 'undefined') document.documentElement.lang = i18n.language
+if (typeof document !== 'undefined') document.documentElement.lang = localized ? i18n.language : 'zh-CN'
 export default i18n
 
 /** Resolve once before mounting: saved choice wins over trusted IP detection. */
 export async function initializeLocale(): Promise<void> {
-  if (import.meta.env.VITE_INTERNATIONAL !== 'true') return
+  if (!localized) return
   try { if (localStorage.getItem('yuoyuo-locale')) return } catch { /* Optional cache. */ }
   try {
     const response = await fetch('/api/locale', {

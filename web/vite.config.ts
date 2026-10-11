@@ -49,7 +49,7 @@ export default defineConfig({
       manifest: {
         name: 'yuoyuo',
         short_name: 'yuoyuo',
-        description: 'yuoyuo — AI companion',
+        description: process.env.VITE_LOCALIZATION === 'true' ? 'yuoyuo — AI companion' : 'yuoyuo — AI 伙伴',
         theme_color: '#0f0f14',
         background_color: '#0f0f14',
         display: 'standalone',

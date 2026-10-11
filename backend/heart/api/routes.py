@@ -28,10 +28,15 @@ async def initial_language(request: Request):
     """Use country metadata only after the edge middleware authenticated it."""
     from fastapi.responses import JSONResponse
 
+    from heart.core.config import settings as locale_settings
     from heart.i18n import resolve_initial_locale
 
     country = getattr(request.state, "edge_country", None)
-    language = resolve_initial_locale(country, request.headers.get("accept-language", "en"))
+    language = (
+        resolve_initial_locale(country, request.headers.get("accept-language", "en"))
+        if locale_settings.international_localization
+        else "zh"
+    )
     return JSONResponse(
         {"language": language},
         headers={"Cache-Control": "private, no-store", "Vary": "Accept-Language"},

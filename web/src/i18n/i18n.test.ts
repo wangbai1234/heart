@@ -24,6 +24,7 @@ describe('international locales', () => {
 it('renders existing controls reactively without changing their stored values', async () => {
   const { vi } = await import('vitest')
   vi.stubEnv('VITE_INTERNATIONAL', 'true')
+  vi.stubEnv('VITE_LOCALIZATION', 'true')
   vi.resetModules()
   const { default: i18n } = await import('./index')
   const { uiText, uiLabel } = await import('./text')
@@ -54,6 +55,7 @@ it('renders existing controls reactively without changing their stored values', 
 it('uses IP detection once and preserves saved choices and browser fallback', async () => {
   const { vi } = await import('vitest')
   vi.stubEnv('VITE_INTERNATIONAL', 'true')
+  vi.stubEnv('VITE_LOCALIZATION', 'true')
   vi.resetModules()
   const values = new Map<string, string>()
   vi.stubGlobal('localStorage', { getItem: (k: string) => values.get(k) ?? null, setItem: (k: string, v: string) => values.set(k, v) })
@@ -85,4 +87,37 @@ it('switches reply language with the interface unless explicitly pinned', async 
   const preferences = { interface_language: 'en' as const, response_language: 'en' as const, action_style: 'fullwidth' as const, response_follows_interface: true }
   expect(withInterfaceLanguage(preferences, 'ja').response_language).toBe('ja')
   expect(withInterfaceLanguage({ ...preferences, response_follows_interface: false }, 'ko').response_language).toBe('en')
+})
+
+it('keeps Chinese when localization is paused despite cached language and browser country', async () => {
+  const { vi } = await import('vitest')
+  vi.stubEnv('VITE_INTERNATIONAL', 'true')
+  vi.stubEnv('VITE_LOCALIZATION', 'false')
+  vi.resetModules()
+  const save = vi.fn()
+  vi.stubGlobal('localStorage', { getItem: () => 'ko', setItem: save })
+  vi.stubGlobal('navigator', { language: 'ja-JP', languages: ['ja-JP'] })
+  const fetchMock = vi.fn()
+  vi.stubGlobal('fetch', fetchMock)
+  try {
+    const { default: paused, initializeLocale } = await import('./index')
+    await initializeLocale()
+    expect(paused.resolvedLanguage).toBe('zh')
+    await paused.changeLanguage('ko')
+    expect(paused.resolvedLanguage).toBe('zh')
+    expect(paused.t('continueWithGoogle')).toContain('Google')
+    expect(paused.t('sharedMemories')).toBe('共同记忆')
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(save).not.toHaveBeenCalled()
+  } finally { vi.unstubAllGlobals(); vi.unstubAllEnvs(); vi.resetModules() }
+})
+
+it('covers new screens in Chinese without missing keys or interpolation arguments', async () => {
+  const { default: legacy } = await import('./legacy.json')
+  const { default: zh } = await import('./locales/zh.json')
+  const catalog: Record<string, string> = { ...legacy, ...zh }
+  for (const [key, value] of Object.entries(en)) {
+    expect(catalog[key], key).toBeTruthy()
+    expect(catalog[key]?.match(/{{[^}]+}}/g) ?? [], key).toEqual(value.match(/{{[^}]+}}/g) ?? [])
+  }
 })

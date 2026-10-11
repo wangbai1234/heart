@@ -10,7 +10,7 @@ from websockets.sync.client import connect
 pytestmark = [
     pytest.mark.e2e,
     pytest.mark.skipif(
-        os.getenv("INTERNATIONAL_MODE") != "true", reason="International release only"
+        os.getenv("INTERNATIONAL_MODE") != "true" or os.getenv("INTERNATIONAL_LOCALIZATION") != "true", reason="Active localization only"
     ),
 ]
 

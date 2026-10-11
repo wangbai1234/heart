@@ -335,7 +335,7 @@ async def request_otp(
         sender = get_email_sender()
         subject = OTP_SUBJECT.format(code=code)
         plain, html = render_otp_email(code)
-        if settings.international_mode:
+        if settings.international_localization:
             from heart.i18n import resolve_locale
             from heart.infra.email.sender import render_international_otp
 
@@ -822,7 +822,7 @@ async def register(
         {"id": user_id},
     )
 
-    if settings.international_mode:
+    if settings.international_localization:
         await initialize_preferences(db, user_id, request.headers.get("accept-language", "en"))
 
     await db.commit()

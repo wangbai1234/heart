@@ -28,3 +28,16 @@ async def test_google_identity_verifies_signature_nonce_issuer_and_verified_emai
                 with pytest.raises((ValueError,jwt.PyJWTError)):
                     await _verify_google_token(token,'test-nonce',client)
     assert all(call.args[0]=='https://www.googleapis.com/oauth2/v3/certs' for call in client.get.call_args_list)
+
+
+def test_google_enabled_is_independent_of_market_and_language(monkeypatch):
+    from heart.api.routes_google_auth import enabled
+    from heart.core.config import settings
+
+    monkeypatch.setattr(settings, "international_mode", False)
+    monkeypatch.setattr(settings, "international_localization", False)
+    monkeypatch.setattr(settings, "google_client_id", "test-client")
+    monkeypatch.setattr(settings, "google_client_secret", "test-secret")
+    assert enabled()
+    monkeypatch.setattr(settings, "google_client_secret", "")
+    assert not enabled()

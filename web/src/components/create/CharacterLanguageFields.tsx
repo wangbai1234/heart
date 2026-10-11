@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next'
+import { localized } from '../../i18n/text'
 import { FieldCard, textInputCls } from './CreateShell'
 
 export type CharacterLanguage = 'en' | 'ja' | 'ko'
@@ -14,12 +15,12 @@ export function CharacterLanguageFields({ language, worldBook, onLanguage, onWor
 }) {
   const { t } = useTranslation()
   return <>
-    <FieldCard label={t('characterReplyLanguage')} hint={t('characterReplyLanguageHint')}>
+    {localized && <FieldCard label={t('characterReplyLanguage')} hint={t('characterReplyLanguageHint')}>
       <select aria-label={t('characterReplyLanguage')} className={`${textInputCls} h-[44px]`} value={language}
         onChange={e => onLanguage(e.target.value as CharacterLanguage)}>
         <option value="ja">日本語</option><option value="ko">한국어</option><option value="en">English</option>
       </select>
-    </FieldCard>
+    </FieldCard>}
     {onCastType && <FieldCard label={t('castType')}>
       <select className={`${textInputCls} h-[44px]`} value={castType} onChange={e => onCastType(e.target.value as 'single' | 'multiple')}>
         <option value="single">{t('singleCast')}</option><option value="multiple">{t('multipleCast')}</option>

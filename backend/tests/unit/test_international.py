@@ -185,7 +185,7 @@ def test_existing_quick_creator_uses_selected_language(monkeypatch, language, na
     from heart.api.routes_characters import _localize_creation_prompt
     from heart.core.config import settings
 
-    monkeypatch.setattr(settings, "international_mode", True)
+    monkeypatch.setattr(settings, "international_localization", True)
     prompt = _localize_creation_prompt("所有文字字段使用简体中文，动作使用中文括号（）", language)
     assert "简体中文" not in prompt
     assert "中文括号（）" in prompt
@@ -209,7 +209,10 @@ def test_initial_language_country_fallback(country, header, expected):
     assert resolve_initial_locale(country, header) == expected
 
 
-def test_locale_endpoint_uses_only_authenticated_edge_country():
+def test_locale_endpoint_uses_only_authenticated_edge_country(monkeypatch):
+    from heart.core.config import settings
+
+    monkeypatch.setattr(settings, "international_localization", True)
     from fastapi import FastAPI
 
     from heart.api.routes import router
@@ -247,3 +250,22 @@ def test_follow_language_and_legacy_markers_normalize_to_original_contract():
         interface_language="ko", response_language="ja", response_follows_interface=False
     )
     assert independent.response_language == "ja"
+
+
+def test_paused_localization_preserves_creator_prompt_and_country_block(monkeypatch):
+    from fastapi import FastAPI
+
+    from heart.api.routes import router
+    from heart.api.routes_characters import _localize_creation_prompt
+    from heart.core.config import settings
+
+    monkeypatch.setattr(settings, "international_mode", True)
+    monkeypatch.setattr(settings, "international_localization", False)
+    original = "所有文字字段使用简体中文，动作使用中文括号（）"
+    assert _localize_creation_prompt(original, "ko") == original
+    app = FastAPI()
+    app.include_router(router)
+    app.add_middleware(InternationalAccessMiddleware, enabled=True, origin_secret="edge-test")
+    with TestClient(app) as client:
+        assert client.get("/api/locale", headers={"CF-IPCountry": "JP", "X-Yuoyuo-Origin": "edge-test"}).json() == {"language": "zh"}
+        assert client.get("/api/locale", headers={"CF-IPCountry": "CN", "X-Yuoyuo-Origin": "edge-test"}).status_code == 403

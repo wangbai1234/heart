@@ -1112,7 +1112,7 @@ async def _handle_chat_message(
 
             language_preferences = (
                 await character_preferences(db, user_uuid, character_id)
-                if locale_settings.international_mode
+                if locale_settings.international_localization
                 else None
             )
             req = TurnRequest(

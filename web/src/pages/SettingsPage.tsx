@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import { uiText } from '../i18n/text'
 import { LanguagePreferences } from '../components/LanguagePreferences'
-import { international } from '../i18n/text'
+import { international, localized } from '../i18n/text'
 import type { ElementType, ReactNode } from 'react'
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -259,7 +259,7 @@ export function SettingsPage() {
             </button>
           </div>
 
-          {international && <LanguagePreferences />}
+          {localized && <LanguagePreferences />}
           <SectionLabel>{uiText('ui530')}</SectionLabel>
           <GroupCard>
             <div className="flex min-h-[56px] flex-wrap items-center justify-between gap-3 px-4 py-3 min-[390px]:flex-nowrap min-[390px]:px-5">

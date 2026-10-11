@@ -9,6 +9,7 @@ import { PasswordInput } from '../components/ui/PasswordInput'
 import { OTPInput } from '../components/ui/OTPInput'
 import { Toast } from '../components/ui/Toast'
 import { SetPasswordModal } from '../components/SetPasswordModal'
+import { GoogleSignInButton } from '../components/GoogleSignInButton'
 import {
   requestOtp,
   verifyOtp,
@@ -413,6 +414,12 @@ export function LoginPage() {
         </div>
 
         {/* Register entry */}
+        {step !== 'restoration' && <GoogleSignInButton disabled={loading}
+          returnTo={(location.state as { from?: unknown } | null)?.from}
+          beforeStart={() => {
+            if (!ageConfirmed) { setToast({ visible: true, message: uiText('ui355') }); return false }
+            return true
+          }} />}
         {step !== 'restoration' && (
           <p className="text-center text-[13px] text-[var(--color-text-secondary)] mb-3">
             {uiText('ui364')}<Link to="/register" className="text-[var(--color-primary)] font-medium">{uiText('ui365')}</Link>

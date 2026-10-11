@@ -16,6 +16,12 @@
 
 ---
 
+## 语言上线暂停与 Google 登录（2026-10-11，未部署）
+
+用户调整后续市场方向为孟加拉地区；本轮不实施孟加拉语。`codex/international-release` 默认恢复中文界面及原有中文生成提示词，隐藏 EN/JA/KO 语言选择和本地首发改编预览。语言功能独立为 `INTERNATIONAL_LOCALIZATION` / `VITE_LOCALIZATION`，默认 false；`INTERNATIONAL_MODE` / `VITE_INTERNATIONAL` 继续控制地域、国内商业接口和移动端布局，不随语言暂停关闭。保留 222 个原审核角色以及三语改编与审计，不删除数据。共同记忆、世界书、搜索等功能保留。
+
+Google 登录和语言开关解耦；登录页、注册页、登录/注册弹窗都有 Google 按钮，未配置时明确显示未启用。Google Cloud 的 Web 客户端表单已准备好（正式域名 yuoyuo.app、本地 127.0.0.1:55173），创建长期凭据仍待执行时确认，尚未完成真实 Google 往返登录。实施与验收记录见 [暂停语言上线](international/LOCALIZATION_PAUSE_20261011.md)。本地 API :58000、前端 :55173；生产环境未变更。
+
 ## 国际版实施批次（2026-10-08，未部署）
 
 按用户选项推进 B1/C/E/F/H/J/K；222 个候选现有 666 个本地名称预览（每个源角色 EN/JA/KO 各一版），另有 12 个完整改编首发稿。名称批次保存独立 ID 和私有来源快照；原角色与聊天不覆盖。正文改编仍待模型额度或编辑审核。新增 Google OIDC + 079 身份绑定表；本地 review/test DB 已迁移。真实 Google 控制台配置、域名隐私邮箱、正式政策主体/处理者资料与部署仍未完成。阶段结果、范围与限制见 [实施记录](international/IMPLEMENTATION_20261008.md)；收费分析见 [日韩收费评估](international/PRICING_JP_KR.md)。不可把本地审核预览当作生产发布。

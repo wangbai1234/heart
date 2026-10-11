@@ -2,11 +2,16 @@
 
 from heart.api import wiring
 from heart.api.main import create_app as production_app
+from heart.core.config import settings
 
 
 class LanguageAwareTestRouter:
     def _reply(self, messages):
         system = messages[0]["content"]
+        if not settings.international_localization:
+            assert "OUTPUT LANGUAGE:" not in system
+            assert "必须用中文全角括号" in system
+            return "（微笑）你想聊什么？"
         language = next(
             (
                 language

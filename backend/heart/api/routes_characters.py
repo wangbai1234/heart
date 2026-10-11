@@ -129,12 +129,19 @@ async def list_characters(
                    tags, cover_url, review_status, review_reason, created_at,
                    display_heat, real_view_count, real_play_uv, recommendation_score
             FROM characters
-            WHERE (NOT :local_review AND owner_user_id = :uid)
+            WHERE ((NOT :local_review AND owner_user_id = :uid)
                OR (status = 'active' AND review_status = 'approved'
-                   AND (visibility = 'public' OR (:local_review AND visibility = 'unlisted')))
+                   AND (visibility = 'public' OR (:local_review AND visibility = 'unlisted'))))
+               AND (NOT :hide_adaptations OR (left(id, 7) <> 'launch_' AND left(id, 5) <> 'intl_'))
             """
         ),
-        {"uid": uid, "local_review": catalog_settings.local_character_review},
+        {
+            "uid": uid,
+            "local_review": catalog_settings.local_character_review,
+            # Paid language drafts and audit records stay intact while hidden.
+            "hide_adaptations": catalog_settings.local_character_review
+            and not catalog_settings.international_localization,
+        },
     )
     raw_rows = list(result.mappings())
     rows = [
@@ -223,7 +230,7 @@ async def list_characters(
     for e in entries:
         # Keep the old catalogue in storage; publish supported-language content only.
         if (
-            catalog_settings.international_mode
+            catalog_settings.international_localization
             and not catalog_settings.local_character_review
             and not e.is_owner
             and content_locales.get(e.id)
@@ -238,7 +245,7 @@ async def list_characters(
         entry_dict.update(discovery_metadata.get(e.id, {}))
         entry_dict["has_voice"] = has_voice_map.get(e.id, False)
         entry_dict.update(review_records.get(e.id, {}))
-        if catalog_settings.international_mode:
+        if catalog_settings.international_localization:
             from heart.i18n import resolve_locale
             from heart.international_catalog import CHARACTERS
 
@@ -492,7 +499,7 @@ async def get_character_profile(
     display_name = display_name_from_spec(spec_json, character_id)
     from heart.core.config import settings as profile_settings
 
-    if profile_settings.international_mode:
+    if profile_settings.international_localization:
         from heart.i18n import resolve_locale
         from heart.international_catalog import CHARACTERS
 
@@ -1168,7 +1175,7 @@ async def preview_opening(
 
     from heart.core.config import settings as authoring_settings
 
-    if authoring_settings.international_mode:
+    if authoring_settings.international_localization:
         from heart.i18n import generation_directive, resolve_locale
 
         messages[0]["content"] += "\n" + generation_directive(
@@ -1641,7 +1648,7 @@ _QUICK_PREFILL_MAX_TOKENS = 2200
 def _localize_creation_prompt(prompt: str, language: str) -> str:
     from heart.core.config import settings as authoring_settings
 
-    if authoring_settings.international_mode:
+    if authoring_settings.international_localization:
         from heart.i18n import LANGUAGE_NAMES, resolve_locale
 
         output_language = LANGUAGE_NAMES[

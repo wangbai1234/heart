@@ -27,6 +27,8 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     local_character_review: bool = False
     international_mode: bool = False
+    # Language rollout is independent of territory, checkout and authentication.
+    international_localization: bool = False
     international_geo_enforced: bool = False
     international_origin_secret: str = ""
 

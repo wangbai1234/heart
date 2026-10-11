@@ -2,7 +2,7 @@ import { GoogleCallbackPage } from './pages/GoogleCallbackPage'
 import { SharedMemoriesPage } from './pages/SharedMemoriesPage'
 import { useTranslation } from 'react-i18next'
 import i18n from './i18n'
-import { international } from './i18n/text'
+import { international, localized } from './i18n/text'
 import { useToastStore } from './stores/toastStore'
 import { getLanguagePreferences } from './services/api'
 import { useEffect, useState } from 'react'
@@ -12,6 +12,7 @@ import { consumePendingAuthentication, setNavigate } from './services/navigation
 import { AuthGuard } from './components/AuthGuard'
 import { SplashPage } from './pages/SplashPage'
 import { RegisterPage } from './pages/RegisterPage'
+import { LoginPage } from './pages/LoginPage'
 import { ForgotPasswordPage } from './pages/ForgotPasswordPage'
 import { ChangePasswordPage } from './pages/ChangePasswordPage'
 import { ChatInboxPage } from './pages/ChatInboxPage'
@@ -83,17 +84,6 @@ function NotFoundRedirect(): ReactElement {
   return <Navigate to="/character" replace />
 }
 
-function LegacyLoginRedirect(): ReactElement {
-  const location = useLocation()
-  return (
-    <Navigate
-      to={{ pathname: '/character', search: location.search }}
-      replace
-      state={{ authRequired: true, from: '/character' }}
-    />
-  )
-}
-
 const SKIP_SAVE_ROUTES = new Set(['/splash', '/login', '/register', '/forgot-password', '/redeem', '/age-gate', '/'])
 const PROMOTION_NOTICE_VERSION = 'v1'
 
@@ -101,7 +91,7 @@ export function App() {
   useTranslation()
   const languageUserId = useAuthStore(s => s.user?.id)
   useEffect(() => {
-    if (!international || !languageUserId) return
+    if (!localized || !languageUserId) return
     let active = true
     void getLanguagePreferences().then(p => { if (active) void i18n.changeLanguage(p.interface_language) }).catch(() => { if (active) useToastStore.getState().show(i18n.t('error'), 'error') })
     return () => { active = false }
@@ -378,7 +368,7 @@ export function App() {
         <Route path="/character/:id/memories" element={<SharedMemoriesPage />} />
         <Route path="/" element={<Navigate to="/character" replace />} />
         <Route path="/splash" element={<SplashPage />} />
-        <Route path="/login" element={<LegacyLoginRedirect />} />
+        <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/redeem" element={<RedeemPage />} />

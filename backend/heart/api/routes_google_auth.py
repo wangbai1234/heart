@@ -32,9 +32,7 @@ _COOKIE = "yuoyuo_google_flow"
 
 
 def enabled() -> bool:
-    return bool(
-        settings.international_mode and settings.google_client_id and settings.google_client_secret
-    )
+    return bool(settings.google_client_id and settings.google_client_secret)
 
 
 def _require_config() -> None:
@@ -228,7 +226,8 @@ async def _google_user(db: AsyncSession, identity: dict) -> dict:
                 "key": f"signup_grant:{uid}",
             },
         )
-        await initialize_preferences(db, uid, identity["locale"])
+        if settings.international_localization:
+            await initialize_preferences(db, uid, identity["locale"])
         result = await db.execute(text("SELECT * FROM users WHERE id=:uid"), {"uid": uid})
         user = result.mappings().one()
     await db.execute(

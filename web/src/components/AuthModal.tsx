@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import { InterfaceLanguageSelect } from './LanguagePreferences'
-import { international } from '../i18n/text'
+import { localized } from '../i18n/text'
+import { GoogleSignInButton } from './GoogleSignInButton'
 import { uiText } from '../i18n/text'
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
@@ -10,7 +11,6 @@ import { PasswordInput } from './ui/PasswordInput'
 import { Toast } from './ui/Toast'
 import {
   ApiError,
-  getGoogleLoginConfig,
   loginWithPassword,
   logout,
   registerWithPassword,
@@ -63,7 +63,7 @@ function safeReturnTo(path: string): string {
 }
 
 export function AuthModal() {
-  const { t } = useTranslation()
+  useTranslation()
   const navigate = useNavigate()
   const open = useAuthPromptStore((state) => state.open)
   const returnTo = useAuthPromptStore((state) => state.returnTo)
@@ -83,10 +83,6 @@ export function AuthModal() {
   const [code, setCode] = useState('')
   const [ageConfirmed, setAgeConfirmed] = useState(false)
   const [agreed, setAgreed] = useState(false)
-  const [googleEnabled, setGoogleEnabled] = useState(false)
-  useEffect(() => {
-    if (international && open) getGoogleLoginConfig().then(value => setGoogleEnabled(value.enabled)).catch(() => setGoogleEnabled(false))
-  }, [open])
   const [loading, setLoading] = useState(false)
   const [cooldownEndAt, setCooldownEndAt] = useState(0)
   const [toast, setToast] = useState({ visible: false, message: '', variant: 'info' as 'info' | 'error' | 'success' })
@@ -266,7 +262,7 @@ export function AuthModal() {
         <div className="shrink-0 px-5 pb-3 pt-5 text-center min-[380px]:px-6">
           <img src="/assets/ui/wordmark.png" alt="yuoyuo" className="mx-auto h-[46px] w-auto" />
           <p className="mt-1 text-[13px] text-white/56">{uiText('ui16')}</p>
-          {international && <InterfaceLanguageSelect />}
+          {localized && <InterfaceLanguageSelect />}
         </div>
 
         {modalStep === 'auth' && (
@@ -363,11 +359,10 @@ export function AuthModal() {
 
           {modalStep === 'auth' && (
             <>
-              {googleEnabled && <button type="button" className="w-full h-[44px] rounded-xl border border-[var(--color-border-glass)] mb-3 text-[16px]" onClick={() => {
-              if (!ageConfirmed || !agreed) { showToast(uiText('ui2'), 'error'); return }
-              sessionStorage.setItem('yuoyuo-google-return', safeReturnTo(returnTo))
-              window.location.assign('/api/auth/google/start')
-            }}>{t('continueWithGoogle')}</button>}
+              <GoogleSignInButton returnTo={returnTo} disabled={loading} beforeStart={() => {
+                if (!ageConfirmed || !agreed) { showToast(uiText('ui2'), 'error'); return false }
+                return true
+              }} />
             <label className="mt-4 flex cursor-pointer items-start gap-2.5 text-left">
                 <input type="checkbox" checked={ageConfirmed} onChange={(event) => setAgeConfirmed(event.target.checked)} className="mt-0.5 h-4 w-4 shrink-0 accent-[#FF7E9F]" />
                 <span className="text-[12px] leading-[1.55] text-white/58">{uiText('ui31')}</span>
