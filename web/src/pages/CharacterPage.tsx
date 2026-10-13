@@ -952,11 +952,11 @@ function DiscoveryCard({
             )}
             {/* Tags row — show only top 2 */}
             {displayTags.length > 0 && (
-              <div className="flex flex-wrap gap-1 min-w-0 max-w-full">
+              <div data-testid="character-cover-tags" className="flex flex-nowrap gap-1 min-w-0 max-w-full overflow-hidden">
                 {displayTags.map((tag) => (
                   <span
                     key={tag}
-                    className="block h-[20px] max-w-full truncate rounded-full border border-white/20 bg-black/16 px-2 text-[11px] leading-[18px] text-white/88"
+                    className="block min-w-0 shrink h-[20px] max-w-full truncate rounded-full border border-white/20 bg-black/16 px-2 text-[11px] leading-[18px] text-white/88"
                     title={characterTagLabel(tag)}
                   >
                     {characterTagLabel(tag)}

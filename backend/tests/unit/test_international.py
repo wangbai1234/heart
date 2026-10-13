@@ -179,10 +179,14 @@ def test_composer_prompt_removes_conflicting_legacy_format(language):
         response_language=language,
         action_style="fullwidth",
     )
-    assert "（action）" in prompt
+    assert {"vi": "（hành động）", "bn": "（কাজ）"}.get(language, "（action）") in prompt
     assert "in Chinese, with no English meta-text" not in prompt
     assert "- 正确示例：（微微一笑）" not in prompt
-    assert "Use 【】 only as the legacy fallback" in prompt
+    assert "【】" in prompt
+    if language in {"en", "vi", "bn"}:
+        assert "你是 " not in prompt
+        assert "本轮输出语言" not in prompt
+        assert "【普通用户内容边界】" not in prompt
     from heart.locales import LANGUAGE_NAMES
 
     assert f"exclusively in {LANGUAGE_NAMES[language]}" in prompt

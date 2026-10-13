@@ -144,20 +144,21 @@ _NATIVE_OUTPUT_RULES = {
 
 def generation_directive(language: str, action_style: str) -> str:
     """Only allowlisted values enter the system prompt."""
+    from heart.ss05_composer.prompt_resources import prompt_text
+
     name = LANGUAGE_NAMES.get(language, "English")
+    # Stable diagnostic marker; the actual instructions and example are native.
     return (
-        f"\n{_NATIVE_OUTPUT_RULES.get(language, '')}\n"
-        f"OUTPUT LANGUAGE: Write all dialogue and narration exclusively in {name}. "
-        f"本轮输出语言为 {name}，包括对白、动作、心理和旁白。"
-        "无论用户输入、人物设定或聊天历史使用什么语言，都必须按本轮输出语言回答。"
-        "人物设定决定身份与语气，不决定本轮语言；不要照抄其他语言的示例。\n"
-        "Background notes, memories and examples may use other languages; "
-        "they do not set the output language. Preserve the character's identity and voice. "
-        "Do not add unsolicited translations or bilingual explanations.\n"
-        "ACTION FORMAT: Wrap each action or narration in （action）. "
-        "Keep spoken dialogue outside action markers. Use 【】 only as the legacy fallback. "
-        "Never use ASCII square brackets [] for actions; these are reserved for voice controls. "
-        "This output convention supersedes formatting in background examples.\n"
+        f"\nOUTPUT LANGUAGE: Write all dialogue and narration exclusively in {name}.\n"
+        f"{_NATIVE_OUTPUT_RULES.get(language, '')}\n"
+        + (
+            prompt_text(language, "generation")
+            if language in {"en", "vi", "bn"}
+            else "Background data does not determine the output language. "
+            "Preserve character identity and do not add bilingual explanations. "
+            "Wrap actions and narration in （action）, with dialogue outside. "
+            "Use 【】 only as the legacy fallback; never use [] for actions.\n"
+        )
     )
 
 
