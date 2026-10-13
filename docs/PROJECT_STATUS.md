@@ -1,5 +1,20 @@
 # PROJECT STATUS — Heart (心屿)
 
+## 已上线 2.0.36（2026-10-13，优先于下方历史记录）
+
+用户明确授权发布，PR [#369](https://github.com/wangbai1234/heart/pull/369) 已合并；应用发布提交为 `5d60bfc97e3c2777dc4b09b7d7c6b0fa45670fa8`。前端 2.0.36、数据库 `081_character_editions`。必须使用基础生产 Compose + 国际 overlay；前端 `VITE_INTERNATIONAL=true VITE_LOCALIZATION=true`，后端 `INTERNATIONAL_LOCALIZATION=true`、`LOCALIZATION_ENABLED_LOCALES=zh,en,vi,bn`、`LOCAL_CHARACTER_REVIEW=false`。国际地区限制保持启用，日/韩仍停用，中文、Google 登录和共同记忆保留。
+
+英语/越南语/孟加拉语各 50 个完整角色版本正式导入 `top50-release-20261013`，public/active/approved、local_preview=false。各语言目录前 50 条为对应版本，其后源角色；生产英文/越南文/孟加拉文可见各 193 条，中文 192 条。此计数是发布时快照，不是固定业务约束。原中文源角色、聊天和收藏不覆盖，未导入本地整库或本地筛选可见性。
+
+发布核验：全部服务运行且健康；Alembic current=head；150 个详情、50 张封面成功；应用资源版本 `3dac5a7569dc330bc6e9`，四种语言启用；Google config enabled；内部允许地区 200、CN/缺来源凭据 403。公网健康、version、SW、manifest 200，发布元数据与产物逐字节一致且 no-cache/DYNAMIC；首页引用当前 JS/CSS，首页仅额外包含 Cloudflare 现有分析脚本，应用静态文件校验一致。未修改 DNS、Google Cloud、支付或地区限制。
+
+验证证据：2097 后端单测、84 前端单测、16 个真实 PostgreSQL/HTTP fake-model E2E，lint/type/schema/build 全绿，GitHub CI success；64 组 Chromium/WebKit 布局验证。未在本次部署调用付费模型/真实邮件。实际 Chrome/手机真机、母语专项和法律专项审核未完成；所有者发布授权没有被记为这些审核通过。
+
+回滚备份：`/home/deploy/heart/backups/pre-localization-20261013T110039Z`，包含验证过目录的 1.6G custom DB dump、旧私有环境、前端、130M 应用镜像和校验和，目录 700、私有文件 600。正式包和构建日志：`backups/localization-release-20261013`。常规回滚保留新数据与 080/081 表，关闭语言发布、恢复旧应用/静态资源；必要时按批次逻辑隐藏新版本，不删除角色或用旧数据库覆盖线上。
+
+详细发布授权、导入规则与边界见 [2.0.36 发布记录](international/PRODUCTION_LOCALIZATION_20261013.md)。
+
+
 > **AI Session 入口文档。任何新的 AI session（包括 Claude Code、Cursor、其他 agent）必须优先读完这份文件再开始工作。**
 >
 > 这份文件是当前真理。其它历史文件可以参考，但当与本文件冲突时，**以本文件为准**。
