@@ -42,6 +42,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from heart.api.rate_limit import limiter
 from heart.api.wiring import get_db
 from heart.core.auth import TokenData, get_current_user
+from heart.localization.editions import local_preview_ids
 from heart.ss01_soul.character_catalog import (
     CharacterRow,
     build_catalog_entries,
@@ -135,11 +136,11 @@ async def list_companions(
             WHERE status = 'active'
               AND (
                     owner_user_id = :uid
-                    OR (visibility = 'public' AND review_status = 'approved')
+                    OR id = ANY(:preview_ids) OR (visibility = 'public' AND review_status = 'approved')
               )
             """
         ),
-        {"uid": uid},
+        {"uid": uid, "preview_ids": await local_preview_ids(db)},
     )
     raw_rows = list(char_result.mappings())
     rows = [
@@ -176,7 +177,13 @@ async def list_companions(
             if r.avatar_url:
                 avatar_urls[r.character_id] = r.avatar_url
 
-    entries = build_catalog_entries(rows, uid, avatar_urls, display_names=display_names)
+    entries = build_catalog_entries(
+        rows,
+        uid,
+        avatar_urls,
+        display_names=display_names,
+        preview_ids=set(await local_preview_ids(db)),
+    )
     if not entries:
         return {"companions": []}
 
@@ -464,9 +471,9 @@ async def add_shared_memory(
         raise HTTPException(422, "identity_confirmation_required")
     visible = await db.execute(
         text(
-            "SELECT id FROM characters WHERE id=:cid AND status='active' AND (owner_user_id=:uid OR (visibility IN ('public','unlisted') AND review_status='approved'))"
+            "SELECT id FROM characters WHERE id=:cid AND status='active' AND (owner_user_id=:uid OR id = ANY(:preview_ids) OR (visibility IN ('public','unlisted') AND review_status='approved'))"
         ),
-        {"uid": uid, "cid": character_id},
+        {"uid": uid, "cid": character_id, "preview_ids": await local_preview_ids(db)},
     )
     if not visible.first():
         raise HTTPException(404, "character_not_found")

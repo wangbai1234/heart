@@ -16,7 +16,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from heart.api.rate_limit import limiter
 from heart.api.wiring import get_db
 from heart.core.auth import TokenData, get_current_user
-from heart.i18n import LanguagePreferences, initialize_preferences, load_preferences
+from heart.i18n import (
+    LanguagePreferences,
+    enabled_locales,
+    initialize_preferences,
+    load_preferences,
+)
 
 logger = structlog.get_logger(__name__)
 
@@ -44,16 +49,23 @@ async def save_language_preferences(
     current_user: TokenData = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> LanguagePreferences:
+    previous = await load_preferences(db, uuid.UUID(current_user.user_id))
+    for field in ("interface_language", "response_language"):
+        if getattr(body, field) not in enabled_locales() and getattr(body, field) != getattr(
+            previous, field
+        ):
+            raise HTTPException(status_code=422, detail="language_unavailable")
     await db.execute(
         text("""
             INSERT INTO user_language_preferences
-                (user_id, interface_language, response_language, action_style, response_follows_interface)
-            VALUES (:uid, :interface_language, :response_language, :action_style, :response_follows_interface)
+                (user_id, interface_language, response_language, action_style, response_follows_interface, response_mode)
+            VALUES (:uid, :interface_language, :response_language, :action_style, :response_follows_interface, :response_mode)
             ON CONFLICT (user_id) DO UPDATE SET
                 interface_language = EXCLUDED.interface_language,
                 response_language = EXCLUDED.response_language,
                 action_style = EXCLUDED.action_style,
-                response_follows_interface = EXCLUDED.response_follows_interface, updated_at = NOW()
+                response_follows_interface = EXCLUDED.response_follows_interface,
+                response_mode = EXCLUDED.response_mode, updated_at = NOW()
         """),
         {"uid": uuid.UUID(current_user.user_id), **body.model_dump()},
     )

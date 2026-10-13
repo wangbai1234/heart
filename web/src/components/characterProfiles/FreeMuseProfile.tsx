@@ -1,3 +1,4 @@
+import { restrictCharacterTags } from '../../i18n/characterTags'
 import { useEffect, useRef, useState } from 'react'
 import type { CharacterProfileDTO } from '../../services/api'
 
@@ -37,7 +38,7 @@ export function FreeMuseProfile({ profile }: FreeMuseProfileProps) {
   }, [])
 
   const name = profile.display_name || '无界'
-  const tags = profile.tags?.length ? profile.tags : ['模拟器', '全性向', '架空世界', '高自由', '群像']
+  const tags = (profile.tags?.length || restrictCharacterTags()) ? profile.tags : ['模拟器', '全性向', '架空世界', '高自由', '群像']
   const tagCloud = tags.map((t) => `<span>${t}</span>`).join('')
 
   const htmlContent = `<!DOCTYPE html>

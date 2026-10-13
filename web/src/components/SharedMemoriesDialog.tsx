@@ -4,7 +4,7 @@ import { Dialog } from './ui/Dialog'
 import { getSharedBond, correctSharedMemory, type SharedBondDTO, type SharedMemoryDTO } from '../services/api'
 
 export function SharedMemoriesDialog({ characterId, open, onClose }: { characterId: string; open: boolean; onClose: () => void }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const [bond, setBond] = useState<SharedBondDTO | null>(null)
   const [editing, setEditing] = useState<SharedMemoryDTO | null>(null)
   const [content, setContent] = useState('')
@@ -39,7 +39,7 @@ export function SharedMemoriesDialog({ characterId, open, onClose }: { character
         <p className="text-xs">{t('sharedMemoryHint')}</p>
         {!bond.memories.length && <p>{t('empty')}</p>}
         {bond.memories.map(memory => <div key={`${memory.tier}-${memory.id}`} className="rounded-xl border border-[var(--color-border-glass)] p-3 space-y-2">
-          <p className="text-xs">{t(memory.tier === 'L4' ? 'identityMemory' : 'everydayMemory')} · {new Date(memory.updated_at).toLocaleDateString()}</p>
+          <p className="text-xs">{t(memory.tier === 'L4' ? 'identityMemory' : 'everydayMemory')} · {new Date(memory.updated_at).toLocaleDateString(i18n.language)}</p>
           {editing?.id === memory.id && editing.tier === memory.tier ? <>
             <textarea aria-label={t('editMemory')} className="w-full min-h-24 bg-transparent text-[16px]" maxLength={2000} value={content} onChange={e => setContent(e.target.value)} />
             {memory.tier === 'L4' && <label className="flex gap-2"><input type="checkbox" checked={confirmed} onChange={e => setConfirmed(e.target.checked)} />{t('confirmIdentityCorrection')}</label>}

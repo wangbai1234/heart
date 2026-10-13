@@ -467,9 +467,9 @@ async def main():
             parser.error("--selection is required for export")
         await export_sources(args.folder, args.selection)
     elif args.action == "generate":
-        await generate(args.folder, args.limit, args.token_budget, args.provider_group)
+        parser.error("Legacy combined-language generation is disabled. Use the offline source×locale plan and review each complete draft separately.")
     else:
-        await apply_drafts(args.folder)
+        parser.error("Legacy unreviewed batch apply is disabled. Complete source/resource hash and human review validation before importing any draft.")
 
 
 if __name__ == "__main__":

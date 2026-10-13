@@ -1,4 +1,4 @@
-import i18n, { supportedLocale } from '../../i18n'
+import i18n, { supportedLocale, type Locale } from '../../i18n'
 import { uiText } from '../../i18n/text'
 import type {
   CharacterDraftDTO,
@@ -13,7 +13,7 @@ import { getThemePresetById, findThemePresetIdByPalette } from '../../data/chara
 export type QualityLevel = 'sketch' | 'draft' | 'shaped' | 'finished'
 
 export interface WorkshopState {
-  responseLanguage: "en" | "ja" | "ko"
+  responseLanguage: Locale
   worldBook: string
   castType: "single" | "multiple"
   contentRating: "general" | "mature"
@@ -218,7 +218,7 @@ export function buildDraft(s: WorkshopState): CharacterDraftDTO {
  */
 export function draftToWorkshopState(d: CharacterDraftDTO): WorkshopState {
   const s: WorkshopState = { ...EMPTY_STATE }
-  s.displayName = d.display_name?.zh ?? d.display_name?.en ?? d.display_name?.ja ?? d.display_name?.ko ?? ''
+  s.displayName = d.display_name?.[supportedLocale(d.locale ?? 'zh')] ?? d.display_name?.localized?.[supportedLocale(d.locale ?? 'zh')] ?? d.display_name?.zh ?? d.display_name?.en ?? Object.values(d.display_name?.localized ?? {})[0] ?? ''
   s.responseLanguage = d.response_language ?? supportedLocale(d.locale ?? i18n.language)
   s.worldBook = d.world_book ?? ""
   s.castType = d.cast_type ?? "single"

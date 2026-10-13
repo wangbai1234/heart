@@ -1,3 +1,4 @@
+import { restrictCharacterTags } from '../../i18n/characterTags'
 import type { CharacterProfileDTO } from '../../services/api'
 import { escapeHtml } from '../../utils/escapeHtml'
 import { ImmersiveProfileFrame } from './ImmersiveProfileFrame'
@@ -9,7 +10,7 @@ interface WenYanqingProfileProps {
 /** 闻砚清专属详情页：病房日光 / 访客记录 / 未发送的备忘录。 */
 export function WenYanqingProfile({ profile }: WenYanqingProfileProps) {
   const name = escapeHtml(profile.display_name || '闻砚清')
-  const tags = (profile.tags?.length
+  const tags = ((profile.tags?.length || restrictCharacterTags())
     ? profile.tags
     : ['女性向', 'BG', '限左', '治愈', '病弱'])
     .map((tag) => `<span>${escapeHtml(tag)}</span>`)

@@ -1,3 +1,4 @@
+import { restrictCharacterTags } from '../../i18n/characterTags'
 import { useEffect, useRef, useState } from 'react'
 import type { CharacterProfileDTO } from '../../services/api'
 
@@ -38,7 +39,7 @@ export function WenYiningProfile({ profile }: WenYiningProfileProps) {
   }, [])
 
   const name = profile.display_name || '温亦宁'
-  const tags = profile.tags?.length ? profile.tags : ['女性向', 'GL', '女团', '同居']
+  const tags = (profile.tags?.length || restrictCharacterTags()) ? profile.tags : ['女性向', 'GL', '女团', '同居']
   const tagCloud = tags.map((t) => `<span>${t}</span>`).join('')
 
   const htmlContent = `<!DOCTYPE html>

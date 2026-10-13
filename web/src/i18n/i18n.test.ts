@@ -14,8 +14,8 @@ describe('international locales', () => {
       }
     }
   })
-  it('does not offer Chinese or infer a region from a locale', () => {
-    expect(supportedLocale('zh-CN')).toBe('en')
+  it('normalizes registered locales without inferring a country', () => {
+    expect(supportedLocale('zh-CN')).toBe('zh')
     expect(supportedLocale('ja-JP')).toBe('ja')
     expect(supportedLocale('ko-KR')).toBe('ko')
   })
@@ -52,34 +52,33 @@ it('renders existing controls reactively without changing their stored values', 
   }
 })
 
-it('uses IP detection once and preserves saved choices and browser fallback', async () => {
+it('persists only explicit device choices and refuses registry drift', async () => {
   const { vi } = await import('vitest')
-  vi.stubEnv('VITE_INTERNATIONAL', 'true')
-  vi.stubEnv('VITE_LOCALIZATION', 'true')
-  vi.resetModules()
+  vi.stubEnv('VITE_LOCALIZATION', 'true'); vi.resetModules()
   const values = new Map<string, string>()
   vi.stubGlobal('localStorage', { getItem: (k: string) => values.get(k) ?? null, setItem: (k: string, v: string) => values.set(k, v) })
-  vi.stubGlobal('navigator', { language: 'ko-KR', languages: ['ko-KR', 'en'] })
-  const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ language: 'ja' }) })
+  vi.stubGlobal('navigator', { language: 'vi-VN', languages: ['vi-VN', 'en'] })
+  const { registryVersion, resourceVersion, locales } = await import('./registry')
+  const config = { registryVersion, resourceVersion, localization: true, languages: locales.map(code => ({ code, enabled: true })) }
+  const fetchMock = vi.fn().mockImplementation(async (url: string) => ({ ok: true, json: async () => url === '/api/app-config' ? config : { language: 'vi' } }))
   vi.stubGlobal('fetch', fetchMock)
-  const { default: detected, initializeLocale } = await import('./index')
   try {
+    const { default: locale, initializeLocale, selectDeviceLocale, applyAccountLocale, restoreDeviceLocale } = await import('./index')
     await initializeLocale()
-    expect(detected.language).toBe('ja')
-    expect(fetchMock).toHaveBeenCalledOnce()
-    await detected.changeLanguage('en')
+    expect(locale.language).toBe('vi'); expect(values.size).toBe(0)
+    await selectDeviceLocale('bn')
+    await applyAccountLocale('en')
+    expect(values.get('yuoyuo-explicit-locale')).toBe('bn')
+    await restoreDeviceLocale(); expect(locale.language).toBe('bn')
     await initializeLocale()
-    expect(detected.language).toBe('en')
-    expect(fetchMock).toHaveBeenCalledOnce()
-    values.clear()
-    await detected.changeLanguage('ko')
-    values.clear()
-    fetchMock.mockRejectedValueOnce(new Error('offline'))
-    await initializeLocale()
-    expect(detected.language).toBe('ko')
-  } finally {
-    vi.unstubAllGlobals(); vi.unstubAllEnvs(); vi.resetModules()
-  }
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+    vi.resetModules()
+    config.resourceVersion = 'stale'
+    const drift = await import('./index')
+    await drift.initializeLocale()
+    expect(drift.availableLocales()).toEqual(['zh'])
+    expect(drift.default.language).toBe('zh')
+  } finally { vi.unstubAllGlobals(); vi.unstubAllEnvs(); vi.resetModules() }
 })
 
 it('switches reply language with the interface unless explicitly pinned', async () => {

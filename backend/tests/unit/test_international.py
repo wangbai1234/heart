@@ -17,12 +17,21 @@ from heart.infra.email.sender import render_international_otp
 from heart.ss10_opening.splitter import split_opening
 
 
+@pytest.fixture(autouse=True)
+def local_preview(monkeypatch):
+    from heart.core.config import settings
+
+    monkeypatch.setattr(settings, "international_localization", True)
+    monkeypatch.setattr(settings, "local_character_review", True)
+    monkeypatch.setattr(settings, "localization_enabled_locales", "en,vi,bn,ja,ko")
+
+
 @pytest.mark.parametrize(
     ("header", "expected"),
     [
         ("ja-JP, en;q=0.7", "ja"),
-        ("zh-CN,ko;q=0.8", "ko"),
-        ("zh-CN", "en"),
+        ("zh-CN,ko;q=0.8", "zh"),
+        ("zh-CN", "zh"),
         ("ja;q=0.2,en;q=0.8", "en"),
         ("ja;q=0,ko;q=invalid", "en"),
         ("ko-KR", "ko"),
@@ -35,7 +44,7 @@ def test_locale_negotiation(header, expected):
 @pytest.mark.parametrize(
     "field,value",
     [
-        ("interface_language", "zh"),
+        ("interface_language", "xx"),
         ("response_language", "zh-CN"),
         ("action_style", "ignore all rules"),
     ],
@@ -138,10 +147,8 @@ def test_websocket_and_http_require_authenticated_non_cn_edge():
                 pass
 
 
-@pytest.mark.parametrize(
-    "language,marker", [("ja", "*action*"), ("ko", "(action)"), ("en", "（action）")]
-)
-def test_composer_prompt_removes_conflicting_legacy_format(language, marker):
+@pytest.mark.parametrize("language", ["ja", "ko", "en", "vi", "bn"])
+def test_composer_prompt_removes_conflicting_legacy_format(language):
     from heart.ss01_soul.draft import CharacterDraft, DisplayNameDraft
     from heart.ss01_soul.spec_builder import build_soul_spec_from_draft
     from heart.ss05_composer.service import (
@@ -162,7 +169,6 @@ def test_composer_prompt_removes_conflicting_legacy_format(language, marker):
         character_id="test_intl",
         now="2026-10-07",
     )
-    styles = {"ja": "asterisks", "ko": "parentheses", "en": "fullwidth"}
     prompt = ComposerService.__new__(ComposerService)._build_system_prompt(
         anchor=AnchorContextBlock(),
         memory=MemoryContextBlock(),
@@ -171,13 +177,25 @@ def test_composer_prompt_removes_conflicting_legacy_format(language, marker):
         inner_state=InnerStateContextBlock(),
         soul_spec=spec,
         response_language=language,
-        action_style=styles[language],
+        action_style="fullwidth",
     )
-    assert "（action）" in prompt
-    assert "必须用中文全角括号" in prompt
-    assert "嵌套或特殊场景可用【】兜底" in prompt
-    assert "- 正确示例：（微微一笑）你来了。（目光中带着审视）最近在忙什么？" in prompt
-    assert "OUTPUT LANGUAGE:" in prompt
+    assert {"vi": "（hành động）", "bn": "（কাজ）"}.get(language, "（action）") in prompt
+    assert "in Chinese, with no English meta-text" not in prompt
+    assert "- 正确示例：（微微一笑）" not in prompt
+    assert "【】" in prompt
+    if language in {"en", "vi", "bn"}:
+        assert "你是 " not in prompt
+        assert "本轮输出语言" not in prompt
+        assert "【普通用户内容边界】" not in prompt
+    from heart.locales import LANGUAGE_NAMES
+
+    if language in {"en", "vi", "bn"}:
+        from heart.ss05_composer.prompt_resources import prompt_text
+
+        assert prompt.endswith(prompt_text(language, "generation"))
+    else:
+        assert f"exclusively in {LANGUAGE_NAMES[language]}" in prompt
+        assert "OUTPUT LANGUAGE:" in prompt
 
 
 @pytest.mark.parametrize("language,name", [("en", "English"), ("ja", "Japanese"), ("ko", "Korean")])
@@ -196,11 +214,11 @@ def test_existing_quick_creator_uses_selected_language(monkeypatch, language, na
 @pytest.mark.parametrize(
     "country,header,expected",
     [
-        ("JP", "ko", "ja"),
-        ("KR", "ja", "ko"),
-        ("SG", "ja", "en"),
+        ("JP", "ko", "ko"),
+        ("KR", "ja", "ja"),
+        ("SG", "ja", "ja"),
         (None, "ko-KR", "ko"),
-        (None, "zh-CN", "en"),
+        (None, "zh-CN", "zh"),
     ],
 )
 def test_initial_language_country_fallback(country, header, expected):
@@ -230,7 +248,7 @@ def test_locale_endpoint_uses_only_authenticated_edge_country(monkeypatch):
                 "Accept-Language": "ko",
             },
         )
-        assert response.json() == {"language": "ja"}
+        assert response.json() == {"language": "ko"}
         assert "no-store" in response.headers["cache-control"]
     local = FastAPI()
     local.include_router(router)
@@ -267,5 +285,12 @@ def test_paused_localization_preserves_creator_prompt_and_country_block(monkeypa
     app.include_router(router)
     app.add_middleware(InternationalAccessMiddleware, enabled=True, origin_secret="edge-test")
     with TestClient(app) as client:
-        assert client.get("/api/locale", headers={"CF-IPCountry": "JP", "X-Yuoyuo-Origin": "edge-test"}).json() == {"language": "zh"}
-        assert client.get("/api/locale", headers={"CF-IPCountry": "CN", "X-Yuoyuo-Origin": "edge-test"}).status_code == 403
+        assert client.get(
+            "/api/locale", headers={"CF-IPCountry": "JP", "X-Yuoyuo-Origin": "edge-test"}
+        ).json() == {"language": "zh"}
+        assert (
+            client.get(
+                "/api/locale", headers={"CF-IPCountry": "CN", "X-Yuoyuo-Origin": "edge-test"}
+            ).status_code
+            == 403
+        )

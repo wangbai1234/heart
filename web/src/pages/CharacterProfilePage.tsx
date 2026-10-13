@@ -1,3 +1,4 @@
+import { characterTagLabel, visibleCharacterTags } from '../i18n/characterTags'
 import { useTranslation } from 'react-i18next'
 import { uiText } from '../i18n/text'
 import { useEffect, useMemo, useState } from 'react'
@@ -1229,7 +1230,7 @@ function pickTheme(tags: string[]): Theme {
  * empty and simply don't render.
  */
 export function CharacterProfilePage() {
-  useTranslation()
+  const { i18n } = useTranslation()
   const navigate = useNavigate()
   const location = useLocation()
   const safeBack = useSafeBack('/character')
@@ -1240,10 +1241,12 @@ export function CharacterProfilePage() {
   const goBack = fromCreate ? () => navigate('/create', { replace: true }) : safeBack
   const { id = '' } = useParams<{ id: string }>()
   const setCharacter = useAppStore((s) => s.setCharacter)
-  const authenticated = useAuthStore((s) => !!s.accessToken)
+  const accessToken = useAuthStore((s) => s.accessToken)
+  const authenticated = !!accessToken
   const showLogin = useAuthPromptStore((s) => s.show)
   const companions = useCompanionsStore((s) => s.companions)
   const loadCompanions = useCompanionsStore((s) => s.load)
+  const catalogRevision = useCharactersStore((s) => s.revision)
   const loadProfile = useCharactersStore((s) => s.loadProfile)
   const storeCharacters = useCharactersStore((s) => s.characters)
   const showToast = useToastStore((s) => s.show)
@@ -1255,6 +1258,7 @@ export function CharacterProfilePage() {
   const [profile, setProfile] = useState<CharacterProfileDTO | null>(
     () => useCharactersStore.getState().profileById[id] ?? null,
   )
+  const displayTags = visibleCharacterTags(profile?.tags ?? [])
   const [error, setError] = useState(false)
   const [aboutExpanded, setAboutExpanded] = useState(false)
   // ji_yu 封面：默认只露上 3/4，点击展开看全图
@@ -1283,7 +1287,7 @@ export function CharacterProfilePage() {
     return () => {
       alive = false
     }
-  }, [id, loadProfile])
+  }, [id, loadProfile, i18n.language, accessToken, catalogRevision])
 
   // Count every real navigation into the profile. This deliberately sits
   // outside loadProfile(): cached profile reads must still count, while React
@@ -1453,9 +1457,9 @@ export function CharacterProfilePage() {
             {profile.display_name || '季屿'}
           </h1>
           {profile.tagline && <p className="text-[16px] mt-2.5 leading-[1.7] italic" style={{ fontFamily: '"Songti SC","STSong","Noto Serif SC",Georgia,serif', color: chrome.taglineColor }}>{profile.tagline}</p>}
-          {profile.tags.length > 0 && (
+          {displayTags.length > 0 && (
             <div className="flex flex-wrap gap-[7px] mt-3.5">
-              {profile.tags.slice(0, 6).map((t, i) => (
+              {displayTags.slice(0, 6).map((t, i) => (
                 <span
                   key={t}
                   className="text-[12px] px-3 py-[5px] rounded-full border"
@@ -1463,7 +1467,7 @@ export function CharacterProfilePage() {
                     ? { color: chrome.chipActiveText, borderColor: chrome.chipActiveBorder, background: chrome.chipActiveBg }
                     : { color: chrome.chipInactiveText, borderColor: chrome.chipInactiveBorder, background: chrome.chipInactiveBg }
                   }
-                >{t}</span>
+                >{characterTagLabel(t)}</span>
               ))}
             </div>
           )}
@@ -1520,7 +1524,7 @@ export function CharacterProfilePage() {
 
         {/* bespoke 叙事内容（iframe） */}
         <div className="mt-6">
-          <BespokeProfile profile={profile} />
+          <BespokeProfile profile={{ ...profile, tags: displayTags.map(tag => characterTagLabel(tag)) }} />
         </div>
       </div>
     )
@@ -1638,9 +1642,9 @@ export function CharacterProfilePage() {
           </p>
         )}
 
-        {profile && profile.tags.length > 0 && (
+        {profile && displayTags.length > 0 && (
           <div className="mt-3 flex flex-wrap gap-2">
-            {profile.tags.map((t) => (
+            {displayTags.map((t) => (
               <span
                 key={t}
                 className="h-[26px] px-3 inline-flex items-center rounded-full text-[12px]"
@@ -1652,7 +1656,7 @@ export function CharacterProfilePage() {
                   color: chrome.chipInactiveText,
                 }}
               >
-                {t}
+                {characterTagLabel(t)}
               </span>
             ))}
           </div>
@@ -1797,7 +1801,7 @@ export function CharacterProfilePage() {
       </div>
 
       {/* ── 叙引 dossier card (premium dark)（高级 HTML 模式下隐藏，交给创作者自排） ── */}
-      {!hasCustomHtml && profile && (profile.one_liner || profile.archetype_label || profile.tags.length > 0) && (
+      {!hasCustomHtml && profile && (profile.one_liner || profile.archetype_label || displayTags.length > 0) && (
         <div
           className="mx-4 mb-4 rounded-[22px] border p-6 relative overflow-hidden"
           style={{
@@ -1827,7 +1831,7 @@ export function CharacterProfilePage() {
           )}
 
           {/* Identity namecard */}
-          {(profile.archetype_label || profile.tags.length > 0) && (
+          {(profile.archetype_label || displayTags.length > 0) && (
             <div className="mt-5 rounded-[16px] bg-white/5 border border-white/10 p-4">
               <div className="text-[12px] font-medium mb-3" style={{ color: theme.accent }}>
                 {uiText('ui321')}</div>
@@ -1840,13 +1844,13 @@ export function CharacterProfilePage() {
                     {profile.archetype_label}
                   </span>
                 )}
-                {profile.tags.slice(0, 3).map((t) => (
+                {displayTags.slice(0, 3).map((t) => (
                   <span
                     key={t}
                     className="inline-flex h-[26px] items-center rounded-full px-3 text-[12px]"
                     style={{ background: 'rgba(255,255,255,0.08)', color: '#D4C7BA' }}
                   >
-                    {t}
+                    {characterTagLabel(t)}
                   </span>
                 ))}
               </div>

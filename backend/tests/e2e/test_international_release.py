@@ -38,6 +38,7 @@ def test_preferences_private_characters_and_chat(api_context, pg_conn, e2e_serve
         "response_language": "ja",
         "action_style": "fullwidth",
         "response_follows_interface": False,
+        "response_mode": "fixed",
     }
     saved = api_context.put("/api/profile/preferences", headers=headers, data=preferences)
     assert saved.ok, saved.text()
@@ -53,7 +54,7 @@ def test_preferences_private_characters_and_chat(api_context, pg_conn, e2e_serve
         api_context.put(
             "/api/profile/preferences",
             headers=headers,
-            data={**preferences, "response_language": "zh"},
+            data={**preferences, "response_language": "xx"},
         ).status
         == 422
     )
@@ -107,7 +108,7 @@ def test_preferences_private_characters_and_chat(api_context, pg_conn, e2e_serve
         followed = api_context.put(
             "/api/profile/preferences",
             headers=headers,
-            data={**preferences, "interface_language": "ko", "response_follows_interface": True},
+            data={**preferences, "interface_language": "ko", "response_follows_interface": True, "response_mode": "interface"},
         )
         assert followed.ok, followed.text()
         assert followed.json()["response_language"] == "ko"
@@ -135,14 +136,33 @@ def test_preferences_private_characters_and_chat(api_context, pg_conn, e2e_serve
     assert api_context.get(f"/api/characters/{cid}/profile", headers=headers).status == 404
 
 
-def test_international_catalog_and_no_commerce(api_context):
+@pytest.fixture
+def catalog_characters(api_context, pg_conn):
+    token = login(api_context, str(uuid4()))
+    headers = {"Authorization": f"Bearer {token}"}
+    ids = {}
+    for locale, name in [("ja", "本屋の春"), ("zh", "书店里的春")]:
+        response = api_context.post("/api/characters", headers=headers, data={
+            "display_name": {locale: name}, "locale": locale,
+            "persona": "An adult bookseller who listens carefully to customers.",
+            "intro": "古書店で働く大人の店員。", "creation_mode": "workshop", "visibility": "private"})
+        assert response.ok, response.text()
+        ids[locale] = response.json()["id"]
+        with pg_conn.cursor() as cursor:
+            cursor.execute("UPDATE characters SET visibility='public', review_status='approved' WHERE id=%s", (ids[locale],))
+    pg_conn.commit()
+    return ids
+
+
+def test_international_catalog_and_no_commerce(api_context, catalog_characters):
     catalog = api_context.get("/api/characters", headers={"Accept-Language": "ko"}).json()[
         "characters"
     ]
-    assert any(c["id"] == "intl_haru" and c["display_name"] == "하루" for c in catalog)
-    assert not any(c["id"] == "rin" for c in catalog)
+    assert any(c["id"] == catalog_characters["ja"] and c["display_name"] == "本屋の春" for c in catalog)
+    assert any(c["id"] == catalog_characters["zh"] for c in catalog)
+    # Interface language never hides otherwise visible source-language characters.
     profile = api_context.get(
-        "/api/characters/intl_haru/profile", headers={"Accept-Language": "ja"}
+        f"/api/characters/{catalog_characters['ja']}/profile", headers={"Accept-Language": "ja"}
     )
     assert profile.ok, profile.text()
     assert "古書店" in profile.json()["intro"]
@@ -153,7 +173,7 @@ def test_international_catalog_and_no_commerce(api_context):
     )
 
 
-@pytest.mark.parametrize("locale", ["ja", "ko"])
+@pytest.mark.parametrize("locale", ["en", "vi", "bn", "ja", "ko"])
 def test_signup_initializes_selected_language(api_context, pg_conn, locale):
     from heart.api.routes_auth import _hash_code
 
@@ -179,6 +199,7 @@ def test_signup_initializes_selected_language(api_context, pg_conn, locale):
         "response_language": locale,
         "action_style": "fullwidth",
         "response_follows_interface": True,
+        "response_mode": "auto",
     }
     # Subsequent login in a different browser language must not reset the choice.
     login_response = api_context.post(
@@ -231,9 +252,45 @@ def test_l3_correction_clears_stale_recall_and_requires_ownership(api_context, p
         assert cur.fetchone() == ('Likes tea','Likes tea',None,{},True)
 
 
-def test_catalog_filters_do_not_expose_private_characters(api_context):
+def test_catalog_filters_do_not_expose_private_characters(api_context, catalog_characters):
     japanese = api_context.get('/api/characters?content_language=ja').json()['characters']
     assert japanese and all(c['content_language']=='ja' for c in japanese)
     assert api_context.get('/api/characters?q=not_a_real_plot_983241').json()['characters'] == []
     assert api_context.get('/api/auth/google/config').json() == {'enabled':False}
     assert api_context.get('/api/auth/google/start').status == 503
+
+
+@pytest.mark.parametrize("locale,name,reply", [("vi", "Minh", "Bạn muốn viết"), ("bn", "অরুণ", "আপনি কী গল্প")])
+def test_new_language_roundtrip_and_voice_gate(api_context, pg_conn, e2e_server, locale, name, reply):
+    uid = str(uuid4())
+    token = login(api_context, uid)
+    headers = {"Authorization": f"Bearer {token}", "Accept-Language": locale}
+    prefs = {"interface_language": locale, "response_language": locale, "response_mode": "interface", "response_follows_interface": True, "action_style": "fullwidth"}
+    saved = api_context.put("/api/profile/preferences", headers=headers, data=prefs)
+    assert saved.ok, saved.text()
+    assert saved.json() == prefs
+    with pg_conn.cursor() as cursor:
+        cursor.execute("UPDATE users SET age_verified_at=NOW(), credits_balance=100000 WHERE id=%s", (uid,))
+    pg_conn.commit()
+    draft = {"display_name": {"localized": {locale: name}}, "locale": locale, "response_language": locale,
+        "persona": "An adult author who remembers every detail of a shared story.", "visibility": "private", "creation_mode": "workshop"}
+    created = api_context.post("/api/characters", headers=headers, data=draft)
+    assert created.ok, created.text()
+    cid = created.json()["id"]
+    loaded = api_context.get(f"/api/characters/{cid}/draft", headers=headers)
+    assert loaded.ok, loaded.text()
+    assert loaded.json()["display_name"]["localized"][locale] == name
+    changed = api_context.patch(f"/api/characters/{cid}", headers=headers, data={**loaded.json(), "intro": "A new introduction."})
+    assert changed.ok, changed.text()
+    frames = []
+    with connect(e2e_server.replace("http://", "ws://") + f"/api/chat/ws?token={token}", open_timeout=10) as ws:
+        ws.send(json.dumps({"type": "chat", "character_id": cid, "text": "Please tell me a story."}))
+        for _ in range(200):
+            frame = json.loads(ws.recv(timeout=30)); frames.append(frame)
+            if frame.get("type") in {"error", "turn_end"}: break
+    assert any(f["type"] == "turn_end" for f in frames), frames
+    assert any(reply in f.get("content", f.get("delta", "")) for f in frames), frames
+    assert not any(f["type"] == "error" for f in frames), frames
+    voice = api_context.post("/api/voice/synthesize", headers=headers, data={"text": reply, "character_id": cid})
+    assert voice.status == 422, voice.text()
+    assert voice.json()["detail"] == "voice_language_unavailable"

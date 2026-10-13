@@ -1,3 +1,4 @@
+import { restrictCharacterTags } from '../../i18n/characterTags'
 import { useEffect, useRef, useState } from 'react'
 import type { CharacterProfileDTO } from '../../services/api'
 
@@ -37,7 +38,7 @@ export function SuWanProfile({ profile }: SuWanProfileProps) {
   }, [])
 
   const name = profile.display_name || '苏晚'
-  const tags = profile.tags?.length ? profile.tags : ['治愈', '温柔', '男性向', '邻家', '恋爱']
+  const tags = (profile.tags?.length || restrictCharacterTags()) ? profile.tags : ['治愈', '温柔', '男性向', '邻家', '恋爱']
   const tagCloud = tags.map((t) => `<span>${t}</span>`).join('')
 
   const htmlContent = `<!DOCTYPE html>

@@ -243,6 +243,7 @@ def build_gm_system_prompt(
     *,
     is_opening: bool = False,
     membership_tier: str = "free",
+    response_language: str | None = None,
 ) -> str:
     """Compose the GM system message: role + raw scenario + player card + summary.
 
@@ -287,6 +288,16 @@ def build_gm_system_prompt(
     if is_opening:
         parts.append(_OPENING_HOOK_DIRECTIVE)
     parts.append(_FORMAT_GUIDE)
+    if response_language:
+        from heart.locales import LANGUAGE_NAMES
+
+        parts.append(
+            f"OUTPUT LANGUAGE: Write all story prose, narration and dialogue in {LANGUAGE_NAMES.get(response_language, 'English')}. "
+            "The source scenario and memory language do not set the output language. "
+            "Keep the exact parser markers 【旁白】 for narration, **name** on the same line as dialogue, "
+            "and （action） for actions. Do not translate these markers or JSON keys. "
+            "Preserve NPC identities and names; do not add bilingual explanations."
+        )
     return "\n\n".join(parts)
 
 
@@ -296,6 +307,7 @@ def build_gm_messages(
     recent_turns: list[StoryMessage],
     *,
     membership_tier: str = "free",
+    response_language: str | None = None,
 ) -> list[dict[str, str]]:
     """Build the OpenAI-style messages list for a GM generation.
 
@@ -315,6 +327,7 @@ def build_gm_messages(
                 run,
                 is_opening=is_opening,
                 membership_tier=membership_tier,
+                response_language=response_language,
             ),
         }
     ]

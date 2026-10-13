@@ -1,3 +1,4 @@
+import { restrictCharacterTags } from '../../i18n/characterTags'
 import { useEffect, useRef, useState } from 'react'
 import type { CharacterProfileDTO } from '../../services/api'
 
@@ -38,7 +39,7 @@ export function YinCiProfile({ profile }: YinCiProfileProps) {
   }, [])
 
   const name = profile.display_name || '殷辞'
-  const tags = profile.tags?.length ? profile.tags : ['血族', '暗黑', '校园', '初拥']
+  const tags = (profile.tags?.length || restrictCharacterTags()) ? profile.tags : ['血族', '暗黑', '校园', '初拥']
   const tagCloud = tags.map((t) => `<span>${t}</span>`).join('')
 
   const htmlContent = `<!DOCTYPE html>

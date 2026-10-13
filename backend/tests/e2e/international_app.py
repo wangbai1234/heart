@@ -12,28 +12,37 @@ class LanguageAwareTestRouter:
             assert "OUTPUT LANGUAGE:" not in system
             assert "必须用中文全角括号" in system
             return "（微笑）你想聊什么？"
-        language = next(
+        from heart.locales import LANGUAGE_NAMES
+        from heart.ss05_composer.prompt_resources import prompt_text
+
+        native = next((LANGUAGE_NAMES[code] for code in ("en", "vi", "bn")
+                       if prompt_text(code, "generation") in system), None)
+        language = native or next(
             (
                 language
-                for language in ("English", "Japanese", "Korean")
-                if f"OUTPUT LANGUAGE: Write all dialogue and narration in {language}." in system
+                for language in ("English", "Japanese", "Korean", "Vietnamese", "Bengali", "Simplified Chinese")
+                if f"OUTPUT LANGUAGE: Write all dialogue and narration exclusively in {language}." in system
             ),
             None,
         )
         if language is None:
             raise AssertionError("Generation preferences did not reach the model")
         replies = {
+            "Vietnamese": ("Mỉm cười", "Bạn muốn viết câu chuyện nào?"),
+            "Bengali": ("হেসে", "আপনি কী গল্প লিখতে চান?"),
+            "Simplified Chinese": ("微笑", "你想写什么故事？"),
             "English": ("Smiles", "What story would you like to write?"),
             "Japanese": ("微笑む", "どんな物語を書きたいですか？"),
             "Korean": ("미소 짓는다", "어떤 이야기를 쓰고 싶으세요?"),
         }
-        assert "（action）" in system
+        marker = {"Vietnamese": "（hành động）", "Bengali": "（কাজ）"}.get(language, "（action）")
+        assert marker in system
         action, dialogue = replies[language]
         left, right = (
             ("*", "*")
             if "*action*" in system
             else ("（", "）")
-            if "（action）" in system
+            if marker in system
             else ("(", ")")
         )
         return f"{left}{action}{right} {dialogue}"

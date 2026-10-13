@@ -38,7 +38,16 @@ def test_original_prompt_ignores_saved_foreign_preferences(api_context, pg_conn,
             "response_follows_interface": False,
         },
     )
-    assert saved.ok, saved.text()
+    assert saved.status == 422, saved.text()
+    # Existing preferences remain intact while new foreign-language writes are paused.
+    with pg_conn.cursor() as cur:
+        cur.execute("""INSERT INTO user_language_preferences
+            (user_id, interface_language, response_language, action_style, response_follows_interface, response_mode)
+            VALUES (%s,'ko','ja','fullwidth',false,'fixed')""", (uid,))
+    pg_conn.commit()
+    stored = api_context.get("/api/profile/preferences", headers=headers).json()
+    assert stored["interface_language"] == "ko" and stored["response_language"] == "ja"
+    assert api_context.put("/api/profile/preferences", headers=headers, data=stored).ok
     with pg_conn.cursor() as cur:
         cur.execute(
             "UPDATE users SET age_verified_at=NOW(), credits_balance=100000 WHERE id=%s", (uid,)
@@ -51,7 +60,7 @@ def test_original_prompt_ignores_saved_foreign_preferences(api_context, pg_conn,
             "display_name": {"zh": "测试作家"},
             "persona": "一位温和细心的成年作家，喜欢倾听故事和安静地陪伴。",
             "locale": "zh-CN",
-            "response_language": "ko",
+            "response_language": None,
             "visibility": "private",
             "creation_mode": "workshop",
         },

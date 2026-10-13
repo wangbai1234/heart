@@ -23,6 +23,7 @@ from sqlalchemy import text as sql_text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from heart.core.auth import TokenData, auth_manager, get_current_user
+from heart.localization.editions import local_preview_ids
 from heart.ss01_soul.character_catalog import ensure_character_loaded
 
 from .wiring import _get_engine, get_db, get_orchestrator, get_voice_service
@@ -322,6 +323,7 @@ async def _precheck_billing(
     ws: WebSocket,
     model: str = "gemini-3.1",
     force_voice: bool = False,
+    voice_language: str | None = None,
 ) -> tuple[bool, bool]:
     """Pre-check voice setting, membership entitlement, and balance.
 
@@ -382,6 +384,10 @@ async def _precheck_billing(
             )
             row = result.scalar_one_or_none()
             effective_voice = bool(row) or force_voice
+            if voice_language is not None:
+                from heart.i18n import voice_supported
+
+                effective_voice = effective_voice and voice_supported(voice_language)
 
             # Membership tier → model entitlement
             tier = await get_effective_tier(db, user_uuid)
@@ -1021,8 +1027,29 @@ async def _handle_chat_message(
     user_uuid = uuid.UUID(user_id)
 
     # ── 1. Pre-check: voice setting + membership entitlement + balance ──
+    from heart.core.config import settings as locale_settings
+    from heart.i18n import character_preferences, voice_supported
+
+    language_preferences = None
+    if locale_settings.international_localization:
+        async with AsyncSession(_get_engine(), expire_on_commit=False) as locale_db:
+            language_preferences = await character_preferences(locale_db, user_uuid, character_id)
+        if channel == "call" and not voice_supported(language_preferences.response_language):
+            await ws.send_json(
+                {
+                    "type": "error",
+                    "code": "voice_language_unavailable",
+                    "turn_id": turn_id,
+                    "character_id": character_id,
+                    "msg": "Voice is unavailable for this language.",
+                }
+            )
+            return
+    voice_options = (
+        {"voice_language": language_preferences.response_language} if language_preferences else {}
+    )
     effective_voice, can_proceed = await _precheck_billing(
-        user_uuid, character_id, turn_id, ws, model=model, force_voice=force_voice
+        user_uuid, character_id, turn_id, ws, model=model, force_voice=force_voice, **voice_options
     )
     if not can_proceed:
         return
@@ -1107,14 +1134,6 @@ async def _handle_chat_message(
             from heart.api.routes_masks import get_bound_mask
 
             user_mask = await get_bound_mask(db, user_uuid, character_id)
-            from heart.core.config import settings as locale_settings
-            from heart.i18n import character_preferences
-
-            language_preferences = (
-                await character_preferences(db, user_uuid, character_id)
-                if locale_settings.international_localization
-                else None
-            )
             req = TurnRequest(
                 user_id=user_uuid,
                 character_id=character_id,
@@ -2242,12 +2261,13 @@ async def get_inbox_summary(
                AND c.status = 'active'
                AND (
                      c.owner_user_id = :uid
+                     OR c.id = ANY(:preview_ids)
                      OR (c.visibility = 'public' AND c.review_status = 'approved')
                )
             LEFT JOIN user_character_read_state rs
                 ON rs.user_id = :uid AND rs.character_id = m.character_id
         """),
-        {"uid": uid},
+        {"uid": uid, "preview_ids": await local_preview_ids(db)},
     )
     rows = result.mappings().all()
     return {

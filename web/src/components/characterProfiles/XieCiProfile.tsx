@@ -1,3 +1,4 @@
+import { restrictCharacterTags } from '../../i18n/characterTags'
 import { useEffect, useRef, useState } from 'react'
 import type { CharacterProfileDTO } from '../../services/api'
 
@@ -38,7 +39,7 @@ export function XieCiProfile({ profile }: XieCiProfileProps) {
 
   const name = profile.display_name || '谢辞'
   const age = 20
-  const tags = profile.tags?.length ? profile.tags : ['女性向', '校园', '反差', '痞帅', '护短', '救赎', '校霸']
+  const tags = (profile.tags?.length || restrictCharacterTags()) ? profile.tags : ['女性向', '校园', '反差', '痞帅', '护短', '救赎', '校霸']
   const tagCloud = tags.map((t) => `#${t}`).join('&nbsp;&nbsp;')
 
   const htmlContent = `<!DOCTYPE html>

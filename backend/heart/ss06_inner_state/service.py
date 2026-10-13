@@ -202,7 +202,15 @@ class InnerStateService:
             INNER_LOOP_DURATION_SECONDS.labels(character=character_id).observe(elapsed)
             return None
 
+        from heart.core.config import settings as locale_settings
+        from heart.i18n import character_preferences
+
+        language = "zh"
+        if db is not None and locale_settings.international_localization:
+            language = (await character_preferences(db, user_id, character_id)).response_language
+
         content = await self._resolve_proactive_content(
+            response_language=language,
             character_id=character_id,
             trigger_type=trigger_type,
             relationship_stage=relationship_stage,
@@ -231,6 +239,7 @@ class InnerStateService:
                     trigger_type=trigger_type,
                 )
                 content = await self._resolve_proactive_content(
+                    response_language=language,
                     character_id=character_id,
                     trigger_type=trigger_type,
                     relationship_stage=relationship_stage,
@@ -276,8 +285,14 @@ class InnerStateService:
         INNER_LOOP_DURATION_SECONDS.labels(character=character_id).observe(elapsed)
         return msg
 
-    def _template_content(self, character_id: str) -> str:
+    def _template_content(self, character_id: str, response_language: str = "zh") -> str:
         """Pick a built-in template (the always-available fallback)."""
+        from heart.i18n import PROACTIVE_FALLBACKS
+
+        if response_language != "zh":
+            return random.choice(
+                PROACTIVE_FALLBACKS.get(response_language, PROACTIVE_FALLBACKS["en"])
+            )
         templates = get_proactive_templates(character_id)
         return random.choice(templates)
 
@@ -291,6 +306,7 @@ class InnerStateService:
         days_since_last_interaction: float,
         recent_context: str,
         user_facts: str,
+        response_language: str = "zh",
         local_time_context: Optional[dict] = None,
         model: str = DEFAULT_CHAT_MODEL,
     ) -> str:
@@ -298,7 +314,7 @@ class InnerStateService:
         from heart.core.config import settings
 
         if not settings.proactive_llm_enabled:
-            return self._template_content(character_id)
+            return self._template_content(character_id, response_language)
         try:
             content = await self._generate_proactive_content(
                 character_id=character_id,
@@ -308,13 +324,14 @@ class InnerStateService:
                 days_since_last_interaction=days_since_last_interaction,
                 recent_context=recent_context,
                 user_facts=user_facts,
+                response_language=response_language,
                 local_time_context=local_time_context,
                 model=model,
             )
         except Exception as e:
             logger.warning("proactive_llm_failed", character_id=character_id, error=str(e))
             content = None
-        return content or self._template_content(character_id)
+        return content or self._template_content(character_id, response_language)
 
     @staticmethod
     def _build_proactive_prompt(
@@ -326,8 +343,11 @@ class InnerStateService:
         days_since_last_interaction: float,
         recent_context: str,
         user_facts: str,
+        response_language: str = "zh",
         local_time_context: Optional[dict] = None,
     ) -> str:
+        from heart.locales import LANGUAGE_NAMES
+
         persona = get_proactive_persona(character_id)
         time_section = ""
         if local_time_context:
@@ -356,6 +376,8 @@ class InnerStateService:
             "2. 自然、个性化，可自然带入你记得的信息，但不要生硬罗列。\n"
             "3. 1-2 句话，像真的主动发消息，不要旁白、不要引号、不要解释。\n"
             "4. 只输出这条消息本身。"
+            f"\nOUTPUT LANGUAGE: Write only in {LANGUAGE_NAMES.get(response_language, 'English')}; "
+            "source notes and examples do not set the output language. No translations or explanations."
         )
 
     async def _generate_proactive_content(
@@ -368,6 +390,7 @@ class InnerStateService:
         days_since_last_interaction: float,
         recent_context: str,
         user_facts: str,
+        response_language: str = "zh",
         local_time_context: Optional[dict] = None,
         model: str = DEFAULT_CHAT_MODEL,
     ) -> Optional[str]:
@@ -388,6 +411,7 @@ class InnerStateService:
             recent_context=recent_context,
             user_facts=user_facts,
             local_time_context=local_time_context,
+            response_language=response_language,
         )
         router = await get_model_router()
         raw, _served_model = await router.call_for(
@@ -401,7 +425,8 @@ class InnerStateService:
         # Guard against a rambling model: keep it to a short proactive ping.
         if not content:
             return None
-        return content[:200]
+        # Reject overlong output instead of cutting a combining sequence or sentence.
+        return content if len(content) <= 600 else None
 
     def get_proactive_messages(
         self,

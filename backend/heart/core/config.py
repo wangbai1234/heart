@@ -29,6 +29,9 @@ class Settings(BaseSettings):
     international_mode: bool = False
     # Language rollout is independent of territory, checkout and authentication.
     international_localization: bool = False
+    # Registration is separate from rollout. Draft languages are preview-only.
+    localization_enabled_locales: str = "zh"
+    localization_voice_locales: str = "zh"
     international_geo_enforced: bool = False
     international_origin_secret: str = ""
 

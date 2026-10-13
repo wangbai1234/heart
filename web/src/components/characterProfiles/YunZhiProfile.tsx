@@ -1,3 +1,4 @@
+import { restrictCharacterTags } from '../../i18n/characterTags'
 import { useEffect, useRef, useState } from 'react'
 import type { CharacterProfileDTO } from '../../services/api'
 
@@ -37,7 +38,7 @@ export function YunZhiProfile({ profile }: YunZhiProfileProps) {
   }, [])
 
   const name = profile.display_name || '云枝'
-  const tags = profile.tags?.length ? profile.tags : ['仙侠', '玄幻', '全性向', '剑仙', '古风']
+  const tags = (profile.tags?.length || restrictCharacterTags()) ? profile.tags : ['仙侠', '玄幻', '全性向', '剑仙', '古风']
   const tagCloud = tags.map((t) => `<span>${t}</span>`).join('')
 
   const htmlContent = `<!DOCTYPE html>

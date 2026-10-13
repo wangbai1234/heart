@@ -1,3 +1,4 @@
+import { restrictCharacterTags } from '../../i18n/characterTags'
 import { useEffect, useRef, useState } from 'react'
 import type { CharacterProfileDTO } from '../../services/api'
 
@@ -38,7 +39,7 @@ export function SongYeProfile({ profile }: SongYeProfileProps) {
 
   const name = profile.display_name || '宋野'
   const age = 28
-  const tags = profile.tags?.length ? profile.tags : ['女性向', '校园', '职场', '年上', '治愈', '体育老师', '直球']
+  const tags = (profile.tags?.length || restrictCharacterTags()) ? profile.tags : ['女性向', '校园', '职场', '年上', '治愈', '体育老师', '直球']
   const tagCloud = tags.map((t) => `#${t}`).join('&nbsp;&nbsp;')
 
   const htmlContent = `<!DOCTYPE html>

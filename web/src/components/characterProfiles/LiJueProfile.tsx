@@ -1,3 +1,4 @@
+import { restrictCharacterTags } from '../../i18n/characterTags'
 import { useEffect, useRef, useState } from 'react'
 import type { CharacterProfileDTO } from '../../services/api'
 
@@ -37,7 +38,7 @@ export function LiJueProfile({ profile }: LiJueProfileProps) {
   }, [])
 
   const name = profile.display_name || '厉决'
-  const tags = profile.tags?.length ? profile.tags : ['黑道', '强制爱', '冷酷', '占有欲']
+  const tags = (profile.tags?.length || restrictCharacterTags()) ? profile.tags : ['黑道', '强制爱', '冷酷', '占有欲']
   const tagCloud = tags.map((t) => `<span>${t}</span>`).join('')
 
   const htmlContent = `<!DOCTYPE html>

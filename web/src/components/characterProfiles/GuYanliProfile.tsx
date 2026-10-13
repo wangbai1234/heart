@@ -1,3 +1,4 @@
+import { restrictCharacterTags } from '../../i18n/characterTags'
 import { useEffect, useRef, useState } from 'react'
 import type { CharacterProfileDTO } from '../../services/api'
 
@@ -37,7 +38,7 @@ export function GuYanliProfile({ profile }: GuYanliProfileProps) {
   }, [])
 
   const name = profile.display_name || '顾砚礼'
-  const tags = profile.tags?.length ? profile.tags : ['女性向', '都市', '贵公子', '赌王', '博弈', '占有欲', '反差']
+  const tags = (profile.tags?.length || restrictCharacterTags()) ? profile.tags : ['女性向', '都市', '贵公子', '赌王', '博弈', '占有欲', '反差']
   const tagCloud = tags.map((t) => `<span>${t}</span>`).join('')
 
   const htmlContent = `<!DOCTYPE html>

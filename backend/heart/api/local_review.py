@@ -49,6 +49,9 @@ async def review_catalog_records(db, enabled: bool) -> dict:
         return {}
     from sqlalchemy import text
 
+    exists = await db.execute(text("SELECT to_regclass('local_review.character_visibility')"))
+    if exists.scalar_one_or_none() is None:
+        return {}
     result = await db.execute(
         text(
             "SELECT character_id, batch_id, original_visibility, original_status, "

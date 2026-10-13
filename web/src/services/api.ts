@@ -1039,6 +1039,10 @@ export async function generateOpening(characterId: string): Promise<{
  * (avatar / colors) remain a frontend concern — see resolveCharacterProfile.
  */
 export interface CharacterDTO {
+  local_preview?: boolean
+  discovery_hidden?: boolean
+  language_priority?: number
+  edition?: { character_id: string; source_id: string; locale: string } | null
   creator_name?: string
   intro?: string
   content_language?: string
@@ -1182,7 +1186,7 @@ export async function recordCharacterView(id: string): Promise<{
 // ── 批4: 快速创建 AI 预填 ──
 
 export interface QuickPrefillRequest {
-  response_language?: "en" | "ja" | "ko"
+  response_language?: Locale
   display_name: string
   gender: 'male' | 'female'
   persona: string
@@ -1245,7 +1249,7 @@ export async function quickPrefill(
 
 /** Mirrors backend CharacterDraft (heart/ss01_soul/draft.py). */
 export interface CharacterDraftDTO {
-  display_name: { zh?: string; ja?: string; ko?: string; en?: string }
+  display_name: Partial<Record<Locale, string>> & { localized?: Partial<Record<Locale, string>> }
   avatar_url?: string
   /** Portrait cover (short S3 proxy URL from POST /api/characters/cover — never base64). */
   cover_url?: string
@@ -1285,7 +1289,7 @@ export interface CharacterDraftDTO {
     steadiness: number
   }
   locale?: string
-  response_language?: "en" | "ja" | "ko"
+  response_language?: Locale
   world_book?: string
   cast_type?: "single" | "multiple"
   content_rating?: "general" | "mature"
@@ -1346,8 +1350,14 @@ export async function uploadCharacterCover(file: File): Promise<{ cover_url: str
 function localizedDraft(draft: CharacterDraftDTO): CharacterDraftDTO {
   if (!localized) return { ...draft, locale: 'zh-CN', response_language: undefined }
   const locale = supportedLocale(draft.locale ?? draft.response_language ?? i18n.language)
-  const name = draft.display_name.zh || draft.display_name[locale] || draft.display_name.en || draft.display_name.ja || draft.display_name.ko
-  return { ...draft, locale, display_name: { [locale]: name } }
+  const names = { ...draft.display_name }
+  // Existing single-name forms use zh as their input slot, independent of UI.
+  // Re-key only that single slot on creation; multilingual input is preserved.
+  if (locale !== 'zh' && names.zh && Object.keys(names).length === 1) {
+    names[locale] = names.zh
+    delete names.zh
+  }
+  return { ...draft, locale, display_name: names }
 }
 
 export async function createCharacter(draft: CharacterDraftDTO): Promise<{
@@ -1365,13 +1375,18 @@ export async function updateCharacter(
 ): Promise<{ id: string; spec_version: string }> {
   const original = await getCharacterDraft(characterId)
   // Editors expose a single name field. Retain other authored translations.
-  const nameKey = (['zh', 'en', 'ja', 'ko'] as const).find(key => original.display_name[key] != null)
-    ?? supportedLocale(original.locale ?? 'en')
+  const nameKey = supportedLocale(original.locale ?? 'zh')
   const payload = {
     ...draft,
     locale: localized ? draft.locale ?? original.locale : original.locale,
-    response_language: localized ? draft.response_language : original.response_language,
-    display_name: { ...original.display_name, [nameKey]: draft.display_name.zh ?? draft.display_name[nameKey] },
+    response_language: localized ? draft.response_language ?? original.response_language : original.response_language,
+    display_name: {
+      ...original.display_name,
+      ...Object.fromEntries(Object.entries(draft.display_name).filter(([key]) => key !== 'zh' && key !== 'localized')),
+      [nameKey]: draft.display_name.zh ?? draft.display_name[nameKey] ?? original.display_name[nameKey] ?? original.display_name.localized?.[nameKey],
+      localized: { ...original.display_name.localized, ...draft.display_name.localized,
+        ...(original.display_name.localized?.[nameKey] ? { [nameKey]: draft.display_name.zh ?? draft.display_name[nameKey] ?? original.display_name.localized[nameKey] } : {}) },
+    },
   }
   return request(`/characters/${characterId}`, { method: 'PATCH', body: JSON.stringify(payload) })
 }
@@ -1386,7 +1401,7 @@ export async function getCharacterDraft(characterId: string): Promise<CharacterD
  * later played back verbatim (see ss10_opening.generator) with no runtime LLM.
  */
 export async function generateOpeningPreview(input: {
-  response_language?: "en" | "ja" | "ko"
+  response_language?: Locale
   display_name?: string
   persona: string
   backstory?: string
@@ -2021,6 +2036,7 @@ export interface LanguagePreferences {
   interface_language: Locale
   response_language: Locale
   action_style: 'parentheses' | 'asterisks' | 'fullwidth'
+  response_mode?: 'auto' | 'interface' | 'character' | 'fixed'
   response_follows_interface: boolean
 }
 export function getLanguagePreferences(): Promise<LanguagePreferences> {

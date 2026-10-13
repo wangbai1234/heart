@@ -1,12 +1,13 @@
 @import "tailwindcss";
 @import "./styles/tokens.css";
 
-/* International desktop uses the same mobile layout, including body portals.
+/* Keep the desktop canvas readable even in short laptop windows; only its
+   height follows the viewport. International layout includes body portals.
    A containing block on body keeps fixed sheets/navigation inside the shell. */
 html[data-mobile-shell="true"] { background: #101116; }
 @media (min-width: 600px) {
   html[data-mobile-shell="true"] body {
-    width: min(430px, max(320px, calc((100dvh - 24px) * 430 / 932)));
+    width: min(430px, calc(100% - 24px));
     height: min(932px, calc(100dvh - 24px));
     min-height: 0;
     margin: 12px auto;
@@ -51,6 +52,12 @@ html[data-mobile-shell="true"] { background: #101116; }
 
 * {
   box-sizing: border-box;
+}
+
+/* Prevent automatic mobile text inflation; browser/user zoom remains available. */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 html,
@@ -209,6 +216,85 @@ body {
   background: rgba(109,170,206,0.045);
 }
 
+/* Discovery follows its actual canvas/card widths, including the desktop
+   mobile shell. Viewport-only breakpoints cannot describe those widths. */
+.character-discovery-page {
+  container: discovery-page / inline-size;
+}
+.discovery-header {
+  gap: 8px;
+  padding-inline: 12px;
+}
+.discovery-wordmark {
+  width: 96px;
+  height: auto;
+  max-height: 34px;
+}
+.discovery-modes {
+  gap: 18px;
+  padding-inline: 12px;
+}
+.discovery-mode {
+  font-size: calc(14px * var(--app-font-scale));
+  white-space: nowrap;
+}
+.discovery-grid-scroll {
+  padding-inline: 12px;
+}
+.discovery-card {
+  min-width: 0;
+  container: discovery-card / inline-size;
+}
+.discovery-card-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px;
+}
+.discovery-card-name {
+  font-size: calc(14px * var(--app-font-scale));
+  line-height: 1.25;
+}
+.discovery-card-hook {
+  font-size: calc(11px * var(--app-font-scale));
+  line-height: 1.35;
+  -webkit-line-clamp: 1;
+}
+.discovery-card-heat {
+  font-size: calc(10px * var(--app-font-scale));
+  line-height: 1.2;
+}
+.discovery-card-tag {
+  flex: 0 1 auto;
+  font-size: calc(10px * var(--app-font-scale));
+  height: 18px;
+  line-height: 16px;
+}
+@container discovery-card (min-width: 190px) {
+  .discovery-card-name { font-size: calc(15px * var(--app-font-scale)); }
+  .discovery-card-hook {
+    font-size: calc(12px * var(--app-font-scale));
+    -webkit-line-clamp: 2;
+  }
+}
+@container discovery-page (max-width: 360px) {
+  .discovery-wordmark { width: 84px; }
+  .discovery-modes { gap: 8px; }
+  .discovery-mode { font-size: calc(13px * var(--app-font-scale)); }
+}
+.app-tab-bar { container: app-tabs / inline-size; }
+.app-tab-label {
+  max-width: 100%;
+  overflow: hidden;
+  padding-inline: 2px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  line-height: 1.25;
+}
+@container app-tabs (max-width: 360px) {
+  .app-tab-label { font-size: calc(10px * var(--app-font-scale)); }
+}
+
 /* ── Animations ──────────────────────────────────────────────── */
 @keyframes shimmer {
   0%   { transform: translateX(-100%); }
@@ -274,4 +360,19 @@ body {
 /* ── Font Utilities ──────────────────────────────────────────── */
 .font-brand {
   font-family: "SF Pro Rounded", -apple-system, system-ui, sans-serif;
+}
+
+
+/* Ship Bengali glyphs locally so preview and production do not depend on
+   a visitor's OS font collection or a third-party font request. */
+@font-face {
+  font-family: 'Yuoyuo Bengali';
+  src: url('/fonts/NotoSansBengali.ttf') format('truetype');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+html:lang(bn) body, html:lang(bn) button, html:lang(bn) input,
+html:lang(bn) textarea, html:lang(bn) select {
+  font-family: 'Yuoyuo Bengali', system-ui, sans-serif;
 }

@@ -30,6 +30,7 @@ import { CHARACTER_PROFILES } from '../data/uiContent'
  * setVisibility, disableCharacter) mutate the catalog and re-fetch in one step.
  */
 interface CharactersState {
+  revision: number
   characters: CharacterDTO[]
   loaded: boolean
   loading: boolean
@@ -66,6 +67,7 @@ let catalogGeneration = 0
 const profileInflight: Record<string, Promise<CharacterProfileDTO | null>> = {}
 
 export const useCharactersStore = create<CharactersState>((set, get) => ({
+  revision: 0,
   characters: [],
   loaded: false,
   loading: false,
@@ -73,7 +75,10 @@ export const useCharactersStore = create<CharactersState>((set, get) => ({
 
   resetCatalog: () => {
     catalogGeneration += 1
-    set({ characters: [], loaded: false, loading: false, profileById: {} })
+    inflight = null
+    forcedRefresh = null
+    for (const id of Object.keys(profileInflight)) delete profileInflight[id]
+    set({ revision: catalogGeneration, characters: [], loaded: false, loading: false, profileById: {} })
   },
 
   loadProfile: async (id, force = false) => {
@@ -81,14 +86,16 @@ export const useCharactersStore = create<CharactersState>((set, get) => ({
     if (cached && !force) return cached
     const pending = profileInflight[id]
     if (pending) return pending
+    const requestGeneration = catalogGeneration
     const req = getCharacterProfile(id)
       .then((profile) => {
+        if (requestGeneration !== catalogGeneration) return null
         set((s) => ({ profileById: { ...s.profileById, [id]: profile } }))
         return profile
       })
       .catch(() => null)
       .finally(() => {
-        delete profileInflight[id]
+        if (profileInflight[id] === req) delete profileInflight[id]
       })
     profileInflight[id] = req
     return req
@@ -128,7 +135,7 @@ export const useCharactersStore = create<CharactersState>((set, get) => ({
         set({ loading: false })
       })
       .finally(() => {
-        inflight = null
+        if (requestGeneration === catalogGeneration) inflight = null
       })
     return inflight
   },

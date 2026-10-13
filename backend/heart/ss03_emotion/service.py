@@ -388,6 +388,7 @@ class EmotionService:
         self,
         user_id: UUID,
         character_id: str,
+        language: str | None = None,
     ) -> Dict[str, Any]:
         """
         Generate EmotionContextBlock for Persona Composer.
@@ -409,10 +410,10 @@ class EmotionService:
         )[:3]
 
         # Generate emotion summary (template-based)
-        emotion_summary = self._generate_emotion_summary(top_emotions, character_id)
+        emotion_summary = self._generate_emotion_summary(top_emotions, character_id, language)
 
         # Generate mood descriptor
-        mood_descriptor = self._generate_mood_descriptor(state["mood"])
+        mood_descriptor = self._generate_mood_descriptor(state["mood"], language)
 
         # Generate energy descriptor
         energy_descriptor = self._generate_energy_descriptor(state["energy"])
@@ -561,8 +562,27 @@ class EmotionService:
         self,
         top_emotions: List[Dict[str, Any]],
         character_id: str,
+        language: str | None = None,
     ) -> str:
         """Generate natural language emotion summary per §6.3."""
+        if language in {"en", "vi", "bn"}:
+            from heart.ss05_composer.prompt_resources import prompt_catalog, prompt_text
+
+            if not top_emotions or all(e["intensity"] < 0.2 for e in top_emotions):
+                return prompt_text(language, "emotion_calm")
+
+            def phrase(emotion):
+                key = "emotion_" + emotion["emotion"]
+                if key in prompt_catalog(language):
+                    return prompt_text(language, key)
+                return prompt_text(language, "emotion_unknown", v0=emotion["emotion"])
+
+            primary = phrase(top_emotions[0])
+            if len(top_emotions) > 1 and top_emotions[1]["intensity"] > 0.2:
+                return prompt_text(
+                    language, "emotion_mixed", v0=primary, v1=phrase(top_emotions[1])
+                )
+            return primary
         if not top_emotions or all(e["intensity"] < 0.2 for e in top_emotions):
             return "你的情绪相对平静。"
 
@@ -591,9 +611,20 @@ class EmotionService:
 
         return primary_phrase
 
-    def _generate_mood_descriptor(self, mood: Dict[str, Any]) -> str:
+    def _generate_mood_descriptor(self, mood: Dict[str, Any], language: str | None = None) -> str:
         """Generate mood descriptor text."""
         v_baseline = mood["valence_baseline"]
+        if language in {"en", "vi", "bn"}:
+            from heart.ss05_composer.prompt_resources import prompt_text
+
+            key = (
+                "mood_low"
+                if v_baseline < -0.3
+                else "mood_high"
+                if v_baseline > 0.3
+                else "mood_calm"
+            )
+            return prompt_text(language, key)
 
         if v_baseline < -0.3:
             return "今天本来心情就不太好。"

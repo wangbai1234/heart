@@ -1146,7 +1146,7 @@
   "memorySaved": "둘만의 기억에 저장했어요. 이후 대화에서 참고할 수 있습니다.",
   "memoryDemoSaved": "이 미리보기에서만 수정했어요.",
   "memoryEmotion_unknown": "아직 감정 기록이 없어요",
-  "confirmIdentityCorrection": "이 내용을 중요한 기억으로 저장하는 데 동의합니다.",
+  "confirmIdentityCorrection": "중요한 기억의 수정을 확인합니다.",
   "sharedMessageCount": "함께 나눈 메시지 {{count}}개",
   "sharedEmotion": "현재 감정",
   "sharedIntimacy": "친밀도",
@@ -1154,7 +1154,6 @@
   "identityMemory": "중요한 기억",
   "everydayMemory": "일상의 기억",
   "editMemory": "기억 수정",
-  "confirmIdentityCorrection": "중요한 기억의 수정을 확인합니다.",
   "memorySaveError": "저장하지 못했어요. 다시 열어 최신 내용을 확인해 주세요.",
   "continueWithGoogle": "Google로 계속하기",
   "googleLoginError": "Google 로그인을 완료하지 못했어요. 다시 시도하거나 이메일로 로그인해 주세요.",
@@ -1162,5 +1161,14 @@
   "memoryEmotion_low": "가라앉음",
   "memoryEmotion_excited": "설렘",
   "memoryEmotion_calm": "차분함",
-  "ageBody": "# 연령 제한과 콘텐츠 등급\n\n만 18세 이상이며 거주지에서 더 높은 최소 연령을 요구하면 해당 기준도 충족해야 합니다. 한국의 청소년 보호 등 관련 법령에 따라 성인 제한 콘텐츠에 접근할 수 있는 연령과 확인 절차를 별도로 적용해야 합니다. 공개 전 현지 연령 확인·분류 의무를 검토합니다. 생년월일 자기 신고만으로 이러한 요건을 충족했다고 볼 수 없습니다.\n\n연령 허위 신고, 미성년자와 계정 공유, 연령·지역 제한 우회는 금지됩니다. 일반 주제와 성인 주제는 콘텐츠 분류이며 이용 연령이나 금지 규칙의 예외가 아닙니다. 유료 회원이나 허구적 설정이어도 미성년자 또는 어려 보이는 캐릭터의 성적 콘텐츠는 금지됩니다."
+  "ageBody": "# 연령 제한과 콘텐츠 등급\n\n만 18세 이상이며 거주지에서 더 높은 최소 연령을 요구하면 해당 기준도 충족해야 합니다. 한국의 청소년 보호 등 관련 법령에 따라 성인 제한 콘텐츠에 접근할 수 있는 연령과 확인 절차를 별도로 적용해야 합니다. 공개 전 현지 연령 확인·분류 의무를 검토합니다. 생년월일 자기 신고만으로 이러한 요건을 충족했다고 볼 수 없습니다.\n\n연령 허위 신고, 미성년자와 계정 공유, 연령·지역 제한 우회는 금지됩니다. 일반 주제와 성인 주제는 콘텐츠 분류이며 이용 연령이나 금지 규칙의 예외가 아닙니다. 유료 회원이나 허구적 설정이어도 미성년자 또는 어려 보이는 캐릭터의 성적 콘텐츠는 금지됩니다.",
+  "responseMode": "답변 모드",
+  "responseAuto": "자동 (캐릭터 설정 우선)",
+  "responseInterface": "화면 언어 사용",
+  "responseCharacter": "캐릭터 언어 사용",
+  "responseFixed": "언어 고정",
+  "languageUnavailable": "현재 사용할 수 없는 언어입니다",
+  "voice_language_unavailable": "이 언어는 음성을 지원하지 않습니다. 텍스트로 대화해 주세요.",
+  "language_unavailable": "이 언어는 아직 사용할 수 없습니다.",
+  "googleUnavailable": "Google 로그인은 아직 활성화되지 않았습니다."
 }

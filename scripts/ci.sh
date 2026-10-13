@@ -119,6 +119,8 @@ stage_unit_tests() {
 stage_schema_validation() {
     log "stage: schema-validation"
     cd "$REPO_ROOT"
+    python3 scripts/generate_locales.py --check
+    python3 scripts/check_locale_resources.py
     pip_install pyyaml
 
     python3 - <<'PYEOF'

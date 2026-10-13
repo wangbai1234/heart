@@ -11,7 +11,10 @@ from __future__ import annotations
 from enum import Enum
 from typing import Annotated, Literal, Optional
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
+
+from heart.i18n import normalize_locale
+from heart.locales import Locale
 
 # Import new UGC creation models (batch 1)
 from heart.ss01_soul.draft_new_models import (
@@ -35,11 +38,35 @@ class DisplayNameDraft(BaseModel, extra="forbid"):
     ja: Optional[str] = Field(None, min_length=1, max_length=20)
     ko: Optional[str] = Field(None, min_length=1, max_length=20)
     en: Optional[str] = Field(None, min_length=1, max_length=40)
+    vi: Optional[str] = Field(None, min_length=1, max_length=60)
+    bn: Optional[str] = Field(None, min_length=1, max_length=60)
+    localized: dict[Locale, Annotated[str, Field(min_length=1, max_length=60)]] = Field(
+        default_factory=dict
+    )
 
     @model_validator(mode="after")
     def at_least_one(self) -> "DisplayNameDraft":
-        if not any([self.zh, self.ja, self.ko, self.en]):
-            raise ValueError("At least one of zh / ja / ko / en is required")
+        if not any(
+            [self.zh, self.ja, self.ko, self.en, self.vi, self.bn, *self.localized.values()]
+        ):
+            raise ValueError("At least one locale name is required")
+        if any(
+            not name.strip()
+            for name in [
+                self.zh,
+                self.ja,
+                self.ko,
+                self.en,
+                self.vi,
+                self.bn,
+                *self.localized.values(),
+            ]
+            if name is not None
+        ):
+            raise ValueError("Locale names cannot be blank")
+        for code, name in self.localized.items():
+            if getattr(self, code, None) is not None and getattr(self, code) != name:
+                raise ValueError("Conflicting locale names")
         return self
 
 
@@ -146,7 +173,7 @@ class CharacterDraft(BaseModel, extra="forbid"):
     soul_profile: Optional[SoulProfileDraft] = None
     sliders: SliderSet = Field(default_factory=SliderSet)
     locale: str = "zh"
-    response_language: Literal["en", "ja", "ko"] | None = None
+    response_language: Locale | None = None
     world_book: str = Field(default="", max_length=10000)
     cast_type: Literal["single", "multiple"] = "single"
     content_rating: Literal["general", "mature"] = "general"
@@ -170,6 +197,14 @@ class CharacterDraft(BaseModel, extra="forbid"):
     starter_config: Optional[StarterConfig] = None
     # 开场白格式: plain (纯文本) vs rich (带 <scene>/<plot>/<dialogue> 标签)
     opening_format: Literal["plain", "rich"] = "plain"
+
+    @field_validator("locale")
+    @classmethod
+    def registered_locale(cls, value: str) -> str:
+        code = normalize_locale(value)
+        if code is None:
+            raise ValueError("Unregistered locale")
+        return code
 
     @model_validator(mode="after")
     def quick_mode_limits(self) -> "CharacterDraft":

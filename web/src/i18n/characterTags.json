@@ -1,0 +1,312 @@
+{
+  "全部": {
+    "en": "All",
+    "vi": "Tất cả",
+    "bn": "সব"
+  },
+  "全性向": {
+    "en": "All orientations",
+    "vi": "Mọi xu hướng",
+    "bn": "সব অভিমুখিতা"
+  },
+  "女性向": {
+    "en": "For women",
+    "vi": "Dành cho nữ",
+    "bn": "নারীদের জন্য"
+  },
+  "男性向": {
+    "en": "For men",
+    "vi": "Dành cho nam",
+    "bn": "পুরুষদের জন্য"
+  },
+  "校园": {
+    "en": "Campus",
+    "vi": "Học đường",
+    "bn": "ক্যাম্পাস"
+  },
+  "都市": {
+    "en": "City life",
+    "vi": "Đô thị",
+    "bn": "শহুরে জীবন"
+  },
+  "古风": {
+    "en": "Historical",
+    "vi": "Cổ trang",
+    "bn": "ঐতিহাসিক"
+  },
+  "模拟器": {
+    "en": "Simulator",
+    "vi": "Mô phỏng",
+    "bn": "সিমুলেটর"
+  },
+  "病娇": {
+    "en": "Obsessive love",
+    "vi": "Tình yêu ám ảnh",
+    "bn": "আচ্ছন্ন প্রেম"
+  },
+  "反差": {
+    "en": "Contrasting sides",
+    "vi": "Tương phản",
+    "bn": "বিপরীত সত্তা"
+  },
+  "霸总": {
+    "en": "Powerful CEO",
+    "vi": "Tổng tài",
+    "bn": "ক্ষমতাবান সিইও"
+  },
+  "年上": {
+    "en": "Older partner",
+    "vi": "Người lớn tuổi hơn",
+    "bn": "বয়সে বড় সঙ্গী"
+  },
+  "年下": {
+    "en": "Younger partner",
+    "vi": "Người nhỏ tuổi hơn",
+    "bn": "বয়সে ছোট সঙ্গী"
+  },
+  "偏执": {
+    "en": "Obsessive",
+    "vi": "Cố chấp",
+    "bn": "আচ্ছন্ন"
+  },
+  "纯爱": {
+    "en": "Pure romance",
+    "vi": "Tình yêu thuần khiết",
+    "bn": "নির্মল প্রেম"
+  },
+  "占有欲": {
+    "en": "Possessive",
+    "vi": "Chiếm hữu",
+    "bn": "অধিকারপ্রবণ"
+  },
+  "治愈": {
+    "en": "Comforting",
+    "vi": "Chữa lành",
+    "bn": "প্রশান্তিদায়ক"
+  },
+  "限左": {
+    "en": "Top only",
+    "vi": "Chỉ vai công",
+    "bn": "শুধু টপ"
+  },
+  "强制爱": {
+    "en": "Coercive romance",
+    "vi": "Tình yêu ép buộc",
+    "bn": "জবরদস্তিমূলক প্রেম"
+  },
+  "忠犬": {
+    "en": "Devoted",
+    "vi": "Tận tụy",
+    "bn": "একনিষ্ঠ"
+  },
+  "高自由": {
+    "en": "Open-ended",
+    "vi": "Tự do cao",
+    "bn": "উন্মুক্ত সম্ভাবনা"
+  },
+  "洁": {
+    "en": "No prior intimacy",
+    "vi": "Chưa từng thân mật",
+    "bn": "পূর্ব ঘনিষ্ঠতা নেই"
+  },
+  "温柔": {
+    "en": "Gentle",
+    "vi": "Dịu dàng",
+    "bn": "কোমল"
+  },
+  "高冷": {
+    "en": "Aloof",
+    "vi": "Lạnh lùng",
+    "bn": "নির্লিপ্ত"
+  },
+  "清冷": {
+    "en": "Reserved",
+    "vi": "Trầm lặng",
+    "bn": "সংযত"
+  },
+  "甜": {
+    "en": "Sweet",
+    "vi": "Ngọt ngào",
+    "bn": "মধুর"
+  },
+  "恋爱": {
+    "en": "Romance",
+    "vi": "Lãng mạn",
+    "bn": "প্রেম"
+  },
+  "暗恋": {
+    "en": "Secret crush",
+    "vi": "Yêu thầm",
+    "bn": "গোপন প্রেম"
+  },
+  "初恋": {
+    "en": "First love",
+    "vi": "Tình đầu",
+    "bn": "প্রথম প্রেম"
+  },
+  "青梅竹马": {
+    "en": "Childhood friends",
+    "vi": "Thanh mai trúc mã",
+    "bn": "শৈশবের বন্ধু"
+  },
+  "破镜重圆": {
+    "en": "Rekindled love",
+    "vi": "Gương vỡ lại lành",
+    "bn": "পুনর্মিলিত প্রেম"
+  },
+  "久别重逢": {
+    "en": "Reunion",
+    "vi": "Gặp lại sau xa cách",
+    "bn": "দীর্ঘদিন পর পুনর্মিলন"
+  },
+  "救赎": {
+    "en": "Redemption",
+    "vi": "Cứu rỗi",
+    "bn": "মুক্তি"
+  },
+  "群像": {
+    "en": "Ensemble cast",
+    "vi": "Dàn nhân vật",
+    "bn": "বহু চরিত্র"
+  },
+  "架空世界": {
+    "en": "Fictional world",
+    "vi": "Thế giới giả tưởng",
+    "bn": "কাল্পনিক জগৎ"
+  },
+  "奇幻": {
+    "en": "Fantasy",
+    "vi": "Kỳ ảo",
+    "bn": "ফ্যান্টাসি"
+  },
+  "玄幻": {
+    "en": "Mystic fantasy",
+    "vi": "Huyền huyễn",
+    "bn": "রহস্যময় ফ্যান্টাসি"
+  },
+  "仙侠": {
+    "en": "Immortal heroes",
+    "vi": "Tiên hiệp",
+    "bn": "অমর বীর"
+  },
+  "悬疑": {
+    "en": "Mystery",
+    "vi": "Bí ẩn",
+    "bn": "রহস্য"
+  },
+  "末世": {
+    "en": "Post-apocalyptic",
+    "vi": "Hậu tận thế",
+    "bn": "বিপর্যয়-পরবর্তী"
+  },
+  "生存": {
+    "en": "Survival",
+    "vi": "Sinh tồn",
+    "bn": "টিকে থাকা"
+  },
+  "娱乐圈": {
+    "en": "Show business",
+    "vi": "Giới giải trí",
+    "bn": "বিনোদন জগৎ"
+  },
+  "电竞": {
+    "en": "Esports",
+    "vi": "Thể thao điện tử",
+    "bn": "ইস্পোর্টস"
+  },
+  "职场": {
+    "en": "Workplace",
+    "vi": "Công sở",
+    "bn": "কর্মক্ষেত্র"
+  },
+  "豪门": {
+    "en": "Wealthy family",
+    "vi": "Hào môn",
+    "bn": "ধনী পরিবার"
+  },
+  "权谋": {
+    "en": "Political intrigue",
+    "vi": "Quyền mưu",
+    "bn": "রাজনৈতিক চক্রান্ত"
+  },
+  "深情": {
+    "en": "Deep affection",
+    "vi": "Si tình",
+    "bn": "গভীর অনুরাগ"
+  },
+  "腹黑": {
+    "en": "Cunning",
+    "vi": "Mưu mô",
+    "bn": "ধূর্ত"
+  },
+  "强势": {
+    "en": "Assertive",
+    "vi": "Mạnh mẽ",
+    "bn": "দৃঢ়চেতা"
+  },
+  "克制": {
+    "en": "Restrained",
+    "vi": "Kiềm chế",
+    "bn": "সংযত"
+  },
+  "医生": {
+    "en": "Doctor",
+    "vi": "Bác sĩ",
+    "bn": "চিকিৎসক"
+  },
+  "律师": {
+    "en": "Lawyer",
+    "vi": "Luật sư",
+    "bn": "আইনজীবী"
+  },
+  "警察": {
+    "en": "Police officer",
+    "vi": "Cảnh sát",
+    "bn": "পুলিশ কর্মকর্তা"
+  },
+  "歌手": {
+    "en": "Singer",
+    "vi": "Ca sĩ",
+    "bn": "গায়ক"
+  },
+  "音乐家": {
+    "en": "Musician",
+    "vi": "Nhạc sĩ",
+    "bn": "সংগীতশিল্পী"
+  },
+  "学霸": {
+    "en": "Top student",
+    "vi": "Học bá",
+    "bn": "মেধাবী শিক্ষার্থী"
+  },
+  "大学生": {
+    "en": "University student",
+    "vi": "Sinh viên",
+    "bn": "বিশ্ববিদ্যালয়ের শিক্ষার্থী"
+  },
+  "元气": {
+    "en": "Energetic",
+    "vi": "Tràn đầy năng lượng",
+    "bn": "প্রাণবন্ত"
+  },
+  "前任": {
+    "en": "Ex-partner",
+    "vi": "Người yêu cũ",
+    "bn": "প্রাক্তন সঙ্গী"
+  },
+  "邻家": {
+    "en": "Next door",
+    "vi": "Hàng xóm",
+    "bn": "পাশের বাড়ির"
+  },
+  "同居": {
+    "en": "Living together",
+    "vi": "Sống chung",
+    "bn": "একসঙ্গে থাকা"
+  },
+  "危险关系": {
+    "en": "Dangerous relationship",
+    "vi": "Quan hệ nguy hiểm",
+    "bn": "বিপজ্জনক সম্পর্ক"
+  }
+}

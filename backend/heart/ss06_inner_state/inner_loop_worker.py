@@ -470,6 +470,7 @@ class InnerLoopWorker:
         hours_since: float,
         ltc: dict,
         model: str = DEFAULT_CHAT_MODEL,
+        response_language: str = "zh",
     ) -> Optional[str]:
         """Retry the content once if it duplicates a recent send; else suppress.
 
@@ -495,6 +496,7 @@ class InnerLoopWorker:
                 user_facts="",
                 local_time_context=ltc,
                 model=model,
+                response_language=response_language,
             )
         logger.info(
             "ritual_suppressed_content_dedup",
@@ -503,6 +505,15 @@ class InnerLoopWorker:
             content_preview=(content or "")[:40],
         )
         return None
+
+    @staticmethod
+    async def _proactive_language(session, user_id: UUID, character_id: str) -> str:
+        from heart.core.config import settings
+        from heart.i18n import character_preferences
+
+        if not settings.international_localization:
+            return "zh"
+        return (await character_preferences(session, user_id, character_id)).response_language
 
     async def _check_ritual_triggers(
         self,
@@ -576,6 +587,7 @@ class InnerLoopWorker:
             return None
 
         # ── Build local-time context + generate content ───────────────────────
+        response_language = await self._proactive_language(session, user_id, character_id)
         ltc = _build_local_time_context(now, user_timezone, hours_since)
         content = await self.inner_state_service._resolve_proactive_content(
             character_id=character_id,
@@ -587,6 +599,7 @@ class InnerLoopWorker:
             user_facts="",
             local_time_context=ltc,
             model=model,
+            response_language=response_language,
         )
 
         content = await self._dedup_or_none(
@@ -598,6 +611,7 @@ class InnerLoopWorker:
             hours_since=hours_since,
             ltc=ltc,
             model=model,
+            response_language=response_language,
         )
         if content is None:
             return None
@@ -687,6 +701,13 @@ class InnerLoopWorker:
                 logger.warning("proactive_v2_composer_unavailable", user_id=str(user_id))
                 return
 
+            from heart.i18n import character_preferences
+
+            preferences = (
+                await character_preferences(session, user_id, character_id)
+                if settings.international_localization
+                else None
+            )
             turn_id = uuid4()
             ctx = CompositionContext(
                 user_id=user_id,
@@ -694,6 +715,8 @@ class InnerLoopWorker:
                 turn_id=turn_id,
                 user_message="",
                 proactive_hint=proactive_hint,
+                response_language=preferences.response_language if preferences else None,
+                action_style="fullwidth",
                 model=model,
             )
 

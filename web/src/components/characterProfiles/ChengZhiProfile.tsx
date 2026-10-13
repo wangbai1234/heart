@@ -1,3 +1,4 @@
+import { restrictCharacterTags } from '../../i18n/characterTags'
 import { useEffect, useRef, useState } from 'react'
 import type { CharacterProfileDTO } from '../../services/api'
 
@@ -37,7 +38,7 @@ export function ChengZhiProfile({ profile }: ChengZhiProfileProps) {
   }, [])
 
   const name = profile.display_name || '程之'
-  const tags = profile.tags?.length ? profile.tags : ['都市', '医生', '温柔', '女性向', '治愈', '年上']
+  const tags = (profile.tags?.length || restrictCharacterTags()) ? profile.tags : ['都市', '医生', '温柔', '女性向', '治愈', '年上']
   const tagCloud = tags.map((t) => `<span>${t}</span>`).join('')
 
   const htmlContent = `<!DOCTYPE html>
