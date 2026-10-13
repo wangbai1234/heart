@@ -1,3 +1,4 @@
+import { restrictCharacterTags } from '../../i18n/characterTags'
 import { useEffect, useRef, useState } from 'react'
 import type { CharacterProfileDTO } from '../../services/api'
 
@@ -37,7 +38,7 @@ export function QinJingzhouProfile({ profile }: QinJingzhouProfileProps) {
   }, [])
 
   const name = profile.display_name || '秦景舟'
-  const tags = profile.tags?.length ? profile.tags : ['婚服设计师', '前任', '破镜重圆']
+  const tags = (profile.tags?.length || restrictCharacterTags()) ? profile.tags : ['婚服设计师', '前任', '破镜重圆']
   const tagCloud = tags.map((t) => `<span>${t}</span>`).join('')
 
   const htmlContent = `<!DOCTYPE html>

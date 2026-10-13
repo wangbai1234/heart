@@ -1,3 +1,4 @@
+import { restrictCharacterTags } from '../../i18n/characterTags'
 import { useEffect, useRef, useState } from 'react'
 import type { CharacterProfileDTO } from '../../services/api'
 
@@ -37,7 +38,7 @@ export function PeiTinglanProfile({ profile }: PeiTinglanProfileProps) {
   }, [])
 
   const name = profile.display_name || '裴听澜'
-  const tags = profile.tags?.length ? profile.tags : ['音乐家', '天才', '破碎感', '救赎', '女性向']
+  const tags = (profile.tags?.length || restrictCharacterTags()) ? profile.tags : ['音乐家', '天才', '破碎感', '救赎', '女性向']
   const tagCloud = tags.map((t) => `<span>${t}</span>`).join('')
 
   const htmlContent = `<!DOCTYPE html>

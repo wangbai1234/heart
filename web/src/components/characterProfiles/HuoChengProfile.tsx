@@ -1,3 +1,4 @@
+import { restrictCharacterTags } from '../../i18n/characterTags'
 import { useEffect, useRef, useState } from 'react'
 import type { CharacterProfileDTO } from '../../services/api'
 
@@ -37,7 +38,7 @@ export function HuoChengProfile({ profile }: HuoChengProfileProps) {
   }, [])
 
   const name = profile.display_name || '霍城'
-  const tags = profile.tags?.length ? profile.tags : ['末世', '硬汉', '女性向', '生存', '占有欲']
+  const tags = (profile.tags?.length || restrictCharacterTags()) ? profile.tags : ['末世', '硬汉', '女性向', '生存', '占有欲']
   const tagCloud = tags.map((t) => `<span>${t}</span>`).join('')
 
   const htmlContent = `<!DOCTYPE html>

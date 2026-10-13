@@ -1,3 +1,4 @@
+import { restrictCharacterTags } from '../../i18n/characterTags'
 import { useEffect, useRef, useState } from 'react'
 import type { CharacterProfileDTO } from '../../services/api'
 
@@ -38,7 +39,7 @@ export function VitoRosettiProfile({ profile }: VitoRosettiProfileProps) {
 
   const name = profile.display_name || '维托'
   const age = 29
-  const tags = profile.tags?.length ? profile.tags : ['女性向', '异国', '拳手', '野性', '救赎', '危险关系']
+  const tags = (profile.tags?.length || restrictCharacterTags()) ? profile.tags : ['女性向', '异国', '拳手', '野性', '救赎', '危险关系']
   const tagCloud = tags.map((t) => `#${t}`).join('&nbsp;&nbsp;')
 
   const htmlContent = `<!DOCTYPE html>

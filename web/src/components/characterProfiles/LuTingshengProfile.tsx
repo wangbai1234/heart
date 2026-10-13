@@ -1,3 +1,4 @@
+import { restrictCharacterTags } from '../../i18n/characterTags'
 import { useEffect, useRef, useState } from 'react'
 import type { CharacterProfileDTO } from '../../services/api'
 
@@ -37,7 +38,7 @@ export function LuTingshengProfile({ profile }: LuTingshengProfileProps) {
   }, [])
 
   const name = profile.display_name || '陆霆生'
-  const tags = profile.tags?.length ? profile.tags : ['全性向', '限左', '民国', '军阀', '糙汉', '女性向', '架空世界']
+  const tags = (profile.tags?.length || restrictCharacterTags()) ? profile.tags : ['全性向', '限左', '民国', '军阀', '糙汉', '女性向', '架空世界']
   const tagCloud = tags.map((t) => `<span>${t}</span>`).join('')
 
   const htmlContent = `<!DOCTYPE html>

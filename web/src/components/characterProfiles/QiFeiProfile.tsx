@@ -1,3 +1,4 @@
+import { restrictCharacterTags } from '../../i18n/characterTags'
 import { useEffect, useRef, useState } from 'react'
 import type { CharacterProfileDTO } from '../../services/api'
 
@@ -38,7 +39,7 @@ export function QiFeiProfile({ profile }: QiFeiProfileProps) {
   }, [])
 
   const name = profile.display_name || '祁绯'
-  const tags = profile.tags?.length ? profile.tags : ['女性向', 'GL', '摇滚', '歌手']
+  const tags = (profile.tags?.length || restrictCharacterTags()) ? profile.tags : ['女性向', 'GL', '摇滚', '歌手']
   const tagCloud = tags.map((t) => `<span>${t}</span>`).join('')
 
   const htmlContent = `<!DOCTYPE html>

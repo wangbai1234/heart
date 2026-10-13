@@ -1,3 +1,4 @@
+import { restrictCharacterTags } from '../../i18n/characterTags'
 import { useEffect, useRef, useState } from 'react'
 import type { CharacterProfileDTO } from '../../services/api'
 
@@ -37,7 +38,7 @@ export function LuZhaoProfile({ profile }: LuZhaoProfileProps) {
   }, [])
 
   const name = profile.display_name || '陆昭'
-  const tags = profile.tags?.length ? profile.tags : ['都市', '娱乐圈', '顶流', '女性向', '反差', '忠犬']
+  const tags = (profile.tags?.length || restrictCharacterTags()) ? profile.tags : ['都市', '娱乐圈', '顶流', '女性向', '反差', '忠犬']
   const tagCloud = tags.map((t) => `<span>${t}</span>`).join('')
 
   const htmlContent = `<!DOCTYPE html>

@@ -1,4 +1,4 @@
-import { characterTagLabel } from '../i18n/characterTags'
+import { characterTagLabel, visibleCharacterTags } from '../i18n/characterTags'
 import { locales, languageNames } from '../i18n'
 import { useTranslation } from 'react-i18next'
 import { international, localized } from '../i18n/text'
@@ -421,7 +421,10 @@ export function CharacterPage() {
   const pinnedTagChips: readonly string[] = [TAG_ALL, ...PINNED_TAGS]
 
   // Extra tags for the「筛选」popup — fixed, hardcoded list (see EXTRA_FILTER_TAGS).
-  const extraFilterChips = useMemo(() => international ? Array.from(new Set(serverCharacters.flatMap(c => c.tags ?? []))).filter(tag => !PINNED_TAGS.includes(tag as typeof PINNED_TAGS[number])) : [...EXTRA_FILTER_TAGS], [serverCharacters])
+  const extraFilterChips = useMemo(() => international ? visibleCharacterTags(Array.from(new Set(serverCharacters.flatMap(c => c.tags ?? [])))).filter(tag => !PINNED_TAGS.includes(tag as typeof PINNED_TAGS[number])) : visibleCharacterTags(EXTRA_FILTER_TAGS), [serverCharacters, i18n.language])
+  useEffect(() => {
+    if (activeTag !== TAG_ALL && !visibleCharacterTags([activeTag]).length) setActiveTag(TAG_ALL)
+  }, [activeTag, i18n.language])
 
   const heatMap = useMemo(
     () => buildCharacterHeatMap(rankedItems),
@@ -466,7 +469,7 @@ export function CharacterPage() {
     if (q) {
       base = base.filter((it) => {
         const metadata = serverCharacters.find(c => c.id === it.id)
-        const hay = `${metadata?.intro ?? ''} ${metadata?.creator_name ?? ''} ${it.profile.name} ${(it.profile.tags ?? []).flatMap(tag => [tag, characterTagLabel(tag)]).join(' ')} ${it.profile.tagline ?? ''}`.toLowerCase()
+        const hay = `${metadata?.intro ?? ''} ${metadata?.creator_name ?? ''} ${it.profile.name} ${visibleCharacterTags(it.profile.tags ?? []).flatMap(tag => [tag, characterTagLabel(tag)]).join(' ')} ${it.profile.tagline ?? ''}`.toLowerCase()
         return hay.includes(q)
       })
     }
@@ -905,7 +908,7 @@ function DiscoveryCard({
 
   // Cover shows the character's first two tags (as authored/ordered), not a
   // priority-reordered subset — product direction 2026-08-17.
-  const displayTags = tags.slice(0, 2)
+  const displayTags = visibleCharacterTags(tags).slice(0, 2)
 
   return (
     <div className="group relative flex w-full flex-col overflow-hidden rounded-[14px] border border-white/70 bg-transparent shadow-[0_5px_18px_rgba(73,48,62,0.12)] transition-shadow duration-[var(--duration-normal)] hover:shadow-[0_8px_26px_rgba(73,48,62,0.16)]">

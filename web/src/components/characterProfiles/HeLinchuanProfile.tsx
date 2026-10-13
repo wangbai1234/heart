@@ -1,3 +1,4 @@
+import { restrictCharacterTags } from '../../i18n/characterTags'
 import type { CharacterProfileDTO } from '../../services/api'
 import { escapeHtml } from '../../utils/escapeHtml'
 import { ImmersiveProfileFrame } from './ImmersiveProfileFrame'
@@ -9,7 +10,7 @@ interface HeLinchuanProfileProps {
 /** 贺临川专属详情页：夕照电竞工作室 / 双人房间 / 追求战报。 */
 export function HeLinchuanProfile({ profile }: HeLinchuanProfileProps) {
   const name = escapeHtml(profile.display_name || '贺临川')
-  const tags = (profile.tags?.length
+  const tags = ((profile.tags?.length || restrictCharacterTags())
     ? profile.tags
     : ['女性向', 'BG', '限左', '校园', '电竞'])
     .map((tag) => `<span>${escapeHtml(tag)}</span>`)

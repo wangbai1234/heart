@@ -1,3 +1,4 @@
+import { restrictCharacterTags } from '../../i18n/characterTags'
 import { useEffect, useRef, useState } from 'react'
 import type { CharacterProfileDTO } from '../../services/api'
 
@@ -37,7 +38,7 @@ export function ShenLiaoProfile({ profile }: ShenLiaoProfileProps) {
   }, [])
 
   const name = profile.display_name || '沈燎'
-  const tags = profile.tags?.length ? profile.tags : ['女性向', '都市', '年下', '狼狗', '直球']
+  const tags = (profile.tags?.length || restrictCharacterTags()) ? profile.tags : ['女性向', '都市', '年下', '狼狗', '直球']
   const tagCloud = tags.map((t) => `<span>${t}</span>`).join('')
 
   const htmlContent = `<!DOCTYPE html>

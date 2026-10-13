@@ -1,3 +1,4 @@
+import { restrictCharacterTags } from '../../i18n/characterTags'
 import { useEffect, useRef, useState } from 'react'
 import type { CharacterProfileDTO } from '../../services/api'
 
@@ -37,7 +38,7 @@ export function ShenYichenProfile({ profile }: ShenYichenProfileProps) {
   }, [])
 
   const name = profile.display_name || '沈亦琛'
-  const tags = profile.tags?.length ? profile.tags : ['都市', '病娇', '强制爱', '偏执', '深情']
+  const tags = (profile.tags?.length || restrictCharacterTags()) ? profile.tags : ['都市', '病娇', '强制爱', '偏执', '深情']
   const tagCloud = tags.map((t) => `<span>${t}</span>`).join('')
 
   const htmlContent = `<!DOCTYPE html>

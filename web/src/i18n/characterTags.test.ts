@@ -12,3 +12,16 @@ it('translates labels while keeping canonical filtering keys and unknown tags', 
   expect(tags.includes('Campus')).toBe(false)
   vi.unstubAllEnvs(); vi.resetModules()
 })
+
+it('shows only registered labels in launch locales without changing stored tags', async () => {
+  vi.stubEnv('VITE_LOCALIZATION', 'true'); vi.resetModules()
+  const { visibleCharacterTags } = await import('./characterTags')
+  const tags = ['专属中文标签', '校园', 'BL', '女性向']
+  for (const locale of ['en', 'vi', 'bn']) {
+    expect(visibleCharacterTags(tags, locale)).toEqual(['校园', '女性向'])
+    expect(visibleCharacterTags(['专属中文标签'], locale)).toEqual([])
+  }
+  expect(visibleCharacterTags(tags, 'zh')).toEqual(tags)
+  expect(tags).toEqual(['专属中文标签', '校园', 'BL', '女性向'])
+  vi.unstubAllEnvs(); vi.resetModules()
+})

@@ -1,3 +1,4 @@
+import { restrictCharacterTags } from '../../i18n/characterTags'
 import { useEffect, useRef, useState } from 'react'
 import type { CharacterProfileDTO } from '../../services/api'
 
@@ -38,7 +39,7 @@ export function HeZhuoProfile({ profile }: HeZhuoProfileProps) {
   }, [])
 
   const name = profile.display_name || '何酌'
-  const tags = profile.tags?.length ? profile.tags : ['全性向', '限左', '都市', '身份反差', '暗恋', '年上']
+  const tags = (profile.tags?.length || restrictCharacterTags()) ? profile.tags : ['全性向', '限左', '都市', '身份反差', '暗恋', '年上']
   const tagCloud = tags.map((t) => `<span>${t}</span>`).join('')
 
   const htmlContent = `<!DOCTYPE html>

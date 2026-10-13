@@ -1,3 +1,4 @@
+import { restrictCharacterTags } from '../../i18n/characterTags'
 import { useEffect, useRef, useState } from 'react'
 import type { CharacterProfileDTO } from '../../services/api'
 
@@ -38,7 +39,7 @@ export function GuiBaiProfile({ profile }: GuiBaiProfileProps) {
   }, [])
 
   const name = profile.display_name || '归白'
-  const tags = profile.tags?.length ? profile.tags : ['玄幻', '狐妖', '暗恋', '古风']
+  const tags = (profile.tags?.length || restrictCharacterTags()) ? profile.tags : ['玄幻', '狐妖', '暗恋', '古风']
   const tagCloud = tags.map((t) => `<span>${t}</span>`).join('')
 
   const htmlContent = `<!DOCTYPE html>

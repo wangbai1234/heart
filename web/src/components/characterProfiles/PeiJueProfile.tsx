@@ -1,3 +1,4 @@
+import { restrictCharacterTags } from '../../i18n/characterTags'
 import { useEffect, useRef, useState } from 'react'
 import type { CharacterProfileDTO } from '../../services/api'
 
@@ -38,7 +39,7 @@ export function PeiJueProfile({ profile }: PeiJueProfileProps) {
 
   const name = profile.display_name || '裴决'
   const age = 29
-  const tags = profile.tags?.length ? profile.tags : ['古风', '权谋', '高岭之花', '腹黑']
+  const tags = (profile.tags?.length || restrictCharacterTags()) ? profile.tags : ['古风', '权谋', '高岭之花', '腹黑']
   const tagCloud = tags.map((t) => `#${t}`).join('&nbsp;&nbsp;')
 
   const htmlContent = `<!DOCTYPE html>

@@ -1,3 +1,4 @@
+import { restrictCharacterTags } from '../../i18n/characterTags'
 import { useEffect, useRef, useState } from 'react'
 import type { CharacterProfileDTO } from '../../services/api'
 
@@ -37,7 +38,7 @@ export function GuQingwanProfile({ profile }: GuQingwanProfileProps) {
   }, [])
 
   const name = profile.display_name || '顾清婉'
-  const tags = profile.tags?.length ? profile.tags : ['古风', '郡主', '男性向', '清冷', '权谋']
+  const tags = (profile.tags?.length || restrictCharacterTags()) ? profile.tags : ['古风', '郡主', '男性向', '清冷', '权谋']
   const tagCloud = tags.map((t) => `<span>${t}</span>`).join('')
 
   const htmlContent = `<!DOCTYPE html>

@@ -1,3 +1,4 @@
+import { restrictCharacterTags } from '../../i18n/characterTags'
 import { useEffect, useRef, useState } from 'react'
 import type { CharacterProfileDTO } from '../../services/api'
 
@@ -37,7 +38,7 @@ export function QingyuBandProfile({ profile }: QingyuBandProfileProps) {
   }, [])
 
   const name = profile.display_name || '青羽乐队'
-  const tags = profile.tags?.length ? profile.tags : ['群像', '校园', '全性向', '模拟器', '高自由']
+  const tags = (profile.tags?.length || restrictCharacterTags()) ? profile.tags : ['群像', '校园', '全性向', '模拟器', '高自由']
   const tagCloud = tags.map((t) => `<span>${t}</span>`).join('')
 
   const htmlContent = `<!DOCTYPE html>
