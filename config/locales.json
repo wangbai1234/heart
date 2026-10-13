@@ -1,0 +1,95 @@
+{
+  "version": 1,
+  "default": "en",
+  "locales": [
+    {
+      "code": "zh",
+      "nativeName": "中文",
+      "promptName": "Simplified Chinese",
+      "aliases": [
+        "zh-CN",
+        "zh-SG",
+        "zh-Hans",
+        "zh-Hans-CN"
+      ],
+      "direction": "ltr",
+      "formatLocale": "zh-CN",
+      "specLocale": "zh-CN",
+      "fallback": "en",
+      "status": "live",
+      "promotion": "active"
+    },
+    {
+      "code": "en",
+      "nativeName": "English",
+      "promptName": "English",
+      "aliases": [
+        "en-US",
+        "en-GB"
+      ],
+      "direction": "ltr",
+      "formatLocale": "en",
+      "specLocale": "en-US",
+      "fallback": "en",
+      "status": "draft",
+      "promotion": "paused"
+    },
+    {
+      "code": "vi",
+      "nativeName": "Tiếng Việt",
+      "promptName": "Vietnamese",
+      "aliases": [
+        "vi-VN"
+      ],
+      "direction": "ltr",
+      "formatLocale": "vi-VN",
+      "specLocale": "vi-VN",
+      "fallback": "en",
+      "status": "draft",
+      "promotion": "paused"
+    },
+    {
+      "code": "bn",
+      "nativeName": "বাংলা",
+      "promptName": "Bengali",
+      "aliases": [
+        "bn-BD",
+        "bn-IN"
+      ],
+      "direction": "ltr",
+      "formatLocale": "bn-BD",
+      "specLocale": "bn-BD",
+      "fallback": "en",
+      "status": "draft",
+      "promotion": "paused"
+    },
+    {
+      "code": "ja",
+      "nativeName": "日本語",
+      "promptName": "Japanese",
+      "aliases": [
+        "ja-JP"
+      ],
+      "direction": "ltr",
+      "formatLocale": "ja-JP",
+      "specLocale": "ja-JP",
+      "fallback": "en",
+      "status": "draft",
+      "promotion": "paused"
+    },
+    {
+      "code": "ko",
+      "nativeName": "한국어",
+      "promptName": "Korean",
+      "aliases": [
+        "ko-KR"
+      ],
+      "direction": "ltr",
+      "formatLocale": "ko-KR",
+      "specLocale": "ko-KR",
+      "fallback": "en",
+      "status": "draft",
+      "promotion": "paused"
+    }
+  ]
+}

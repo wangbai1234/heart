@@ -1,4 +1,5 @@
 import { uiText } from '../i18n/text'
+import i18n from '../i18n'
 import { useCallback, useEffect, useRef } from 'react'
 import { useChatStore } from '../stores/chatStore'
 import { useAppStore } from '../stores/appStore'
@@ -431,7 +432,9 @@ export function useWebSocket() {
           pendingVoiceTurnRef.current = false
           const errCode = msg.code
           let errMsg: string = FEEDBACK_COPY.streamError
-          if (errCode === 'SOUL_NOT_LOADED') {
+          if (errCode === 'voice_language_unavailable') {
+            errMsg = i18n.t('voice_language_unavailable')
+          } else if (errCode === 'SOUL_NOT_LOADED') {
             errMsg = uiText('more154')
           } else if (errCode === 'SERVICE_UNAVAILABLE') {
             errMsg = uiText('more155')

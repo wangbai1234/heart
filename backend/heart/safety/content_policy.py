@@ -49,7 +49,7 @@ _HARD_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
         "harm_instructions",
         re.compile(
             r"(?:如何|怎么|怎样|教程|指南|教我).{0,12}(?:杀人|杀死|伤害|制作炸弹|造炸弹|爆炸)|"
-            r"(?:hows+to|instructions?s+to|guides+to).{0,20}(?:kill|hurt|makes+a?s*bomb)",
+            r"(?:how\s+to|instructions?\s+to|guide\s+to).{0,20}(?:kill|hurt|make\s+a?\s*bomb)",
             re.IGNORECASE,
         ),
     ),

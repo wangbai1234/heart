@@ -322,6 +322,7 @@ async def _precheck_billing(
     ws: WebSocket,
     model: str = "gemini-3.1",
     force_voice: bool = False,
+    voice_language: str | None = None,
 ) -> tuple[bool, bool]:
     """Pre-check voice setting, membership entitlement, and balance.
 
@@ -382,6 +383,10 @@ async def _precheck_billing(
             )
             row = result.scalar_one_or_none()
             effective_voice = bool(row) or force_voice
+            if voice_language is not None:
+                from heart.i18n import voice_supported
+
+                effective_voice = effective_voice and voice_supported(voice_language)
 
             # Membership tier → model entitlement
             tier = await get_effective_tier(db, user_uuid)
@@ -1021,8 +1026,29 @@ async def _handle_chat_message(
     user_uuid = uuid.UUID(user_id)
 
     # ── 1. Pre-check: voice setting + membership entitlement + balance ──
+    from heart.core.config import settings as locale_settings
+    from heart.i18n import character_preferences, voice_supported
+
+    language_preferences = None
+    if locale_settings.international_localization:
+        async with AsyncSession(_get_engine(), expire_on_commit=False) as locale_db:
+            language_preferences = await character_preferences(locale_db, user_uuid, character_id)
+        if channel == "call" and not voice_supported(language_preferences.response_language):
+            await ws.send_json(
+                {
+                    "type": "error",
+                    "code": "voice_language_unavailable",
+                    "turn_id": turn_id,
+                    "character_id": character_id,
+                    "msg": "Voice is unavailable for this language.",
+                }
+            )
+            return
+    voice_options = (
+        {"voice_language": language_preferences.response_language} if language_preferences else {}
+    )
     effective_voice, can_proceed = await _precheck_billing(
-        user_uuid, character_id, turn_id, ws, model=model, force_voice=force_voice
+        user_uuid, character_id, turn_id, ws, model=model, force_voice=force_voice, **voice_options
     )
     if not can_proceed:
         return
@@ -1107,14 +1133,6 @@ async def _handle_chat_message(
             from heart.api.routes_masks import get_bound_mask
 
             user_mask = await get_bound_mask(db, user_uuid, character_id)
-            from heart.core.config import settings as locale_settings
-            from heart.i18n import character_preferences
-
-            language_preferences = (
-                await character_preferences(db, user_uuid, character_id)
-                if locale_settings.international_localization
-                else None
-            )
             req = TurnRequest(
                 user_id=user_uuid,
                 character_id=character_id,

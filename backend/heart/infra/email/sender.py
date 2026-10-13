@@ -105,8 +105,26 @@ def render_international_otp(code: str, locale: str, ttl_seconds: int) -> tuple[
     """Render only trusted, server-generated OTP content in the requested locale."""
     from html import escape
 
+    from heart.i18n import normalize_locale
+
+    locale = normalize_locale(locale) or "en"
     minutes = max(1, (ttl_seconds + 59) // 60)
     copy = {
+        "zh": (
+            "yuoyuo 验证码",
+            "你的验证码",
+            f"{minutes} 分钟内有效。如非本人操作，请忽略此邮件。",
+        ),
+        "vi": (
+            "Mã xác minh yuoyuo của bạn",
+            "Mã xác minh của bạn",
+            f"Có hiệu lực trong {minutes} phút. Nếu bạn không yêu cầu mã này, hãy bỏ qua email.",
+        ),
+        "bn": (
+            "আপনার yuoyuo যাচাইকরণ কোড",
+            "আপনার যাচাইকরণ কোড",
+            f"{minutes} মিনিটের জন্য বৈধ। আপনি অনুরোধ না করে থাকলে এই ইমেইলটি উপেক্ষা করুন।",
+        ),
         "en": (
             "Your yuoyuo verification code",
             "Your verification code",

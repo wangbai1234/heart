@@ -152,7 +152,15 @@ def get_display_name(character_id: str) -> str:
 
         spec = get_soul_registry().get_soul(character_id)
         display = spec.display_name
-        name = display.zh or display.ja or display.en
+        name = (
+            display.zh
+            or display.ja
+            or display.en
+            or display.ko
+            or display.vi
+            or display.bn
+            or next(iter(display.localized.values()), None)
+        )
         if name:
             return str(name)
     except Exception:

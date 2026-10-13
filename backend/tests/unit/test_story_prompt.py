@@ -633,3 +633,13 @@ def test_fresh_run_has_empty_memory_by_default():
     assert run.story_memory == {}
     sp = build_gm_system_prompt(_scenario(), run)
     assert "角色记忆" not in sp
+
+
+def test_new_languages_keep_story_parser_protocol():
+    for language, name in [("vi", "Vietnamese"), ("bn", "Bengali")]:
+        messages = build_gm_messages(_scenario(), _run(), [], response_language=language)
+        prompt = messages[0]["content"]
+        assert f"in {name}." in prompt
+        assert "【旁白】" in prompt and "**name**" in prompt and "（action）" in prompt
+        parsed = split_gm_text("【旁白】" + ("Trời tối." if language == "vi" else "রাত নেমেছে।") + "\n**Minh** Xin chào.")
+        assert [row["kind"] for row in parsed] == ["narration", "dialogue"]

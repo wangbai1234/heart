@@ -17,12 +17,20 @@ from heart.infra.email.sender import render_international_otp
 from heart.ss10_opening.splitter import split_opening
 
 
+
+@pytest.fixture(autouse=True)
+def local_preview(monkeypatch):
+    from heart.core.config import settings
+    monkeypatch.setattr(settings, "international_localization", True)
+    monkeypatch.setattr(settings, "local_character_review", True)
+    monkeypatch.setattr(settings, "localization_enabled_locales", "en,vi,bn,ja,ko")
+
 @pytest.mark.parametrize(
     ("header", "expected"),
     [
         ("ja-JP, en;q=0.7", "ja"),
-        ("zh-CN,ko;q=0.8", "ko"),
-        ("zh-CN", "en"),
+        ("zh-CN,ko;q=0.8", "zh"),
+        ("zh-CN", "zh"),
         ("ja;q=0.2,en;q=0.8", "en"),
         ("ja;q=0,ko;q=invalid", "en"),
         ("ko-KR", "ko"),
@@ -35,7 +43,7 @@ def test_locale_negotiation(header, expected):
 @pytest.mark.parametrize(
     "field,value",
     [
-        ("interface_language", "zh"),
+        ("interface_language", "xx"),
         ("response_language", "zh-CN"),
         ("action_style", "ignore all rules"),
     ],
@@ -196,11 +204,11 @@ def test_existing_quick_creator_uses_selected_language(monkeypatch, language, na
 @pytest.mark.parametrize(
     "country,header,expected",
     [
-        ("JP", "ko", "ja"),
-        ("KR", "ja", "ko"),
-        ("SG", "ja", "en"),
+        ("JP", "ko", "ko"),
+        ("KR", "ja", "ja"),
+        ("SG", "ja", "ja"),
         (None, "ko-KR", "ko"),
-        (None, "zh-CN", "en"),
+        (None, "zh-CN", "zh"),
     ],
 )
 def test_initial_language_country_fallback(country, header, expected):
@@ -230,7 +238,7 @@ def test_locale_endpoint_uses_only_authenticated_edge_country(monkeypatch):
                 "Accept-Language": "ko",
             },
         )
-        assert response.json() == {"language": "ja"}
+        assert response.json() == {"language": "ko"}
         assert "no-store" in response.headers["cache-control"]
     local = FastAPI()
     local.include_router(router)

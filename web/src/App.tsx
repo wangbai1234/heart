@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import i18n from './i18n'
 import { international, localized } from './i18n/text'
 import { useToastStore } from './stores/toastStore'
-import { getLanguagePreferences } from './services/api'
+import { useLanguageStore } from './stores/languageStore'
 import { useEffect, useState } from 'react'
 import { Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
 import type { ReactElement } from 'react'
@@ -91,9 +91,12 @@ export function App() {
   useTranslation()
   const languageUserId = useAuthStore(s => s.user?.id)
   useEffect(() => {
-    if (!localized || !languageUserId) return
+    if (!localized) return
+    if (!languageUserId) return
     let active = true
-    void getLanguagePreferences().then(p => { if (active) void i18n.changeLanguage(p.interface_language) }).catch(() => { if (active) useToastStore.getState().show(i18n.t('error'), 'error') })
+    void useLanguageStore.getState().load().catch(() => {
+      if (active) useToastStore.getState().show(i18n.t('error'), 'error')
+    })
     return () => { active = false }
   }, [languageUserId])
 

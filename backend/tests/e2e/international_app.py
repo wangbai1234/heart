@@ -15,7 +15,7 @@ class LanguageAwareTestRouter:
         language = next(
             (
                 language
-                for language in ("English", "Japanese", "Korean")
+                for language in ("English", "Japanese", "Korean", "Vietnamese", "Bengali", "Simplified Chinese")
                 if f"OUTPUT LANGUAGE: Write all dialogue and narration in {language}." in system
             ),
             None,
@@ -23,6 +23,9 @@ class LanguageAwareTestRouter:
         if language is None:
             raise AssertionError("Generation preferences did not reach the model")
         replies = {
+            "Vietnamese": ("Mỉm cười", "Bạn muốn viết câu chuyện nào?"),
+            "Bengali": ("হেসে", "আপনি কী গল্প লিখতে চান?"),
+            "Simplified Chinese": ("微笑", "你想写什么故事？"),
             "English": ("Smiles", "What story would you like to write?"),
             "Japanese": ("微笑む", "どんな物語を書きたいですか？"),
             "Korean": ("미소 짓는다", "어떤 이야기를 쓰고 싶으세요?"),

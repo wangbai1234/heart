@@ -45,8 +45,17 @@ def display_name_from_spec(spec: object, fallback_id: str) -> str:
     if isinstance(spec, dict):
         raw = spec.get("display_name")
         if isinstance(raw, dict):
-            for locale in ("zh", "ja", "ko", "en"):
+            from heart.locales import LOCALE_REGISTRY
+
+            for locale in LOCALE_REGISTRY:
                 value = raw.get(locale)
+                if isinstance(value, str) and value.strip():
+                    return value.strip()
+            for value in (
+                (raw.get("localized") or {}).values()
+                if isinstance(raw.get("localized"), dict)
+                else ()
+            ):
                 if isinstance(value, str) and value.strip():
                     return value.strip()
     return get_display_name(fallback_id)

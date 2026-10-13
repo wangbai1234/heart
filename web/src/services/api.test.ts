@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { international } from '../i18n/text'
+import i18n from '../i18n'
 import { detailToMessage, updateProfile } from './api'
 
 afterEach(() => {
@@ -40,12 +42,12 @@ describe('detailToMessage', () => {
   it('does not expose FastAPI Field required errors to users', () => {
     expect(detailToMessage([
       { loc: ['body'], msg: 'Field required', type: 'missing' },
-    ], 'fallback')).toBe('资料提交不完整，请刷新页面后重试')
+    ], 'fallback')).toBe(international ? i18n.t('fieldInvalid') : '资料提交不完整，请刷新页面后重试')
   })
 
   it('names a missing profile field when FastAPI provides one', () => {
     expect(detailToMessage([
       { loc: ['body', 'birthdate'], msg: 'Field required', type: 'missing' },
-    ], 'fallback')).toBe('请填写出生日期')
+    ], 'fallback')).toBe(international ? i18n.t('fieldInvalid') : '请填写出生日期')
   })
 })

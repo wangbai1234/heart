@@ -242,8 +242,17 @@ async def synthesize(
     request: Request,
     req: SynthesizeRequest,
     current_user: TokenData = Depends(require_age_verified),
+    db: AsyncSession = Depends(get_db),
 ):
     """Synthesize speech from text."""
+    from heart.i18n import character_preferences, voice_supported
+
+    if settings.international_localization:
+        preferences = await character_preferences(
+            db, uuid.UUID(current_user.user_id), req.character_id
+        )
+        if not voice_supported(preferences.response_language):
+            raise HTTPException(status_code=422, detail="voice_language_unavailable")
     voice_service = get_voice_service()
     if not voice_service:
         raise HTTPException(
@@ -1419,6 +1428,13 @@ async def transcribe_audio(
     """
     uid = uuid.UUID(current_user.user_id)
 
+    from heart.i18n import interface_preferences, voice_supported
+
+    if settings.international_localization:
+        preferences = await interface_preferences(db, uid)
+        if not voice_supported(preferences.interface_language):
+            raise HTTPException(status_code=422, detail="voice_language_unavailable")
+
     # Qwen is the primary ASR; MiMo remains the fallback if Qwen is
     # unconfigured or fails. At least one must be configured.
     qwen = get_qwen_asr_provider()
@@ -1582,6 +1598,23 @@ async def asr_stream_ws(ws: WebSocket, token: str | None = Query(None)):
     if not user_id:
         return
 
+    if settings.international_localization:
+        from heart.api.wiring import _get_session_factory
+        from heart.i18n import interface_preferences, voice_supported
+
+        async with _get_session_factory()() as db:
+            preferences = await interface_preferences(db, uuid.UUID(user_id))
+        if not voice_supported(preferences.interface_language):
+            await ws.accept()
+            await ws.send_json(
+                {
+                    "type": "error",
+                    "code": "voice_language_unavailable",
+                    "message": "Voice is unavailable for this language.",
+                }
+            )
+            await ws.close()
+            return
     provider = get_qwen_asr_provider()
     if provider is None:
         await ws.accept()

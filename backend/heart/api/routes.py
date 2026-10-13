@@ -23,6 +23,36 @@ logger = structlog.get_logger()
 router = APIRouter(prefix="/api", tags=["api"])
 
 
+@router.get("/app-config")
+async def public_app_config():
+    """Non-secret runtime rollout contract; territory/checkout remain independent."""
+    from fastapi.responses import JSONResponse
+
+    from heart.i18n import enabled_locales, voice_supported
+    from heart.locales import LOCALE_REGISTRY, REGISTRY_VERSION, RESOURCE_VERSION
+
+    enabled = enabled_locales()
+    return JSONResponse(
+        {
+            "registryVersion": REGISTRY_VERSION,
+            "resourceVersion": RESOURCE_VERSION,
+            "localization": settings.international_localization,
+            "languages": [
+                {
+                    **LOCALE_REGISTRY[code],
+                    "enabled": code in enabled,
+                    "capabilities": {
+                        "text": code in enabled,
+                        "voice": code in enabled and voice_supported(code),
+                    },
+                }
+                for code in LOCALE_REGISTRY
+            ],
+        },
+        headers={"Cache-Control": "private, no-store"},
+    )
+
+
 @router.get("/locale")
 async def initial_language(request: Request):
     """Use country metadata only after the edge middleware authenticated it."""

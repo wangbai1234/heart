@@ -11,6 +11,14 @@ from heart.ss01_soul.draft import CharacterDraft
 from heart.ss05_composer.world_book import select_world_book
 
 
+
+@pytest.fixture(autouse=True)
+def local_preview(monkeypatch):
+    from heart.core.config import settings
+    monkeypatch.setattr(settings, "international_localization", True)
+    monkeypatch.setattr(settings, "local_character_review", True)
+    monkeypatch.setattr(settings, "localization_enabled_locales", "en,vi,bn,ja,ko")
+
 @pytest.mark.asyncio
 async def test_explicit_reader_language_wins_over_creator():
     db = AsyncMock()
@@ -23,7 +31,7 @@ async def test_explicit_reader_language_wins_over_creator():
 @pytest.mark.asyncio
 async def test_creator_language_does_not_mutate_interface():
     db = AsyncMock()
-    db.execute.return_value = SimpleNamespace(scalar_one_or_none=lambda: 'ja')
+    db.execute.return_value = SimpleNamespace(mappings=lambda: SimpleNamespace(first=lambda: {'response_language': 'ja', 'locale': 'ja-JP'}))
     with patch('heart.i18n.load_preferences', AsyncMock(return_value=LanguagePreferences(interface_language='en'))):
         result = await character_preferences(db, uuid4(), 'test')
     assert result.response_language == 'ja'

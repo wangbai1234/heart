@@ -8,9 +8,11 @@ Author: 心屿团队
 Created: 2026-05-17
 """
 
-from typing import Any, Dict, List, Literal, Optional, Union
+from typing import Annotated, Any, Dict, List, Literal, Optional, Union
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+from heart.locales import Locale
 
 # ============================================================
 # Identity Anchor - Core Components
@@ -436,14 +438,22 @@ class DisplayName(BaseModel):
     ja: Optional[str] = None
     ko: Optional[str] = None
     en: Optional[str] = None
+    vi: Optional[str] = None
+    bn: Optional[str] = None
+    localized: dict[Locale, Annotated[str, Field(min_length=1, max_length=60)]] = Field(
+        default_factory=dict
+    )
     pet_self_reference: Optional[str] = None
 
-    @field_validator("zh", "ja", "ko", "en")
-    @classmethod
-    def validate_at_least_one(cls, v, info):
-        """Ensure at least one locale is provided."""
-        # This will be checked at SoulSpec level
-        return v
+    @model_validator(mode="after")
+    def validate_names(self) -> "DisplayName":
+        values = [self.zh, self.ja, self.ko, self.en, self.vi, self.bn, *self.localized.values()]
+        if not any(values) or any(value is not None and not value.strip() for value in values):
+            raise ValueError("At least one nonblank locale name is required")
+        for code, name in self.localized.items():
+            if getattr(self, code, None) is not None and getattr(self, code) != name:
+                raise ValueError("Conflicting locale names")
+        return self
 
     model_config = ConfigDict(extra="forbid")
 
@@ -466,7 +476,7 @@ class SoulSpec(BaseModel):
     schema_version: str = Field(..., pattern=r"^\d+\.\d+$")
     character_id: str = Field(..., pattern=r"^[a-z][a-z0-9_]*$")
     spec_version: str = Field(..., pattern=r"^\d+\.\d+\.\d+$")
-    locale: str = Field(..., pattern=r"^[a-z]{2}-[A-Z]{2}$")
+    locale: str = Field(..., pattern=r"^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{1,8})*$", max_length=64)
 
     # Display name
     display_name: DisplayName
@@ -494,8 +504,8 @@ class SoulSpec(BaseModel):
     @classmethod
     def validate_display_name(cls, v):
         """Ensure at least one locale name is provided."""
-        if not any([v.zh, v.ja, v.ko, v.en]):
-            raise ValueError("At least one of zh/ja/ko/en must be provided in display_name")
+        if not any([v.zh, v.ja, v.ko, v.en, v.vi, v.bn, *v.localized.values()]):
+            raise ValueError("At least one locale name must be provided in display_name")
         return v
 
     model_config = ConfigDict(

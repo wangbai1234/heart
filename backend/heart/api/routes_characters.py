@@ -18,6 +18,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from heart.api.wiring import get_db
 from heart.core.auth import TokenData, get_current_user, get_optional_user
+from heart.i18n import enabled_locales, normalize_locale
+from heart.locales import Locale
 from heart.ss01_soul.character_catalog import (
     CharacterRow,
     build_catalog_entries,
@@ -105,7 +107,7 @@ async def _ensure_publishable_quota(
 @router.get("")
 async def list_characters(
     q: str = "",
-    content_language: Literal["en", "ja", "ko"] | None = None,
+    content_language: Locale | None = None,
     genre: str = "",
     cast_type: Literal["single", "multiple"] | None = None,
     content_rating: Literal["general", "mature"] | None = None,
@@ -195,9 +197,10 @@ async def list_characters(
         for row in content_result:
             spec_data = _coerce_json(row.spec)
             draft_data = _coerce_json(row.draft)
-            content_locales[row.character_id] = str(
-                draft_data.get("response_language") or spec_data.get("locale", "zh-CN")
-            ).split("-")[0]
+            content_locales[row.character_id] = (
+                normalize_locale(str(draft_data.get("locale") or spec_data.get("locale", "zh-CN")))
+                or "zh"
+            )
             discovery_metadata[row.character_id] = {
                 "content_language": content_locales[row.character_id],
                 "intro": str(draft_data.get("intro") or ""),
@@ -228,19 +231,6 @@ async def list_characters(
     review_records = await review_catalog_records(db, catalog_settings.local_character_review)
 
     for e in entries:
-        # Keep the old catalogue in storage; publish supported-language content only.
-        if (
-            catalog_settings.international_localization
-            and not catalog_settings.local_character_review
-            and not e.is_owner
-            and content_locales.get(e.id)
-            not in {
-                "en",
-                "ja",
-                "ko",
-            }
-        ):
-            continue
         entry_dict = asdict(e)
         entry_dict.update(discovery_metadata.get(e.id, {}))
         entry_dict["has_voice"] = has_voice_map.get(e.id, False)
@@ -251,7 +241,7 @@ async def list_characters(
 
             locale = resolve_locale(language if isinstance(language, str) else "en")
             curated = next((item for item in CHARACTERS if item["id"] == e.id), None)
-            if curated:
+            if curated and locale in curated["names"] and locale in curated["taglines"]:
                 entry_dict["display_name"] = curated["names"][locale]
                 entry_dict["tagline"] = curated["taglines"][locale]
         result_list.append(entry_dict)
@@ -505,10 +495,12 @@ async def get_character_profile(
 
         locale = resolve_locale(language if isinstance(language, str) else "en")
         curated = next((item for item in CHARACTERS if item["id"] == character_id), None)
-        if curated:
+        if curated and locale in curated["names"] and locale in curated["taglines"]:
             display_name = curated["names"][locale]
             presentation["tagline"] = curated["taglines"][locale]
-            presentation["intro"] = curated.get("intros", {}).get(locale, curated["persona"])
+            presentation["intro"] = curated.get("intros", {}).get(
+                locale, presentation.get("intro", "")
+            )
             presentation["one_liner"] = ""
 
     return {
@@ -816,6 +808,9 @@ def _derive_content(
         or draft.display_name.ja
         or draft.display_name.ko
         or draft.display_name.en
+        or draft.display_name.vi
+        or draft.display_name.bn
+        or next(iter(draft.display_name.localized.values()), None)
         or character_id
     )
     style_greet = {
@@ -977,6 +972,18 @@ async def upload_character_cover(
     return {"cover_url": cover_url}
 
 
+def _require_authoring_locale(draft: CharacterDraft, previous: dict | None = None) -> None:
+    previous = previous or {}
+    for field in ("locale", "response_language"):
+        value = getattr(draft, field)
+        if value is None:
+            continue
+        code = normalize_locale(value)
+        retained = normalize_locale(str(previous.get(field) or ""))
+        if code not in enabled_locales() and code != retained:
+            raise HTTPException(status_code=422, detail="language_unavailable")
+
+
 @router.post("")
 async def create_character(
     draft: CharacterDraft,
@@ -998,12 +1005,17 @@ async def create_character(
 
     uid = uuid.UUID(current_user.user_id)
 
+    _require_authoring_locale(draft)
+
     # Mint id
     name_zh = (
         draft.display_name.en
         or draft.display_name.ja
         or draft.display_name.ko
         or draft.display_name.zh
+        or draft.display_name.vi
+        or draft.display_name.bn
+        or next(iter(draft.display_name.localized.values()), None)
     )
     character_id = _mint_character_id(name_zh, uid)
 
@@ -1134,7 +1146,7 @@ class OpeningPreviewRequest(BaseModel):
     backstory: str | None = None
     tags: list[str] = []
     greeting_style: str = "warm"
-    response_language: Literal["en", "ja", "ko"] | None = None
+    response_language: Locale | None = None
 
 
 @router.post("/opening-preview")
@@ -1151,6 +1163,7 @@ async def preview_opening(
     the main (high-quality) model here is intentional: this is authoring UI, run
     once per creation, not the per-user hot path.
     """
+    _require_generation_locale(body.response_language)
     persona = (body.persona or "").strip()
     if len(persona) < 20:
         raise HTTPException(status_code=422, detail="请先填写人设（至少 20 字）再生成开场")
@@ -1241,6 +1254,15 @@ async def update_character(
 
     uid = uuid.UUID(current_user.user_id)
     row = await _require_owner(character_id, uid, db)
+    previous_result = await db.execute(
+        text(
+            "SELECT draft FROM soul_specs WHERE character_id=:cid AND status='active' "
+            "ORDER BY created_at DESC LIMIT 1"
+        ),
+        {"cid": character_id},
+    )
+    previous = previous_result.scalar_one_or_none() or {}
+    _require_authoring_locale(draft, previous)
 
     # Bump semver minor (1.0.0 → 1.1.0)
     old_ver = row.get("soul_spec_version") or "1.0.0"
@@ -1583,7 +1605,7 @@ class QuickPrefillRequest(BaseModel):
     display_name: str = Field(min_length=1, max_length=20)
     gender: Literal["male", "female"]
     persona: str = Field(min_length=20, max_length=5000)
-    response_language: Literal["en", "ja", "ko"] | None = None
+    response_language: Locale | None = None
 
 
 class QuickPrefillResponse(BaseModel):
@@ -1649,11 +1671,9 @@ def _localize_creation_prompt(prompt: str, language: str) -> str:
     from heart.core.config import settings as authoring_settings
 
     if authoring_settings.international_localization:
-        from heart.i18n import LANGUAGE_NAMES, resolve_locale
+        from heart.i18n import LANGUAGE_NAMES, effective_locale, resolve_locale
 
-        output_language = LANGUAGE_NAMES[
-            resolve_locale(language if isinstance(language, str) else "en")
-        ]
+        output_language = LANGUAGE_NAMES[effective_locale(resolve_locale(language))]
         prompt = prompt.replace("所有文字字段使用简体中文", f"所有文字字段使用{output_language}")
         prompt += (
             f"\nAll prose values must be written in {output_language}. "
@@ -1661,6 +1681,11 @@ def _localize_creation_prompt(prompt: str, language: str) -> str:
         )
 
     return prompt
+
+
+def _require_generation_locale(language: str | None) -> None:
+    if language and language not in enabled_locales():
+        raise HTTPException(status_code=422, detail="language_unavailable")
 
 
 @router.post("/quick-prefill")
@@ -1677,6 +1702,7 @@ async def quick_prefill(
     """
     from heart.api.wiring import get_model_router
 
+    _require_generation_locale(body.response_language)
     router = get_model_router()
     if router is None:
         msg = "AI 预填暂不可用，请稍后再试或使用「角色创作」模式手动填写"

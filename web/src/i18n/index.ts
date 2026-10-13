@@ -1,57 +1,105 @@
 import { createInstance } from 'i18next'
 import { initReactI18next } from 'react-i18next'
-import en from './locales/en.json'
-import ja from './locales/ja.json'
-import ko from './locales/ko.json'
 import legacy from './legacy.json'
-import zh from './locales/zh.json'
+import { localeAliases, localeRegistry, locales, registryVersion, resourceVersion, type Locale } from './registry'
 
+export { locales, type Locale }
+export const languageNames = Object.fromEntries(localeRegistry.map(row => [row.code, row.nativeName])) as Record<Locale, string>
 const localized = import.meta.env.VITE_LOCALIZATION === 'true'
-
+const deviceKey = 'yuoyuo-explicit-locale'
+let enabled: Locale[] = ['zh']
+let deviceEpoch = 0
+let accountEpoch = 0
+export function accountLocaleRevision(): number { return accountEpoch }
+export function invalidateAccountLocaleRequests(): void { accountEpoch++ }
+let detectedLocale: Locale = 'en'
 const i18n = createInstance()
+const catalogs = import.meta.glob<Record<string, string>>('./locales/*.json', { eager: true, import: 'default' })
+const resources = Object.fromEntries(locales.map(code => [code, { translation: {
+  ...(code === 'zh' ? legacy : {}), ...catalogs[`./locales/${code}.json`],
+} }]))
+const fallbackLng = localized ? Object.fromEntries(localeRegistry.map(row => [row.code, [row.fallback]])) : 'zh'
 
-export const locales = ['en', 'ja', 'ko'] as const
-export type Locale = typeof locales[number]
-export const languageNames: Record<Locale, string> = { en: 'English', ja: '日本語', ko: '한국어' }
-export function supportedLocale(value: string): Locale {
-  const language = value.toLowerCase().split('-')[0]
-  return locales.includes(language as Locale) ? language as Locale : 'en'
+export function normalizeLocale(value: string): Locale | undefined {
+  let code = value.trim().toLowerCase()
+  while (code) {
+    if (localeAliases[code]) return localeAliases[code]
+    if (code.startsWith('zh-hant') || ['zh-tw', 'zh-hk', 'zh-mo'].includes(code)) return undefined
+    const index = code.lastIndexOf('-')
+    code = index > 0 ? code.slice(0, index) : ''
+  }
+  return undefined
 }
-function initialLocale(): Locale {
-  try {
-    const saved = localStorage.getItem('yuoyuo-locale')
-    if (saved) return supportedLocale(saved)
-  } catch { /* Storage is optional in private browsing. */ }
-  return supportedLocale(typeof navigator === 'undefined' ? 'en' : navigator.language)
+export function supportedLocale(value: string): Locale { return normalizeLocale(value) ?? 'en' }
+export function availableLocales(): readonly Locale[] { return enabled }
+function savedDeviceLocale(): Locale | undefined {
+  try { return normalizeLocale(localStorage.getItem(deviceKey) ?? '') } catch { return undefined }
+}
+function effectiveLocale(value: string): Locale {
+  const code = normalizeLocale(value)
+  return code && enabled.includes(code) ? code : enabled.includes('en') ? 'en' : 'zh'
+}
+function browserLocale(): Locale {
+  const languages = typeof navigator === 'undefined' ? ['en'] : navigator.languages?.length ? navigator.languages : [navigator.language]
+  return languages.map(normalizeLocale).find(code => code && enabled.includes(code)) ?? (enabled.includes('en') ? 'en' : 'zh')
+}
+function updateDocument(language: string) {
+  if (typeof document === 'undefined') return
+  const row = localeRegistry.find(item => item.code === supportedLocale(language))!
+  document.documentElement.lang = row.formatLocale
+  document.documentElement.dir = row.direction
 }
 void i18n.use(initReactI18next).init({
-  resources: { zh: { translation: { ...legacy, ...zh } }, en: { translation: en }, ja: { translation: ja }, ko: { translation: ko } },
-  lng: localized ? initialLocale() : 'zh', fallbackLng: localized ? 'en' : 'zh', supportedLngs: localized ? [...locales] : ['zh'],
+  resources,
+  lng: 'zh', fallbackLng, supportedLngs: localized ? [...locales] : ['zh'],
   interpolation: { escapeValue: false }, returnNull: false,
 })
-i18n.on('languageChanged', (language) => {
-  if (typeof document !== 'undefined') document.documentElement.lang = localized ? supportedLocale(language) : 'zh-CN'
-  if (!localized) return
-  try { localStorage.setItem('yuoyuo-locale', supportedLocale(language)) } catch { /* Optional cache. */ }
-})
-if (typeof document !== 'undefined') document.documentElement.lang = localized ? i18n.language : 'zh-CN'
+i18n.on('languageChanged', updateDocument)
+updateDocument(i18n.language)
 export default i18n
 
-/** Resolve once before mounting: saved choice wins over trusted IP detection. */
+/** Only explicit device choices persist; account/detection changes never do. */
+export async function selectDeviceLocale(locale: Locale): Promise<void> {
+  if (!localized || !enabled.includes(locale)) return
+  deviceEpoch++; accountEpoch++
+  try { localStorage.setItem(deviceKey, locale) } catch { /* Optional storage. */ }
+  await i18n.changeLanguage(locale)
+}
+export async function applyAccountLocale(locale: Locale, expectedRevision?: number): Promise<void> {
+  if (expectedRevision !== undefined && expectedRevision !== accountEpoch) return
+  accountEpoch++
+  await i18n.changeLanguage(effectiveLocale(locale))
+}
+export async function restoreDeviceLocale(): Promise<void> {
+  accountEpoch++
+  await i18n.changeLanguage(localized ? effectiveLocale(savedDeviceLocale() ?? detectedLocale) : 'zh')
+}
+
+/** Both assets and runtime must agree before offering language writes. */
 export async function initializeLocale(): Promise<void> {
   if (!localized) return
-  try { if (localStorage.getItem('yuoyuo-locale')) return } catch { /* Optional cache. */ }
+  const epoch = deviceEpoch, account = accountEpoch
   try {
-    const response = await fetch('/api/locale', {
-      headers: { 'Accept-Language': typeof navigator === 'undefined' ? 'en' : navigator.languages.join(',') },
+    const response = await fetch('/api/app-config', { cache: 'no-store', signal: AbortSignal.timeout(1500) })
+    if (!response.ok) return
+    const config = await response.json()
+    if (config.registryVersion !== registryVersion || config.resourceVersion !== resourceVersion || !Array.isArray(config.languages)) return
+    const codes = config.languages.filter((row: { code: string; enabled: boolean }) => row.enabled && locales.includes(row.code as Locale)).map((row: { code: Locale }) => row.code)
+    enabled = config.localization && codes.length ? codes : ['zh']
+    detectedLocale = browserLocale()
+    if (epoch !== deviceEpoch || account !== accountEpoch) return
+    await i18n.changeLanguage(effectiveLocale(savedDeviceLocale() ?? detectedLocale))
+    if (savedDeviceLocale()) return
+    const detection = await fetch('/api/locale', {
+      headers: { 'Accept-Language': typeof navigator === 'undefined' ? 'en' : (navigator.languages?.length ? navigator.languages : [navigator.language]).join(',') },
       cache: 'no-store', signal: AbortSignal.timeout(1500),
     })
-    if (!response.ok) return
-    const data = await response.json()
-    if (typeof data.language === 'string' && locales.includes(data.language as Locale)) {
-      // A manual selection made while detection was in flight always wins.
-      try { if (localStorage.getItem('yuoyuo-locale')) return } catch { /* Optional cache. */ }
-      await i18n.changeLanguage(data.language)
+    if (!detection.ok) return
+    const data = await detection.json()
+    if (epoch !== deviceEpoch || account !== accountEpoch || savedDeviceLocale()) return
+    if (typeof data.language === 'string') {
+      detectedLocale = effectiveLocale(data.language)
+      await i18n.changeLanguage(detectedLocale)
     }
-  } catch { /* Offline/timeout keeps the browser-language fallback. */ }
+  } catch { /* Offline/version mismatch prevents new language writes. */ }
 }

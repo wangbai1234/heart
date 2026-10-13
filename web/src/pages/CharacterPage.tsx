@@ -1,3 +1,4 @@
+import { locales, languageNames } from '../i18n'
 import { useTranslation } from 'react-i18next'
 import { international, localized } from '../i18n/text'
 import { InterfaceLanguageSelect } from '../components/LanguagePreferences'
@@ -707,7 +708,7 @@ export function CharacterPage() {
                 </div>
                 <div className="grid grid-cols-2 gap-2 mb-3">
                   {localized && <select aria-label={t('contentLanguage')} value={contentLanguage} onChange={e => setContentLanguage(e.target.value)} className="min-w-0 bg-transparent text-[16px]">
-                    <option value="">{t('allLanguages')}</option><option value="ja">日本語</option><option value="ko">한국어</option><option value="en">English</option>
+                    <option value="">{t('allLanguages')}</option>{locales.map(code => <option key={code} value={code}>{languageNames[code]}</option>)}
                   </select>}
                   <select aria-label={t('castType')} value={castType} onChange={e => setCastType(e.target.value)} className="min-w-0 bg-transparent text-[16px]">
                     <option value="">{t('allCasts')}</option><option value="single">{t('singleCast')}</option><option value="multiple">{t('multipleCast')}</option>

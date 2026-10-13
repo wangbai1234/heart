@@ -22,6 +22,7 @@ import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from heart.billing.pricing import llm_cost_fen, story_minute_cost_fen
+from heart.i18n import interface_preferences, localized_reply
 
 from . import prompt as gm_prompt
 from . import repository as repo
@@ -176,7 +177,10 @@ class StoryService:
                 session, run_id, limit=gm_prompt.RECENT_TURNS_WINDOW
             )
         tier = await self._resolve_tier(user_id)
-        messages = gm_prompt.build_gm_messages(scenario, run, recent, membership_tier=tier)
+        language = await self._response_language(user_id)
+        messages = gm_prompt.build_gm_messages(
+            scenario, run, recent, membership_tier=tier, response_language=language
+        )
 
         # Two-phase streaming (matches the frontend store contract):
         #   1. During generation: emit raw text_delta frames so the player sees a
@@ -212,7 +216,7 @@ class StoryService:
         from heart.safety.content_policy import evaluate_content_policy
 
         if evaluate_content_policy(full_text, tier).blocked:
-            full_text = "【旁白】这段内容暂时不能继续生成，请改为非露骨的情感或剧情表达。"
+            full_text = "【旁白】" + localized_reply("refusal", language or "zh")
 
         # Release the validated response as one transport chunk so a model slip
         # cannot reach the client before the policy check.
@@ -267,6 +271,15 @@ class StoryService:
 
     # ── helpers ──────────────────────────────────────────────────────
 
+    async def _response_language(self, user_id: UUID) -> str | None:
+        from heart.core.config import settings
+
+        if not settings.international_localization:
+            return None
+        async with self._session_factory() as session:
+            preferences = await interface_preferences(session, user_id)
+            return preferences.response_language
+
     async def _load_run(self, run_id: UUID, user_id: UUID) -> Optional[Run]:
         async with self._session_factory() as session:
             return await repo.get_run(session, run_id, user_id)
@@ -274,7 +287,10 @@ class StoryService:
     async def _generate(self, scenario: Scenario, run: Run, recent_turns: list) -> str:
         """Non-streaming full generation (used for the opening turn)."""
         tier = await self._resolve_tier(run.user_id)
-        messages = gm_prompt.build_gm_messages(scenario, run, recent_turns, membership_tier=tier)
+        language = await self._response_language(run.user_id)
+        messages = gm_prompt.build_gm_messages(
+            scenario, run, recent_turns, membership_tier=tier, response_language=language
+        )
         chunks: list[str] = []
         async for delta in self._router.stream_for(
             run.model or "deepseek", messages, agent_name="story_gm_opening"
@@ -285,7 +301,7 @@ class StoryService:
         from heart.safety.content_policy import evaluate_content_policy
 
         if evaluate_content_policy(full_text, tier).blocked:
-            return "【旁白】这段内容暂时不能继续生成，请改为非露骨的情感或剧情表达。"
+            return "【旁白】" + localized_reply("refusal", language or "zh")
         return full_text
 
     # ── turn pre-flight (PR5) ────────────────────────────────────────

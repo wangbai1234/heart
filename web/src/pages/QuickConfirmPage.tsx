@@ -145,7 +145,7 @@ export function QuickConfirmPage() {
       .then((draft) => {
         if (cancelled) return
         setCoverUrl(draft.cover_url ?? '')
-        setName(draft.display_name?.zh ?? draft.display_name?.en ?? draft.display_name?.ja ?? draft.display_name?.ko ?? '')
+        setName(draft.display_name?.[supportedLocale(draft.locale ?? 'zh')] ?? draft.display_name?.localized?.[supportedLocale(draft.locale ?? 'zh')] ?? draft.display_name?.zh ?? draft.display_name?.en ?? Object.values(draft.display_name?.localized ?? {})[0] ?? '')
         if (draft.gender) setGender(draft.gender)
         setPersona(draft.persona ?? '')
         setLanguage(draft.response_language ?? supportedLocale(draft.locale ?? i18n.language))

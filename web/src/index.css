@@ -275,3 +275,18 @@ body {
 .font-brand {
   font-family: "SF Pro Rounded", -apple-system, system-ui, sans-serif;
 }
+
+
+/* Ship Bengali glyphs locally so preview and production do not depend on
+   a visitor's OS font collection or a third-party font request. */
+@font-face {
+  font-family: 'Yuoyuo Bengali';
+  src: url('/fonts/NotoSansBengali.ttf') format('truetype');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+html:lang(bn) body, html:lang(bn) button, html:lang(bn) input,
+html:lang(bn) textarea, html:lang(bn) select {
+  font-family: 'Yuoyuo Bengali', system-ui, sans-serif;
+}

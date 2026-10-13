@@ -995,7 +995,19 @@ class ComposerService:
           9  Identity re-anchor tail   — combats recency drift, always last
         """
         dn = soul_spec.display_name
-        display_name = dn.zh or dn.ja or dn.ko or dn.en or soul_spec.character_id
+        from heart.i18n import normalize_locale
+
+        code = normalize_locale(soul_spec.locale) or "zh"
+        display_name = (
+            getattr(dn, code, None)
+            or dn.localized.get(code)
+            or dn.zh
+            or dn.ja
+            or dn.ko
+            or dn.en
+            or next(iter(dn.localized.values()), None)
+            or soul_spec.character_id
+        )
         ia = soul_spec.identity_anchor
 
         parts = []
