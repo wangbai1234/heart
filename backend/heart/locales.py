@@ -3,7 +3,7 @@ from typing import Literal
 
 Locale = Literal["zh", "en", "vi", "bn", "ja", "ko"]
 REGISTRY_VERSION = 1
-RESOURCE_VERSION = "00753e7979c18085ba9e"
+RESOURCE_VERSION = "3dac5a7569dc330bc6e9"
 DEFAULT_LOCALE = "en"
 LOCALE_REGISTRY = {
     "zh": {
@@ -27,8 +27,8 @@ LOCALE_REGISTRY = {
         "formatLocale": "en",
         "specLocale": "en-US",
         "fallback": "en",
-        "status": "draft",
-        "promotion": "paused",
+        "status": "live",
+        "promotion": "active",
     },
     "vi": {
         "code": "vi",
@@ -39,8 +39,8 @@ LOCALE_REGISTRY = {
         "formatLocale": "vi-VN",
         "specLocale": "vi-VN",
         "fallback": "en",
-        "status": "draft",
-        "promotion": "paused",
+        "status": "live",
+        "promotion": "active",
     },
     "bn": {
         "code": "bn",
@@ -51,8 +51,8 @@ LOCALE_REGISTRY = {
         "formatLocale": "bn-BD",
         "specLocale": "bn-BD",
         "fallback": "en",
-        "status": "draft",
-        "promotion": "paused",
+        "status": "live",
+        "promotion": "active",
     },
     "ja": {
         "code": "ja",

@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "release_id": "localization-20261013",
+  "batch_id": "top50-release-20261013",
+  "authorization": {
+    "by": "project_owner",
+    "request": "可以进行部署了",
+    "date": "2026-10-13",
+    "scope": "Deploy en/vi/bn localization, 50 editions per locale and responsive fixes"
+  },
+  "resource_version": "3dac5a7569dc330bc6e9",
+  "resource_hashes": {
+    "en": "562662351ae79b8292c98edd05dc07609a66bc65a7e25d70696e2d3361c45c9f",
+    "vi": "58342df7cb5fad8033d9c5ec990202016aaebedd595f22cec4a1728adcea0fbf",
+    "bn": "68644c67516f62f631bd3a5ff929c5c221aeb17ee89eea0878b621e244558f6a"
+  },
+  "package_sha256": "c29b9ea762a96025915a605e2938807380c1fe9a9ffbf3229adf04393dc440a8",
+  "edition_counts": {
+    "en": 50,
+    "vi": 50,
+    "bn": 50
+  },
+  "review_evidence": {
+    "native_language_specialist": "not_completed",
+    "legal_specialist": "not_completed",
+    "real_device_browser": "not_completed",
+    "automated_layout": "64 Chromium/WebKit scenarios passed",
+    "human_reviewed": false
+  },
+  "source_reconciliation": {
+    "zhou_jian": "Only source draft.creation_mode differed (local workshop, production quick). Rebound source digest to production; source spec/text unchanged. New complete authored editions use workshop, required for public publication."
+  },
+  "ranking_snapshot": "2026-09-28 user-authorized existing real traffic snapshot"
+}

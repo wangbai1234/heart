@@ -545,33 +545,33 @@ export function CharacterPage() {
     : 'border border-white/65 bg-white/68 text-[var(--color-text-secondary)] shadow-[0_3px_12px_rgba(90,54,68,0.06)]'
 
   return (
-    <AppPageShell className="app-atmosphere">
+    <AppPageShell className="app-atmosphere character-discovery-page">
       <div className="relative z-10 h-full flex flex-col">
         <div style={{ height: 'calc(var(--safe-top) + 4px)' }} />
 
         <div className="character-discovery-chrome relative z-20 shrink-0">
         {/* Navigation bar — brand logo (login-page style) + search / announcement. */}
-        <div className="relative z-20 mx-auto flex h-[54px] w-full max-w-[1180px] shrink-0 items-center justify-between gap-2.5 px-4 sm:px-5">
+        <div className="discovery-header relative z-20 mx-auto flex h-[54px] w-full max-w-[1180px] shrink-0 items-center justify-between">
           <img
             src="/assets/ui/wordmark.png"
             alt="yuoyuo"
-            className="h-[38px] w-auto shrink-0 select-none"
+            className="discovery-wordmark shrink-0 select-none"
             draggable={false}
           />
-          <div className="flex items-center gap-1.5">
+          <div className={`flex min-w-0 items-center gap-1 ${showSearch ? 'flex-1' : 'shrink-0'}`}>
             {showSearch ? (
-              <div className="flex items-center gap-1.5">
+              <div className="flex w-full min-w-0 items-center gap-1">
                 <input
                   autoFocus
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   placeholder={uiText('ui267')}
-                  className="h-[40px] w-[132px] rounded-[10px] border border-[var(--color-divider)] bg-[var(--color-page-soft)] px-3.5 text-[14px] text-[var(--color-ink)] outline-none transition-colors placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-primary-400)] min-[380px]:w-[176px]"
+                  className="h-[40px] min-w-0 flex-1 rounded-[10px] border border-[var(--color-divider)] bg-[var(--color-page-soft)] px-3.5 text-[14px] text-[var(--color-ink)] outline-none transition-colors placeholder:text-[var(--color-text-muted)] focus:border-[var(--color-primary-400)]"
                 />
                 <button
                   onClick={() => { setShowSearch(false); setQuery('') }}
                   aria-label={uiText('ui268')}
-                  className={`flex h-[40px] w-[40px] items-center justify-center rounded-[12px] transition-colors active:scale-95 ${headerActionClass}`}
+                  className={`flex h-[40px] w-[40px] shrink-0 items-center justify-center rounded-[12px] transition-colors active:scale-95 ${headerActionClass}`}
                 >
                   <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                     <line x1="4" y1="4" x2="12" y2="12" />
@@ -584,14 +584,14 @@ export function CharacterPage() {
                 <button
                   onClick={() => setShowSearch(true)}
                   aria-label={uiText('ui269')}
-                  className={`flex h-[40px] w-[40px] items-center justify-center rounded-[12px] transition-colors active:scale-95 ${headerActionClass}`}
+                  className={`flex h-[40px] w-[40px] shrink-0 items-center justify-center rounded-[12px] transition-colors active:scale-95 ${headerActionClass}`}
                 >
                   <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
                     <circle cx="7" cy="7" r="5" />
                     <line x1="11" y1="11" x2="15" y2="15" />
                   </svg>
                 </button>
-          {localized && <InterfaceLanguageSelect />}
+          {localized && <InterfaceLanguageSelect compact />}
                 <button
                   onClick={() => {
                     if (!isAuthenticated) {
@@ -602,7 +602,7 @@ export function CharacterPage() {
                     setShowOpenLink(true)
                   }}
                   aria-label={uiText('ui270')}
-                  className="flex h-[40px] w-[40px] items-center justify-center rounded-[10px] bg-[var(--color-page-soft)] text-[var(--color-text-secondary)] transition-colors active:scale-95"
+                  className="flex h-[40px] w-[40px] shrink-0 items-center justify-center rounded-[10px] bg-[var(--color-page-soft)] text-[var(--color-text-secondary)] transition-colors active:scale-95"
                 >
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
@@ -612,7 +612,7 @@ export function CharacterPage() {
                 <button
                   onClick={() => isAuthenticated ? setShowAnnounce(true) : requireLogin('/character')}
                   aria-label={uiText('ui271')}
-                  className={`relative flex h-[40px] w-[40px] items-center justify-center rounded-[12px] transition-colors active:scale-95 ${headerActionClass}`}
+                  className={`relative flex h-[40px] w-[40px] shrink-0 items-center justify-center rounded-[12px] transition-colors active:scale-95 ${headerActionClass}`}
                 >
                   <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M8 2.5a3 3 0 0 0-3 3v.9A5.25 5.25 0 0 1 3.2 10.5L2 11.5v1.25h12v-1.25l-1.2-1a5.25 5.25 0 0 1-1.8-4.1v-.9a3 3 0 0 0-3-3Z" />
@@ -629,7 +629,7 @@ export function CharacterPage() {
         </div>
 
         {/* Primary mode tabs (推荐 / 新角色 / 收藏 / 我的) — large, underline-active. */}
-        <div className="relative z-20 mx-auto flex w-full max-w-[1180px] shrink-0 items-center gap-6 overflow-x-auto border-b border-black/[0.045] px-4 pb-1 pt-0.5 no-scrollbar sm:px-5">
+        <div className="discovery-modes relative z-20 mx-auto flex w-full max-w-[1180px] shrink-0 items-center overflow-x-auto border-b border-black/[0.045] pb-1 pt-0.5 no-scrollbar">
           {DISCOVERY_MODES.map((mode) => (
             <button
               key={mode}
@@ -640,7 +640,7 @@ export function CharacterPage() {
                 }
                 setActiveMode(mode)
               }}
-              className={`relative shrink-0 pb-2 text-[16px] transition-colors ${
+              className={`discovery-mode relative shrink-0 pb-2 transition-colors ${
                 activeMode === mode
                   ? `font-bold ${activeModeText}`
                   : `font-semibold ${inactiveModeText}`
@@ -752,7 +752,7 @@ export function CharacterPage() {
         </div>
 
         {/* Discovery grid */}
-        <div ref={gridRef} onScroll={handleGridScroll} className="relative z-10 mx-auto min-h-0 w-full max-w-[1180px] flex-1 overflow-y-auto overscroll-y-contain px-3.5 pb-[120px] pt-1.5 sm:px-5">
+        <div ref={gridRef} onScroll={handleGridScroll} className="discovery-grid-scroll relative z-10 mx-auto min-h-0 w-full max-w-[1180px] flex-1 overflow-y-auto overscroll-y-contain pb-[120px] pt-1.5">
           {/* Pull-to-refresh indicator — height tracks finger pull, snaps to a
               spinner while refreshing. */}
           {(pull > 0 || refreshing) && (
@@ -919,7 +919,7 @@ function DiscoveryCard({
   const displayTags = visibleCharacterTags(tags).slice(0, 2)
 
   return (
-    <div className="group relative flex w-full flex-col overflow-hidden rounded-[14px] border border-white/70 bg-transparent shadow-[0_5px_18px_rgba(73,48,62,0.12)] transition-shadow duration-[var(--duration-normal)] hover:shadow-[0_8px_26px_rgba(73,48,62,0.16)]">
+    <div className="discovery-card group relative flex w-full flex-col overflow-hidden rounded-[14px] border border-white/70 bg-transparent shadow-[0_5px_18px_rgba(73,48,62,0.12)] transition-shadow duration-[var(--duration-normal)] hover:shadow-[0_8px_26px_rgba(73,48,62,0.16)]">
       <button
         onClick={onOpen}
         className="relative aspect-[0.72] w-full text-left transition-opacity active:opacity-90"
@@ -941,21 +941,21 @@ function DiscoveryCard({
         )}
 
         {/* name + hook + interaction data overlay */}
-        <div className="absolute inset-x-0 bottom-0 space-y-1 p-2.5">
-          <p className="text-[15px] font-bold leading-tight text-white line-clamp-1 text-left">{profile.name}</p>
+        <div className="discovery-card-copy absolute inset-x-0 bottom-0">
+          <p className="discovery-card-name font-bold text-white line-clamp-1 text-left">{profile.name}</p>
           {hook && (
-            <p className="text-[12px] leading-[1.5] text-white/95 font-medium line-clamp-2 text-left">
+            <p className="discovery-card-hook text-white/95 font-medium line-clamp-2 text-left">
               {hook}
             </p>
           )}
-          <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 min-w-0">
+          <div className="flex min-w-0 flex-col items-start gap-0.5">
             {/* Server-authoritative cover heat. */}
             {virtualHeat !== undefined && (
               <div className="flex items-center gap-1 flex-shrink-0">
                 <svg className="text-white/85" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M12 2c-1.5 4-4 6-7 7 1 5 3 8 7 11 4-3 6-6 7-11-3-1-5.5-3-7-7z" />
                 </svg>
-                <span className="text-[11px] text-white/85 whitespace-nowrap">{formatPlays(virtualHeat)}</span>
+                <span className="discovery-card-heat text-white/85 whitespace-nowrap">{formatPlays(virtualHeat)}</span>
               </div>
             )}
             {/* Tags row — show only top 2 */}
@@ -964,7 +964,7 @@ function DiscoveryCard({
                 {displayTags.map((tag) => (
                   <span
                     key={tag}
-                    className="block min-w-0 shrink h-[20px] max-w-full truncate rounded-full border border-white/20 bg-black/16 px-2 text-[11px] leading-[18px] text-white/88"
+                    className="discovery-card-tag block min-w-0 max-w-full truncate rounded-full border border-white/20 bg-black/16 px-1.5 text-white/88"
                     title={characterTagLabel(tag)}
                   >
                     {characterTagLabel(tag)}

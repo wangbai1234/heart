@@ -33,6 +33,8 @@ def test_negotiation_rejects_excluded_and_invalid_weights():
 def test_draft_languages_require_preview(preview, monkeypatch):
     assert enabled_locales() == ("zh", "en", "vi", "bn")
     monkeypatch.setattr(settings, "local_character_review", False)
+    assert enabled_locales() == ("zh", "en", "vi", "bn")
+    monkeypatch.setattr(settings, "localization_enabled_locales", "en,ja")
     with pytest.raises(ValueError):
         enabled_locales()
 

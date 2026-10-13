@@ -54,7 +54,7 @@ export function LanguagePreferences() {
   </div>
 }
 
-export function InterfaceLanguageSelect() {
+export function InterfaceLanguageSelect({ compact = false }: { compact?: boolean }) {
   const { t, i18n: current } = useTranslation()
   const userId = useAuthStore(s => s.user?.id)
   const saving = useLanguageStore(s => s.busy)
@@ -64,5 +64,12 @@ export function InterfaceLanguageSelect() {
       else if (!useAuthStore.getState().user) await selectDeviceLocale(locale)
     } catch { if (useAuthStore.getState().user?.id === userId) useToastStore.getState().show(i18n.t('error'), 'error') }
   }
-  return <select aria-label={t('interfaceLanguage')} value={supportedLocale(current.language)} className={selectClass} disabled={saving} onChange={e => void selectLanguage(supportedLocale(e.target.value))}><LanguageOptions /></select>
+  const locale = supportedLocale(current.language)
+  const select = <select aria-label={t('interfaceLanguage')} value={locale} className={compact ? 'absolute inset-0 h-full w-full cursor-pointer opacity-0' : selectClass} disabled={saving} onChange={e => void selectLanguage(supportedLocale(e.target.value))}><LanguageOptions /></select>
+  if (!compact) return select
+  return <div title={languageNames[locale]} className="relative flex h-[40px] w-[64px] shrink-0 items-center justify-center gap-1 rounded-[10px] border border-[var(--color-divider)] bg-[var(--color-page-surface)] text-[12px] text-[var(--color-ink)] focus-within:outline-2 focus-within:outline-[var(--color-primary-400)]">
+    <span aria-hidden="true" className="max-w-[40px] truncate">{locale.toUpperCase()}</span>
+    <svg aria-hidden="true" width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="m3 4.5 3 3 3-3" /></svg>
+    {select}
+  </div>
 }

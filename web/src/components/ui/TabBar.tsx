@@ -84,7 +84,7 @@ function TabButton({
   return (
     <button
       onClick={onClick}
-      className="flex h-[58px] flex-1 flex-col items-center justify-center gap-[3px] active:scale-95 transition-transform duration-[var(--duration-fast)]"
+      className="flex h-[58px] min-w-0 flex-1 flex-col items-center justify-center gap-[3px] active:scale-95 transition-transform duration-[var(--duration-fast)]"
     >
       <div className="relative transition-colors duration-[var(--duration-fast)]">
         {tab.icon(active)}
@@ -97,7 +97,7 @@ function TabButton({
           </span>
         )}
       </div>
-      <span className={`text-[11px] transition-colors duration-[var(--duration-fast)] ${active ? 'text-[var(--color-tab-active)] font-semibold' : 'text-[var(--color-tab-inactive)]'}`}>
+      <span title={tab.label} className={`app-tab-label text-[11px] transition-colors duration-[var(--duration-fast)] ${active ? 'text-[var(--color-tab-active)] font-semibold' : 'text-[var(--color-tab-inactive)]'}`}>
         {tab.label}
       </span>
     </button>
@@ -124,7 +124,7 @@ export function TabBar() {
 
   return (
     <div
-      className="fixed inset-x-0 bottom-0 z-[30] border-t border-[var(--color-divider)] bg-[var(--color-page-surface)]/94 backdrop-blur-[20px] shadow-[0_-6px_22px_rgba(20,20,28,0.06)] md:left-1/2 md:right-auto md:bottom-4 md:w-[calc(100%_-_32px)] md:max-w-[720px] md:-translate-x-1/2 md:rounded-[18px] md:border"
+      className="app-tab-bar fixed inset-x-0 bottom-0 z-[30] border-t border-[var(--color-divider)] bg-[var(--color-page-surface)]/94 backdrop-blur-[20px] shadow-[0_-6px_22px_rgba(20,20,28,0.06)] md:left-1/2 md:right-auto md:bottom-4 md:w-[calc(100%_-_32px)] md:max-w-[720px] md:-translate-x-1/2 md:rounded-[18px] md:border"
       style={{ paddingBottom: 'var(--safe-bottom)' }}
     >
       <div className="flex h-[62px] items-center px-2">
@@ -132,7 +132,7 @@ export function TabBar() {
           <TabButton key={tab.id} tab={tab} active={isActive(tab.path)} onClick={() => openTab(tab.path)} />
         ))}
 
-        <div className="relative flex h-[58px] flex-1 items-center justify-center">
+        <div className="relative flex h-[58px] min-w-0 flex-1 items-center justify-center">
           <button
             onClick={() => openTab('/create')}
             aria-label={uiText('ui136')}
@@ -148,7 +148,7 @@ export function TabBar() {
               </svg>
             </div>
           </button>
-          <span className={`absolute bottom-0 text-[11px] transition-colors duration-[var(--duration-fast)] ${createActive ? 'text-[var(--color-tab-active)] font-semibold' : 'text-[var(--color-tab-inactive)]'}`}>
+          <span title={uiText('ui136')} className={`app-tab-label absolute bottom-0 text-[11px] transition-colors duration-[var(--duration-fast)] ${createActive ? 'text-[var(--color-tab-active)] font-semibold' : 'text-[var(--color-tab-inactive)]'}`}>
             {uiText('ui136')}</span>
         </div>
 

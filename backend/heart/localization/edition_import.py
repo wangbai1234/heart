@@ -20,6 +20,15 @@ async def import_preview(db, records: list[dict], *, batch_id: str) -> list[str]
         "heart_ui_test",
     }:
         raise ValueError("Editorial preview imports require an isolated local database")
+    return await _import_editions(db, records, batch_id=batch_id)
+
+
+async def _import_editions(
+    db, records: list[dict], *, batch_id: str, publish: bool = False
+) -> list[str]:
+    """Shared transactional insertion; entrypoints enforce preview/publication gates."""
+    visibility = "public" if publish else "private"
+    review_status = "approved" if publish else "pending"
     ids = [r["id"] for r in records]
     pairs = [(r["source_id"], r["locale"]) for r in records]
     if not ids or len(set(ids)) != len(ids) or len(set(pairs)) != len(pairs):
@@ -35,10 +44,11 @@ async def import_preview(db, records: list[dict], *, batch_id: str) -> list[str]
         if (
             draft.locale != record["locale"]
             or draft.response_language != record["locale"]
-            or draft.visibility != "private"
+            or draft.visibility != visibility
             or record.get("human_reviewed") is not False
-            or record.get("published") is not False
-            or record.get("review_status") != "editorial_draft"
+            or record.get("published") is not publish
+            or record.get("review_status")
+            != ("owner_authorized_release" if publish else "editorial_draft")
             or record.get("resource_version") != RESOURCE_VERSION
         ):
             raise ValueError("Invalid editorial draft or resource version")
@@ -51,12 +61,18 @@ async def import_preview(db, records: list[dict], *, batch_id: str) -> list[str]
         )
         if digest(current) != record["source_sha256"]:
             raise ValueError("Source changed since export")
+        if publish and (
+            current["status"] != "active"
+            or current["review_status"] != "approved"
+            or current["visibility"] not in {"public", "unlisted"}
+        ):
+            raise ValueError("Source is no longer approved for publication")
         candidate_hash = digest({"draft": record["draft"], "spec": record["spec"]})
         existing = (
             (
                 await db.execute(
                     text("""SELECT candidate_sha256, source_id, locale,
-            source_sha256, batch_id FROM character_editions WHERE character_id=:id"""),
+            source_sha256, batch_id, local_preview FROM character_editions WHERE character_id=:id"""),
                     {"id": cid},
                 )
             )
@@ -70,6 +86,7 @@ async def import_preview(db, records: list[dict], *, batch_id: str) -> list[str]
                 or existing["locale"] != record["locale"]
                 or existing["source_sha256"] != record["source_sha256"]
                 or existing["batch_id"] != batch_id
+                or existing["local_preview"] != (not publish)
             ):
                 raise ValueError("Edition already exists with different content/provenance")
             actual = (
@@ -90,10 +107,12 @@ async def import_preview(db, records: list[dict], *, batch_id: str) -> list[str]
         await db.execute(
             text("""INSERT INTO characters
             (id, owner_user_id, visibility, status, soul_spec_version, tags, cover_url, review_status)
-            VALUES (:id, :owner, 'private', 'active', :version, CAST(:tags AS jsonb), :cover, 'pending')"""),
+            VALUES (:id, :owner, :visibility, 'active', :version, CAST(:tags AS jsonb), :cover, :review)"""),
             {
                 "id": cid,
                 "owner": current["owner_user_id"],
+                "visibility": visibility,
+                "review": review_status,
                 "version": spec.spec_version,
                 "tags": json.dumps(draft.tags),
                 "cover": draft.cover_url,
@@ -109,7 +128,7 @@ async def import_preview(db, records: list[dict], *, batch_id: str) -> list[str]
         await db.execute(
             text("""INSERT INTO character_editions
             (character_id, source_id, locale, source_sha256, candidate_sha256, batch_id, local_preview)
-            VALUES (:id, :source, :locale, :source_hash, :candidate_hash, :batch, TRUE)"""),
+            VALUES (:id, :source, :locale, :source_hash, :candidate_hash, :batch, :preview)"""),
             {
                 "id": cid,
                 "source": record["source_id"],
@@ -117,6 +136,7 @@ async def import_preview(db, records: list[dict], *, batch_id: str) -> list[str]
                 "source_hash": record["source_sha256"],
                 "candidate_hash": candidate_hash,
                 "batch": batch_id,
+                "preview": not publish,
             },
         )
     return ids

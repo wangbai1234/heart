@@ -29,8 +29,8 @@ export const localeRegistry = [
     "formatLocale": "en",
     "specLocale": "en-US",
     "fallback": "en",
-    "status": "draft",
-    "promotion": "paused"
+    "status": "live",
+    "promotion": "active"
   },
   {
     "code": "vi",
@@ -43,8 +43,8 @@ export const localeRegistry = [
     "formatLocale": "vi-VN",
     "specLocale": "vi-VN",
     "fallback": "en",
-    "status": "draft",
-    "promotion": "paused"
+    "status": "live",
+    "promotion": "active"
   },
   {
     "code": "bn",
@@ -58,8 +58,8 @@ export const localeRegistry = [
     "formatLocale": "bn-BD",
     "specLocale": "bn-BD",
     "fallback": "en",
-    "status": "draft",
-    "promotion": "paused"
+    "status": "live",
+    "promotion": "active"
   },
   {
     "code": "ja",
@@ -112,4 +112,4 @@ export const localeAliases: Record<string, Locale> = {
   "ko-kr": "ko"
 }
 export const registryVersion = 1
-export const resourceVersion = '00753e7979c18085ba9e'
+export const resourceVersion = '3dac5a7569dc330bc6e9'
