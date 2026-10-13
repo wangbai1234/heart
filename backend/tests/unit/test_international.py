@@ -189,8 +189,13 @@ def test_composer_prompt_removes_conflicting_legacy_format(language):
         assert "【普通用户内容边界】" not in prompt
     from heart.locales import LANGUAGE_NAMES
 
-    assert f"exclusively in {LANGUAGE_NAMES[language]}" in prompt
-    assert "OUTPUT LANGUAGE:" in prompt
+    if language in {"en", "vi", "bn"}:
+        from heart.ss05_composer.prompt_resources import prompt_text
+
+        assert prompt.endswith(prompt_text(language, "generation"))
+    else:
+        assert f"exclusively in {LANGUAGE_NAMES[language]}" in prompt
+        assert "OUTPUT LANGUAGE:" in prompt
 
 
 @pytest.mark.parametrize("language,name", [("en", "English"), ("ja", "Japanese"), ("ko", "Korean")])

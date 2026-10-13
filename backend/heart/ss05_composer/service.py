@@ -230,7 +230,7 @@ class EmotionContextBlock:
     mood_descriptor: str = "平静"
     energy_descriptor: str = "适中"
     pending_repairs_summary: Optional[str] = None
-    expression_guidelines: Optional[List[str]] = None
+    expression_guidelines: Optional[List[str] | Dict[str, Any]] = None
 
 
 @dataclass
@@ -708,10 +708,14 @@ class ComposerService:
     ) -> AsyncGenerator[str, None]:
         """Route streaming to stream_for (multi-model) or legacy stream_main."""
         _model = ctx.model if ctx.model else "gemini-3.1"
+        from heart.i18n import generation_directive
+
         logger.info(
             "composer_output_language",
             language=ctx.response_language,
-            directive_present="OUTPUT LANGUAGE:" in messages[0]["content"],
+            directive_present=bool(ctx.response_language)
+            and generation_directive(ctx.response_language, ctx.action_style)
+            in messages[0]["content"],
         )
         _has_stream_for = hasattr(self._model_router, "stream_for")
         if _model and _has_stream_for:
@@ -878,6 +882,11 @@ class ComposerService:
             ecb = await self._emotion_service.get_context_block(
                 user_id=ctx.user_id,
                 character_id=ctx.character_id,
+                **(
+                    {"language": ctx.response_language}
+                    if ctx.response_language in {"en", "vi", "bn"}
+                    else {}
+                ),
             )
             return (
                 EmotionContextBlock(
@@ -1016,7 +1025,7 @@ class ComposerService:
         ia = soul_spec.identity_anchor
         from functools import partial
 
-        from heart.ss05_composer.prompt_resources import prompt_text
+        from heart.ss05_composer.prompt_resources import prompt_catalog, prompt_text
 
         p = partial(prompt_text, response_language or "zh")
 
@@ -1179,15 +1188,18 @@ class ComposerService:
 
         if vd_lines:
             parts.append(p("voice") + "\n".join(vd_lines))
-        if example_lines and not response_language:
+        if example_lines and (not response_language or response_language == code):
             from heart.ss05_composer.message_splitter import _wrap_bare_actions_segment
 
             formatted = [_wrap_bare_actions_segment(ex) for ex in example_lines[:5]]
             ex_block = "\n".join(f"「{ex}」" for ex in formatted)
-            parts.append(
-                "\n【真实声音示例】\n"
-                "（注：以下展示语气风格，实际输出时所有动作须加（）括号）\n" + ex_block
-            )
+            if response_language in {"en", "vi", "bn"}:
+                parts.append(p("voice_examples") + ex_block)
+            else:
+                parts.append(
+                    "\n【真实声音示例】\n"
+                    "（注：以下展示语气风格，实际输出时所有动作须加（）括号）\n" + ex_block
+                )
 
         # ── Layer 3.5: Message-format contract (bubble splitter) ──────
         # The frontend renders the reply as a mix of grey action pills and
@@ -1281,7 +1293,28 @@ class ComposerService:
         if emotion.mood_descriptor and emotion.mood_descriptor != "平静":
             parts.append(p("mood", v0=(emotion.mood_descriptor)))
         if emotion.expression_guidelines:
-            parts.append(p("emotion_guidance") + "；".join(emotion.expression_guidelines))
+            guidelines = emotion.expression_guidelines
+            if isinstance(guidelines, dict):
+                # SS03 returns structured state, not prose. Render values instead
+                # of accidentally joining English dictionary keys into the prompt.
+                rendered = []
+                modifier = guidelines.get("sentence_length_modifier", 0)
+                if modifier < 0:
+                    rendered.append(p("expression_short"))
+                elif modifier > 0:
+                    rendered.append(p("expression_long"))
+                if guidelines.get("use_ellipsis"):
+                    rendered.append(p("expression_pause"))
+                for field, key in [
+                    ("avoid_topics", "expression_avoid"),
+                    ("favor_topics", "expression_favor"),
+                ]:
+                    if guidelines.get(field):
+                        rendered.append(p(key, v0="; ".join(guidelines[field])))
+            else:
+                rendered = guidelines
+            if rendered:
+                parts.append(p("emotion_guidance") + "\n".join(rendered))
 
         # ── Layer 6: Relationship context ────────────────────────
         if (
@@ -1289,7 +1322,13 @@ class ComposerService:
             and relationship.relationship_phase
             and relationship.relationship_phase != "stranger"
         ):
-            parts.append(p("relationship", v0=(relationship.relationship_phase)))
+            phase = relationship.relationship_phase
+            phase_key = "phase_" + phase.lower()
+            if response_language in {"en", "vi", "bn"} and phase_key in prompt_catalog(
+                response_language
+            ):
+                phase = p(phase_key)
+            parts.append(p("relationship", v0=phase))
             if relationship.relationship_phase == "cold_war":
                 parts.append(p("cold_war"))
 
@@ -1639,7 +1678,7 @@ class ComposerService:
         if emotion.mood_descriptor:
             emo_parts.append(f"Mood: {emotion.mood_descriptor}")
         if emotion.expression_guidelines:
-            emo_parts.append("Guidelines: " + "; ".join(emotion.expression_guidelines))
+            emo_parts.append("Guidelines: " + str(emotion.expression_guidelines))
         layers["emotion"] = {
             "name": "Emotion (SS03)",
             "content": "\n".join(emo_parts),

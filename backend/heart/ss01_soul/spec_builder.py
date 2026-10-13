@@ -240,6 +240,18 @@ _SAFETY_NEVER = [
 # ── main builder ──────────────────────────────────────────────────────────────
 
 
+def _localized_style_template(style: GreetingStyle, language: str) -> dict[str, Any]:
+    from heart.ss05_composer.prompt_resources import prompt_catalog, prompt_text
+
+    template = dict(_STYLE_TEMPLATES[style])
+    if language in {"en", "vi", "bn"}:
+        for key in template:
+            resource_key = f"default_{style.value}_{key}"
+            if resource_key in prompt_catalog(language):
+                template[key] = prompt_text(language, resource_key)
+    return template
+
+
 def build_soul_spec_from_draft(
     draft: CharacterDraft,
     *,
@@ -260,7 +272,12 @@ def build_soul_spec_from_draft(
         A SoulSpec instance that passes SoulSpec.model_validate.
     """
     today = now or date.today().isoformat()
-    tmpl = _STYLE_TEMPLATES[draft.greeting_style]
+    from functools import partial
+
+    from heart.ss05_composer.prompt_resources import prompt_text
+
+    p = partial(prompt_text, draft.locale)
+    tmpl = _localized_style_template(draft.greeting_style, draft.locale)
     soul = draft.soul_profile
     s = draft.sliders
 
@@ -290,7 +307,7 @@ def build_soul_spec_from_draft(
         voice_dna.append(
             VoiceDNA(
                 id=vd_id,
-                pattern="口癖与说话风格 — 真实对话中的角色声音",
+                pattern=p("sample_pattern"),
                 example=sample,
                 frequency="medium",
             )
@@ -302,7 +319,7 @@ def build_soul_spec_from_draft(
         voice_dna.append(
             VoiceDNA(
                 id=vd_id,
-                pattern="标志性口头禅 — 关键情绪时刻自然出现",
+                pattern=p("catchphrase_pattern"),
                 example=cp,
                 frequency="low",
             )
@@ -311,9 +328,9 @@ def build_soul_spec_from_draft(
     # Always add at least 3 entries based on greeting_style
     needed = max(0, 3 - len(voice_dna))
     style_vd_base = [
-        ("primary", "Characteristic phrasing drawn from the persona description", "high"),
-        ("secondary", "Secondary register — used when the mood shifts", "medium"),
-        ("contextual", "Contextual expression appearing during moments of closeness", "contextual"),
+        ("primary", p("voice_primary"), "high"),
+        ("secondary", p("voice_secondary"), "medium"),
+        ("contextual", p("voice_contextual"), "contextual"),
     ]
     for i in range(needed):
         label, pattern, freq = style_vd_base[i]
@@ -328,19 +345,19 @@ def build_soul_spec_from_draft(
     # ── identity_narrative from persona + backstory + basic attributes ──────────
     # gender and age_range were silently dropped before this fix — they are now
     # prepended so the LLM knows basic persona facts the creator intended.
-    _gender_zh = {"male": "男性", "female": "女性"}
+    _gender_zh = {"male": p("male"), "female": p("female")}
     attr_parts: list[str] = []
     if draft.gender and draft.gender in _gender_zh:
-        attr_parts.append(f"性别：{_gender_zh[draft.gender]}")
+        attr_parts.append(p("gender") + _gender_zh[draft.gender])
     if draft.age_range:
-        attr_parts.append(f"年龄：{draft.age_range}岁")
+        attr_parts.append(p("age_attribute", v0=draft.age_range))
 
     narrative_parts: list[str] = []
     if attr_parts:
         narrative_parts.append("【" + "，".join(attr_parts) + "】\n")
     narrative_parts.append(draft.persona)
     if draft.backstory:
-        narrative_parts.append(f"\n【过往】{draft.backstory}")
+        narrative_parts.append(p("backstory_attribute", v0=draft.backstory))
     identity_narrative = "".join(narrative_parts)
 
     # ── hard_never: safety baseline + creator-defined rules ──────────────────

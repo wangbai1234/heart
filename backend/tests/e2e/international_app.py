@@ -12,7 +12,12 @@ class LanguageAwareTestRouter:
             assert "OUTPUT LANGUAGE:" not in system
             assert "必须用中文全角括号" in system
             return "（微笑）你想聊什么？"
-        language = next(
+        from heart.locales import LANGUAGE_NAMES
+        from heart.ss05_composer.prompt_resources import prompt_text
+
+        native = next((LANGUAGE_NAMES[code] for code in ("en", "vi", "bn")
+                       if prompt_text(code, "generation") in system), None)
+        language = native or next(
             (
                 language
                 for language in ("English", "Japanese", "Korean", "Vietnamese", "Bengali", "Simplified Chinese")

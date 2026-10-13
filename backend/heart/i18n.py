@@ -146,8 +146,10 @@ def generation_directive(language: str, action_style: str) -> str:
     """Only allowlisted values enter the system prompt."""
     from heart.ss05_composer.prompt_resources import prompt_text
 
+    if language in {"en", "vi", "bn"}:
+        return "\n" + prompt_text(language, "generation")
+
     name = LANGUAGE_NAMES.get(language, "English")
-    # Stable diagnostic marker; the actual instructions and example are native.
     return (
         f"\nOUTPUT LANGUAGE: Write all dialogue and narration exclusively in {name}.\n"
         f"{_NATIVE_OUTPUT_RULES.get(language, '')}\n"
