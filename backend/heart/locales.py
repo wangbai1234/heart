@@ -3,7 +3,7 @@ from typing import Literal
 
 Locale = Literal["zh", "en", "vi", "bn", "ja", "ko"]
 REGISTRY_VERSION = 1
-RESOURCE_VERSION = "0dfb55bcaf1f3b7d5a97"
+RESOURCE_VERSION = "00753e7979c18085ba9e"
 DEFAULT_LOCALE = "en"
 LOCALE_REGISTRY = {
     "zh": {

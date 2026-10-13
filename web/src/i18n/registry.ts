@@ -112,4 +112,4 @@ export const localeAliases: Record<string, Locale> = {
   "ko-kr": "ko"
 }
 export const registryVersion = 1
-export const resourceVersion = '0dfb55bcaf1f3b7d5a97'
+export const resourceVersion = '00753e7979c18085ba9e'

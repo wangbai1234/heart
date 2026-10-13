@@ -17,13 +17,14 @@ from heart.infra.email.sender import render_international_otp
 from heart.ss10_opening.splitter import split_opening
 
 
-
 @pytest.fixture(autouse=True)
 def local_preview(monkeypatch):
     from heart.core.config import settings
+
     monkeypatch.setattr(settings, "international_localization", True)
     monkeypatch.setattr(settings, "local_character_review", True)
     monkeypatch.setattr(settings, "localization_enabled_locales", "en,vi,bn,ja,ko")
+
 
 @pytest.mark.parametrize(
     ("header", "expected"),
@@ -146,10 +147,8 @@ def test_websocket_and_http_require_authenticated_non_cn_edge():
                 pass
 
 
-@pytest.mark.parametrize(
-    "language,marker", [("ja", "*action*"), ("ko", "(action)"), ("en", "（action）")]
-)
-def test_composer_prompt_removes_conflicting_legacy_format(language, marker):
+@pytest.mark.parametrize("language", ["ja", "ko", "en", "vi", "bn"])
+def test_composer_prompt_removes_conflicting_legacy_format(language):
     from heart.ss01_soul.draft import CharacterDraft, DisplayNameDraft
     from heart.ss01_soul.spec_builder import build_soul_spec_from_draft
     from heart.ss05_composer.service import (
@@ -170,7 +169,6 @@ def test_composer_prompt_removes_conflicting_legacy_format(language, marker):
         character_id="test_intl",
         now="2026-10-07",
     )
-    styles = {"ja": "asterisks", "ko": "parentheses", "en": "fullwidth"}
     prompt = ComposerService.__new__(ComposerService)._build_system_prompt(
         anchor=AnchorContextBlock(),
         memory=MemoryContextBlock(),
@@ -179,12 +177,15 @@ def test_composer_prompt_removes_conflicting_legacy_format(language, marker):
         inner_state=InnerStateContextBlock(),
         soul_spec=spec,
         response_language=language,
-        action_style=styles[language],
+        action_style="fullwidth",
     )
     assert "（action）" in prompt
-    assert "必须用中文全角括号" in prompt
-    assert "嵌套或特殊场景可用【】兜底" in prompt
-    assert "- 正确示例：（微微一笑）你来了。（目光中带着审视）最近在忙什么？" in prompt
+    assert "in Chinese, with no English meta-text" not in prompt
+    assert "- 正确示例：（微微一笑）" not in prompt
+    assert "Use 【】 only as the legacy fallback" in prompt
+    from heart.locales import LANGUAGE_NAMES
+
+    assert f"exclusively in {LANGUAGE_NAMES[language]}" in prompt
     assert "OUTPUT LANGUAGE:" in prompt
 
 
@@ -275,5 +276,12 @@ def test_paused_localization_preserves_creator_prompt_and_country_block(monkeypa
     app.include_router(router)
     app.add_middleware(InternationalAccessMiddleware, enabled=True, origin_secret="edge-test")
     with TestClient(app) as client:
-        assert client.get("/api/locale", headers={"CF-IPCountry": "JP", "X-Yuoyuo-Origin": "edge-test"}).json() == {"language": "zh"}
-        assert client.get("/api/locale", headers={"CF-IPCountry": "CN", "X-Yuoyuo-Origin": "edge-test"}).status_code == 403
+        assert client.get(
+            "/api/locale", headers={"CF-IPCountry": "JP", "X-Yuoyuo-Origin": "edge-test"}
+        ).json() == {"language": "zh"}
+        assert (
+            client.get(
+                "/api/locale", headers={"CF-IPCountry": "CN", "X-Yuoyuo-Origin": "edge-test"}
+            ).status_code
+            == 403
+        )

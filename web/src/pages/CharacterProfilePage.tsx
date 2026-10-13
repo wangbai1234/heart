@@ -1,3 +1,4 @@
+import { characterTagLabel } from '../i18n/characterTags'
 import { useTranslation } from 'react-i18next'
 import { uiText } from '../i18n/text'
 import { useEffect, useMemo, useState } from 'react'
@@ -1229,7 +1230,7 @@ function pickTheme(tags: string[]): Theme {
  * empty and simply don't render.
  */
 export function CharacterProfilePage() {
-  useTranslation()
+  const { i18n } = useTranslation()
   const navigate = useNavigate()
   const location = useLocation()
   const safeBack = useSafeBack('/character')
@@ -1240,10 +1241,12 @@ export function CharacterProfilePage() {
   const goBack = fromCreate ? () => navigate('/create', { replace: true }) : safeBack
   const { id = '' } = useParams<{ id: string }>()
   const setCharacter = useAppStore((s) => s.setCharacter)
-  const authenticated = useAuthStore((s) => !!s.accessToken)
+  const accessToken = useAuthStore((s) => s.accessToken)
+  const authenticated = !!accessToken
   const showLogin = useAuthPromptStore((s) => s.show)
   const companions = useCompanionsStore((s) => s.companions)
   const loadCompanions = useCompanionsStore((s) => s.load)
+  const catalogRevision = useCharactersStore((s) => s.revision)
   const loadProfile = useCharactersStore((s) => s.loadProfile)
   const storeCharacters = useCharactersStore((s) => s.characters)
   const showToast = useToastStore((s) => s.show)
@@ -1283,7 +1286,7 @@ export function CharacterProfilePage() {
     return () => {
       alive = false
     }
-  }, [id, loadProfile])
+  }, [id, loadProfile, i18n.language, accessToken, catalogRevision])
 
   // Count every real navigation into the profile. This deliberately sits
   // outside loadProfile(): cached profile reads must still count, while React
@@ -1463,7 +1466,7 @@ export function CharacterProfilePage() {
                     ? { color: chrome.chipActiveText, borderColor: chrome.chipActiveBorder, background: chrome.chipActiveBg }
                     : { color: chrome.chipInactiveText, borderColor: chrome.chipInactiveBorder, background: chrome.chipInactiveBg }
                   }
-                >{t}</span>
+                >{characterTagLabel(t)}</span>
               ))}
             </div>
           )}
@@ -1520,7 +1523,7 @@ export function CharacterProfilePage() {
 
         {/* bespoke 叙事内容（iframe） */}
         <div className="mt-6">
-          <BespokeProfile profile={profile} />
+          <BespokeProfile profile={{ ...profile, tags: profile.tags.map(tag => characterTagLabel(tag)) }} />
         </div>
       </div>
     )
@@ -1652,7 +1655,7 @@ export function CharacterProfilePage() {
                   color: chrome.chipInactiveText,
                 }}
               >
-                {t}
+                {characterTagLabel(t)}
               </span>
             ))}
           </div>
@@ -1846,7 +1849,7 @@ export function CharacterProfilePage() {
                     className="inline-flex h-[26px] items-center rounded-full px-3 text-[12px]"
                     style={{ background: 'rgba(255,255,255,0.08)', color: '#D4C7BA' }}
                   >
-                    {t}
+                    {characterTagLabel(t)}
                   </span>
                 ))}
               </div>

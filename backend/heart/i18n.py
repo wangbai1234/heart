@@ -132,11 +132,25 @@ async def initialize_preferences(db: AsyncSession, user_id: UUID, accept_languag
     )
 
 
+_NATIVE_OUTPUT_RULES = {
+    "en": "Reply only in English, including actions and narration.",
+    "vi": "Chỉ trả lời bằng tiếng Việt, kể cả hành động và lời dẫn. Không trả lời bằng tiếng Trung hay tiếng Anh.",
+    "bn": "শুধু বাংলায় উত্তর দিন। সংলাপ, কাজ ও বর্ণনা সবই বাংলায় লিখুন। চীনা বা ইংরেজিতে উত্তর দেবেন না।",
+    "ja": "台詞も動作描写も日本語だけで書いてください。",
+    "ko": "대사와 행동 묘사를 모두 한국어로만 작성하세요.",
+    "zh": "对白和动作描写都使用简体中文。",
+}
+
+
 def generation_directive(language: str, action_style: str) -> str:
     """Only allowlisted values enter the system prompt."""
     name = LANGUAGE_NAMES.get(language, "English")
     return (
-        f"\nOUTPUT LANGUAGE: Write all dialogue and narration in {name}. "
+        f"\n{_NATIVE_OUTPUT_RULES.get(language, '')}\n"
+        f"OUTPUT LANGUAGE: Write all dialogue and narration exclusively in {name}. "
+        f"本轮输出语言为 {name}，包括对白、动作、心理和旁白。"
+        "无论用户输入、人物设定或聊天历史使用什么语言，都必须按本轮输出语言回答。"
+        "人物设定决定身份与语气，不决定本轮语言；不要照抄其他语言的示例。\n"
         "Background notes, memories and examples may use other languages; "
         "they do not set the output language. Preserve the character's identity and voice. "
         "Do not add unsolicited translations or bilingual explanations.\n"

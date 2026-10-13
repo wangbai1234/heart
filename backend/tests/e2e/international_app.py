@@ -16,7 +16,7 @@ class LanguageAwareTestRouter:
             (
                 language
                 for language in ("English", "Japanese", "Korean", "Vietnamese", "Bengali", "Simplified Chinese")
-                if f"OUTPUT LANGUAGE: Write all dialogue and narration in {language}." in system
+                if f"OUTPUT LANGUAGE: Write all dialogue and narration exclusively in {language}." in system
             ),
             None,
         )

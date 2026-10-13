@@ -1,7 +1,6 @@
 import { GoogleCallbackPage } from './pages/GoogleCallbackPage'
 import { SharedMemoriesPage } from './pages/SharedMemoriesPage'
 import { useTranslation } from 'react-i18next'
-import i18n from './i18n'
 import { international, localized } from './i18n/text'
 import { useToastStore } from './stores/toastStore'
 import { useLanguageStore } from './stores/languageStore'
@@ -88,7 +87,7 @@ const SKIP_SAVE_ROUTES = new Set(['/splash', '/login', '/register', '/forgot-pas
 const PROMOTION_NOTICE_VERSION = 'v1'
 
 export function App() {
-  useTranslation()
+  const { i18n } = useTranslation()
   const languageUserId = useAuthStore(s => s.user?.id)
   useEffect(() => {
     if (!localized) return
@@ -181,7 +180,7 @@ export function App() {
     if (accessToken) {
       void loadCompanions(true)
     }
-  }, [accessToken, loadCharacters, loadCompanions, resetCharacterCatalog, resetCompanions])
+  }, [accessToken, i18n.language, loadCharacters, loadCompanions, resetCharacterCatalog, resetCompanions])
 
   // Hydrate the server catalog and cross-device per-character selections.
   // An empty server map leaves migrated local choices intact; characters with

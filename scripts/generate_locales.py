@@ -14,6 +14,7 @@ def generate() -> dict[Path, str]:
     digest = hashlib.sha256()
     digest.update(json.dumps(registry, sort_keys=True, ensure_ascii=False).encode())
     digest.update((ROOT / 'web/src/i18n/legacy.json').read_bytes())
+    digest.update((ROOT / 'web/src/i18n/characterTags.json').read_bytes())
     for row in rows:
         resource = ROOT / f'web/src/i18n/locales/{row["code"]}.json'
         digest.update(resource.read_bytes())

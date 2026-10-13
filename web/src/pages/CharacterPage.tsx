@@ -1,3 +1,4 @@
+import { characterTagLabel } from '../i18n/characterTags'
 import { locales, languageNames } from '../i18n'
 import { useTranslation } from 'react-i18next'
 import { international, localized } from '../i18n/text'
@@ -234,7 +235,7 @@ function stableShuffleScore(id: string): number {
 }
 
 export function CharacterPage() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const isAuthenticated = useAuthStore((s) => !!s.accessToken)
   const showAuthPrompt = useAuthPromptStore((state) => state.show)
@@ -417,10 +418,10 @@ export function CharacterPage() {
   }, [items])
 
   // Pinned tags row — fixed order (全部 + 女性向/男性向/.../霸总), always shown.
-  const pinnedTagChips = useMemo(() => [TAG_ALL, ...(international ? Array.from(new Set(serverCharacters.flatMap(c => c.tags ?? []))).slice(0, 10) : PINNED_TAGS)], [serverCharacters])
+  const pinnedTagChips: readonly string[] = [TAG_ALL, ...PINNED_TAGS]
 
   // Extra tags for the「筛选」popup — fixed, hardcoded list (see EXTRA_FILTER_TAGS).
-  const extraFilterChips = useMemo(() => international ? Array.from(new Set(serverCharacters.flatMap(c => c.tags ?? []))).slice(10) : [...EXTRA_FILTER_TAGS], [serverCharacters])
+  const extraFilterChips = useMemo(() => international ? Array.from(new Set(serverCharacters.flatMap(c => c.tags ?? []))).filter(tag => !PINNED_TAGS.includes(tag as typeof PINNED_TAGS[number])) : [...EXTRA_FILTER_TAGS], [serverCharacters])
 
   const heatMap = useMemo(
     () => buildCharacterHeatMap(rankedItems),
@@ -465,7 +466,7 @@ export function CharacterPage() {
     if (q) {
       base = base.filter((it) => {
         const metadata = serverCharacters.find(c => c.id === it.id)
-        const hay = `${metadata?.intro ?? ''} ${metadata?.creator_name ?? ''} ${it.profile.name} ${(it.profile.tags ?? []).join(' ')} ${it.profile.tagline ?? ''}`.toLowerCase()
+        const hay = `${metadata?.intro ?? ''} ${metadata?.creator_name ?? ''} ${it.profile.name} ${(it.profile.tags ?? []).flatMap(tag => [tag, characterTagLabel(tag)]).join(' ')} ${it.profile.tagline ?? ''}`.toLowerCase()
         return hay.includes(q)
       })
     }
@@ -493,7 +494,7 @@ export function CharacterPage() {
     }
 
     return base
-  }, [rankedItems, activeMode, activeTag, query, isFavorite, serverCharacters, contentLanguage, castType, contentRating])
+  }, [rankedItems, activeMode, activeTag, query, isFavorite, serverCharacters, contentLanguage, castType, contentRating, i18n.language])
 
   const [visibleCount, setVisibleCount] = useState(INITIAL_VISIBLE_ITEMS)
 
@@ -656,7 +657,7 @@ export function CharacterPage() {
                       : `bg-transparent ${inactiveTagText} font-medium`
                   }`}
                 >
-                  {international && tag !== TAG_ALL ? tag : uiLabel(tag)}
+                  {characterTagLabel(tag)}
                   {activeTag === tag && (
                     <span className="sr-only">{uiText('ui272')}</span>
                   )}
@@ -727,9 +728,9 @@ export function CharacterPage() {
                           ? 'bg-[var(--color-primary)] text-white border-transparent font-bold'
                           : `${filterChipIdle} font-semibold`
                       }`}
-                      title={international && tag !== TAG_ALL ? tag : uiLabel(tag)}
+                      title={characterTagLabel(tag)}
                     >
-                      {international && tag !== TAG_ALL ? tag : uiLabel(tag)}
+                      {characterTagLabel(tag)}
                     </button>
                   ))}
                 </div>
@@ -936,7 +937,7 @@ function DiscoveryCard({
               {hook}
             </p>
           )}
-          <div className="flex items-center justify-between gap-2 min-w-0">
+          <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 min-w-0">
             {/* Server-authoritative cover heat. */}
             {virtualHeat !== undefined && (
               <div className="flex items-center gap-1 flex-shrink-0">
@@ -948,14 +949,14 @@ function DiscoveryCard({
             )}
             {/* Tags row — show only top 2 */}
             {displayTags.length > 0 && (
-              <div className="flex gap-2 min-w-0 flex-shrink">
+              <div className="flex flex-wrap gap-1 min-w-0 max-w-full">
                 {displayTags.map((tag) => (
                   <span
                     key={tag}
-                    className="inline-flex h-[20px] max-w-[72px] items-center truncate rounded-full border border-white/20 bg-black/16 px-2 text-[11px] text-white/88"
-                    title={international && tag !== TAG_ALL ? tag : uiLabel(tag)}
+                    className="block h-[20px] max-w-full truncate rounded-full border border-white/20 bg-black/16 px-2 text-[11px] leading-[18px] text-white/88"
+                    title={characterTagLabel(tag)}
                   >
-                    {international && tag !== TAG_ALL ? tag : uiLabel(tag)}
+                    {characterTagLabel(tag)}
                   </span>
                 ))}
               </div>
