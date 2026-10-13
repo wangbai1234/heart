@@ -78,6 +78,9 @@ const VISIBLE_ITEMS_BATCH = 24
  */
 
 interface GridItem {
+  localPreview?: boolean
+  discoveryHidden?: boolean
+  languagePriority?: number
   localReview?: boolean
   id: string
   profile: CharacterProfile
@@ -367,6 +370,9 @@ export function CharacterPage() {
           visibility: c.visibility,
           reviewStatus: c.review_status,
           localReview: Boolean(c.local_review),
+          localPreview: c.local_preview,
+          discoveryHidden: c.discovery_hidden,
+          languagePriority: c.language_priority,
           companion: companionById.get(c.id),
           chatUserCount: c.chat_user_count,
           displayHeat: c.display_heat,
@@ -440,10 +446,10 @@ export function CharacterPage() {
       // 推荐 = 全部可发现角色（public+approved + built-ins + own）。编辑精选只作为
       //「排序」体现（featured 置顶 + 女性向优先，见下方 SORT），不再作为「过滤」把
       // 别的用户公开+审核通过的角色挡在外面——否则 推荐+全部 下这些角色永远不出现。
-      base = rankedItems.filter(isDiscoverableCharacter)
+      base = rankedItems.filter(it => !it.discoveryHidden && isDiscoverableCharacter(it))
     } else if (activeMode === MODE_NEWEST) {
       // 新角色 = 所有可见角色（内置+UGC）按 created_at DESC
-      base = rankedItems.filter(isDiscoverableCharacter)
+      base = rankedItems.filter(it => !it.discoveryHidden && isDiscoverableCharacter(it))
     } else if (activeMode === MODE_FAVORITES) {
       // 收藏 = user's favorited characters (can include private/unlisted own UGC)
       base = rankedItems.filter((it) => isFavorite(it.id))
@@ -451,7 +457,7 @@ export function CharacterPage() {
       // 我的 = all own characters (public + unlisted + private), bypass discovery gate
       base = rankedItems.filter((it) => it.isOwner)
     } else {
-      base = rankedItems.filter(isDiscoverableCharacter)
+      base = rankedItems.filter(it => !it.discoveryHidden && isDiscoverableCharacter(it))
     }
 
     // **TIER-2: TAG** — apply tag filter on top of mode set
@@ -496,6 +502,8 @@ export function CharacterPage() {
       })
     }
 
+    // Stable partition after every mode/search sort; old favorites keep their IDs.
+    if (localized) base.sort((a, b) => (a.languagePriority ?? 1) - (b.languagePriority ?? 1))
     return base
   }, [rankedItems, activeMode, activeTag, query, isFavorite, serverCharacters, contentLanguage, castType, contentRating, i18n.language])
 
@@ -507,7 +515,7 @@ export function CharacterPage() {
   // requested by the browser.
   useEffect(() => {
     setVisibleCount(INITIAL_VISIBLE_ITEMS)
-  }, [activeMode, activeTag, query])
+  }, [activeMode, activeTag, query, contentLanguage, castType, contentRating, i18n.language])
 
   const visibleItems = useMemo(
     () => filtered.slice(0, visibleCount),

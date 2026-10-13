@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from heart.api.wiring import get_db
 from heart.core.auth import TokenData, get_current_user
+from heart.localization.editions import local_preview_ids
 
 router = APIRouter(prefix="/api/masks", tags=["masks"])
 
@@ -46,10 +47,10 @@ async def _ensure_character_visible(db: AsyncSession, uid: uuid.UUID, character_
     result = await db.execute(
         text(
             """SELECT 1 FROM characters WHERE id = :cid AND status = 'active'
-               AND (owner_user_id = :uid OR (visibility IN ('public', 'unlisted') AND review_status = 'approved'))
+               AND (owner_user_id = :uid OR id = ANY(:preview_ids) OR (visibility IN ('public', 'unlisted') AND review_status = 'approved'))
                LIMIT 1"""
         ),
-        {"cid": character_id, "uid": uid},
+        {"cid": character_id, "uid": uid, "preview_ids": await local_preview_ids(db)},
     )
     if result.scalar_one_or_none() is None:
         from heart.ss01_soul.character_catalog import is_known_character

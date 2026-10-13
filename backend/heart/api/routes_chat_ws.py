@@ -23,6 +23,7 @@ from sqlalchemy import text as sql_text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from heart.core.auth import TokenData, auth_manager, get_current_user
+from heart.localization.editions import local_preview_ids
 from heart.ss01_soul.character_catalog import ensure_character_loaded
 
 from .wiring import _get_engine, get_db, get_orchestrator, get_voice_service
@@ -2260,12 +2261,13 @@ async def get_inbox_summary(
                AND c.status = 'active'
                AND (
                      c.owner_user_id = :uid
+                     OR c.id = ANY(:preview_ids)
                      OR (c.visibility = 'public' AND c.review_status = 'approved')
                )
             LEFT JOIN user_character_read_state rs
                 ON rs.user_id = :uid AND rs.character_id = m.character_id
         """),
-        {"uid": uid},
+        {"uid": uid, "preview_ids": await local_preview_ids(db)},
     )
     rows = result.mappings().all()
     return {

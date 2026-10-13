@@ -163,6 +163,7 @@ def build_catalog_entries(
     display_names: dict[str, str | None] | None = None,
     *,
     local_review: bool = False,
+    preview_ids: set[str] | None = None,
 ) -> list[CharacterEntry]:
     """Shape visible rows into API entries ordered by persisted recommendation score.
 
@@ -218,7 +219,8 @@ def build_catalog_entries(
             creation_mode=creation_modes.get(row.id),
         )
         for row in rows
-        if (
+        if (row.id in (preview_ids or set()) and row.status == "active")
+        or (
             row.status == "active"
             and row.visibility in {"public", "unlisted"}
             and row.review_status == "approved"

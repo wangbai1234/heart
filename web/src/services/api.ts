@@ -1039,6 +1039,10 @@ export async function generateOpening(characterId: string): Promise<{
  * (avatar / colors) remain a frontend concern — see resolveCharacterProfile.
  */
 export interface CharacterDTO {
+  local_preview?: boolean
+  discovery_hidden?: boolean
+  language_priority?: number
+  edition?: { character_id: string; source_id: string; locale: string } | null
   creator_name?: string
   intro?: string
   content_language?: string

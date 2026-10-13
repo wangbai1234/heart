@@ -20,6 +20,7 @@ from heart.api.wiring import get_db
 from heart.core.auth import TokenData, get_current_user, get_optional_user
 from heart.i18n import enabled_locales, normalize_locale
 from heart.locales import Locale
+from heart.localization.editions import edition_records, local_preview_ids, prioritize_editions
 from heart.ss01_soul.character_catalog import (
     CharacterRow,
     build_catalog_entries,
@@ -124,6 +125,7 @@ async def list_characters(
     from heart.core.config import settings as catalog_settings
 
     uid = uuid.UUID(current_user.user_id) if current_user else None
+    preview_ids = await local_preview_ids(db)
     result = await db.execute(
         text(
             """
@@ -131,14 +133,15 @@ async def list_characters(
                    tags, cover_url, review_status, review_reason, created_at,
                    display_heat, real_view_count, real_play_uv, recommendation_score
             FROM characters
-            WHERE ((NOT :local_review AND owner_user_id = :uid)
+            WHERE (id = ANY(:preview_ids) OR (NOT :local_review AND owner_user_id = :uid)
                OR (status = 'active' AND review_status = 'approved'
                    AND (visibility = 'public' OR (:local_review AND visibility = 'unlisted'))))
-               AND (NOT :hide_adaptations OR (left(id, 7) <> 'launch_' AND left(id, 5) <> 'intl_'))
+               AND (NOT :hide_adaptations OR (left(id, 7) <> 'launch_' AND left(id, 5) <> 'intl_' AND left(id, 9) <> 'launch50_'))
             """
         ),
         {
             "uid": uid,
+            "preview_ids": preview_ids,
             "local_review": catalog_settings.local_character_review,
             # Paid language drafts and audit records stay intact while hidden.
             "hide_adaptations": catalog_settings.local_character_review
@@ -224,6 +227,7 @@ async def list_characters(
         creation_modes,
         display_names,
         local_review=catalog_settings.local_character_review,
+        preview_ids=set(preview_ids),
     )
     result_list = []
     from heart.api.local_review import review_catalog_records
@@ -232,6 +236,12 @@ async def list_characters(
 
     for e in entries:
         entry_dict = asdict(e)
+        entry_dict["local_preview"] = e.id in preview_ids
+        # The restored review database also contains the superseded EN/JA/KO
+        # name-only preview batch. Retain its IDs for direct links/history only.
+        entry_dict["discovery_hidden"] = bool(
+            catalog_settings.local_character_review and e.id.startswith(("launch_", "intl_"))
+        )
         entry_dict.update(discovery_metadata.get(e.id, {}))
         entry_dict["has_voice"] = has_voice_map.get(e.id, False)
         entry_dict.update(review_records.get(e.id, {}))
@@ -245,6 +255,14 @@ async def list_characters(
                 entry_dict["display_name"] = curated["names"][locale]
                 entry_dict["tagline"] = curated["taglines"][locale]
         result_list.append(entry_dict)
+    from heart.i18n import resolve_locale
+
+    result_list = prioritize_editions(
+        result_list,
+        await edition_records(db, visible_ids),
+        resolve_locale(language if isinstance(language, str) else "en"),
+        enabled=catalog_settings.international_localization,
+    )
     return {
         "characters": [
             entry
@@ -450,11 +468,12 @@ async def get_character_profile(
             WHERE id = :cid AND status = 'active'
               AND (
                     owner_user_id = :uid
+                    OR id = ANY(:preview_ids)
                     OR (visibility IN ('public', 'unlisted') AND review_status = 'approved')
               )
             """
         ),
-        {"cid": character_id, "uid": uid},
+        {"cid": character_id, "uid": uid, "preview_ids": await local_preview_ids(db)},
     )
     row = char_result.mappings().fetchone()
     if row is None:
@@ -552,12 +571,13 @@ async def record_character_view(
                AND status = 'active'
                AND (
                     owner_user_id = :uid
+                    OR id = ANY(:preview_ids)
                     OR (visibility IN ('public', 'unlisted') AND review_status = 'approved')
                )
             RETURNING display_heat, real_view_count
             """
         ),
-        {"cid": character_id, "uid": uid},
+        {"cid": character_id, "uid": uid, "preview_ids": await local_preview_ids(db)},
     )
     row = result.mappings().one_or_none()
     if row is None:
